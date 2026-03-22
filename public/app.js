@@ -427,3 +427,75 @@ function downloadSpec() {
   a.click()
   URL.revokeObjectURL(url)
 }
+async function generatePPTX() {
+  const btn        = document.getElementById('pptx-btn')
+  const statusEl   = document.getElementById('agent6-status')
+  const progressEl = document.getElementById('agent6-progress')
+  const cardEl     = document.getElementById('pptx-download-card')
+
+  if (!state.finalSpec || !state.brandRulebook) {
+    alert('Please run the full pipeline first.')
+    return
+  }
+
+  btn.disabled = true
+  cardEl.style.display   = 'none'
+  statusEl.textContent   = '⏳ Sending spec to Agent 6...'
+  progressEl.style.width = '20%'
+
+  try {
+    progressEl.style.width = '50%'
+    statusEl.textContent   = '⏳ python-pptx building slides on server...'
+
+    const res  = await fetch('/api/generate-pptx', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        finalSpec:     state.finalSpec,
+        brandRulebook: state.brandRulebook
+      })
+    })
+
+    const json = await res.json()
+    if (!res.ok || !json.success) throw new Error(json.error || 'Agent 6 failed')
+
+    progressEl.style.width = '90%'
+    statusEl.textContent   = '⏳ Preparing download...'
+
+    // Decode base64 → Blob → Object URL
+    const binary = atob(json.data)
+    const bytes  = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+    const blob = new Blob([bytes], {
+      type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+    })
+    const url      = URL.createObjectURL(blob)
+    const filename = json.filename || 'presentation.pptx'
+
+    // Show green download card on screen
+    const link     = document.getElementById('pptx-link')
+    link.href      = url
+    link.download  = filename
+    link.textContent = '⬇  Download ' + filename + ' — ' + json.slides + ' slides'
+    cardEl.style.display = 'block'
+
+    // Also auto-trigger download
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+
+    progressEl.style.width = '100%'
+    statusEl.textContent   = '✅ ' + json.slides + ' slides generated successfully.'
+    btn.disabled           = false
+    btn.textContent        = '↺ Regenerate PPTX'
+
+  } catch (err) {
+    statusEl.textContent   = '❌ Error: ' + err.message
+    progressEl.style.width = '0%'
+    btn.disabled           = false
+    console.error('Agent 6 error:', err)
+  }
+}
