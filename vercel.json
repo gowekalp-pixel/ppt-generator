@@ -6,6 +6,10 @@
       "use": "@vercel/node"
     },
     {
+      "src": "api/generate_pptx.py",
+      "use": "@vercel/python"
+    },
+    {
       "src": "public/**",
       "use": "@vercel/static"
     }
@@ -14,6 +18,10 @@
     {
       "src": "/api/claude",
       "dest": "api/claude.js"
+    },
+    {
+      "src": "/api/generate-pptx",
+      "dest": "api/generate_pptx.py"
     },
     {
       "src": "/(.*)",
