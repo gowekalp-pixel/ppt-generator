@@ -1,31 +1,15 @@
 {
   "version": 2,
   "builds": [
-    {
-      "src": "api/claude.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/generate_pptx.py",
-      "use": "@vercel/python"
-    },
-    {
-      "src": "public/**",
-      "use": "@vercel/static"
-    }
+    { "src": "api/claude.js",         "use": "@vercel/node"   },
+    { "src": "api/generate_pptx.py",  "use": "@vercel/python" },
+    { "src": "api/extract_brand.py",  "use": "@vercel/python" },
+    { "src": "public/**",             "use": "@vercel/static" }
   ],
   "routes": [
-    {
-      "src": "/api/claude",
-      "dest": "api/claude.js"
-    },
-    {
-      "src": "/api/generate-pptx",
-      "dest": "api/generate_pptx.py"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "public/$1"
-    }
+    { "src": "/api/claude",           "dest": "api/claude.js"        },
+    { "src": "/api/generate-pptx",    "dest": "api/generate_pptx.py" },
+    { "src": "/api/extract-brand",    "dest": "api/extract_brand.py" },
+    { "src": "/(.*)",                 "dest": "public/$1"            }
   ]
 }
