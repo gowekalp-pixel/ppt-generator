@@ -12,100 +12,102 @@
 
     .header { margin-bottom: 1.5rem; }
     .header h1 { font-size: 24px; font-weight: 700; color: #111; margin-bottom: 4px; }
-    .header p  { font-size: 14px; color: #666; }
+    .header p  { font-size: 14px; color: #666; line-height: 1.5; }
 
     .card { background: white; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.25rem; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
-    .card-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #888; margin-bottom: 1rem; }
+    .card-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #888; margin-bottom: 1rem; }
 
     .field { margin-bottom: 1.25rem; }
     .field:last-child { margin-bottom: 0; }
-    label { display: block; font-size: 13px; font-weight: 600; color: #333; margin-bottom: 5px; }
-    .hint { font-size: 12px; color: #888; margin-bottom: 6px; }
+    label { display: block; font-size: 13px; font-weight: 600; color: #333; margin-bottom: 4px; }
+    .hint { font-size: 12px; color: #999; margin-bottom: 7px; line-height: 1.4; }
 
     .upload-zone { border: 2px dashed #d1d5db; border-radius: 10px; padding: 1rem 1.25rem; cursor: pointer; position: relative; background: #fafafa; transition: all 0.15s; }
     .upload-zone:hover { background: #f3f4f6; border-color: #9ca3af; }
     .upload-zone.ready { border-color: #22c55e; border-style: solid; background: #f0fdf4; }
     .upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
-    .upload-zone .text { font-size: 13px; color: #555; pointer-events: none; }
-    .upload-zone .text span { font-weight: 600; color: #2563eb; }
-    .upload-zone.ready .text { color: #16a34a; }
+    .upload-zone .uz-text { font-size: 13px; color: #555; pointer-events: none; }
+    .upload-zone .uz-text span { font-weight: 600; color: #2563eb; }
+    .upload-zone.ready .uz-text { color: #16a34a; font-weight: 500; }
 
     .slider-row { display: flex; align-items: center; gap: 14px; }
     .slider-row input[type=range] { flex: 1; accent-color: #2563eb; }
     .slide-count { font-size: 22px; font-weight: 700; min-width: 48px; text-align: center; background: #f3f4f6; padding: 6px 10px; border-radius: 8px; color: #2563eb; }
 
-    .btn { width: 100%; padding: 14px; font-size: 15px; font-weight: 700; background: #2563eb; color: white; border: none; border-radius: 10px; cursor: pointer; transition: background 0.15s, transform 0.1s; letter-spacing: 0.02em; }
-    .btn:hover:not(:disabled) { background: #1d4ed8; }
-    .btn:active:not(:disabled) { transform: scale(0.99); }
-    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-primary { width: 100%; padding: 14px; font-size: 15px; font-weight: 700; background: #2563eb; color: white; border: none; border-radius: 10px; cursor: pointer; transition: background 0.15s, transform 0.1s; letter-spacing: 0.02em; }
+    .btn-primary:hover:not(:disabled) { background: #1d4ed8; }
+    .btn-primary:active:not(:disabled) { transform: scale(0.99); }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
 
-    .status-card { display: none; }
-    .status-card.show { display: block; }
-    .step { font-size: 13px; padding: 5px 0; color: #555; border-bottom: 1px solid #f3f4f6; }
+    .btn-green { width: 100%; padding: 12px; font-size: 14px; font-weight: 600; background: #059669; color: white; border: none; border-radius: 10px; cursor: pointer; transition: background 0.15s; margin-bottom: 8px; }
+    .btn-green:hover { background: #047857; }
+
+    .btn-purple { width: 100%; padding: 12px; font-size: 14px; font-weight: 600; background: #7c3aed; color: white; border: none; border-radius: 10px; cursor: pointer; transition: background 0.15s; margin-top: 8px; }
+    .btn-purple:hover:not(:disabled) { background: #6d28d9; }
+    .btn-purple:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .pipeline { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 4px; }
+    .p-node { text-align: center; font-size: 10px; font-weight: 600; color: #888; }
+    .p-node .circle { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 4px; font-size: 13px; font-weight: 700; background: #e5e7eb; color: #888; transition: all 0.3s; }
+    .p-node .circle.done   { background: #dcfce7; color: #16a34a; }
+    .p-node .circle.active { background: #dbeafe; color: #2563eb; }
+    .p-arrow { color: #d1d5db; font-size: 14px; }
+
+    .step { font-size: 13px; padding: 6px 0; color: #666; border-bottom: 1px solid #f3f4f6; line-height: 1.4; }
     .step:last-of-type { border-bottom: none; }
     .step.done   { color: #16a34a; }
     .step.active { color: #2563eb; font-weight: 600; }
-    .step.wait   { color: #aaa; }
+    .step.wait   { color: #bbb; }
     .step.error  { color: #dc2626; }
-    .progress-wrap { margin-top: 12px; }
+
+    .progress-wrap { margin-top: 14px; }
     .progress { height: 5px; background: #e5e7eb; border-radius: 99px; overflow: hidden; }
     .progress-fill { height: 100%; background: #2563eb; border-radius: 99px; width: 0%; transition: width 0.5s ease; }
-    .progress-label { font-size: 12px; color: #888; margin-top: 5px; text-align: right; }
+    .progress-label { font-size: 12px; color: #999; margin-top: 5px; text-align: right; }
 
-    .error-box { display: none; background: #fef2f2; border: 1px solid #fca5a5; border-radius: 10px; padding: 12px 14px; font-size: 13px; color: #dc2626; margin-top: 1rem; }
-    .error-box.show { display: block; }
-
+    .status-card  { display: none; }
+    .status-card.show  { display: block; }
     .results-card { display: none; }
     .results-card.show { display: block; }
 
+    .error-box { display: none; background: #fef2f2; border: 1px solid #fca5a5; border-radius: 10px; padding: 12px 14px; font-size: 13px; color: #dc2626; margin-top: 1rem; line-height: 1.5; }
+    .error-box.show { display: block; }
+
     .summary-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 1.25rem; }
     .summary-item { background: #f9fafb; border-radius: 8px; padding: 10px 14px; }
-    .summary-item .s-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+    .summary-item .s-label { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
     .summary-item .s-value { font-size: 15px; font-weight: 700; color: #111; }
 
-    .slide-list { border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; margin-bottom: 1.25rem; max-height: 320px; overflow-y: auto; }
+    .slide-list { border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; margin-bottom: 1.25rem; max-height: 340px; overflow-y: auto; }
     .slide-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid #f3f4f6; font-size: 12px; }
     .slide-row:last-child { border-bottom: none; }
     .slide-row:nth-child(even) { background: #fafafa; }
-    .slide-num { font-family: monospace; font-size: 11px; color: #888; min-width: 24px; }
-    .slide-type { font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 20px; text-transform: uppercase; min-width: 58px; text-align: center; }
+    .slide-num { font-family: monospace; font-size: 11px; color: #aaa; min-width: 26px; }
+    .slide-type { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; text-transform: uppercase; min-width: 58px; text-align: center; flex-shrink: 0; }
     .slide-type.title   { background: #dbeafe; color: #1d4ed8; }
     .slide-type.divider { background: #fef9c3; color: #854d0e; }
     .slide-type.content { background: #dcfce7; color: #166534; }
-    .slide-title  { flex: 1; color: #333; font-weight: 500; }
-    .slide-layout { font-size: 11px; color: #888; min-width: 80px; text-align: right; }
+    .slide-title  { flex: 1; color: #333; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .slide-layout { font-size: 11px; color: #aaa; min-width: 80px; text-align: right; flex-shrink: 0; }
 
-    .download-btn { width: 100%; padding: 12px; font-size: 14px; font-weight: 600; background: #059669; color: white; border: none; border-radius: 10px; cursor: pointer; transition: background 0.15s; margin-bottom: 8px; }
-    .download-btn:hover { background: #047857; }
-
-    .pptx-btn { width: 100%; padding: 12px; font-size: 14px; font-weight: 600; background: #7c3aed; color: white; border: none; border-radius: 10px; cursor: pointer; transition: background 0.15s; margin-top: 8px; }
-    .pptx-btn:hover:not(:disabled) { background: #6d28d9; }
-    .pptx-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-    .pptx-download-card { display: none; margin-top: 16px; background: #f0fdf4; border: 1.5px solid #22c55e; border-radius: 10px; padding: 16px 20px; }
-    .pptx-download-card .card-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #16a34a; margin-bottom: 10px; }
-    .pptx-download-card a { display: block; padding: 12px 16px; background: #16a34a; color: white; border-radius: 8px; font-size: 15px; font-weight: 700; text-decoration: none; text-align: center; transition: background 0.15s; }
+    .pptx-download-card { display: none; margin-top: 14px; background: #f0fdf4; border: 1.5px solid #22c55e; border-radius: 10px; padding: 16px 20px; }
+    .pptx-download-card .dl-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #16a34a; margin-bottom: 10px; }
+    .pptx-download-card a { display: block; padding: 12px 16px; background: #16a34a; color: white; border-radius: 8px; font-size: 14px; font-weight: 700; text-decoration: none; text-align: center; transition: background 0.15s; }
     .pptx-download-card a:hover { background: #15803d; }
-    .pptx-download-card .card-note { font-size: 12px; color: #555; margin-top: 8px; text-align: center; }
+    .pptx-download-card .dl-note { font-size: 12px; color: #666; margin-top: 8px; text-align: center; }
 
-    .agent6-status { font-size: 13px; color: #555; margin-top: 8px; min-height: 18px; }
-    .agent6-bar { height: 4px; background: #e5e7eb; border-radius: 99px; margin-top: 6px; }
+    .agent6-status { font-size: 13px; color: #555; margin-top: 8px; min-height: 18px; line-height: 1.4; }
+    .agent6-bar  { height: 4px; background: #e5e7eb; border-radius: 99px; margin-top: 6px; }
     .agent6-fill { height: 100%; background: #7c3aed; border-radius: 99px; width: 0%; transition: width 0.4s ease; }
-
-    .pipeline { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 6px; }
-    .p-node { text-align: center; font-size: 11px; font-weight: 600; }
-    .p-node .circle { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 4px; font-size: 13px; font-weight: 700; background: #e5e7eb; color: #888; }
-    .p-node .circle.done   { background: #dcfce7; color: #16a34a; }
-    .p-node .circle.active { background: #dbeafe; color: #2563eb; }
-    .p-arrow { color: #d1d5db; font-size: 16px; }
   </style>
 </head>
 <body>
 <div class="container">
 
+  <!-- HEADER -->
   <div class="header">
     <h1>PPT Generator</h1>
-    <p>Upload your brand deck and content PDF. The 5-agent AI pipeline builds your branded presentation, then Agent 6 generates the real .pptx file.</p>
+    <p>Upload your brand deck and content PDF. Six AI agents work in sequence to build your fully branded presentation.</p>
   </div>
 
   <!-- INPUT CARD -->
@@ -114,24 +116,25 @@
 
     <div class="field">
       <label>Brand Guideline Deck</label>
-      <div class="hint">Your company brand template — colors, fonts, slide layouts (.pptx, .pdf, .png)</div>
+      <div class="hint">Your company brand template — colors, fonts, layouts (.pptx, .pdf, .png, .jpg)</div>
       <div class="upload-zone" id="zone-brand">
         <input type="file" accept=".pptx,.ppt,.pdf,.png,.jpg,.jpeg" onchange="handleUpload('brand', this)">
-        <div class="text" id="label-brand">Click to upload &nbsp;<span>.pptx · .pdf · .png</span></div>
+        <div class="uz-text" id="label-brand">Click to upload &nbsp;<span>.pptx · .pdf · .png · .jpg</span></div>
       </div>
     </div>
 
     <div class="field">
       <label>Content Document</label>
-      <div class="hint">Source material — report, research, or notes to turn into slides (.pdf)</div>
+      <div class="hint">Source material — report, research, or notes to turn into slides (.pdf only)</div>
       <div class="upload-zone" id="zone-content">
         <input type="file" accept=".pdf" onchange="handleUpload('content', this)">
-        <div class="text" id="label-content">Click to upload &nbsp;<span>.pdf only</span></div>
+        <div class="uz-text" id="label-content">Click to upload &nbsp;<span>.pdf only</span></div>
       </div>
     </div>
 
     <div class="field">
       <label>Number of Slides</label>
+      <div class="hint">How many slides should the final deck have?</div>
       <div class="slider-row">
         <input type="range" min="5" max="40" value="12" step="1" oninput="updateSlides(this.value)">
         <div class="slide-count" id="slide-count">12</div>
@@ -140,8 +143,8 @@
   </div>
 
   <!-- RUN BUTTON -->
-  <button class="btn" id="run-btn" disabled onclick="runPipeline()">
-    ▶ &nbsp; Run AI Pipeline — All 5 Agents
+  <button class="btn-primary" id="run-btn" disabled onclick="runPipeline()">
+    ▶ &nbsp; Run AI Pipeline — All 6 Agents
   </button>
 
   <!-- STATUS CARD -->
@@ -160,11 +163,11 @@
       <div class="p-node"><div class="circle" id="c5">5</div>Design</div>
     </div>
 
-    <div id="s1" class="step">⬜ Agent 1 — Collecting & packaging inputs</div>
-    <div id="s2" class="step">⬜ Agent 2 — Parsing brand guidelines</div>
-    <div id="s3" class="step">⬜ Agent 3 — Analysing content & building structure</div>
-    <div id="s4" class="step">⬜ Agent 4 — Writing detailed slide content</div>
-    <div id="s5" class="step">⬜ Agent 5 — Merging brand + content into final spec</div>
+    <div id="s1" class="step wait">⬜ Agent 1 — Collecting & packaging inputs</div>
+    <div id="s2" class="step wait">⬜ Agent 2 — Parsing brand guidelines</div>
+    <div id="s3" class="step wait">⬜ Agent 3 — Analysing content & building structure</div>
+    <div id="s4" class="step wait">⬜ Agent 4 — Writing detailed slide content</div>
+    <div id="s5" class="step wait">⬜ Agent 5 — Merging brand + content into final spec</div>
 
     <div class="progress-wrap">
       <div class="progress"><div class="progress-fill" id="prog"></div></div>
@@ -172,7 +175,7 @@
     </div>
   </div>
 
-  <!-- ERROR -->
+  <!-- ERROR BOX -->
   <div class="error-box" id="error-box">
     <strong>Error:</strong> <span id="error-msg"></span>
   </div>
@@ -200,16 +203,13 @@
       </div>
     </div>
 
-    <!-- Slide preview list -->
     <div class="slide-list" id="slide-preview"></div>
 
-    <!-- JSON spec download -->
-    <button class="download-btn" onclick="downloadSpec()">
-      ⬇ &nbsp; Download Spec JSON (for debugging)
+    <button class="btn-green" onclick="downloadSpec()">
+      ⬇ &nbsp; Download Spec JSON (debug / inspect)
     </button>
 
-    <!-- Agent 6 PPTX generation -->
-    <button class="pptx-btn" id="pptx-btn" onclick="generatePPTX()">
+    <button class="btn-purple" id="pptx-btn" onclick="generatePPTX()">
       ▶ &nbsp; Generate PPTX — Agent 6 (python-pptx)
     </button>
 
@@ -218,44 +218,46 @@
       <div class="agent6-fill" id="agent6-progress"></div>
     </div>
 
-    <!-- Download card — appears after Agent 6 completes -->
     <div class="pptx-download-card" id="pptx-download-card">
-      <div class="card-label">✅ Agent 6 Complete — Your PPTX is Ready</div>
-      <a id="pptx-link" href="#" download>
-        ⬇ &nbsp; Download presentation.pptx
-      </a>
-      <div class="card-note">
-        Link stays active until you refresh the page
-      </div>
+      <div class="dl-label">✅ Agent 6 Complete — Your PPTX is Ready</div>
+      <a id="pptx-link" href="#" download>⬇ &nbsp; Download presentation.pptx</a>
+      <div class="dl-note">Link stays active until you refresh the page</div>
     </div>
 
   </div>
 
 </div>
 
+<!-- SCRIPTS — order matters -->
+<script src="agent1.js"></script>
+<script src="agent2.js"></script>
+<script src="agent3.js"></script>
+<script src="agent4.js"></script>
+<script src="agent5.js"></script>
+<script src="agent6.js"></script>
 <script src="app.js"></script>
+
 <script>
-  // Update progress bar label and pipeline circles
-  const _origSetProgress = setProgress
+  // Wrap setProgress to also update pipeline circles
+  const _orig = setProgress
   window.setProgress = function(pct) {
-    _origSetProgress(pct)
-    const label = document.getElementById('prog-label')
-    if (label) label.textContent = pct + '%'
-    const thresholds = [
-      { id: 'c1', min: 5  },
-      { id: 'c2', min: 15 },
-      { id: 'c3', min: 35 },
-      { id: 'c4', min: 55 },
-      { id: 'c5', min: 75 }
+    _orig(pct)
+    const nodes = [
+      { id: 'c1', at: 5  },
+      { id: 'c2', at: 20 },
+      { id: 'c3', at: 35 },
+      { id: 'c4', at: 55 },
+      { id: 'c5', at: 75 }
     ]
-    thresholds.forEach(t => {
-      const el = document.getElementById(t.id)
+    nodes.forEach(n => {
+      const el = document.getElementById(n.id)
       if (!el) return
       el.classList.remove('done', 'active')
-      if (pct >= t.min + 20) el.classList.add('done')
-      else if (pct >= t.min)  el.classList.add('active')
+      if (pct >= n.at + 15) el.classList.add('done')
+      else if (pct >= n.at)  el.classList.add('active')
     })
   }
 </script>
+
 </body>
 </html>
