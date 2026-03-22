@@ -1,60 +1,130 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PPT Generator</title>
+  <title>PPT Generator — AI Pipeline</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 2rem; }
-    .container { max-width: 600px; margin: 0 auto; background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
-    h1 { font-size: 22px; margin-bottom: 6px; color: #111; }
-    p { font-size: 14px; color: #666; margin-bottom: 1.5rem; }
+    body { font-family: Arial, sans-serif; background: #f0f2f5; padding: 2rem; color: #111; }
+    .container { max-width: 680px; margin: 0 auto; }
+
+    /* HEADER */
+    .header { margin-bottom: 1.5rem; }
+    .header h1 { font-size: 24px; font-weight: 700; color: #111; margin-bottom: 4px; }
+    .header p  { font-size: 14px; color: #666; }
+
+    /* CARDS */
+    .card { background: white; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.25rem; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
+    .card-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #888; margin-bottom: 1rem; }
+
+    /* FIELDS */
     .field { margin-bottom: 1.25rem; }
-    label { display: block; font-size: 13px; font-weight: 600; color: #333; margin-bottom: 6px; }
+    .field:last-child { margin-bottom: 0; }
+    label { display: block; font-size: 13px; font-weight: 600; color: #333; margin-bottom: 5px; }
     .hint { font-size: 12px; color: #888; margin-bottom: 6px; }
-    .upload-zone { border: 2px dashed #ccc; border-radius: 8px; padding: 1rem; cursor: pointer; position: relative; background: #fafafa; transition: background 0.15s; }
-    .upload-zone:hover { background: #f0f0f0; }
-    .upload-zone.ready { border-color: #22c55e; background: #f0fdf4; }
+
+    /* UPLOAD */
+    .upload-zone { border: 2px dashed #d1d5db; border-radius: 10px; padding: 1rem 1.25rem; cursor: pointer; position: relative; background: #fafafa; transition: all 0.15s; }
+    .upload-zone:hover { background: #f3f4f6; border-color: #9ca3af; }
+    .upload-zone.ready { border-color: #22c55e; border-style: solid; background: #f0fdf4; }
     .upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
     .upload-zone .text { font-size: 13px; color: #555; pointer-events: none; }
-    .upload-zone .text span { font-weight: 600; color: #111; }
-    .slider-row { display: flex; align-items: center; gap: 12px; }
-    .slider-row input { flex: 1; }
-    .slide-count { font-size: 20px; font-weight: 600; min-width: 40px; text-align: center; background: #f0f0f0; padding: 6px 10px; border-radius: 8px; }
-    .btn { width: 100%; padding: 12px; font-size: 15px; font-weight: 600; background: #2563eb; color: white; border: none; border-radius: 8px; cursor: pointer; margin-top: 1rem; transition: background 0.15s; }
+    .upload-zone .text span { font-weight: 600; color: #2563eb; }
+    .upload-zone.ready .text { color: #16a34a; }
+
+    /* SLIDER */
+    .slider-row { display: flex; align-items: center; gap: 14px; }
+    .slider-row input[type=range] { flex: 1; accent-color: #2563eb; }
+    .slide-count { font-size: 22px; font-weight: 700; min-width: 48px; text-align: center; background: #f3f4f6; padding: 6px 10px; border-radius: 8px; color: #2563eb; }
+
+    /* BUTTON */
+    .btn { width: 100%; padding: 14px; font-size: 15px; font-weight: 700; background: #2563eb; color: white; border: none; border-radius: 10px; cursor: pointer; transition: background 0.15s, transform 0.1s; letter-spacing: 0.02em; }
     .btn:hover:not(:disabled) { background: #1d4ed8; }
+    .btn:active:not(:disabled) { transform: scale(0.99); }
     .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-    .status { margin-top: 1rem; font-size: 13px; color: #555; background: #f9f9f9; border-radius: 8px; padding: 12px; display: none; line-height: 1.7; }
-    .status.show { display: block; }
-    .status .step { padding: 3px 0; }
-    .status .step.done { color: #16a34a; }
-    .status .step.active { color: #2563eb; font-weight: 600; }
-    .status .step.wait { color: #aaa; }
-    .progress { height: 4px; background: #e5e7eb; border-radius: 99px; margin-top: 10px; overflow: hidden; }
-    .progress-fill { height: 100%; background: #2563eb; border-radius: 99px; width: 0%; transition: width 0.4s ease; }
+
+    /* STATUS */
+    .status-card { display: none; }
+    .status-card.show { display: block; }
+    .step { font-size: 13px; padding: 5px 0; color: #555; border-bottom: 1px solid #f3f4f6; }
+    .step:last-of-type { border-bottom: none; }
+    .step.done   { color: #16a34a; }
+    .step.active { color: #2563eb; font-weight: 600; }
+    .step.wait   { color: #aaa; }
+    .step.error  { color: #dc2626; }
+    .progress-wrap { margin-top: 12px; }
+    .progress { height: 5px; background: #e5e7eb; border-radius: 99px; overflow: hidden; }
+    .progress-fill { height: 100%; background: #2563eb; border-radius: 99px; width: 0%; transition: width 0.5s ease; }
+    .progress-label { font-size: 12px; color: #888; margin-top: 5px; text-align: right; }
+
+    /* ERROR */
+    .error-box { display: none; background: #fef2f2; border: 1px solid #fca5a5; border-radius: 10px; padding: 12px 14px; font-size: 13px; color: #dc2626; margin-top: 1rem; }
+    .error-box.show { display: block; }
+
+    /* RESULTS */
+    .results-card { display: none; }
+    .results-card.show { display: block; }
+
+    .summary-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 1.25rem; }
+    .summary-item { background: #f9fafb; border-radius: 8px; padding: 10px 14px; }
+    .summary-item .s-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+    .summary-item .s-value { font-size: 15px; font-weight: 700; color: #111; }
+
+    .slide-list { border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; margin-bottom: 1.25rem; }
+    .slide-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid #f3f4f6; font-size: 12px; }
+    .slide-row:last-child { border-bottom: none; }
+    .slide-row:nth-child(even) { background: #fafafa; }
+    .slide-num { font-family: monospace; font-size: 11px; color: #888; min-width: 24px; }
+    .slide-type { font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 20px; text-transform: uppercase; min-width: 58px; text-align: center; }
+    .slide-type.title   { background: #dbeafe; color: #1d4ed8; }
+    .slide-type.divider { background: #fef9c3; color: #854d0e; }
+    .slide-type.content { background: #dcfce7; color: #166534; }
+    .slide-title  { flex: 1; color: #333; font-weight: 500; }
+    .slide-layout { font-size: 11px; color: #888; min-width: 80px; text-align: right; }
+
+    .download-btn { width: 100%; padding: 12px; font-size: 14px; font-weight: 600; background: #059669; color: white; border: none; border-radius: 10px; cursor: pointer; transition: background 0.15s; }
+    .download-btn:hover { background: #047857; }
+    .download-note { font-size: 12px; color: #888; text-align: center; margin-top: 8px; }
+
+    /* PIPELINE DIAGRAM */
+    .pipeline { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 6px; }
+    .p-node { text-align: center; font-size: 11px; font-weight: 600; }
+    .p-node .circle { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 4px; font-size: 13px; font-weight: 700; background: #e5e7eb; color: #888; }
+    .p-node .circle.done   { background: #dcfce7; color: #16a34a; }
+    .p-node .circle.active { background: #dbeafe; color: #2563eb; }
+    .p-arrow { color: #d1d5db; font-size: 16px; }
   </style>
 </head>
 <body>
-  <div class="container">
+<div class="container">
+
+  <!-- HEADER -->
+  <div class="header">
     <h1>PPT Generator</h1>
-    <p>Upload your brand deck and content. The AI pipeline will build your presentation.</p>
+    <p>Upload your brand deck and content PDF. The 5-agent AI pipeline builds your branded presentation spec.</p>
+  </div>
+
+  <!-- INPUT CARD -->
+  <div class="card">
+    <div class="card-title">Step 1 — Your Inputs</div>
 
     <div class="field">
       <label>Brand Guideline Deck</label>
-      <div class="hint">Your company brand template — colors, fonts, layouts</div>
+      <div class="hint">Your company brand template — colors, fonts, slide layouts (.pptx, .pdf, .png)</div>
       <div class="upload-zone" id="zone-brand">
-        <input type="file" accept=".pptx,.ppt,.pdf,.png,.jpg" onchange="handleUpload('brand', this)">
-        <div class="text" id="label-brand">Click to upload <span>.pptx, .pdf, or .png</span></div>
+        <input type="file" accept=".pptx,.ppt,.pdf,.png,.jpg,.jpeg" onchange="handleUpload('brand', this)">
+        <div class="text" id="label-brand">Click to upload &nbsp;<span>.pptx · .pdf · .png</span></div>
       </div>
     </div>
 
     <div class="field">
       <label>Content Document</label>
-      <div class="hint">The source material — report, research, or notes to turn into slides</div>
+      <div class="hint">Source material — report, research, or notes to turn into slides (.pdf)</div>
       <div class="upload-zone" id="zone-content">
         <input type="file" accept=".pdf" onchange="handleUpload('content', this)">
-        <div class="text" id="label-content">Click to upload <span>.pdf only</span></div>
+        <div class="text" id="label-content">Click to upload &nbsp;<span>.pdf only</span></div>
       </div>
     </div>
 
@@ -65,21 +135,89 @@
         <div class="slide-count" id="slide-count">12</div>
       </div>
     </div>
+  </div>
 
-    <button class="btn" id="run-btn" disabled onclick="runPipeline()">
-      Generate Presentation
-    </button>
+  <!-- RUN BUTTON -->
+  <button class="btn" id="run-btn" disabled onclick="runPipeline()">
+    ▶ &nbsp; Run AI Pipeline — Generate Presentation
+  </button>
 
-    <div class="status" id="status-box">
-      <div class="step" id="s1">⬜ Agent 1 — Collecting inputs</div>
-      <div class="step" id="s2">⬜ Agent 2 — Parsing brand guidelines</div>
-      <div class="step" id="s3">⬜ Agent 3 — Analysing content structure</div>
-      <div class="step" id="s4">⬜ Agent 4 — Writing slide content</div>
-      <div class="step" id="s5">⬜ Agent 5 — Applying brand to slides</div>
+  <!-- STATUS CARD -->
+  <div class="card status-card" id="status-box" style="margin-top:1.25rem;">
+    <div class="card-title">Pipeline Progress</div>
+
+    <div class="pipeline">
+      <div class="p-node"><div class="circle" id="c1">1</div>Input</div>
+      <div class="p-arrow">→</div>
+      <div class="p-node"><div class="circle" id="c2">2</div>Brand</div>
+      <div class="p-arrow">→</div>
+      <div class="p-node"><div class="circle" id="c3">3</div>Structure</div>
+      <div class="p-arrow">→</div>
+      <div class="p-node"><div class="circle" id="c4">4</div>Content</div>
+      <div class="p-arrow">→</div>
+      <div class="p-node"><div class="circle" id="c5">5</div>Design</div>
+    </div>
+
+    <div id="s1" class="step">⬜ Agent 1 — Collecting & packaging inputs</div>
+    <div id="s2" class="step">⬜ Agent 2 — Parsing brand guidelines</div>
+    <div id="s3" class="step">⬜ Agent 3 — Analysing content & building structure</div>
+    <div id="s4" class="step">⬜ Agent 4 — Writing detailed slide content</div>
+    <div id="s5" class="step">⬜ Agent 5 — Merging brand + content into final spec</div>
+
+    <div class="progress-wrap">
       <div class="progress"><div class="progress-fill" id="prog"></div></div>
+      <div class="progress-label" id="prog-label">0%</div>
     </div>
   </div>
 
-  <script src="app.js"></script>
+  <!-- ERROR -->
+  <div class="error-box" id="error-box">
+    <strong>Error:</strong> <span id="error-msg"></span>
+  </div>
+
+  <!-- RESULTS CARD -->
+  <div class="card results-card" id="results-box" style="margin-top:1.25rem;">
+    <div class="card-title">✅ Pipeline Complete — Presentation Spec Ready</div>
+
+    <div class="summary-grid">
+      <div class="summary-item"><div class="s-label">Total Slides</div><div class="s-value" id="res-slides">—</div></div>
+      <div class="summary-item"><div class="s-label">Visual Style</div><div class="s-value" id="res-style">—</div></div>
+      <div class="summary-item"><div class="s-label">Title Font</div><div class="s-value" id="res-font">—</div></div>
+      <div class="summary-item"><div class="s-label">Brand Colors</div><div class="s-value" id="res-colors">—</div></div>
+    </div>
+
+    <div class="slide-list" id="slide-preview"></div>
+
+    <button class="download-btn" onclick="downloadSpec()">
+      ⬇ &nbsp; Download Presentation Spec (JSON)
+    </button>
+    <div class="download-note">This JSON file is the input for Agent 6 — the PPTX generator</div>
+  </div>
+
+</div>
+<script src="app.js"></script>
+<script>
+  // Update progress label
+  const origSetProgress = setProgress
+  window.setProgress = function(pct) {
+    origSetProgress(pct)
+    const el = document.getElementById('prog-label')
+    if (el) el.textContent = pct + '%'
+    // Update circles
+    const steps = [
+      { id: 'c1', threshold: 15 },
+      { id: 'c2', threshold: 30 },
+      { id: 'c3', threshold: 50 },
+      { id: 'c4', threshold: 70 },
+      { id: 'c5', threshold: 100 }
+    ]
+    steps.forEach(s => {
+      const el = document.getElementById(s.id)
+      if (!el) return
+      if (pct >= s.threshold) el.classList.add('done')
+      else if (pct >= s.threshold - 20) el.classList.add('active')
+    })
+  }
+</script>
 </body>
 </html>
