@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent 2 Tester — Brand Extraction</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: #f0f2f5; padding: 2rem; color: #111; }
+    .container { max-width: 900px; margin: 0 auto; }
+
+    .header { margin-bottom: 1.5rem; }
+    .header h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+    .header p  { font-size: 13px; color: #666; }
+    .badge { display: inline-block; background: #dbeafe; color: #1d4ed8; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; margin-bottom: 10px; }
+
+    .card { background: white; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.25rem; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
+    .card-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #888; margin-bottom: 1rem; }
+
+    .upload-zone { border: 2px dashed #d1d5db; border-radius: 10px; padding: 1.2rem; cursor: pointer; position: relative; background: #fafafa; transition: all 0.15s; }
+    .upload-zone:hover { background: #f3f4f6; border-color: #9ca3af; }
+    .upload-zone.ready { border-color: #22c55e; border-style: solid; background: #f0fdf4; }
+    .upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+    .upload-zone .uz-text { font-size: 13px; color: #555; pointer-events: none; }
+    .upload-zone .uz-text span { font-weight: 600; color: #2563eb; }
+    .upload-zone.ready .uz-text { color: #16a34a; font-weight: 500; }
+
+    .btn-row { display: flex; gap: 10px; margin-top: 1rem; }
+    .btn { flex: 1; padding: 12px; font-size: 14px; font-weight: 700; border: none; border-radius: 10px; cursor: pointer; transition: background 0.15s; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-blue   { background: #2563eb; color: white; }
+    .btn-blue:hover:not(:disabled)   { background: #1d4ed8; }
+    .btn-green  { background: #059669; color: white; }
+    .btn-green:hover:not(:disabled)  { background: #047857; }
+    .btn-gray   { background: #e5e7eb; color: #374151; }
+    .btn-gray:hover:not(:disabled)   { background: #d1d5db; }
+
+    .progress-wrap { margin-top: 12px; display: none; }
+    .progress-wrap.show { display: block; }
+    .progress { height: 4px; background: #e5e7eb; border-radius: 99px; overflow: hidden; }
+    .progress-fill { height: 100%; background: #2563eb; border-radius: 99px; width: 0%; transition: width 0.4s ease; }
+    .progress-msg { font-size: 12px; color: #666; margin-top: 5px; }
+
+    .error-box { display: none; background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #dc2626; margin-top: 12px; line-height: 1.5; }
+    .error-box.show { display: block; }
+
+    /* Results layout */
+    .results { display: none; }
+    .results.show { display: block; }
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+    .info-block { background: #f9fafb; border-radius: 8px; padding: 12px 14px; }
+    .info-block .ib-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+    .info-block .ib-value { font-size: 14px; font-weight: 600; color: #111; }
+    .info-block .ib-sub   { font-size: 12px; color: #555; margin-top: 2px; }
+
+    /* Color swatches */
+    .swatch-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+    .swatch { position: relative; }
+    .swatch .dot { width: 32px; height: 32px; border-radius: 6px; border: 1px solid rgba(0,0,0,0.1); cursor: pointer; }
+    .swatch .hex { font-size: 10px; color: #666; text-align: center; margin-top: 2px; font-family: monospace; }
+
+    /* Layout cards */
+    .layout-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+    .layout-card { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; }
+    .layout-card .lc-name { font-size: 13px; font-weight: 700; color: #111; margin-bottom: 4px; }
+    .layout-card .lc-structure { font-size: 12px; color: #2563eb; margin-bottom: 4px; }
+    .layout-card .lc-guidance { font-size: 12px; color: #555; margin-bottom: 6px; font-style: italic; }
+    .layout-card .lc-meta { font-size: 11px; color: #aaa; }
+    .layout-card .lc-phs { margin-top: 6px; }
+    .ph-row { font-size: 11px; color: #666; padding: 2px 0; border-bottom: 1px solid #f0f0f0; display: flex; gap: 8px; }
+    .ph-row:last-child { border-bottom: none; }
+    .ph-type { font-weight: 600; color: #374151; min-width: 70px; }
+    .ph-pos  { color: #aaa; font-family: monospace; }
+
+    /* Raw JSON */
+    .json-box { background: #1e1e1e; border-radius: 8px; padding: 14px; overflow-x: auto; max-height: 400px; overflow-y: auto; }
+    .json-box pre { font-family: monospace; font-size: 11px; color: #d4d4d4; white-space: pre-wrap; line-height: 1.6; }
+
+    /* Log */
+    .log-box { background: #0d0d0d; border-radius: 8px; padding: 12px; max-height: 200px; overflow-y: auto; display: none; margin-top: 10px; }
+    .log-box.show { display: block; }
+    .log-line { font-family: monospace; font-size: 11px; line-height: 1.7; }
+    .log-line.info { color: #7dd3fc; }
+    .log-line.ok   { color: #86efac; }
+    .log-line.warn { color: #fde68a; }
+    .log-line.err  { color: #fca5a5; }
+
+    .section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #888; margin-bottom: 10px; margin-top: 1.25rem; }
+    .divider { border: none; border-top: 1px solid #e5e7eb; margin: 1.25rem 0; }
+
+    .step-indicator { display: flex; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap; }
+    .step-pill { font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 20px; }
+    .step-pill.wait   { background: #f3f4f6; color: #9ca3af; }
+    .step-pill.active { background: #dbeafe; color: #2563eb; }
+    .step-pill.done   { background: #dcfce7; color: #16a34a; }
+    .step-pill.skip   { background: #f9fafb; color: #d1d5db; text-decoration: line-through; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="badge">Isolated Test — Agent 2 Only</div>
+    <h1>Brand Extraction Tester</h1>
+    <p>Test Agent 2 in isolation. Upload any brand deck and see exactly what gets extracted — colors, fonts, slide size, and all layout structures.</p>
+  </div>
+
+  <!-- Upload -->
+  <div class="card">
+    <div class="card-title">Upload Brand Deck</div>
+    <div class="upload-zone" id="upload-zone">
+      <input type="file" accept=".pptx,.ppt,.pdf,.png,.jpg,.jpeg" onchange="handleUpload(this)">
+      <div class="uz-text" id="upload-label">
+        Click to upload &nbsp;<span>.pptx · .pdf · .png · .jpg</span>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-blue" id="run-btn" onclick="runAgent2Test()" disabled>
+        ▶ Run Agent 2 Extraction
+      </button>
+      <button class="btn btn-gray" onclick="resetAll()">
+        ↺ Reset
+      </button>
+    </div>
+
+    <!-- Step indicators -->
+    <div class="step-indicator" id="steps" style="margin-top:12px; display:none;">
+      <div class="step-pill wait" id="step-a">Step A: Python extraction</div>
+      <div class="step-pill wait" id="step-b">Step B: Claude enrichment</div>
+    </div>
+
+    <div class="progress-wrap" id="prog-wrap">
+      <div class="progress"><div class="progress-fill" id="prog-fill"></div></div>
+      <div class="progress-msg" id="prog-msg"></div>
+    </div>
+
+    <div class="log-box" id="log-box"></div>
+    <div class="error-box" id="error-box"></div>
+  </div>
+
+  <!-- Results -->
+  <div class="results" id="results">
+
+    <!-- Summary row -->
+    <div class="two-col">
+      <div class="info-block">
+        <div class="ib-label">Color Scheme</div>
+        <div class="ib-value" id="r-scheme">—</div>
+        <div class="ib-sub" id="r-source">—</div>
+      </div>
+      <div class="info-block">
+        <div class="ib-label">Font Scheme</div>
+        <div class="ib-value" id="r-fontscheme">—</div>
+        <div class="ib-sub" id="r-style">—</div>
+      </div>
+      <div class="info-block">
+        <div class="ib-label">Slide Size</div>
+        <div class="ib-value" id="r-size">—</div>
+        <div class="ib-sub" id="r-sizept">—</div>
+      </div>
+      <div class="info-block">
+        <div class="ib-label">Layouts Found</div>
+        <div class="ib-value" id="r-layouts">—</div>
+        <div class="ib-sub" id="r-logo">—</div>
+      </div>
+    </div>
+
+    <!-- Fonts -->
+    <div class="card">
+      <div class="card-title">Fonts Extracted</div>
+      <div class="two-col">
+        <div class="info-block">
+          <div class="ib-label">Title / Heading Font</div>
+          <div class="ib-value" id="r-titlefont">—</div>
+          <div class="ib-sub" id="r-titlefont-detail">—</div>
+        </div>
+        <div class="info-block">
+          <div class="ib-label">Body Font</div>
+          <div class="ib-value" id="r-bodyfont">—</div>
+          <div class="ib-sub" id="r-bodyfont-detail">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Colors -->
+    <div class="card">
+      <div class="card-title">Color Palette Extracted</div>
+      <div id="color-sections"></div>
+    </div>
+
+    <!-- Layouts -->
+    <div class="card">
+      <div class="card-title">Slide Layouts Extracted</div>
+      <div class="layout-grid" id="layout-grid"></div>
+    </div>
+
+    <!-- Raw JSON -->
+    <div class="card">
+      <div class="card-title">Raw Rulebook JSON — copy into agent2.js fallback if needed</div>
+      <div class="json-box"><pre id="raw-json"></pre></div>
+      <button class="btn btn-green" style="margin-top:10px;" onclick="copyJSON()">
+        Copy JSON to Clipboard
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<script src="agent1.js"></script>
+<script src="agent2.js"></script>
+<script src="app.js"></script>
+
+<script>
+  let fileState = { brandB64: null, brandExt: null, brandFile: null }
+  let resultRulebook = null
+
+  function log(msg, type='info') {
+    const box = document.getElementById('log-box')
+    box.classList.add('show')
+    const line = document.createElement('div')
+    line.className = 'log-line ' + type
+    const ts = new Date().toLocaleTimeString('en-GB', { hour12: false })
+    line.textContent = '[' + ts + '] ' + msg
+    box.appendChild(line)
+    box.scrollTop = box.scrollHeight
+  }
+
+  function setProgress(pct, msg) {
+    document.getElementById('prog-fill').style.width = pct + '%'
+    document.getElementById('prog-msg').textContent  = msg
+  }
+
+  function setStep(id, status) {
+    const el = document.getElementById(id)
+    if (!el) return
+    el.className = 'step-pill ' + status
+  }
+
+  function handleUpload(input) {
+    const file = input.files[0]
+    if (!file) return
+    const ext = file.name.split('.').pop().toLowerCase()
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      fileState.brandB64  = e.target.result.split(',')[1]
+      fileState.brandExt  = ext
+      fileState.brandFile = file
+      document.getElementById('upload-label').innerHTML = '✓ <span>' + file.name + '</span>'
+      document.getElementById('upload-zone').classList.add('ready')
+      document.getElementById('run-btn').disabled = false
+      log('File loaded: ' + file.name + ' (' + ext.toUpperCase() + ', ' + (file.size/1024).toFixed(1) + ' KB)', 'info')
+    }
+    reader.readAsDataURL(file)
+  }
+
+  async function runAgent2Test() {
+    document.getElementById('run-btn').disabled   = true
+    document.getElementById('error-box').classList.remove('show')
+    document.getElementById('results').classList.remove('show')
+    document.getElementById('log-box').innerHTML  = ''
+    document.getElementById('prog-wrap').classList.add('show')
+    document.getElementById('steps').style.display = 'flex'
+
+    setProgress(5, 'Starting Agent 2...')
+    setStep('step-a', 'active')
+    setStep('step-b', 'wait')
+
+    log('Agent 2 test starting — file: ' + fileState.brandFile.name, 'info')
+
+    try {
+      // Run Agent 1 first to get brandContent
+      const mockState = {
+        brandFile: fileState.brandFile,
+        brandB64:  fileState.brandB64,
+        brandExt:  fileState.brandExt
+      }
+
+      log('Step A: running Python extraction via /api/extract-brand...', 'info')
+      setProgress(20, 'Step A — Python extracting brand data...')
+
+      // Override console.log to capture agent logs
+      const origLog = console.log
+      const origWarn = console.warn
+      console.log  = (...args) => { log(args.join(' '), 'ok');   origLog(...args)  }
+      console.warn = (...args) => { log(args.join(' '), 'warn'); origWarn(...args) }
+
+      const brandContent = await runAgent1(mockState)
+      setStep('step-a', 'done')
+      setProgress(50, 'Step B — Claude enriching layout descriptions...')
+      setStep('step-b', 'active')
+
+      const rulebook = await runAgent2(mockState, brandContent)
+      setStep('step-b', 'done')
+
+      // Restore console
+      console.log  = origLog
+      console.warn = origWarn
+
+      setProgress(100, '✅ Extraction complete.')
+      log('Agent 2 complete — rendering results...', 'ok')
+
+      resultRulebook = rulebook
+      renderResults(rulebook)
+
+    } catch (err) {
+      log('ERROR: ' + err.message, 'err')
+      document.getElementById('error-box').textContent = 'Error: ' + err.message
+      document.getElementById('error-box').classList.add('show')
+    }
+
+    document.getElementById('run-btn').disabled = false
+  }
+
+  function renderResults(rb) {
+    document.getElementById('results').classList.add('show')
+
+    // Summary
+    document.getElementById('r-scheme').textContent    = rb.color_scheme_name || '—'
+    document.getElementById('r-source').textContent    = 'Source: ' + (rb.extraction_source || '—')
+    document.getElementById('r-fontscheme').textContent= rb.font_scheme_name  || '—'
+    document.getElementById('r-style').textContent     = 'Style: ' + (rb.visual_style || '—')
+    document.getElementById('r-size').textContent      = (rb.slide_width_inches || '?') + '" × ' + (rb.slide_height_inches || '?') + '"'
+    document.getElementById('r-sizept').textContent    = (rb.slide_width_pt || '?') + 'pt × ' + (rb.slide_height_pt || '?') + 'pt'
+    document.getElementById('r-layouts').textContent   = (rb.slide_layouts || []).length + ' layouts'
+    document.getElementById('r-logo').textContent      = 'Logo: ' + (rb.logo_position || '—')
+
+    // Fonts
+    const tf = rb.title_font || {}
+    document.getElementById('r-titlefont').textContent        = tf.family || '—'
+    document.getElementById('r-titlefont-detail').textContent = [tf.size, tf.weight, tf.color].filter(Boolean).join(' · ')
+
+    const bf = rb.body_font || {}
+    document.getElementById('r-bodyfont').textContent        = bf.family || '—'
+    document.getElementById('r-bodyfont-detail').textContent = [bf.size, bf.weight, bf.color].filter(Boolean).join(' · ')
+
+    // Colors
+    const colorSections = [
+      { label: 'Primary Colors',    key: 'primary_colors'    },
+      { label: 'Secondary Colors',  key: 'secondary_colors'  },
+      { label: 'Accent Colors',     key: 'accent_colors'     },
+      { label: 'Background Colors', key: 'background_colors' },
+      { label: 'Text Colors',       key: 'text_colors'       },
+      { label: 'Chart Colors',      key: 'chart_colors'      }
+    ]
+
+    let colorHTML = ''
+    // Also show all_colors
+    if (rb.all_colors && Object.keys(rb.all_colors).length) {
+      colorHTML += '<div style="margin-bottom:14px;">'
+      colorHTML += '<div style="font-size:12px;font-weight:600;color:#374151;margin-bottom:6px;">All Theme Colors (with roles)</div>'
+      colorHTML += '<div class="swatch-row">'
+      for (const [role, hex] of Object.entries(rb.all_colors)) {
+        colorHTML += `<div class="swatch">
+          <div class="dot" style="background:${hex}" title="${role}: ${hex}"></div>
+          <div class="hex">${role}</div>
+          <div class="hex">${hex}</div>
+        </div>`
+      }
+      colorHTML += '</div></div>'
+    }
+
+    for (const { label, key } of colorSections) {
+      const colors = rb[key] || []
+      if (!colors.length) continue
+      colorHTML += `<div style="margin-bottom:12px;">
+        <div style="font-size:12px;font-weight:600;color:#374151;margin-bottom:6px;">${label}</div>
+        <div class="swatch-row">`
+      for (const c of colors) {
+        colorHTML += `<div class="swatch">
+          <div class="dot" style="background:${c}" title="${c}"></div>
+          <div class="hex">${c}</div>
+        </div>`
+      }
+      colorHTML += '</div></div>'
+    }
+
+    document.getElementById('color-sections').innerHTML = colorHTML || '<p style="color:#aaa;font-size:13px;">No colors extracted.</p>'
+
+    // Layouts
+    const layouts = rb.slide_layouts || []
+    let layoutHTML = ''
+    if (layouts.length === 0) {
+      layoutHTML = '<p style="color:#aaa;font-size:13px;">No layouts extracted — PPTX format may not be supported.</p>'
+    } else {
+      for (const l of layouts) {
+        const phs = (l.placeholders || []).slice(0, 5)
+        const phRows = phs.map(p =>
+          `<div class="ph-row">
+            <span class="ph-type">${p.type || 'body'}</span>
+            <span class="ph-pos">${p.x_in}"x${p.y_in}" ${p.w_in}"×${p.h_in}"</span>
+            ${p.font_size_pt ? '<span class="ph-pos">'+p.font_size_pt+'pt</span>' : ''}
+          </div>`
+        ).join('')
+
+        layoutHTML += `<div class="layout-card">
+          <div class="lc-name">${l.name}</div>
+          <div class="lc-structure">${l.structure || ''}</div>
+          ${l.usage_guidance ? '<div class="lc-guidance">' + l.usage_guidance + '</div>' : ''}
+          <div class="lc-meta">${l.ph_count || 0} placeholders · type: ${l.type || '—'}</div>
+          ${phs.length ? '<div class="lc-phs">' + phRows + '</div>' : ''}
+        </div>`
+      }
+    }
+    document.getElementById('layout-grid').innerHTML = layoutHTML
+
+    // Raw JSON
+    document.getElementById('raw-json').textContent = JSON.stringify(rb, null, 2)
+  }
+
+  function copyJSON() {
+    if (!resultRulebook) return
+    navigator.clipboard.writeText(JSON.stringify(resultRulebook, null, 2))
+      .then(() => alert('JSON copied to clipboard!'))
+      .catch(() => alert('Copy failed — select the JSON manually.'))
+  }
+
+  function resetAll() {
+    fileState = { brandB64: null, brandExt: null, brandFile: null }
+    resultRulebook = null
+    document.getElementById('upload-label').innerHTML = 'Click to upload &nbsp;<span>.pptx · .pdf · .png · .jpg</span>'
+    document.getElementById('upload-zone').classList.remove('ready')
+    document.getElementById('run-btn').disabled = true
+    document.getElementById('results').classList.remove('show')
+    document.getElementById('error-box').classList.remove('show')
+    document.getElementById('log-box').innerHTML = ''
+    document.getElementById('log-box').classList.remove('show')
+    document.getElementById('prog-wrap').classList.remove('show')
+    document.getElementById('steps').style.display = 'none'
+    document.getElementById('prog-fill').style.width = '0%'
+  }
+</script>
+</body>
+</html>
