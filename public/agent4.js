@@ -1,15 +1,51 @@
 // ─── AGENT 4 — SLIDE CONTENT WRITER ──────────────────────────────────────────
 // Input:  state.outline    — presentationBrief from Agent 3
-//         state.contentB64 — original PDF (fallback for detail)
+//         state.contentB64 — original PDF
 // Output: slideManifest    — flat JSON array, one object per slide
 //
-// Each slide object has:
+// Each slide has:
 //   slide_number, section_name, section_type, slide_type
-//   title, subtitle, key_message
-//   is_mixed         — true when slide has both data and narrative
-//   primary_content  — main visual element (chart/stat/table/bullets/cards etc.)
-//   secondary_content— supporting element when is_mixed = true (bullets/insight_box)
-//   speaker_note
+//   title, subtitle, key_message, speaker_note
+//   zones[] — array of content zones with split hints and content
+//
+// Agent 4 decides WHAT to show and how many zones.
+// Agent 5 decides WHERE everything goes (coordinates, title placement, brand).
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ZONE SPLIT REFERENCE
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// Each zone has a "split" field that tells Agent 5 how to divide the content area.
+//
+// ONE ZONE:
+//   "full"             — one zone fills entire content area
+//
+// TWO ZONES — HORIZONTAL (side by side):
+//   "left_50"          — left half
+//   "right_50"         — right half
+//   "left_60"          — wider left
+//   "right_40"         — narrower right
+//   "left_40"          — narrower left
+//   "right_60"         — wider right
+//
+// TWO ZONES — VERTICAL (top / bottom):
+//   "top_30"           — narrow top row (good for stat callouts)
+//   "bottom_70"        — main content below
+//   "top_40"           — equal-ish top
+//   "bottom_60"        — main content below
+//   "top_50"           — top half
+//   "bottom_50"        — bottom half
+//
+// THREE ZONES:
+//   "top_left_50"      — top left quadrant
+//   "top_right_50"     — top right quadrant
+//   "bottom_full"      — full-width bottom
+//   "left_full_50"     — left half full height
+//   "top_right_50_h"   — top right (stacked)
+//   "bottom_right_50_h"— bottom right (stacked)
+//
+// FOUR ZONES (2x2 grid):
+//   "tl" "tr" "bl" "br" — top-left, top-right, bottom-left, bottom-right
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SYSTEM PROMPT
@@ -18,7 +54,7 @@
 const AGENT4_SYSTEM = `You are a senior management consultant creating slide content for a board-level presentation.
 
 You will receive a presentation brief and a batch of slides to populate.
-The source document is also attached for reference when the brief lacks detail.
+The source document is attached for reference when the brief lacks detail.
 
 Return a JSON array — one object per slide — with EXACTLY these fields:
 
@@ -27,491 +63,456 @@ Return a JSON array — one object per slide — with EXACTLY these fields:
   "section_name": "string",
   "section_type": "string",
   "slide_type": "title" | "divider" | "content",
-  "title": "string",
-  "subtitle": "string",
-  "key_message": "string",
-  "is_mixed": true | false,
-  "primary_content": { ... },
-  "secondary_content": null or { ... },
+  "title": "string — insight-led for content slides, short name for title slides",
+  "subtitle": "string — for title slides only, empty for others",
+  "key_message": "string — the single most important insight, specific and data-driven",
+  "zones": [ ... zone objects ... ],
   "speaker_note": "string"
 }
 
-════════════════════════════════════════
-TITLE RULES
-════════════════════════════════════════
+═══════════════════════════
+SLIDE TYPE RULES
+═══════════════════════════
 
 Title slides:
-- title: SHORT presentation name, 5-8 words max. Example: "Retail Portfolio Analytics — Q3 2025"
-- key_message: the governing thought (the single most important insight for the whole presentation)
-- is_mixed: false
-- primary_content type: "title_slide"
-- secondary_content: null
+- title: SHORT presentation name, 5-8 words max
+- key_message: the governing thought (most important insight for the whole deck)
+- zones: single zone with type "title_slide"
 
 Divider slides:
 - title: section name only
-- is_mixed: false
-- primary_content type: "divider_slide"
-- secondary_content: null
+- zones: single zone with type "divider_slide"
 
-════════════════════════════════════════
-MIXED CONTENT RULES
-════════════════════════════════════════
+Content slides:
+- title: INSIGHT-LED — state the conclusion, not the topic
+  WRONG: "Revenue Analysis"  RIGHT: "Revenue grew 18% driven by Product X"
+  WRONG: "Geographic Risk"   RIGHT: "North Zone concentration at 66% exceeds safe limits"
+- zones: 1 to 4 zones depending on what the slide needs
 
-Set is_mixed: true when the slide has BOTH numbers (charts/stats) AND narrative insight that together tell a stronger story.
-Set is_mixed: false for: title slides, divider slides, data_table, three_column, process_flow (these need full space).
+═══════════════════════════
+ZONE STRUCTURE
+═══════════════════════════
 
-When is_mixed: true  → populate BOTH primary_content AND secondary_content
-When is_mixed: false → populate primary_content only, set secondary_content: null
+Each zone object:
+{
+  "zone_id": "z1",
+  "label": "short description of what this zone shows",
+  "split": "full" | "left_50" | "right_50" | "left_60" | "right_40" | "left_40" | "right_60" |
+           "top_30" | "bottom_70" | "top_40" | "bottom_60" | "top_50" | "bottom_50" |
+           "top_left_50" | "top_right_50" | "bottom_full" |
+           "left_full_50" | "top_right_50_h" | "bottom_right_50_h" |
+           "tl" | "tr" | "bl" | "br",
+  "content": { ... content object ... }
+}
 
-════════════════════════════════════════
-PRIMARY CONTENT TYPES
-════════════════════════════════════════
+SPLIT RULES:
+- All splits in a slide must together cover exactly the full content area
+- For 1 zone: use "full"
+- For 2 side-by-side zones: pair "left_XX" with "right_YY" where XX+YY=100
+- For 2 stacked zones: pair "top_XX" with "bottom_YY" where XX+YY=100
+- For 3 zones (2 top + 1 bottom): use "top_left_50" + "top_right_50" + "bottom_full"
+- For 3 zones (1 left + 2 stacked right): use "left_full_50" + "top_right_50_h" + "bottom_right_50_h"
+- For 4 zones (2x2 grid): use "tl" + "tr" + "bl" + "br"
+
+MINIMUM ZONE SIZE GUIDANCE (Agent 5 will enforce, but respect in planning):
+- A chart needs at least 40% of height to be readable
+- A data table needs at least 0.4" per row — do not use tables for more than 6 rows in a zone
+- Stat callouts work well in top_30 (narrow top strip) or tl/tr quarters
+- Bullets/text work well in right_40 or bottom_40
+- Full-width chart works best in "full" or "bottom_70"
+
+═══════════════════════════
+CONTENT TYPES
+═══════════════════════════
 
 ── title_slide ──
-{
-  "type": "title_slide",
-  "title": "short presentation name",
-  "subtitle": "audience or context",
-  "date": "Month Year"
-}
+{ "type": "title_slide", "title": "short name", "subtitle": "audience/context", "date": "Month Year" }
 
 ── divider_slide ──
-{
-  "type": "divider_slide",
-  "section_name": "section title",
-  "section_descriptor": "one line describing what this section covers"
-}
+{ "type": "divider_slide", "section_name": "string", "section_descriptor": "one line" }
 
 ── chart ──
 {
   "type": "chart",
   "chart_type": "bar" | "line" | "pie" | "waterfall" | "clustered_bar",
-  "chart_decision": "one line explaining why this chart type was chosen",
-  "chart_title": "descriptive chart title",
-  "x_label": "string or empty",
-  "y_label": "string or empty",
-  "categories": ["string", "string"],
-  "series": [
-    {
-      "name": "series name",
-      "values": [number, number],
-      "types": ["positive" | "negative" | "total"]
-    }
-  ],
+  "chart_decision": "why this chart type was chosen",
+  "chart_title": "descriptive title",
+  "x_label": "string",
+  "y_label": "string",
+  "categories": ["string"],
+  "series": [{ "name": "string", "values": [number], "types": ["positive"|"negative"|"total"] }],
   "show_data_labels": true,
   "show_legend": true | false
 }
 
+Chart type selection:
+- bar:           3+ categories, one metric, no time
+- line:          trend over time (months, quarters, years)
+- pie:           parts of a whole summing to ~100%, max 5 segments
+- waterfall:     bridge/variance — items have types positive/negative/total
+- clustered_bar: two series on same categories (actual vs target, period vs period)
+
 ── stat_callout ──
 {
   "type": "stat_callout",
-  "stats": [
-    {
-      "value": "₹351.11 Cr",
-      "label": "Principal Outstanding",
-      "change": "76.7% of disbursed",
-      "sentiment": "positive" | "negative" | "neutral"
-    }
-  ]
+  "stats": [{ "value": "₹351Cr", "label": "string", "change": "string", "sentiment": "positive"|"negative"|"neutral" }]
 }
-Note: Use "negative" sentiment for bad/risk metrics. Max 4 stats.
+Max 4 stats. Use "negative" for risk/bad metrics.
+In a narrow zone (top_30, tl, tr): use max 2-3 stats.
 
 ── data_table ──
 {
   "type": "data_table",
-  "headers": ["Col1", "Col2", "Col3"],
-  "rows": [["val", "val", "val"]],
-  "highlight_rows": [0]
+  "headers": ["Col1","Col2"],
+  "rows": [["val","val"]],
+  "highlight_rows": [0],
+  "note": "optional table footnote"
 }
-
-── three_column ──
-{
-  "type": "three_column",
-  "columns": [
-    { "header": "string", "body": "2-3 sentence description", "sentiment": "positive" | "negative" | "neutral" }
-  ]
-}
-
-── two_column ──
-{
-  "type": "two_column",
-  "left_header": "string",
-  "left_points": ["point 1", "point 2"],
-  "right_header": "string",
-  "right_points": ["point 1", "point 2"]
-}
-
-── cards ──
-{
-  "type": "cards",
-  "cards": [
-    { "header": "string", "body": "2-3 sentences", "sentiment": "positive" | "negative" | "neutral" }
-  ]
-}
-Note: Use for 3-4 parallel recommendations or strategic initiatives.
-
-── process_flow ──
-{
-  "type": "process_flow",
-  "steps": [
-    { "step_number": 1, "title": "string", "description": "string" }
-  ]
-}
+Max 6 rows for readability. If more data needed, use two table zones.
 
 ── bullets ──
 {
   "type": "bullets",
   "bullets": [
     {
-      "text": "full bullet text with specific data",
-      "emphasis": [
-        { "text": "exact substring to emphasise", "style": "bold", "color": "accent" | "positive" | "warning" | null }
-      ],
-      "sentiment": "positive" | "warning" | "neutral"
+      "text": "specific insight with data",
+      "emphasis": [{ "text": "exact substring", "style": "bold", "color": "accent"|"positive"|"warning"|null }],
+      "sentiment": "positive"|"warning"|"neutral"
     }
   ]
 }
+Max 5 bullets per zone. Each must be a complete sentence with specific data.
+Emphasis rules:
+- Numbers/percentages: always bold, no color
+- Risk words (risk, decline, breach, critical, dangerous, concentration): bold + accent
+- Positive words (grew, improved, record, exceeded): bold + positive
+- Max ONE emphasis per bullet
 
-════════════════════════════════════════
-SECONDARY CONTENT TYPES
-════════════════════════════════════════
-
-── bullets (same structure as primary bullets above) ──
+── cards ──
+{
+  "type": "cards",
+  "cards": [{ "header": "string", "body": "2-3 sentences", "sentiment": "positive"|"negative"|"neutral" }]
+}
+For 3-4 parallel items. In a full zone: up to 4 cards. In left/right zone: up to 2 cards.
 
 ── insight_box ──
 {
   "type": "insight_box",
-  "heading": "Key Insight" | "So What" | "Risk Alert" | "Action Required",
+  "heading": "Key Insight"|"Risk Alert"|"So What"|"Action Required",
   "text": "1-2 specific sentences with data",
-  "sentiment": "positive" | "warning" | "neutral"
+  "sentiment": "positive"|"warning"|"neutral"
 }
+Good for small zones (right_40, bottom_30, tr, br).
 
-── stat_callout (1-2 stats only, for secondary position) ──
-
-════════════════════════════════════════
-CHART TYPE DECISION RULES
-════════════════════════════════════════
-
-bar:          comparison across 3+ categories, one metric, no time dimension
-line:         trend over time — labels are months / quarters / years
-pie:          part of a whole — values sum to ~100%, max 5 segments
-waterfall:    bridge / variance — items have types: positive / negative / total
-clustered_bar: two series compared across same categories (e.g. actual vs target)
-
-════════════════════════════════════════
-BULLET EMPHASIS RULES
-════════════════════════════════════════
-
-- Numbers and percentages: ALWAYS bold, no color change
-- Risk words (risk, decline, fall, breach, exceed, critical, dangerous, concentration): bold + accent color
-- Positive words (grew, growth, strong, record, exceeded target, improved): bold + positive color
-- Key entity names (zone names, product names): bold only
-- Max ONE emphasis per bullet — the single most important element only
-
-════════════════════════════════════════
-CRITICAL QUALITY RULES
-════════════════════════════════════════
-
-1. ZERO placeholder text — "Key point from this slide", "TBD", "Insert data" = FAILURE
-2. Every number must come from the source document — no invented figures
-3. Title slides: title is SHORT (5-8 words), not the governing thought
-4. key_message must be an INSIGHT not a description — state the so-what
-5. Titles of content slides must be insight-led: "Revenue grew 18%" not "Revenue Analysis"
-6. Return ONLY a valid JSON array. No explanation. No markdown fences.`
-
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// CHART TYPE AUTO-SELECTOR (fallback if Claude doesn't decide)
-// ═══════════════════════════════════════════════════════════════════════════════
-
-function selectChartType(pc, sectionType, slideTitle) {
-  // Already decided
-  if (pc && pc.chart_type) return pc.chart_type
-
-  const text = ((slideTitle || '') + ' ' + (sectionType || '')).toLowerCase()
-
-  // Waterfall — items have types array
-  if (pc && pc.series && pc.series[0] && pc.series[0].types) return 'waterfall'
-
-  // Two series → clustered bar
-  if (pc && pc.series && pc.series.length >= 2) return 'clustered_bar'
-
-  const cats = (pc && pc.categories) ? pc.categories : []
-
-  // Time series
-  const timeLabels = ['q1','q2','q3','q4','jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec','fy','h1','h2','2020','2021','2022','2023','2024','2025','2026']
-  if (cats.some(c => timeLabels.some(t => String(c).toLowerCase().includes(t)))) return 'line'
-
-  // Pie — distribution / composition / share
-  if (/distribution|breakdown|mix|composition|share|proportion/.test(text)) {
-    const vals = pc && pc.series && pc.series[0] ? pc.series[0].values || [] : []
-    const sum  = vals.reduce((a, b) => a + b, 0)
-    if (sum > 80 && sum < 120 && cats.length <= 5) return 'pie'
-  }
-
-  return 'bar'
+── two_column ──
+{
+  "type": "two_column",
+  "left_header": "string",
+  "left_points": ["string"],
+  "right_header": "string",
+  "right_points": ["string"]
 }
+Only use in a "full" zone. Do not combine with other zones.
 
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// MIXED CONTENT DECISION (whether a slide should be mixed)
-// ═══════════════════════════════════════════════════════════════════════════════
-
-function shouldBeMixed(sectionType, slideType, visualType) {
-  if (slideType === 'title' || slideType === 'divider') return false
-  if (['data_table', 'three_column', 'process_flow', 'two_column'].includes(visualType)) return false
-  if (sectionType === 'executive_summary') return false
-  return ['financial_data', 'strategic_analysis', 'market_analysis', 'operational_review', 'recommendations'].includes(sectionType)
+── three_column ──
+{
+  "type": "three_column",
+  "columns": [{ "header": "string", "body": "string", "sentiment": "positive"|"negative"|"neutral" }]
 }
+Only use in a "full" zone. Do not combine with other zones.
 
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// VISUAL TYPE INFERENCE (fallback when not specified)
-// ═══════════════════════════════════════════════════════════════════════════════
-
-function inferVisualType(sectionType, slideIndex, totalInSection) {
-  switch (sectionType) {
-    case 'financial_data':     return slideIndex === 0 ? 'stat_callout' : 'chart'
-    case 'executive_summary':  return 'stat_callout'
-    case 'strategic_analysis': return slideIndex % 2 === 0 ? 'chart' : 'bullets'
-    case 'market_analysis':    return 'chart'
-    case 'recommendations':    return totalInSection > 1 ? 'three_column' : 'cards'
-    case 'conclusion':         return 'process_flow'
-    case 'operational_review': return 'data_table'
-    default:                   return 'bullets'
-  }
+── process_flow ──
+{
+  "type": "process_flow",
+  "steps": [{ "step_number": 1, "title": "string", "description": "string" }]
 }
+Only use in a "full" zone. Max 5 steps.
 
+═══════════════════════════
+ZONE COMBINATION EXAMPLES
+═══════════════════════════
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// PLACEHOLDER DETECTOR
-// ═══════════════════════════════════════════════════════════════════════════════
-
-const PLACEHOLDER_PATTERNS = [
-  /key point from this slide/i,
-  /insert data here/i,
-  /\btbd\b/i,
-  /^placeholder$/i,
-  /sample text/i,
-  /click to edit/i,
-  /^\s*-\s*$/
+Example 1 — Chart with key insight (2 zones):
+zones: [
+  { zone_id: "z1", split: "left_60", content: { type: "chart", ... } },
+  { zone_id: "z2", split: "right_40", content: { type: "insight_box", ... } }
 ]
 
-function isPlaceholder(text) {
-  if (!text || typeof text !== 'string') return true
-  if (text.trim().length < 5) return true
-  return PLACEHOLDER_PATTERNS.some(p => p.test(text.trim()))
+Example 2 — Stats above chart (2 zones):
+zones: [
+  { zone_id: "z1", split: "top_30", content: { type: "stat_callout", stats: [2-3 stats] } },
+  { zone_id: "z2", split: "bottom_70", content: { type: "chart", ... } }
+]
+
+Example 3 — Two comparison charts (2 zones):
+zones: [
+  { zone_id: "z1", split: "left_50", content: { type: "chart", chart_title: "North Zone", ... } },
+  { zone_id: "z2", split: "right_50", content: { type: "chart", chart_title: "West Zone", ... } }
+]
+
+Example 4 — Three charts (3 zones):
+zones: [
+  { zone_id: "z1", split: "top_left_50", content: { type: "chart", ... } },
+  { zone_id: "z2", split: "top_right_50", content: { type: "chart", ... } },
+  { zone_id: "z3", split: "bottom_full", content: { type: "bullets", ... } }
+]
+
+Example 5 — Main chart left, table + insight right (3 zones):
+zones: [
+  { zone_id: "z1", split: "left_full_50", content: { type: "chart", ... } },
+  { zone_id: "z2", split: "top_right_50_h", content: { type: "data_table", ... } },
+  { zone_id: "z3", split: "bottom_right_50_h", content: { type: "insight_box", ... } }
+]
+
+Example 6 — 4 stat callouts in grid (4 zones):
+zones: [
+  { zone_id: "z1", split: "tl", content: { type: "stat_callout", stats: [1 stat] } },
+  { zone_id: "z2", split: "tr", content: { type: "stat_callout", stats: [1 stat] } },
+  { zone_id: "z3", split: "bl", content: { type: "stat_callout", stats: [1 stat] } },
+  { zone_id: "z4", split: "br", content: { type: "stat_callout", stats: [1 stat] } }
+]
+
+═══════════════════════════
+QUALITY RULES
+═══════════════════════════
+
+1. ZERO placeholder text — every value must be real and specific
+2. Numbers must come from the source document — no invented figures
+3. Key messages must state the insight, not describe the slide
+4. Use multiple zones when data richness justifies it
+5. Do NOT force multi-zone when a single chart or table tells the story clearly
+6. Return ONLY valid JSON array. No explanation. No markdown fences.`
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function inferDefaultZones(sectionType, slideType, slideIndex) {
+  if (slideType === 'title')   return [{ zone_id: 'z1', label: 'title', split: 'full', content: { type: 'title_slide', title: '', subtitle: '', date: '' } }]
+  if (slideType === 'divider') return [{ zone_id: 'z1', label: 'section', split: 'full', content: { type: 'divider_slide', section_name: '', section_descriptor: '' } }]
+
+  switch (sectionType) {
+    case 'financial_data':
+      return slideIndex === 0
+        ? [
+            { zone_id: 'z1', label: 'key metrics', split: 'top_30', content: { type: 'stat_callout', stats: [] } },
+            { zone_id: 'z2', label: 'trend chart', split: 'bottom_70', content: { type: 'chart', chart_type: 'bar', categories: [], series: [] } }
+          ]
+        : [
+            { zone_id: 'z1', label: 'chart', split: 'left_60', content: { type: 'chart', chart_type: 'bar', categories: [], series: [] } },
+            { zone_id: 'z2', label: 'insight', split: 'right_40', content: { type: 'insight_box', heading: 'Key Insight', text: '', sentiment: 'neutral' } }
+          ]
+
+    case 'executive_summary':
+      return [
+        { zone_id: 'z1', label: 'headline metrics', split: 'top_30', content: { type: 'stat_callout', stats: [] } },
+        { zone_id: 'z2', label: 'key points', split: 'bottom_70', content: { type: 'bullets', bullets: [] } }
+      ]
+
+    case 'strategic_analysis':
+    case 'market_analysis':
+      return [
+        { zone_id: 'z1', label: 'primary chart', split: 'left_60', content: { type: 'chart', chart_type: 'bar', categories: [], series: [] } },
+        { zone_id: 'z2', label: 'supporting bullets', split: 'right_40', content: { type: 'bullets', bullets: [] } }
+      ]
+
+    case 'recommendations':
+      return [{ zone_id: 'z1', label: 'recommendations', split: 'full', content: { type: 'cards', cards: [] } }]
+
+    case 'conclusion':
+      return [{ zone_id: 'z1', label: 'next steps', split: 'full', content: { type: 'process_flow', steps: [] } }]
+
+    case 'operational_review':
+      return [
+        { zone_id: 'z1', label: 'metrics', split: 'top_30', content: { type: 'stat_callout', stats: [] } },
+        { zone_id: 'z2', label: 'detail table', split: 'bottom_70', content: { type: 'data_table', headers: [], rows: [] } }
+      ]
+
+    default:
+      return [{ zone_id: 'z1', label: 'content', split: 'full', content: { type: 'bullets', bullets: [] } }]
+  }
 }
 
-function hasPlaceholderContent(slide) {
-  const pc = slide.primary_content || {}
+function isZonePlaceholder(zone) {
+  const c = zone.content || {}
+  const type = (c.type || '').toLowerCase()
 
-  // Check bullets
-  if (pc.type === 'bullets') {
-    const bullets = pc.bullets || []
-    if (bullets.length === 0) return true
-    const texts = bullets.map(b => typeof b === 'string' ? b : (b.text || ''))
-    if (texts.every(t => isPlaceholder(t))) return true
+  if (type === 'bullets') {
+    const bullets = c.bullets || []
+    if (!bullets.length) return true
+    return bullets.every(b => {
+      const text = typeof b === 'string' ? b : (b.text || '')
+      return !text || text.trim().length < 5 || /key point|placeholder|tbd|insert/i.test(text)
+    })
   }
-
-  // Check stats
-  if (pc.type === 'stat_callout') {
-    const stats = pc.stats || []
-    if (stats.length === 0) return true
-    if (stats.every(s => isPlaceholder(s.value) || s.value === '—')) return true
+  if (type === 'stat_callout') {
+    const stats = c.stats || []
+    if (!stats.length) return true
+    return stats.every(s => !s.value || s.value === '—' || /placeholder|tbd/i.test(s.value))
   }
-
-  // Check chart has data
-  if (pc.type === 'chart') {
-    if (!pc.categories || pc.categories.length === 0) return true
-    if (!pc.series || pc.series.length === 0) return true
-    if (pc.series.every(s => !s.values || s.values.length === 0)) return true
+  if (type === 'chart') {
+    return !c.categories || c.categories.length === 0 || !c.series || c.series.length === 0
   }
-
-  // Check cards
-  if (pc.type === 'cards') {
-    const cards = pc.cards || []
-    if (cards.length === 0) return true
-    if (cards.every(c => isPlaceholder(c.body || '') && isPlaceholder(c.header || ''))) return true
+  if (type === 'cards') {
+    return !c.cards || c.cards.length === 0
   }
-
-  // Check key message
-  if (isPlaceholder(slide.key_message)) return true
-
   return false
 }
 
+function hasPlaceholderContent(slide) {
+  if (slide.slide_type !== 'content') return false
+  if (!slide.zones || slide.zones.length === 0) return true
+  if (!slide.key_message || slide.key_message.trim().length < 10) return true
+  return slide.zones.some(z => isZonePlaceholder(z))
+}
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// NORMALISE A SINGLE SLIDE (clean up structure from Claude's response)
-// ═══════════════════════════════════════════════════════════════════════════════
+function normaliseZone(z) {
+  if (!z) return null
+  const content = z.content || {}
+  if (!content.type) content.type = 'bullets'
+
+  // Ensure chart has chart_title
+  if (content.type === 'chart' && !content.chart_title) {
+    content.chart_title = z.label || ''
+  }
+
+  // Ensure chart type is set
+  if (content.type === 'chart' && !content.chart_type) {
+    content.chart_type = 'bar'
+  }
+
+  // Normalise bullets
+  if (content.type === 'bullets' && content.bullets) {
+    content.bullets = content.bullets.map(b => {
+      if (typeof b === 'string') {
+        return { text: b, emphasis: autoEmphasis(b), sentiment: autoSentiment(b) }
+      }
+      return {
+        text:      b.text      || '',
+        emphasis:  b.emphasis  || autoEmphasis(b.text || ''),
+        sentiment: b.sentiment || autoSentiment(b.text || '')
+      }
+    })
+  }
+
+  return { zone_id: z.zone_id || 'z1', label: z.label || '', split: z.split || 'full', content }
+}
+
+function autoEmphasis(text) {
+  const m = text.match(/[₹$€]?[\d,]+\.?\d*[%CrLKMB]*/g)
+  if (m && m[0]) return [{ text: m[0], style: 'bold', color: null }]
+  return []
+}
+
+function autoSentiment(text) {
+  const t = text.toLowerCase()
+  if (/risk|decline|fall|breach|exceed|critical|concern|dangerous|concentrat|below|deficit/.test(t)) return 'warning'
+  if (/grew|growth|strong|record|exceed.*target|improv|positive|increase/.test(t)) return 'positive'
+  return 'neutral'
+}
 
 function normaliseSlide(slide, plan) {
   const slideType = slide.slide_type || plan.slide_type || 'content'
-  const isMixed   = slide.is_mixed !== undefined ? !!slide.is_mixed : plan.suggested_mixed || false
 
-  // Get primary content — handle both new format and legacy format
-  let pc = slide.primary_content || null
+  // Normalise zones
+  let zones = []
 
-  if (!pc && slide.content) {
-    // Legacy format — Agent returned old-style content object
-    pc = normaliseLegacyContent(slide.content, slide.visual_type || plan.suggested_visual_type)
-  }
+  if (slide.zones && Array.isArray(slide.zones) && slide.zones.length > 0) {
+    zones = slide.zones.map(normaliseZone).filter(Boolean)
+  } else if (slide.primary_content || slide.content) {
+    // Legacy format conversion
+    const pc = slide.primary_content || slide.content || {}
+    const sc = slide.secondary_content || null
+    const pcType = (pc.type || '').replace('bullet_list','bullets').replace('chart_bar','chart').replace('chart_line','chart')
 
-  if (!pc) {
-    pc = buildEmptyContent(plan.suggested_visual_type, slideType, plan)
-  }
+    if (!pc.type) pc.type = pcType || 'bullets'
 
-  // Ensure type field always exists
-  if (!pc.type) {
-    pc.type = plan.suggested_visual_type || 'bullets'
-  }
-
-  // Auto-select chart type if missing
-  if (pc.type === 'chart' && !pc.chart_type) {
-    pc.chart_type     = selectChartType(pc, plan.section_type, slide.title || '')
-    pc.chart_decision = pc.chart_decision || 'auto-selected based on data structure'
-  }
-
-  // Ensure chart_title is populated
-  if (pc.type === 'chart' && !pc.chart_title) {
-    pc.chart_title = slide.title || plan.section_name || ''
-  }
-
-  // Secondary content — only if mixed
-  let sc = null
-  if (isMixed) {
-    sc = slide.secondary_content || null
-    // If mixed but no secondary provided, build a minimal insight box
-    if (!sc && slide.key_message && !isPlaceholder(slide.key_message)) {
-      sc = {
-        type:      'insight_box',
-        heading:   'Key Insight',
-        text:      slide.key_message,
-        sentiment: 'neutral'
-      }
+    if (sc) {
+      zones = [
+        { zone_id: 'z1', label: 'primary', split: 'left_60', content: { ...pc, type: pcType || 'bullets' } },
+        { zone_id: 'z2', label: 'secondary', split: 'right_40', content: sc }
+      ]
+    } else {
+      zones = [{ zone_id: 'z1', label: 'main', split: 'full', content: { ...pc, type: pcType || 'bullets' } }]
     }
+    zones = zones.map(normaliseZone).filter(Boolean)
+  } else {
+    zones = inferDefaultZones(plan.section_type, slideType, 0).map(normaliseZone).filter(Boolean)
   }
 
   return {
-    slide_number:      slide.slide_number      || plan.slide_number,
-    section_name:      slide.section_name      || plan.section_name   || '',
-    section_type:      slide.section_type      || plan.section_type   || '',
-    slide_type:        slideType,
-    title:             slide.title             || plan.section_name   || ('Slide ' + plan.slide_number),
-    subtitle:          slide.subtitle          || '',
-    key_message:       slide.key_message       || plan.so_what        || '',
-    is_mixed:          isMixed,
-    primary_content:   pc,
-    secondary_content: sc,
-    speaker_note:      slide.speaker_note      || plan.purpose        || ''
+    slide_number:  slide.slide_number  || plan.slide_number,
+    section_name:  slide.section_name  || plan.section_name  || '',
+    section_type:  slide.section_type  || plan.section_type  || '',
+    slide_type:    slideType,
+    title:         slide.title         || plan.section_name  || ('Slide ' + plan.slide_number),
+    subtitle:      slide.subtitle      || '',
+    key_message:   slide.key_message   || plan.so_what       || '',
+    zones:         zones,
+    speaker_note:  slide.speaker_note  || plan.purpose       || ''
   }
 }
-
-function normaliseLegacyContent(content, visualType) {
-  if (!content || typeof content !== 'object') return null
-  const vt = (visualType || 'bullets')
-    .replace('bullet_list', 'bullets')
-    .replace('chart_bar',   'chart')
-    .replace('chart_line',  'chart')
-    .replace('chart_waterfall', 'chart')
-    .replace('stat_callout', 'stat_callout')
-  return { type: vt, ...content }
-}
-
-function buildEmptyContent(visualType, slideType, plan) {
-  if (slideType === 'title')   return { type: 'title_slide',   title: plan.section_name || '', subtitle: '', date: '' }
-  if (slideType === 'divider') return { type: 'divider_slide', section_name: plan.section_name || '', section_descriptor: plan.purpose || '' }
-
-  switch (visualType) {
-    case 'chart':        return { type: 'chart',        chart_type: 'bar', chart_title: '', categories: [], series: [] }
-    case 'stat_callout': return { type: 'stat_callout', stats: [] }
-    case 'data_table':   return { type: 'data_table',   headers: [], rows: [] }
-    case 'three_column': return { type: 'three_column', columns: [] }
-    case 'cards':        return { type: 'cards',        cards: [] }
-    case 'process_flow': return { type: 'process_flow', steps: [] }
-    default:             return { type: 'bullets',      bullets: [] }
-  }
-}
-
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// SLIDE PLAN BUILDER
-// ═══════════════════════════════════════════════════════════════════════════════
 
 function buildSlidePlan(brief, slideCount) {
   const sections = brief.sections || []
   const plan     = []
-  let   slideNum = 1
+  let   num      = 1
 
   for (const section of sections) {
     const count = Math.max(1, section.suggested_slide_count || 1)
 
     for (let i = 0; i < count; i++) {
-      if (slideNum > slideCount) break
+      if (num > slideCount) break
 
-      let slideType  = 'content'
-      let visualType = inferVisualType(section.section_type, i, count)
-
-      if (slideNum === 1) {
-        slideType  = 'title'
-        visualType = 'title_slide'
-      } else if (section.section_type === 'divider') {
-        slideType  = 'divider'
-        visualType = 'divider_slide'
-      }
+      let slideType = 'content'
+      if (num === 1) slideType = 'title'
+      else if (section.section_type === 'divider') slideType = 'divider'
 
       plan.push({
-        slide_number:          slideNum,
-        section_name:          section.section_name  || '',
-        section_type:          section.section_type  || '',
-        slide_type:            slideType,
-        suggested_visual_type: visualType,
-        suggested_mixed:       shouldBeMixed(section.section_type, slideType, visualType),
-        purpose:               section.purpose       || '',
-        key_content:           section.key_content   || [],
-        so_what:               section.so_what       || '',
-        data_available:        section.data_available || false
+        slide_number:  num,
+        section_name:  section.section_name  || '',
+        section_type:  section.section_type  || '',
+        slide_type:    slideType,
+        purpose:       section.purpose       || '',
+        key_content:   section.key_content   || [],
+        so_what:       section.so_what       || '',
+        data_available:section.data_available || false,
+        slide_index_in_section: i
       })
-
-      slideNum++
+      num++
     }
-
-    if (slideNum > slideCount) break
+    if (num > slideCount) break
   }
 
   return plan
 }
 
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// BATCH WRITER
-// ═══════════════════════════════════════════════════════════════════════════════
-
 async function writeSlideBatch(batchPlan, brief, contentB64, batchNum) {
   console.log('Agent 4 — batch', batchNum, ': slides', batchPlan[0].slide_number, '–', batchPlan[batchPlan.length-1].slide_number)
 
   const prompt = `PRESENTATION BRIEF:
-Document type:    ${brief.document_type || '—'}
+Document type:     ${brief.document_type || '—'}
 Governing thought: ${brief.governing_thought || '—'}
-Narrative flow:   ${brief.narrative_flow || '—'}
-Tone:             ${brief.tone || 'professional'}
-Key messages:     ${(brief.key_messages || []).join(' | ')}
-Key data points:  ${(brief.key_data_points || []).join(' | ')}
-Recommendations:  ${(brief.recommendations || []).join(' | ')}
+Narrative flow:    ${brief.narrative_flow || '—'}
+Tone:              ${brief.tone || 'professional'}
+Key messages:      ${(brief.key_messages || []).join(' | ')}
+Key data points:   ${(brief.key_data_points || []).join(' | ')}
+Recommendations:   ${(brief.recommendations || []).join(' | ')}
 
 SLIDES TO WRITE — batch ${batchNum} (${batchPlan.length} slides):
 ${JSON.stringify(batchPlan, null, 2)}
 
 INSTRUCTIONS:
-- Write full content for each slide using the brief AND the attached source document
-- Where suggested_mixed is true: populate BOTH primary_content AND secondary_content
-- Where suggested_mixed is false: primary_content only, secondary_content: null
-- Select the best chart type using the decision rules
-- Apply bullet emphasis rules — bold numbers, flag risks with accent color
-- Title slide: SHORT name (5-8 words max), not the governing thought
-- Use REAL data from the source document — actual numbers, percentages, names
-- ZERO placeholder content — every field must be specific and meaningful
+- Write full zones[] content for each slide using the brief AND the attached source document
+- Decide how many zones each slide needs based on the richness of the data
+- Use multiple zones when comparing data sets, showing trends alongside summaries, or presenting parallel insights
+- Do NOT force multi-zone when a single chart or table tells the story clearly
+- Zone splits must be complementary — left_60 + right_40, top_30 + bottom_70 etc.
+- Title slides: SHORT name (5-8 words max), not the governing thought
+- Content slide titles: INSIGHT-LED — state the conclusion
+- All numbers must come from the source document
+- ZERO placeholder content
 - Return ONLY a JSON array for these ${batchPlan.length} slides`
 
   const messages = [{
@@ -534,29 +535,24 @@ INSTRUCTIONS:
   return parsed
 }
 
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// SLIDE REPAIR (for slides with placeholder content)
-// ═══════════════════════════════════════════════════════════════════════════════
-
 async function repairSlide(slide, brief, contentB64) {
   console.log('Agent 4 — repairing slide', slide.slide_number, ':', slide.title)
 
-  const prompt = `This slide has placeholder or missing content. Fix it with specific data from the source document.
+  const prompt = `This slide has placeholder or missing content in its zones. Fix every zone with real data from the source document.
 
 CONTEXT:
-Document type:   ${brief.document_type || '—'}
-Key messages:    ${(brief.key_messages || []).join(' | ')}
-Key data:        ${(brief.key_data_points || []).join(' | ')}
+Document type:  ${brief.document_type || '—'}
+Key messages:   ${(brief.key_messages || []).join(' | ')}
+Key data:       ${(brief.key_data_points || []).join(' | ')}
 
 SLIDE TO FIX:
 ${JSON.stringify(slide, null, 2)}
 
-RULES:
-- Replace ALL placeholder text with specific, data-driven content
-- For title slides: SHORT name (5-8 words max)
+Rules:
+- Replace ALL placeholder content with real, specific data-driven content
+- Keep the same zones[] structure — just fill in the content
 - Numbers must come from the source document
-- Return ONLY a single JSON object for this one slide. No array. No explanation.`
+- Return ONLY a single JSON object for this one slide`
 
   const messages = [{
     role: 'user',
@@ -576,38 +572,23 @@ RULES:
   } catch(e) {
     console.warn('Agent 4 repair — parse failed for slide', slide.slide_number)
   }
-
   return null
 }
-
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// MAIN RUNNER
-// ═══════════════════════════════════════════════════════════════════════════════
 
 async function runAgent4(state) {
   const brief      = state.outline
   const contentB64 = state.contentB64
   const slideCount = (brief && brief.total_slides) || state.slideCount || 12
 
-  console.log('Agent 4 starting')
-  console.log('  Target slides:', slideCount)
-  console.log('  Document type:', (brief && brief.document_type) || '—')
+  console.log('Agent 4 starting — target slides:', slideCount, '| doc type:', (brief && brief.document_type) || '—')
 
-  // Step 1 — Build slide plan from brief
   const slidePlan = buildSlidePlan(brief, slideCount)
-  const mixedCount = slidePlan.filter(s => s.suggested_mixed).length
-  console.log('  Slide plan:', slidePlan.length, 'slides,', mixedCount, 'suggested as mixed')
+  console.log('  Slide plan:', slidePlan.length, 'slides')
 
-  // Step 2 — Split into batches of 5
-  const BATCH_SIZE = 5
-  const batches    = []
-  for (let i = 0; i < slidePlan.length; i += BATCH_SIZE) {
-    batches.push(slidePlan.slice(i, i + BATCH_SIZE))
-  }
-  console.log('  Batches:', batches.length)
+  // Batch into groups of 5
+  const batches = []
+  for (let i = 0; i < slidePlan.length; i += 5) batches.push(slidePlan.slice(i, i + 5))
 
-  // Step 3 — Write each batch
   let allSlides = []
 
   for (let b = 0; b < batches.length; b++) {
@@ -615,11 +596,8 @@ async function runAgent4(state) {
     const result = await writeSlideBatch(batch, brief, contentB64, b + 1)
 
     if (!result) {
-      // Batch failed — create empty shells
-      console.warn('Agent 4 — batch', b+1, 'failed, creating shells')
       batch.forEach(plan => allSlides.push(normaliseSlide({}, plan)))
     } else {
-      // Merge results with plan
       batch.forEach((plan, idx) => {
         const match = result[idx] || result.find(s => s.slide_number === plan.slide_number)
         allSlides.push(normaliseSlide(match || {}, plan))
@@ -627,48 +605,38 @@ async function runAgent4(state) {
     }
   }
 
-  // Step 4 — Validate and repair placeholder slides
-  const failed = allSlides.filter(s => s.slide_type === 'content' && hasPlaceholderContent(s))
-  console.log('Agent 4 — slides needing repair:', failed.length)
+  // Validate and repair
+  const failed = allSlides.filter(s => hasPlaceholderContent(s))
+  console.log('  Slides needing repair:', failed.length)
 
   for (const slide of failed.slice(0, 5)) {
     const repaired = await repairSlide(slide, brief, contentB64)
     if (repaired) {
       const idx = allSlides.findIndex(s => s.slide_number === slide.slide_number)
       if (idx >= 0) {
-        const plan = slidePlan.find(p => p.slide_number === slide.slide_number) || {}
-        allSlides[idx] = normaliseSlide(repaired, plan)
+        allSlides[idx] = normaliseSlide(repaired, slidePlan.find(p => p.slide_number === slide.slide_number) || {})
         console.log('  Repaired slide', slide.slide_number)
       }
     }
   }
 
-  // Step 5 — Final quality log
-  const finalFailed = allSlides.filter(s => s.slide_type === 'content' && hasPlaceholderContent(s))
-  if (finalFailed.length > 0) {
-    console.warn('Agent 4 — slides still with placeholder content:', finalFailed.map(s => s.slide_number).join(', '))
-  }
-
-  // Log visual type breakdown
-  const vtBreakdown  = {}
-  const finalMixed   = allSlides.filter(s => s.is_mixed).length
-  const chartTypes   = {}
-
+  // Summary log
+  const zoneBreakdown = {}
+  const typeBreakdown = {}
   allSlides.forEach(s => {
-    const ptype = (s.primary_content || {}).type || 'unknown'
-    vtBreakdown[ptype] = (vtBreakdown[ptype] || 0) + 1
-    if (ptype === 'chart') {
-      const ct = (s.primary_content || {}).chart_type || 'unknown'
-      chartTypes[ct] = (chartTypes[ct] || 0) + 1
-    }
+    const zc = (s.zones || []).length
+    zoneBreakdown[zc] = (zoneBreakdown[zc] || 0) + 1
+    ;(s.zones || []).forEach(z => {
+      const t = (z.content || {}).type || 'unknown'
+      typeBreakdown[t] = (typeBreakdown[t] || 0) + 1
+    })
   })
 
   console.log('Agent 4 complete')
   console.log('  Total slides:', allSlides.length)
-  console.log('  Mixed slides:', finalMixed)
-  console.log('  Content types:', JSON.stringify(vtBreakdown))
-  console.log('  Chart types:', JSON.stringify(chartTypes))
-  console.log('  Placeholder slides remaining:', finalFailed.length)
+  console.log('  Zone counts:', JSON.stringify(zoneBreakdown))
+  console.log('  Content types:', JSON.stringify(typeBreakdown))
+  console.log('  Placeholder remaining:', allSlides.filter(s => hasPlaceholderContent(s)).length)
 
   return allSlides
 }

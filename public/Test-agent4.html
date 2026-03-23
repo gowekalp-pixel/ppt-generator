@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Agent 4 Tester — Slide Content Writer</title>
+  <title>Agent 4 Tester — Zones Model</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: Arial, sans-serif; background: #f0f2f5; padding: 2rem; color: #111; }
-    .container { max-width: 960px; margin: 0 auto; }
+    .container { max-width: 1000px; margin: 0 auto; }
     .badge { display: inline-block; background: #fef9c3; color: #854d0e; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; margin-bottom: 10px; }
     h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
     .subhead { font-size: 13px; color: #666; margin-bottom: 1.5rem; line-height: 1.5; }
@@ -51,19 +51,20 @@
     .sp-val { font-size: 20px; font-weight: 700; color: #111; }
     .sp-lbl { font-size: 11px; color: #888; text-transform: uppercase; margin-top: 2px; }
 
-    /* Content type pills */
+    /* Content type legend */
     .type-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 1.25rem; }
     .type-pill { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px; }
-    .tp-chart        { background: #dcfce7; color: #15803d; }
-    .tp-stat_callout { background: #ede9fe; color: #5b21b6; }
-    .tp-bullets      { background: #dbeafe; color: #1d4ed8; }
-    .tp-data_table   { background: #fef3c7; color: #92400e; }
-    .tp-three_column { background: #f0fdf4; color: #166534; }
-    .tp-two_column   { background: #f0f9ff; color: #0369a1; }
-    .tp-cards        { background: #fdf4ff; color: #6b21a8; }
-    .tp-process_flow { background: #fff7ed; color: #7c2d12; }
-    .tp-title_slide  { background: #e0e7ff; color: #3730a3; }
-    .tp-divider_slide{ background: #f3f4f6; color: #6b7280; }
+    .tp-chart         { background: #dcfce7; color: #15803d; }
+    .tp-stat_callout  { background: #ede9fe; color: #5b21b6; }
+    .tp-bullets       { background: #dbeafe; color: #1d4ed8; }
+    .tp-data_table    { background: #fef3c7; color: #92400e; }
+    .tp-three_column  { background: #f0fdf4; color: #166534; }
+    .tp-two_column    { background: #f0f9ff; color: #0369a1; }
+    .tp-cards         { background: #fdf4ff; color: #6b21a8; }
+    .tp-process_flow  { background: #fff7ed; color: #7c2d12; }
+    .tp-insight_box   { background: #fef2f2; color: #991b1b; }
+    .tp-title_slide   { background: #e0e7ff; color: #3730a3; }
+    .tp-divider_slide { background: #f3f4f6; color: #6b7280; }
 
     /* Slide cards */
     .slide-list { display: flex; flex-direction: column; gap: 8px; }
@@ -75,15 +76,13 @@
     .sc-header.content { background: #f0fdf4; }
     .sc-header:hover { filter: brightness(0.97); }
 
-    .sc-num   { font-size: 11px; font-weight: 700; color: #aaa; min-width: 28px; font-family: monospace; }
-    .sc-badge { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; text-transform: uppercase; }
+    .sc-num     { font-size: 11px; font-weight: 700; color: #aaa; min-width: 28px; font-family: monospace; }
+    .sc-badge   { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; text-transform: uppercase; white-space: nowrap; }
     .badge-title   { background: #7c3aed; color: white; }
     .badge-divider { background: #6b7280; color: white; }
     .badge-content { background: #16a34a; color: white; }
-    .badge-mixed   { background: #ea580c; color: white; margin-left: 4px; }
-
     .sc-title   { flex: 1; font-size: 13px; font-weight: 600; color: #111; }
-    .sc-ptype   { font-size: 11px; color: #7c3aed; background: #fdf4ff; padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
+    .sc-zones   { font-size: 11px; color: #d97706; background: #fef9c3; padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
     .sc-section { font-size: 11px; color: #aaa; white-space: nowrap; }
     .sc-chevron { font-size: 11px; color: #aaa; transition: transform 0.2s; flex-shrink: 0; }
     .sc-chevron.open { transform: rotate(90deg); }
@@ -93,49 +92,59 @@
 
     /* Key message banner */
     .km-banner { background: #1e3a8a; color: white; border-radius: 7px; padding: 10px 14px; margin-bottom: 12px; font-size: 13px; font-weight: 600; line-height: 1.5; }
-    .km-banner::before { content: 'KEY MESSAGE: '; font-size: 10px; opacity: 0.7; display: block; margin-bottom: 2px; }
+    .km-banner::before { content: 'KEY MESSAGE  '; font-size: 10px; opacity: 0.6; display: block; margin-bottom: 2px; letter-spacing: 0.06em; }
 
-    /* Primary / secondary panels */
-    .content-panels { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
-    .content-panels.single { grid-template-columns: 1fr; }
-    .content-block { background: #f9fafb; border-radius: 8px; padding: 12px; }
-    .cb-label { font-size: 11px; color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
-    .cb-type { font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 20px; background: #e5e7eb; color: #555; }
-    .cb-content pre { font-family: monospace; font-size: 11px; color: #333; white-space: pre-wrap; line-height: 1.6; max-height: 200px; overflow-y: auto; }
+    /* Zone layout preview */
+    .zone-layout { margin-bottom: 12px; }
+    .zone-layout-label { font-size: 11px; color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
 
-    /* Bullet preview */
-    .bullet-preview { list-style: none; }
-    .bullet-preview li { padding: 4px 0 4px 16px; position: relative; font-size: 12px; color: #333; border-bottom: 1px solid #f0f0f0; line-height: 1.5; }
-    .bullet-preview li::before { content: '●'; position: absolute; left: 0; color: #d97706; font-size: 8px; top: 7px; }
-    .bullet-preview li.warning { color: #dc2626; }
-    .bullet-preview li.positive { color: #16a34a; }
+    /* Visual slide canvas (proportional wireframe) */
+    .slide-wireframe { width: 100%; aspect-ratio: 11.02 / 8.29; background: #f8faff; border: 1px solid #dce3f0; border-radius: 6px; position: relative; overflow: hidden; margin-bottom: 10px; }
+    .wf-zone { position: absolute; border: 1.5px solid #93c5fd; border-radius: 3px; background: white; display: flex; flex-direction: column; overflow: hidden; }
+    .wf-zone-label { font-size: 9px; font-weight: 700; color: #1d4ed8; padding: 2px 5px; background: #dbeafe; border-bottom: 1px solid #93c5fd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .wf-zone-type { font-size: 10px; font-weight: 700; padding: 3px 5px; color: #374151; }
+    .wf-zone-detail { font-size: 9px; color: #6b7280; padding: 0 5px; line-height: 1.4; overflow: hidden; }
+    .wf-title-bar { position: absolute; top: 0; left: 0; right: 0; height: 12%; background: #eff6ff; border-bottom: 1.5px solid #bfdbfe; display: flex; align-items: center; padding: 0 8px; }
+    .wf-title-text { font-size: 9px; font-weight: 700; color: #1e3a8a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-    /* Chart preview */
-    .chart-info { font-size: 12px; }
-    .chart-info .ci-type { font-size: 14px; font-weight: 700; color: #15803d; margin-bottom: 6px; }
-    .chart-info .ci-row { display: flex; gap: 8px; margin-bottom: 3px; font-size: 11px; }
-    .ci-label { color: #888; min-width: 70px; }
-    .ci-value { color: #333; font-weight: 500; }
-    .chart-bars { display: flex; align-items: flex-end; gap: 4px; height: 60px; margin-top: 8px; padding: 0 4px; }
-    .chart-bar-wrap { display: flex; flex-direction: column; align-items: center; flex: 1; }
-    .chart-bar { width: 100%; border-radius: 3px 3px 0 0; min-height: 4px; }
-    .chart-bar-label { font-size: 9px; color: #888; margin-top: 2px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40px; }
-    .chart-bar-val { font-size: 9px; color: #555; margin-bottom: 2px; text-align: center; }
+    /* Zone detail table */
+    .zone-detail-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .zone-detail-table th { background: #f1f5f9; color: #475569; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; padding: 5px 8px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+    .zone-detail-table td { padding: 6px 8px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+    .zone-detail-table tr:last-child td { border-bottom: none; }
 
-    /* Stat preview */
-    .stat-preview { display: flex; flex-wrap: wrap; gap: 8px; }
-    .stat-card { background: white; border: 1px solid #e5e7eb; border-radius: 6px; padding: 8px 12px; min-width: 120px; }
-    .stat-val { font-size: 16px; font-weight: 700; color: #1e3a8a; }
-    .stat-val.negative { color: #dc2626; }
-    .stat-val.warning  { color: #dc2626; }
-    .stat-val.positive { color: #16a34a; }
-    .stat-lbl { font-size: 11px; color: #888; margin-top: 2px; }
-    .stat-chg { font-size: 10px; color: #d97706; margin-top: 2px; }
+    /* Content previews */
+    .mini-chart { display: flex; align-items: flex-end; gap: 3px; height: 36px; }
+    .mini-bar { border-radius: 2px 2px 0 0; min-width: 8px; }
+    .mini-label { font-size: 8px; color: #888; text-align: center; margin-top: 2px; }
+    .mini-pie { width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; }
+
+    .bullet-list-mini { list-style: none; }
+    .bullet-list-mini li { font-size: 11px; color: #374151; padding: 2px 0 2px 12px; position: relative; line-height: 1.4; border-bottom: 1px solid #f5f5f5; }
+    .bullet-list-mini li::before { content: '•'; position: absolute; left: 0; color: #d97706; }
+    .bullet-list-mini li.warning { color: #dc2626; }
+    .bullet-list-mini li.positive { color: #16a34a; }
+
+    .stat-grid-mini { display: flex; flex-wrap: wrap; gap: 6px; }
+    .stat-mini { background: #f5f7ff; border: 1px solid #e0e4f0; border-radius: 5px; padding: 5px 8px; min-width: 80px; }
+    .stat-mini-val { font-size: 14px; font-weight: 700; color: #1e3a8a; }
+    .stat-mini-val.negative { color: #dc2626; }
+    .stat-mini-val.warning  { color: #dc2626; }
+    .stat-mini-val.positive { color: #16a34a; }
+    .stat-mini-lbl { font-size: 10px; color: #888; margin-top: 1px; }
+    .stat-mini-chg { font-size: 10px; color: #d97706; }
+
+    .insight-mini { border-left: 3px solid; padding: 6px 8px; border-radius: 0 5px 5px 0; }
+    .insight-mini.warning  { border-color: #dc2626; background: #fef2f2; }
+    .insight-mini.positive { border-color: #16a34a; background: #f0fdf4; }
+    .insight-mini.neutral  { border-color: #1e3a8a; background: #eff6ff; }
+    .insight-mini .ih { font-size: 10px; font-weight: 700; margin-bottom: 2px; }
+    .insight-mini .ib { font-size: 11px; color: #374151; line-height: 1.4; }
 
     /* Speaker note */
-    .speaker-note { font-size: 12px; color: #666; font-style: italic; border-left: 3px solid #e5e7eb; padding-left: 10px; margin-top: 8px; }
+    .speaker-note { font-size: 12px; color: #666; font-style: italic; border-left: 3px solid #e5e7eb; padding-left: 10px; margin-top: 10px; }
 
-    /* Raw JSON */
+    /* JSON */
     .json-box { background: #1e1e1e; border-radius: 8px; padding: 14px; overflow-x: auto; max-height: 360px; overflow-y: auto; }
     .json-box pre { font-family: monospace; font-size: 11px; color: #d4d4d4; white-space: pre-wrap; line-height: 1.6; }
     .btn-copy { width: 100%; padding: 10px; font-size: 13px; font-weight: 600; background: #374151; color: white; border: none; border-radius: 8px; cursor: pointer; margin-top: 10px; }
@@ -145,25 +154,23 @@
 <body>
 <div class="container">
 
-  <div class="badge">Isolated Test — Agent 4 Only</div>
+  <div class="badge">Isolated Test — Agent 4 Zones Model</div>
   <h1>Slide Content Writer Tester</h1>
-  <p class="subhead">Paste the Agent 3 brief JSON and upload the content PDF. Agent 4 writes fully populated content for every slide — with primary and secondary content for mixed slides.</p>
+  <p class="subhead">Paste the Agent 3 brief JSON and upload the content PDF. Agent 4 writes fully populated zones for every slide — each slide can have 1 to 4 independent content zones with different types.</p>
 
   <div class="card">
     <div class="card-title">Inputs</div>
     <div class="two-up">
-
       <div>
-        <div class="hint">Agent 3 brief JSON — paste or upload</div>
+        <div class="hint">Agent 3 Brief JSON</div>
         <textarea id="brief-input" placeholder='{ "governing_thought": "...", "sections": [...], "total_slides": 12 }'></textarea>
         <div class="upload-zone" id="zone-brief">
-          <input type="file" accept=".json" onchange="loadJSON('brief', this)">
+          <input type="file" accept=".json" onchange="loadFile('brief', this)">
           <div class="uz">Or upload <span>brief.json</span></div>
         </div>
       </div>
-
       <div>
-        <div class="hint">Content PDF — source document for Agent 4</div>
+        <div class="hint">Content PDF — source document</div>
         <div class="upload-zone" id="zone-pdf">
           <input type="file" accept=".pdf" onchange="loadPDF(this)">
           <div class="uz" id="pdf-label">Click to upload <span>.pdf</span></div>
@@ -174,14 +181,12 @@
           <div class="slide-num" id="slide-num">12</div>
         </div>
       </div>
-
     </div>
 
     <div class="btn-row">
-      <button class="btn btn-amber" id="run-btn" onclick="runTest()" disabled>▶ Run Agent 4 — Write Slides</button>
+      <button class="btn btn-amber" id="run-btn" onclick="runTest()" disabled>▶ Run Agent 4</button>
       <button class="btn btn-gray" onclick="resetAll()">↺ Reset</button>
     </div>
-
     <div class="progress-wrap" id="prog-wrap">
       <div class="progress"><div class="progress-fill" id="prog-fill"></div></div>
       <div class="progress-msg" id="prog-msg"></div>
@@ -192,8 +197,9 @@
   <div class="results" id="results">
 
     <div class="stats-bar" id="stats-bar"></div>
+
     <div class="card">
-      <div class="card-title">Content Types Used</div>
+      <div class="card-title">Content Types Across All Zones</div>
       <div class="type-grid" id="type-grid"></div>
     </div>
 
@@ -215,14 +221,15 @@
 <script src="app.js"></script>
 <script>
 
-  let pdfB64       = null
-  let slideCount   = 12
+  const CHART_COLORS = ['#0F2FB5','#FF8E00','#2D962D','#D60202','#2E046C','#0092D0']
+
+  let pdfB64 = null
+  let slideCount = 12
   let resultManifest = null
 
   // ─── FILE LOADERS ─────────────────────────────────────────────────────────
   function loadPDF(input) {
-    const file = input.files[0]
-    if (!file) return
+    const file = input.files[0]; if (!file) return
     const reader = new FileReader()
     reader.onload = e => {
       pdfB64 = e.target.result.split(',')[1]
@@ -233,9 +240,8 @@
     reader.readAsDataURL(file)
   }
 
-  function loadJSON(type, input) {
-    const file = input.files[0]
-    if (!file) return
+  function loadFile(type, input) {
+    const file = input.files[0]; if (!file) return
     const reader = new FileReader()
     reader.onload = e => {
       if (type === 'brief') document.getElementById('brief-input').value = e.target.result
@@ -245,29 +251,24 @@
     reader.readAsText(file)
   }
 
-  function updateSlides(val) {
-    slideCount = parseInt(val)
-    document.getElementById('slide-num').textContent = val
-  }
+  function updateSlides(val) { slideCount = parseInt(val); document.getElementById('slide-num').textContent = val }
 
   function checkReady() {
     const hasBrief = (document.getElementById('brief-input').value || '').trim().length > 10
     document.getElementById('run-btn').disabled = !(hasBrief && pdfB64)
   }
-
   document.getElementById('brief-input').addEventListener('input', checkReady)
 
   function setProgress(pct, msg) {
     document.getElementById('prog-fill').style.width = pct + '%'
-    document.getElementById('prog-msg').textContent  = msg
+    document.getElementById('prog-msg').textContent = msg
   }
 
   // ─── RUN ──────────────────────────────────────────────────────────────────
   async function runTest() {
-    const briefRaw = document.getElementById('brief-input').value.trim()
-    const brief    = safeParseJSON(briefRaw, null)
+    const brief = safeParseJSON(document.getElementById('brief-input').value, null)
+    const err   = document.getElementById('error-box')
 
-    const err = document.getElementById('error-box')
     if (!brief) { err.textContent = 'Cannot parse Brief JSON'; err.classList.add('show'); return }
     err.classList.remove('show')
 
@@ -277,26 +278,15 @@
     setProgress(10, 'Building slide plan...')
 
     try {
-      const mockState = {
-        outline:    brief,
-        contentB64: pdfB64,
-        slideCount: brief.total_slides || slideCount
-      }
-
       setProgress(30, 'Writing slides in batches...')
-      const manifest = await runAgent4(mockState)
+      const manifest = await runAgent4({ outline: brief, contentB64: pdfB64, slideCount: brief.total_slides || slideCount })
       resultManifest = manifest
-
-      setProgress(90, 'Rendering results...')
+      setProgress(90, 'Rendering...')
       renderResults(manifest)
-      setProgress(100, '✅ ' + manifest.length + ' slides written.')
-
+      setProgress(100, '✅ ' + manifest.length + ' slides — ' + manifest.reduce((s,sl) => s + (sl.zones||[]).length, 0) + ' total zones')
     } catch(e) {
-      err.textContent = 'Error: ' + e.message
-      err.classList.add('show')
-      console.error(e)
+      err.textContent = 'Error: ' + e.message; err.classList.add('show'); console.error(e)
     }
-
     document.getElementById('run-btn').disabled = false
   }
 
@@ -304,61 +294,63 @@
   function renderResults(manifest) {
     document.getElementById('results').classList.add('show')
 
-    // Stats bar
-    const byType = { title: 0, divider: 0, content: 0 }
-    const byPType = {}
-    let mixedCount = 0
+    // Stats
+    const byType = {}
+    const byContentType = {}
+    let totalZones = 0
 
     manifest.forEach(s => {
       byType[s.slide_type] = (byType[s.slide_type] || 0) + 1
-      const pt = (s.primary_content || {}).type || 'unknown'
-      byPType[pt] = (byPType[pt] || 0) + 1
-      if (s.is_mixed) mixedCount++
+      ;(s.zones || []).forEach(z => {
+        totalZones++
+        const t = (z.content || {}).type || 'unknown'
+        byContentType[t] = (byContentType[t] || 0) + 1
+      })
+    })
+
+    const zoneDistrib = {}
+    manifest.forEach(s => {
+      const zc = (s.zones || []).length
+      zoneDistrib[zc] = (zoneDistrib[zc] || 0) + 1
     })
 
     document.getElementById('stats-bar').innerHTML = [
-      { val: manifest.length,     lbl: 'Total Slides' },
-      { val: byType.title   || 0, lbl: 'Title' },
-      { val: byType.divider || 0, lbl: 'Dividers' },
-      { val: byType.content || 0, lbl: 'Content' },
-      { val: mixedCount,          lbl: 'Mixed Slides' }
+      { val: manifest.length,         lbl: 'Total Slides' },
+      { val: byType.content || 0,     lbl: 'Content' },
+      { val: byType.divider || 0,     lbl: 'Dividers' },
+      { val: totalZones,              lbl: 'Total Zones' },
+      { val: (zoneDistrib[2]||0) + (zoneDistrib[3]||0) + (zoneDistrib[4]||0), lbl: 'Multi-Zone' }
     ].map(s => `<div class="stat-pill"><div class="sp-val">${s.val}</div><div class="sp-lbl">${s.lbl}</div></div>`).join('')
 
-    // Content type pills
-    document.getElementById('type-grid').innerHTML = Object.entries(byPType)
+    document.getElementById('type-grid').innerHTML = Object.entries(byContentType)
       .sort((a,b) => b[1]-a[1])
       .map(([t,c]) => `<span class="type-pill tp-${t}">${t.replace(/_/g,' ')} ×${c}</span>`)
       .join('')
 
     // Slide list
     document.getElementById('slide-list').innerHTML = manifest.map((s, i) => {
-      const pt  = (s.primary_content || {}).type || '—'
-      const st  = (s.secondary_content || {}).type || null
-      const isMixed = s.is_mixed && st
+      const zones    = s.zones || []
+      const zoneTypes = zones.map(z => (z.content||{}).type || '?').join(' + ')
+      const zoneCount = zones.length
 
       return `<div class="slide-card">
-        <div class="sc-header ${s.slide_type}" onclick="toggleSlide(${i})">
+        <div class="sc-header ${s.slide_type}" onclick="toggle(${i})">
           <span class="sc-num">S${s.slide_number}</span>
           <span class="sc-badge badge-${s.slide_type}">${s.slide_type}</span>
-          ${isMixed ? `<span class="sc-badge badge-mixed">MIXED</span>` : ''}
           <span class="sc-title">${s.title || '—'}</span>
-          <span class="sc-ptype">${pt.replace(/_/g,' ')}${isMixed ? ' + ' + st.replace(/_/g,' ') : ''}</span>
+          <span class="sc-zones">${zoneCount} zone${zoneCount!==1?'s':''} · ${zoneTypes}</span>
           <span class="sc-section">${s.section_name || ''}</span>
           <span class="sc-chevron" id="chev-${i}">▶</span>
         </div>
         <div class="sc-body" id="body-${i}">
           ${s.key_message ? `<div class="km-banner">${s.key_message}</div>` : ''}
-          <div class="content-panels ${isMixed ? '' : 'single'}">
-            <div class="content-block">
-              <div class="cb-label">Primary Content <span class="cb-type">${pt.replace(/_/g,' ')}</span></div>
-              <div class="cb-content">${renderContentPreview(s.primary_content)}</div>
-            </div>
-            ${isMixed ? `
-            <div class="content-block">
-              <div class="cb-label">Secondary Content <span class="cb-type">${st ? st.replace(/_/g,' ') : '—'}</span></div>
-              <div class="cb-content">${renderContentPreview(s.secondary_content)}</div>
-            </div>` : ''}
-          </div>
+
+          <!-- Wireframe layout -->
+          ${s.slide_type === 'content' ? renderWireframe(s) : ''}
+
+          <!-- Zone detail table -->
+          ${renderZoneTable(s)}
+
           ${s.speaker_note ? `<div class="speaker-note">${s.speaker_note}</div>` : ''}
         </div>
       </div>`
@@ -367,166 +359,242 @@
     document.getElementById('raw-json').textContent = JSON.stringify(manifest, null, 2)
   }
 
-  // ─── CONTENT PREVIEW RENDERER ─────────────────────────────────────────────
-  function renderContentPreview(pc) {
-    if (!pc) return '<span style="color:#aaa;font-size:12px;">null</span>'
+  // ─── WIREFRAME RENDERER ───────────────────────────────────────────────────
+  function renderWireframe(slide) {
+    const zones = slide.zones || []
+    if (!zones.length) return ''
 
-    const type = (pc.type || '').toLowerCase()
+    const TITLE_H = 15  // % of slide height for title bar
+    const CONTENT_H = 100 - TITLE_H
+    const zoneEls = zones.map(z => getZoneRect(z.split, TITLE_H, CONTENT_H)).filter(Boolean)
+
+    const zoneHTML = zones.map((z, i) => {
+      const rect    = zoneEls[i]
+      if (!rect) return ''
+      const content = z.content || {}
+      const ctype   = content.type || '—'
+      const detail  = getContentSummary(content)
+      return `<div class="wf-zone" style="left:${rect.l}%;top:${rect.t}%;width:${rect.w}%;height:${rect.h}%;padding:2px;">
+        <div class="wf-zone-label">${z.zone_id} · ${z.split}</div>
+        <div class="wf-zone-type">${ctype.replace(/_/g,' ')}</div>
+        <div class="wf-zone-detail">${detail}</div>
+      </div>`
+    }).join('')
+
+    return `<div class="zone-layout">
+      <div class="zone-layout-label">Slide Layout Preview</div>
+      <div class="slide-wireframe">
+        <div class="wf-title-bar"><span class="wf-title-text">${slide.title || ''}</span></div>
+        ${zoneHTML}
+      </div>
+    </div>`
+  }
+
+  function getZoneRect(split, titleH, contentH) {
+    const T = titleH  // top of content area %
+    const H = contentH
+    const L = 0, W = 100
+
+    const rects = {
+      'full':              { l:L,  t:T,        w:W,  h:H         },
+      'left_50':           { l:L,  t:T,        w:50, h:H         },
+      'right_50':          { l:50, t:T,        w:50, h:H         },
+      'left_60':           { l:L,  t:T,        w:60, h:H         },
+      'right_40':          { l:60, t:T,        w:40, h:H         },
+      'left_40':           { l:L,  t:T,        w:40, h:H         },
+      'right_60':          { l:40, t:T,        w:60, h:H         },
+      'top_30':            { l:L,  t:T,        w:W,  h:H*0.30    },
+      'bottom_70':         { l:L,  t:T+H*0.30, w:W,  h:H*0.70   },
+      'top_40':            { l:L,  t:T,        w:W,  h:H*0.40    },
+      'bottom_60':         { l:L,  t:T+H*0.40, w:W,  h:H*0.60   },
+      'top_50':            { l:L,  t:T,        w:W,  h:H*0.50    },
+      'bottom_50':         { l:L,  t:T+H*0.50, w:W,  h:H*0.50   },
+      'top_left_50':       { l:L,  t:T,        w:50, h:H*0.50    },
+      'top_right_50':      { l:50, t:T,        w:50, h:H*0.50    },
+      'bottom_full':       { l:L,  t:T+H*0.50, w:W,  h:H*0.50   },
+      'left_full_50':      { l:L,  t:T,        w:50, h:H         },
+      'top_right_50_h':    { l:50, t:T,        w:50, h:H*0.50    },
+      'bottom_right_50_h': { l:50, t:T+H*0.50, w:50, h:H*0.50   },
+      'tl':                { l:L,  t:T,        w:50, h:H*0.50    },
+      'tr':                { l:50, t:T,        w:50, h:H*0.50    },
+      'bl':                { l:L,  t:T+H*0.50, w:50, h:H*0.50   },
+      'br':                { l:50, t:T+H*0.50, w:50, h:H*0.50   }
+    }
+    return rects[split] || null
+  }
+
+  function getContentSummary(content) {
+    const type = (content.type || '').toLowerCase()
+    if (type === 'chart')        return (content.chart_type||'bar').toUpperCase() + ' · ' + (content.categories||[]).length + ' cats'
+    if (type === 'stat_callout') return (content.stats||[]).length + ' stats'
+    if (type === 'bullets')      return (content.bullets||[]).length + ' bullets'
+    if (type === 'data_table')   return (content.headers||[]).length + ' cols × ' + (content.rows||[]).length + ' rows'
+    if (type === 'cards')        return (content.cards||[]).length + ' cards'
+    if (type === 'insight_box')  return content.heading || 'Insight'
+    if (type === 'process_flow') return (content.steps||[]).length + ' steps'
+    if (type === 'three_column') return (content.columns||[]).length + ' columns'
+    if (type === 'two_column')   return 'L: ' + (content.left_points||[]).length + ' · R: ' + (content.right_points||[]).length
+    if (type === 'title_slide')  return content.title || ''
+    if (type === 'divider_slide')return content.section_name || ''
+    return ''
+  }
+
+  // ─── ZONE DETAIL TABLE ────────────────────────────────────────────────────
+  function renderZoneTable(slide) {
+    const zones = slide.zones || []
+    if (!zones.length) return '<p style="color:#aaa;font-size:12px;">No zones</p>'
+
+    const rows = zones.map(z => {
+      const content = z.content || {}
+      const type    = (content.type || '').toLowerCase()
+      return `<tr>
+        <td><strong>${z.zone_id}</strong></td>
+        <td><code style="font-size:10px;background:#f1f5f9;padding:1px 5px;border-radius:3px;">${z.split}</code></td>
+        <td><span class="type-pill tp-${type}" style="display:inline-block;">${type.replace(/_/g,' ')}</span></td>
+        <td>${z.label || ''}</td>
+        <td>${renderContentPreview(content)}</td>
+      </tr>`
+    }).join('')
+
+    return `<table class="zone-detail-table">
+      <thead><tr><th>Zone</th><th>Split</th><th>Type</th><th>Label</th><th>Content Preview</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`
+  }
+
+  // ─── CONTENT PREVIEW ──────────────────────────────────────────────────────
+  function renderContentPreview(content) {
+    if (!content) return '<span style="color:#aaa;">—</span>'
+    const type = (content.type || '').toLowerCase()
 
     if (type === 'title_slide') {
-      return `<div style="font-size:12px;">
-        <div style="font-weight:700;margin-bottom:4px;">${pc.title || '—'}</div>
-        <div style="color:#888;">${pc.subtitle || ''}</div>
-        <div style="color:#aaa;font-size:11px;">${pc.date || ''}</div>
-      </div>`
+      return `<div style="font-size:11px;"><strong>${content.title||'—'}</strong><br><span style="color:#888;">${content.subtitle||''}</span></div>`
     }
 
     if (type === 'divider_slide') {
-      return `<div style="font-size:12px;">
-        <div style="font-weight:700;margin-bottom:4px;">${pc.section_name || '—'}</div>
-        <div style="color:#666;">${pc.section_descriptor || ''}</div>
-      </div>`
+      return `<div style="font-size:11px;"><strong>${content.section_name||'—'}</strong><br><span style="color:#888;">${content.section_descriptor||''}</span></div>`
     }
 
     if (type === 'stat_callout') {
-      const stats = pc.stats || []
-      if (!stats.length) return '<span style="color:#dc2626;font-size:12px;">⚠ Empty stats array</span>'
-      return `<div class="stat-preview">${stats.map(s =>
-        `<div class="stat-card">
-          <div class="stat-val ${s.sentiment || ''}">${s.value || '—'}</div>
-          <div class="stat-lbl">${s.label || ''}</div>
-          ${s.change ? `<div class="stat-chg">${s.change}</div>` : ''}
+      const stats = (content.stats || []).slice(0, 4)
+      if (!stats.length) return '<span style="color:#dc2626;font-size:11px;">⚠ No stats</span>'
+      return `<div class="stat-grid-mini">${stats.map(s =>
+        `<div class="stat-mini">
+          <div class="stat-mini-val ${s.sentiment||''}">${s.value||'—'}</div>
+          <div class="stat-mini-lbl">${s.label||''}</div>
+          ${s.change ? `<div class="stat-mini-chg">${s.change}</div>` : ''}
         </div>`
       ).join('')}</div>`
     }
 
     if (type === 'chart') {
-      const cats   = pc.categories || []
-      const series = pc.series || []
-      const vals   = series[0] ? series[0].values || [] : []
+      const cats   = content.categories || []
+      const series = content.series || []
+      const vals   = series[0] ? (series[0].values || []) : []
       const max    = Math.max(...vals, 1)
-      const chartColors = ['#0F2FB5','#FF8E00','#2D962D','#D60202','#2E046C','#0092D0']
+      const ct     = (content.chart_type || 'bar').toUpperCase()
 
-      const chartDecision = pc.chart_decision || ''
+      let preview = `<div style="font-size:10px;color:#15803d;font-weight:700;margin-bottom:4px;">📊 ${ct} · ${content.chart_title||''}</div>`
 
-      let chartHTML = `<div class="chart-info">
-        <div class="ci-type">📊 ${(pc.chart_type || 'bar').toUpperCase()} CHART</div>
-        <div class="ci-row"><span class="ci-label">Title:</span><span class="ci-value">${pc.chart_title || '—'}</span></div>
-        <div class="ci-row"><span class="ci-label">Categories:</span><span class="ci-value">${cats.length} items</span></div>
-        <div class="ci-row"><span class="ci-label">Series:</span><span class="ci-value">${series.length}</span></div>
-        ${chartDecision ? `<div class="ci-row"><span class="ci-label">Decision:</span><span class="ci-value" style="color:#7c3aed;font-style:italic;">${chartDecision}</span></div>` : ''}
-      </div>`
-
-      if (pc.chart_type === 'pie' && vals.length > 0) {
-        const total = vals.reduce((a,b) => a+b, 0)
-        chartHTML += `<div style="margin-top:8px;">${cats.map((c,i) =>
-          `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
-            <div style="width:12px;height:12px;border-radius:2px;background:${chartColors[i % chartColors.length]};flex-shrink:0;"></div>
-            <span style="font-size:11px;flex:1;">${c}</span>
-            <span style="font-size:11px;font-weight:600;">${vals[i]} (${Math.round(vals[i]/total*100)}%)</span>
-          </div>`
-        ).join('')}</div>`
-      } else if (vals.length > 0) {
-        chartHTML += `<div class="chart-bars">${cats.map((c,i) =>
-          `<div class="chart-bar-wrap">
-            <div class="chart-bar-val">${vals[i] !== undefined ? vals[i] : ''}</div>
-            <div class="chart-bar" style="height:${Math.round((vals[i]||0)/max*50)+4}px;background:${chartColors[i % chartColors.length]};"></div>
-            <div class="chart-bar-label">${c}</div>
-          </div>`
-        ).join('')}</div>`
+      if (content.chart_decision) {
+        preview += `<div style="font-size:10px;color:#7c3aed;font-style:italic;margin-bottom:4px;">${content.chart_decision}</div>`
       }
 
-      return chartHTML
+      if (content.chart_type === 'pie' && vals.length) {
+        const total = vals.reduce((a,b)=>a+b,0)||1
+        preview += `<div>${cats.slice(0,5).map((c,i) =>
+          `<div style="display:flex;align-items:center;gap:4px;margin-bottom:2px;">
+            <div style="width:10px;height:10px;border-radius:2px;background:${CHART_COLORS[i%CHART_COLORS.length]};flex-shrink:0;"></div>
+            <span style="font-size:10px;flex:1;">${c}</span>
+            <span style="font-size:10px;font-weight:600;">${Math.round(vals[i]/total*100)}%</span>
+          </div>`).join('')}</div>`
+      } else if (vals.length) {
+        preview += `<div class="mini-chart">${cats.slice(0,8).map((c,i) => {
+          const h = Math.max(4, Math.round((vals[i]||0)/max*32))
+          return `<div class="mini-bar-wrap" style="display:flex;flex-direction:column;align-items:center;flex:1;">
+            <div style="font-size:8px;color:#555;margin-bottom:1px;">${vals[i]!==undefined?vals[i]:''}</div>
+            <div class="mini-bar" style="height:${h}px;width:100%;background:${CHART_COLORS[i%CHART_COLORS.length]};border-radius:2px 2px 0 0;"></div>
+            <div class="mini-label">${c.toString().slice(0,6)}</div>
+          </div>`
+        }).join('')}</div>`
+      }
+      return preview
     }
 
     if (type === 'bullets') {
-      const bullets = pc.bullets || []
-      if (!bullets.length) return '<span style="color:#dc2626;font-size:12px;">⚠ Empty bullets array</span>'
-      return `<ul class="bullet-preview">${bullets.map(b => {
+      const bullets = content.bullets || []
+      if (!bullets.length) return '<span style="color:#dc2626;font-size:11px;">⚠ No bullets</span>'
+      return `<ul class="bullet-list-mini">${bullets.slice(0,4).map(b => {
         const text      = typeof b === 'string' ? b : (b.text || '')
         const sentiment = typeof b === 'object' ? (b.sentiment || 'neutral') : 'neutral'
-        const emphasis  = typeof b === 'object' ? (b.emphasis || []) : []
-        const empStr    = emphasis.length ? ` <span style="font-size:10px;color:#7c3aed;">[bold: ${emphasis.map(e=>e.text).join(', ')}]</span>` : ''
-        return `<li class="${sentiment}">${text}${empStr}</li>`
-      }).join('')}</ul>`
+        const emph      = typeof b === 'object' ? (b.emphasis || []) : []
+        const empStr    = emph.length ? ` <em style="font-size:9px;color:#7c3aed;">[${emph.map(e=>e.text).join(', ')}]</em>` : ''
+        return `<li class="${sentiment}">${text.slice(0,90)}${text.length>90?'…':''}${empStr}</li>`
+      }).join('')}${bullets.length>4?`<li style="color:#aaa;">+${bullets.length-4} more</li>`:''}</ul>`
     }
 
     if (type === 'insight_box') {
-      const sentColor = pc.sentiment === 'positive' ? '#16a34a' : pc.sentiment === 'warning' ? '#dc2626' : '#1e3a8a'
-      return `<div style="border-left:3px solid ${sentColor};padding:8px 10px;background:${sentColor}15;border-radius:0 6px 6px 0;">
-        ${pc.heading ? `<div style="font-size:11px;font-weight:700;color:${sentColor};margin-bottom:4px;">${pc.heading}</div>` : ''}
-        <div style="font-size:12px;color:#333;line-height:1.5;">${pc.text || '—'}</div>
+      return `<div class="insight-mini ${content.sentiment||'neutral'}">
+        ${content.heading ? `<div class="ih">${content.heading}</div>` : ''}
+        <div class="ib">${(content.text||'').slice(0,120)}${(content.text||'').length>120?'…':''}</div>
       </div>`
-    }
-
-    if (type === 'three_column') {
-      const cols = pc.columns || []
-      if (!cols.length) return '<span style="color:#dc2626;font-size:12px;">⚠ Empty columns</span>'
-      return `<div style="display:grid;grid-template-columns:repeat(${cols.length},1fr);gap:8px;">${cols.map(c =>
-        `<div style="background:white;border:1px solid #e5e7eb;border-radius:6px;padding:8px;">
-          <div style="font-size:11px;font-weight:700;color:#1e3a8a;margin-bottom:4px;">${c.header || '—'}</div>
-          <div style="font-size:11px;color:#555;line-height:1.4;">${(c.body || '').slice(0,120)}${(c.body||'').length>120?'…':''}</div>
-        </div>`
-      ).join('')}</div>`
-    }
-
-    if (type === 'two_column') {
-      return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:11px;">
-        <div>
-          <div style="font-weight:700;color:#1e3a8a;margin-bottom:4px;">${pc.left_header || 'Left'}</div>
-          ${(pc.left_points || []).map(p => `<div style="padding:2px 0 2px 10px;border-left:2px solid #d97706;">${p}</div>`).join('')}
-        </div>
-        <div>
-          <div style="font-weight:700;color:#1e3a8a;margin-bottom:4px;">${pc.right_header || 'Right'}</div>
-          ${(pc.right_points || []).map(p => `<div style="padding:2px 0 2px 10px;border-left:2px solid #d97706;">${p}</div>`).join('')}
-        </div>
-      </div>`
-    }
-
-    if (type === 'cards') {
-      const cards = pc.cards || []
-      if (!cards.length) return '<span style="color:#dc2626;font-size:12px;">⚠ Empty cards</span>'
-      return `<div style="display:grid;grid-template-columns:repeat(${Math.min(cards.length,3)},1fr);gap:6px;">${cards.map(c =>
-        `<div style="background:white;border:1px solid #e5e7eb;border-radius:6px;padding:8px;border-top:3px solid #1e3a8a;">
-          <div style="font-size:11px;font-weight:700;color:#1e3a8a;margin-bottom:4px;">${c.header || '—'}</div>
-          <div style="font-size:11px;color:#555;line-height:1.4;">${(c.body || '').slice(0,100)}${(c.body||'').length>100?'…':''}</div>
-        </div>`
-      ).join('')}</div>`
     }
 
     if (type === 'data_table') {
-      const headers = pc.headers || []
-      const rows    = pc.rows    || []
-      if (!headers.length) return '<span style="color:#dc2626;font-size:12px;">⚠ Empty table</span>'
-      return `<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:11px;">
-        <tr>${headers.map(h => `<th style="background:#1e3a8a;color:white;padding:4px 8px;text-align:left;">${h}</th>`).join('')}</tr>
-        ${rows.slice(0,5).map((row,ri) => `<tr style="background:${ri%2?'#f5f5f5':'white'}">${row.map(c => `<td style="padding:3px 8px;border-bottom:1px solid #eee;">${c}</td>`).join('')}</tr>`).join('')}
-        ${rows.length > 5 ? `<tr><td colspan="${headers.length}" style="padding:4px 8px;color:#888;font-style:italic;">... ${rows.length-5} more rows</td></tr>` : ''}
+      const headers = content.headers || []
+      const rows    = content.rows    || []
+      if (!headers.length) return '<span style="color:#dc2626;font-size:11px;">⚠ Empty table</span>'
+      return `<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:10px;">
+        <tr>${headers.map(h=>`<th style="background:#1e3a8a;color:white;padding:2px 5px;text-align:left;">${h}</th>`).join('')}</tr>
+        ${rows.slice(0,4).map((row,ri)=>`<tr style="background:${ri%2?'#f5f5f5':'white'}">${row.map(c=>`<td style="padding:2px 5px;border-bottom:1px solid #eee;">${c}</td>`).join('')}</tr>`).join('')}
+        ${rows.length>4?`<tr><td colspan="${headers.length}" style="padding:2px 5px;color:#aaa;font-style:italic;">+${rows.length-4} more rows</td></tr>`:''}
       </table></div>`
     }
 
-    if (type === 'process_flow') {
-      const steps = pc.steps || []
-      if (!steps.length) return '<span style="color:#dc2626;font-size:12px;">⚠ Empty steps</span>'
-      return `<div>${steps.map(s =>
-        `<div style="display:flex;gap:8px;margin-bottom:6px;align-items:flex-start;">
-          <div style="background:#1e3a8a;color:white;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;">${s.step_number}</div>
-          <div><div style="font-size:11px;font-weight:700;">${s.title || ''}</div><div style="font-size:11px;color:#555;">${(s.description||'').slice(0,80)}</div></div>
-        </div>`
-      ).join('')}</div>`
+    if (type === 'cards') {
+      const cards = content.cards || []
+      if (!cards.length) return '<span style="color:#dc2626;font-size:11px;">⚠ No cards</span>'
+      return `<div style="display:grid;grid-template-columns:repeat(${Math.min(cards.length,3)},1fr);gap:4px;">${cards.map(c=>
+        `<div style="background:white;border:1px solid #e5e7eb;border-top:3px solid #1e3a8a;border-radius:4px;padding:5px;">
+          <div style="font-size:10px;font-weight:700;color:#1e3a8a;margin-bottom:2px;">${c.header||'—'}</div>
+          <div style="font-size:10px;color:#555;">${(c.body||'').slice(0,60)}${(c.body||'').length>60?'…':''}</div>
+        </div>`).join('')}</div>`
     }
 
-    // Fallback — show raw JSON
-    return `<pre style="font-size:10px;color:#555;white-space:pre-wrap;">${JSON.stringify(pc, null, 2).slice(0, 400)}</pre>`
+    if (type === 'three_column') {
+      const cols = content.columns || []
+      return `<div style="display:grid;grid-template-columns:repeat(${cols.length},1fr);gap:4px;">${cols.map(c=>
+        `<div style="background:#f9fafb;border-left:3px solid #1e3a8a;padding:4px 6px;">
+          <div style="font-size:10px;font-weight:700;color:#1e3a8a;">${c.header||''}</div>
+          <div style="font-size:10px;color:#555;">${(c.body||'').slice(0,60)}</div>
+        </div>`).join('')}</div>`
+    }
+
+    if (type === 'two_column') {
+      return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px;">
+        <div><strong style="color:#1e3a8a;font-size:10px;">${content.left_header||'Left'}</strong>${(content.left_points||[]).slice(0,3).map(p=>`<div style="padding-left:8px;border-left:2px solid #d97706;margin-top:2px;font-size:10px;">${p.slice(0,50)}</div>`).join('')}</div>
+        <div><strong style="color:#1e3a8a;font-size:10px;">${content.right_header||'Right'}</strong>${(content.right_points||[]).slice(0,3).map(p=>`<div style="padding-left:8px;border-left:2px solid #d97706;margin-top:2px;font-size:10px;">${p.slice(0,50)}</div>`).join('')}</div>
+      </div>`
+    }
+
+    if (type === 'process_flow') {
+      const steps = content.steps || []
+      return `<div style="display:flex;gap:4px;align-items:flex-start;">${steps.slice(0,5).map((s,i)=>
+        `<div style="flex:1;background:#eff6ff;border-top:2px solid #1e3a8a;border-radius:3px;padding:4px;font-size:10px;">
+          <div style="font-weight:700;color:#1e3a8a;">${s.step_number||i+1}. ${(s.title||'').slice(0,20)}</div>
+          <div style="color:#555;">${(s.description||'').slice(0,40)}</div>
+        </div>`).join('<div style="color:#d97706;font-size:12px;margin-top:8px;">▶</div>')}</div>`
+    }
+
+    return `<span style="color:#aaa;font-size:11px;">${type}</span>`
   }
 
   // ─── HELPERS ──────────────────────────────────────────────────────────────
-  function toggleSlide(i) {
+  function toggle(i) {
     const body = document.getElementById('body-' + i)
     const chev = document.getElementById('chev-' + i)
-    const open = body.classList.contains('open')
-    body.classList.toggle('open', !open)
-    chev.classList.toggle('open', !open)
+    body.classList.toggle('open', !body.classList.contains('open'))
+    chev.classList.toggle('open', !chev.classList.contains('open'))
   }
 
   function safeParseJSON(raw, fallback) {
@@ -537,16 +605,15 @@
   function copyJSON() {
     if (!resultManifest) return
     navigator.clipboard.writeText(JSON.stringify(resultManifest, null, 2))
-      .then(() => alert('JSON copied!'))
-      .catch(() => alert('Copy failed — select manually.'))
+      .then(() => alert('Copied!'))
+      .catch(() => alert('Select manually.'))
   }
 
   function resetAll() {
     pdfB64 = null; resultManifest = null
     document.getElementById('brief-input').value = ''
     document.getElementById('pdf-label').innerHTML = 'Click to upload <span>.pdf</span>'
-    document.getElementById('zone-pdf').classList.remove('ready')
-    document.getElementById('zone-brief').classList.remove('ready')
+    ;['pdf','brief'].forEach(t => document.getElementById('zone-'+t).classList.remove('ready'))
     document.getElementById('run-btn').disabled = true
     document.getElementById('results').classList.remove('show')
     document.getElementById('error-box').classList.remove('show')
