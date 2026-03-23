@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent 4 Tester — Slide Content Writer</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: #f0f2f5; padding: 2rem; color: #111; }
+    .container { max-width: 960px; margin: 0 auto; }
+    .badge { display: inline-block; background: #fef9c3; color: #854d0e; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; margin-bottom: 10px; }
+    h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+    .subhead { font-size: 13px; color: #666; margin-bottom: 1.5rem; line-height: 1.5; }
+    .card { background: white; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.25rem; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
+    .card-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #888; margin-bottom: 1rem; }
+
+    .two-up { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+
+    .upload-zone { border: 2px dashed #d1d5db; border-radius: 10px; padding: 1rem; cursor: pointer; position: relative; background: #fafafa; transition: all 0.15s; margin-bottom: 10px; }
+    .upload-zone:hover { background: #f3f4f6; }
+    .upload-zone.ready { border-color: #22c55e; border-style: solid; background: #f0fdf4; }
+    .upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+    .uz { font-size: 13px; color: #555; pointer-events: none; }
+    .uz span { font-weight: 600; color: #2563eb; }
+    .upload-zone.ready .uz { color: #16a34a; font-weight: 500; }
+
+    textarea { width: 100%; height: 140px; font-family: monospace; font-size: 11px; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; resize: vertical; background: #fafafa; color: #333; }
+    textarea:focus { outline: none; border-color: #2563eb; }
+
+    .slider-row { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+    .slider-row label { font-size: 13px; font-weight: 600; color: #333; white-space: nowrap; }
+    .slider-row input { flex: 1; accent-color: #854d0e; }
+    .slide-num { font-size: 18px; font-weight: 700; min-width: 40px; text-align: center; background: #fef9c3; padding: 5px 10px; border-radius: 8px; color: #854d0e; }
+
+    .btn-row { display: flex; gap: 10px; }
+    .btn { flex: 1; padding: 12px; font-size: 14px; font-weight: 700; border: none; border-radius: 10px; cursor: pointer; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-amber { background: #d97706; color: white; }
+    .btn-amber:hover:not(:disabled) { background: #b45309; }
+    .btn-gray  { background: #e5e7eb; color: #374151; }
+    .btn-gray:hover:not(:disabled)  { background: #d1d5db; }
+
+    .progress-wrap { display: none; margin-top: 12px; }
+    .progress-wrap.show { display: block; }
+    .progress { height: 4px; background: #e5e7eb; border-radius: 99px; overflow: hidden; }
+    .progress-fill { height: 100%; background: #d97706; border-radius: 99px; width: 0%; transition: width 0.5s ease; }
+    .progress-msg { font-size: 12px; color: #666; margin-top: 5px; }
+
+    .error-box { display: none; background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #dc2626; margin-top: 10px; }
+    .error-box.show { display: block; }
+
+    .results { display: none; }
+    .results.show { display: block; }
+
+    /* Stats bar */
+    .stats-bar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 1.25rem; }
+    .stat-pill { background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 16px; text-align: center; }
+    .stat-pill .sp-val { font-size: 22px; font-weight: 700; color: #111; }
+    .stat-pill .sp-lbl { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+
+    /* Visual type breakdown */
+    .vt-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 1.25rem; }
+    .vt-pill { font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 20px; }
+    .vt-title_slide    { background: #e0e7ff; color: #3730a3; }
+    .vt-divider_slide  { background: #f3f4f6; color: #6b7280; }
+    .vt-bullet_list    { background: #dbeafe; color: #1d4ed8; }
+    .vt-three_column   { background: #dcfce7; color: #15803d; }
+    .vt-two_column     { background: #d1fae5; color: #065f46; }
+    .vt-data_table     { background: #fef3c7; color: #92400e; }
+    .vt-stat_callout   { background: #ede9fe; color: #5b21b6; }
+    .vt-chart_bar      { background: #fee2e2; color: #991b1b; }
+    .vt-chart_line     { background: #ffedd5; color: #9a3412; }
+    .vt-chart_waterfall{ background: #fce7f3; color: #9d174d; }
+    .vt-quote_callout  { background: #f0fdf4; color: #14532d; }
+    .vt-icon_cards     { background: #fdf4ff; color: #6b21a8; }
+    .vt-process_flow   { background: #fff7ed; color: #7c2d12; }
+
+    /* Slide cards */
+    .slide-manifest { display: flex; flex-direction: column; gap: 10px; }
+    .slide-card { border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; }
+    .slide-card-header { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; cursor: pointer; }
+    .slide-card-header:hover { background: #f3f4f6; }
+    .sh-num  { font-size: 11px; font-weight: 700; color: #aaa; min-width: 28px; font-family: monospace; }
+    .sh-type { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; text-transform: uppercase; }
+    .sh-type.title   { background: #e0e7ff; color: #3730a3; }
+    .sh-type.divider { background: #f3f4f6; color: #6b7280; }
+    .sh-type.content { background: #dcfce7; color: #15803d; }
+    .sh-title { flex: 1; font-size: 13px; font-weight: 600; color: #111; }
+    .sh-vt    { font-size: 11px; color: #888; background: #f3f4f6; padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
+    .sh-section { font-size: 11px; color: #aaa; white-space: nowrap; }
+    .sh-chevron { font-size: 12px; color: #aaa; transition: transform 0.2s; }
+    .sh-chevron.open { transform: rotate(90deg); }
+
+    .slide-card-body { display: none; padding: 14px; border-top: 1px solid #f3f4f6; }
+    .slide-card-body.open { display: block; }
+
+    .km-banner { background: #0f2fb5; color: white; border-radius: 7px; padding: 10px 14px; margin-bottom: 12px; font-size: 13px; font-weight: 600; line-height: 1.5; }
+    .km-banner::before { content: 'KEY MESSAGE: '; font-size: 10px; opacity: 0.7; display: block; margin-bottom: 2px; }
+
+    .content-block { background: #f9fafb; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+    .content-block .cb-label { font-size: 11px; color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+    .content-block pre { font-family: monospace; font-size: 11px; color: #333; white-space: pre-wrap; line-height: 1.6; }
+
+    .speaker-note { font-size: 12px; color: #666; font-style: italic; border-left: 3px solid #e5e7eb; padding-left: 10px; margin-top: 8px; }
+
+    /* JSON */
+    .json-box { background: #1e1e1e; border-radius: 8px; padding: 14px; overflow-x: auto; max-height: 400px; overflow-y: auto; }
+    .json-box pre { font-family: monospace; font-size: 11px; color: #d4d4d4; white-space: pre-wrap; line-height: 1.6; }
+    .btn-copy { width: 100%; padding: 10px; font-size: 13px; font-weight: 600; background: #374151; color: white; border: none; border-radius: 8px; cursor: pointer; margin-top: 10px; }
+    .btn-copy:hover { background: #1f2937; }
+
+    .hint { font-size: 12px; color: #888; margin-bottom: 8px; line-height: 1.4; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <div class="badge">Isolated Test — Agent 4 Only</div>
+  <h1>Slide Content Writer Tester</h1>
+  <p class="subhead">Paste the Agent 3 brief JSON and upload the content PDF. Agent 4 will produce a fully populated slide manifest — title, key message, visual type, and content for every slide.</p>
+
+  <div class="card">
+    <div class="card-title">Inputs</div>
+    <div class="two-up">
+
+      <div>
+        <div class="hint">Paste Agent 3 brief JSON here (copy from test-agent3.html)</div>
+        <textarea id="brief-input" placeholder='{ "governing_thought": "...", "sections": [...], "total_slides": 12 ... }'></textarea>
+        <div style="margin-top:8px;">
+          <div class="hint">Or load a saved brief JSON file</div>
+          <div class="upload-zone" id="zone-brief">
+            <input type="file" accept=".json" onchange="loadBriefFile(this)">
+            <div class="uz" id="label-brief">Click to upload <span>brief.json</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="hint">Upload the original content PDF (used as fallback for missing detail)</div>
+        <div class="upload-zone" id="zone-pdf">
+          <input type="file" accept=".pdf" onchange="loadPDF(this)">
+          <div class="uz" id="label-pdf">Click to upload <span>.pdf</span></div>
+        </div>
+        <div style="margin-top:12px;">
+          <div class="slider-row">
+            <label>Slide count</label>
+            <input type="range" min="5" max="40" value="12" step="1" oninput="updateSlides(this.value)">
+            <div class="slide-num" id="slide-num">12</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="btn-row" style="margin-top:12px;">
+      <button class="btn btn-amber" id="run-btn" onclick="runTest()" disabled>▶ Run Agent 4 — Write Slides</button>
+      <button class="btn btn-gray" onclick="resetAll()">↺ Reset</button>
+    </div>
+
+    <div class="progress-wrap" id="prog-wrap">
+      <div class="progress"><div class="progress-fill" id="prog-fill"></div></div>
+      <div class="progress-msg" id="prog-msg"></div>
+    </div>
+    <div class="error-box" id="error-box"></div>
+  </div>
+
+  <div class="results" id="results">
+
+    <!-- Stats -->
+    <div class="stats-bar" id="stats-bar"></div>
+
+    <!-- Visual type breakdown -->
+    <div class="card">
+      <div class="card-title">Visual Types Used</div>
+      <div class="vt-grid" id="vt-grid"></div>
+    </div>
+
+    <!-- Slide manifest -->
+    <div class="card">
+      <div class="card-title">Slide Manifest — Click Any Slide to Expand</div>
+      <div class="slide-manifest" id="slide-manifest"></div>
+    </div>
+
+    <!-- Raw JSON -->
+    <div class="card">
+      <div class="card-title">Raw Manifest JSON — Passed to Agent 5</div>
+      <div class="json-box"><pre id="raw-json"></pre></div>
+      <button class="btn-copy" onclick="copyJSON()">Copy JSON to Clipboard</button>
+    </div>
+
+  </div>
+
+</div>
+
+<script src="agent4.js"></script>
+<script src="app.js"></script>
+<script>
+  let pdfB64       = null
+  let briefData    = null
+  let slideCount   = 12
+  let resultManifest = null
+
+  function loadPDF(input) {
+    const file = input.files[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      pdfB64 = e.target.result.split(',')[1]
+      document.getElementById('label-pdf').innerHTML = '✓ <span>' + file.name + '</span>'
+      document.getElementById('zone-pdf').classList.add('ready')
+      checkReady()
+    }
+    reader.readAsDataURL(file)
+  }
+
+  function loadBriefFile(input) {
+    const file = input.files[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      document.getElementById('brief-input').value = e.target.result
+      document.getElementById('label-brief').innerHTML = '✓ <span>' + file.name + '</span>'
+      document.getElementById('zone-brief').classList.add('ready')
+      checkReady()
+    }
+    reader.readAsText(file)
+  }
+
+  function updateSlides(val) {
+    slideCount = parseInt(val)
+    document.getElementById('slide-num').textContent = val
+  }
+
+  function checkReady() {
+    const hasBrief = document.getElementById('brief-input').value.trim().length > 10
+    const hasPDF   = pdfB64 !== null
+    document.getElementById('run-btn').disabled = !(hasBrief && hasPDF)
+  }
+
+  document.getElementById('brief-input').addEventListener('input', checkReady)
+
+  function setProgress(pct, msg) {
+    document.getElementById('prog-fill').style.width = pct + '%'
+    document.getElementById('prog-msg').textContent  = msg
+  }
+
+  async function runTest() {
+    const briefRaw = document.getElementById('brief-input').value.trim()
+    briefData = safeParseJSON(briefRaw, null)
+    if (!briefData) {
+      document.getElementById('error-box').textContent = 'Could not parse the brief JSON. Check the format.'
+      document.getElementById('error-box').classList.add('show')
+      return
+    }
+
+    document.getElementById('run-btn').disabled = true
+    document.getElementById('error-box').classList.remove('show')
+    document.getElementById('results').classList.remove('show')
+    document.getElementById('prog-wrap').classList.add('show')
+    setProgress(10, 'Sending brief + PDF to Claude...')
+
+    try {
+      const mockState = {
+        outline:    briefData,
+        contentB64: pdfB64,
+        slideCount: briefData.total_slides || slideCount
+      }
+
+      setProgress(30, 'Agent 4 writing slide content...')
+      const manifest = await runAgent4(mockState)
+      resultManifest = manifest
+      setProgress(90, 'Rendering slide manifest...')
+      renderResults(manifest)
+      setProgress(100, '✅ ' + manifest.length + ' slides written.')
+    } catch (err) {
+      document.getElementById('error-box').textContent = 'Error: ' + err.message
+      document.getElementById('error-box').classList.add('show')
+      console.error(err)
+    }
+
+    document.getElementById('run-btn').disabled = false
+  }
+
+  function renderResults(manifest) {
+    document.getElementById('results').classList.add('show')
+
+    // Stats
+    const byType = { title: 0, divider: 0, content: 0 }
+    const vtCount = {}
+    manifest.forEach(s => {
+      byType[s.slide_type] = (byType[s.slide_type] || 0) + 1
+      vtCount[s.visual_type] = (vtCount[s.visual_type] || 0) + 1
+    })
+    document.getElementById('stats-bar').innerHTML = [
+      { val: manifest.length, lbl: 'Total Slides' },
+      { val: byType.title || 0, lbl: 'Title Slides' },
+      { val: byType.divider || 0, lbl: 'Dividers' },
+      { val: byType.content || 0, lbl: 'Content Slides' },
+      { val: Object.keys(vtCount).length, lbl: 'Visual Types' }
+    ].map(s => `<div class="stat-pill"><div class="sp-val">${s.val}</div><div class="sp-lbl">${s.lbl}</div></div>`).join('')
+
+    // Visual type breakdown
+    document.getElementById('vt-grid').innerHTML = Object.entries(vtCount)
+      .sort((a,b) => b[1]-a[1])
+      .map(([vt, count]) => `<span class="vt-pill vt-${vt}">${vt.replace(/_/g,' ')} ×${count}</span>`)
+      .join('')
+
+    // Slide manifest
+    document.getElementById('slide-manifest').innerHTML = manifest.map((s, i) => {
+      const contentStr = JSON.stringify(s.content, null, 2)
+      return `<div class="slide-card" id="sc-${i}">
+        <div class="slide-card-header" onclick="toggleSlide(${i})">
+          <span class="sh-num">S${s.slide_number}</span>
+          <span class="sh-type ${s.slide_type}">${s.slide_type}</span>
+          <span class="sh-title">${s.title}</span>
+          <span class="sh-vt">${(s.visual_type || '').replace(/_/g,' ')}</span>
+          <span class="sh-section">${s.section_name || ''}</span>
+          <span class="sh-chevron" id="chev-${i}">▶</span>
+        </div>
+        <div class="slide-card-body" id="body-${i}">
+          ${s.key_message ? '<div class="km-banner">' + s.key_message + '</div>' : ''}
+          <div class="content-block">
+            <div class="cb-label">Content (${(s.visual_type||'').replace(/_/g,' ')})</div>
+            <pre>${contentStr}</pre>
+          </div>
+          ${s.speaker_note ? '<div class="speaker-note">' + s.speaker_note + '</div>' : ''}
+        </div>
+      </div>`
+    }).join('')
+
+    document.getElementById('raw-json').textContent = JSON.stringify(manifest, null, 2)
+  }
+
+  function toggleSlide(i) {
+    const body  = document.getElementById('body-' + i)
+    const chev  = document.getElementById('chev-' + i)
+    const isOpen = body.classList.contains('open')
+    body.classList.toggle('open', !isOpen)
+    chev.classList.toggle('open', !isOpen)
+  }
+
+  function safeParseJSON(raw, fallback) {
+    try {
+      const cleaned = raw.replace(/```json\s*/g,'').replace(/```\s*/g,'').trim()
+      return JSON.parse(cleaned)
+    } catch(e) { return fallback }
+  }
+
+  function copyJSON() {
+    if (!resultManifest) return
+    navigator.clipboard.writeText(JSON.stringify(resultManifest, null, 2))
+      .then(() => alert('JSON copied!'))
+      .catch(() => alert('Copy failed — select manually.'))
+  }
+
+  function resetAll() {
+    pdfB64 = null; briefData = null; resultManifest = null
+    document.getElementById('brief-input').value = ''
+    document.getElementById('label-pdf').innerHTML   = 'Click to upload <span>.pdf</span>'
+    document.getElementById('label-brief').innerHTML = 'Click to upload <span>brief.json</span>'
+    document.getElementById('zone-pdf').classList.remove('ready')
+    document.getElementById('zone-brief').classList.remove('ready')
+    document.getElementById('run-btn').disabled = true
+    document.getElementById('results').classList.remove('show')
+    document.getElementById('error-box').classList.remove('show')
+    document.getElementById('prog-wrap').classList.remove('show')
+    document.getElementById('prog-fill').style.width = '0%'
+  }
+</script>
+</body>
+</html>
