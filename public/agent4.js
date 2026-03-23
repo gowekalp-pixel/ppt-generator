@@ -1,72 +1,60 @@
-// ─── AGENT 4 — SLIDE CONTENT WRITER ──────────────────────────────────────────
-// Input:  state.outline    — presentationBrief from Agent 3
-//         state.contentB64 — original PDF
+// ─── AGENT 4 — SLIDE CONTENT ARCHITECT ────────────────────────────────────────
+// Input:  state.outline    — presentation brief / slide plan from Agent 3
+//         state.contentB64 — original PDF or source document
 // Output: slideManifest    — flat JSON array, one object per slide
 //
-// Each slide has:
-//   slide_number, section_name, section_type, slide_type
-//   title, subtitle, key_message, speaker_note
-//   zones[] — array of content zones with split hints and content
+// Agent 4 decides WHAT each slide is trying to say, WHAT zones (messaging arcs)
+// it needs, and WHAT artifacts sit inside each zone.
+// Agent 5 decides final layout, coordinates, styling, and rendering.
 //
-// Agent 4 decides WHAT to show and how many zones.
-// Agent 5 decides WHERE everything goes (coordinates, title placement, brand).
+// Key concepts:
+//   Zone    = a messaging arc — one coherent argument unit
+//   Artifact= the visual expression inside a zone (chart, table, workflow, etc.)
+//   Each slide: max 4 zones, title/subtitle outside zones
+//   Each zone:  max 2 artifacts
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ZONE SPLIT REFERENCE
-// ═══════════════════════════════════════════════════════════════════════════════
-//
-// Each zone has a "split" field that tells Agent 5 how to divide the content area.
-//
-// ONE ZONE:
-//   "full"             — one zone fills entire content area
-//
-// TWO ZONES — HORIZONTAL (side by side):
-//   "left_50"          — left half
-//   "right_50"         — right half
-//   "left_60"          — wider left
-//   "right_40"         — narrower right
-//   "left_40"          — narrower left
-//   "right_60"         — wider right
-//
-// TWO ZONES — VERTICAL (top / bottom):
-//   "top_30"           — narrow top row (good for stat callouts)
-//   "bottom_70"        — main content below
-//   "top_40"           — equal-ish top
-//   "bottom_60"        — main content below
-//   "top_50"           — top half
-//   "bottom_50"        — bottom half
-//
-// THREE ZONES:
-//   "top_left_50"      — top left quadrant
-//   "top_right_50"     — top right quadrant
-//   "bottom_full"      — full-width bottom
-//   "left_full_50"     — left half full height
-//   "top_right_50_h"   — top right (stacked)
-//   "bottom_right_50_h"— bottom right (stacked)
-//
-// FOUR ZONES (2x2 grid):
-//   "tl" "tr" "bl" "br" — top-left, top-right, bottom-left, bottom-right
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// SYSTEM PROMPT
+// SYSTEM PROMPT (pasted from consultant-authored spec)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const AGENT4_SYSTEM = `You are a senior management consultant creating slide content for a board-level presentation.
+const AGENT4_SYSTEM = `You are a senior management consultant acting as the slide content architect for a board-level presentation.
 
-You will receive a presentation brief and a batch of slides to populate.
-The source document is attached for reference when the brief lacks detail.
+You will receive:
+1. A structured presentation brief
+2. A batch of slide plans
+3. A source document for reference
 
-Return a JSON array — one object per slide — with EXACTLY these fields:
+Your role is to define the HIGH-LEVEL CONTENT STRUCTURE for each slide.
+
+You do NOT design the final slide.
+You do NOT decide coordinates, colors, fonts, or exact visual styling.
+You DO decide:
+- what the slide is trying to prove
+- what messaging arcs (zones) it needs
+- what artifacts belong inside each zone
+- what should visually dominate
+- how a workflow should be structured when needed
+
+Return ONLY a valid JSON array with one object per slide.
+
+═══════════════════════════
+OUTPUT OBJECT — REQUIRED FIELDS
+═══════════════════════════
+
+Each slide object must contain EXACTLY these top-level fields:
 
 {
   "slide_number": number,
   "section_name": "string",
   "section_type": "string",
   "slide_type": "title" | "divider" | "content",
-  "title": "string — insight-led for content slides, short name for title slides",
-  "subtitle": "string — for title slides only, empty for others",
-  "key_message": "string — the single most important insight, specific and data-driven",
-  "zones": [ ... zone objects ... ],
+  "slide_archetype": "summary" | "trend" | "comparison" | "breakdown" | "driver_analysis" | "process" | "recommendation" | "dashboard" | "proof" | "roadmap",
+  "title": "string",
+  "subtitle": "string",
+  "key_message": "string",
+  "visual_flow_hint": "string",
+  "context_from_previous_slide": "string",
+  "zones": [ ... ],
   "speaker_note": "string"
 }
 
@@ -74,475 +62,619 @@ Return a JSON array — one object per slide — with EXACTLY these fields:
 SLIDE TYPE RULES
 ═══════════════════════════
 
-Title slides:
-- title: SHORT presentation name, 5-8 words max
-- key_message: the governing thought (most important insight for the whole deck)
-- zones: single zone with type "title_slide"
+1. Title slide
+- title: short presentation name, 4-8 words
+- subtitle: audience / context / date if relevant
+- key_message: governing thought of the full deck
+- slide_archetype: "summary"
+- zones: []
 
-Divider slides:
+2. Divider slide
 - title: section name only
-- zones: single zone with type "divider_slide"
+- subtitle: empty
+- key_message: one-line purpose of the section
+- slide_archetype: "summary"
+- zones: []
 
-Content slides:
-- title: INSIGHT-LED — state the conclusion, not the topic
-  WRONG: "Revenue Analysis"  RIGHT: "Revenue grew 18% driven by Product X"
-  WRONG: "Geographic Risk"   RIGHT: "North Zone concentration at 66% exceeds safe limits"
-- zones: 1 to 4 zones depending on what the slide needs
+3. Content slide
+- title must be insight-led — never generic topic titles
+  WRONG: "Revenue Analysis" | RIGHT: "Premium mix drove most of the revenue uplift"
+  WRONG: "Market Overview"  | RIGHT: "Market growing at 22% CAGR with untapped headroom"
+  WRONG: "Geographic Risk"  | RIGHT: "North Zone concentration exceeds the safe exposure threshold"
 
 ═══════════════════════════
-ZONE STRUCTURE
+SLIDE ARCHETYPE RULES
 ═══════════════════════════
 
-Each zone object:
+Choose ONE slide_archetype per content slide:
+
+summary       — executive summaries, headline synthesis, recap. Often metrics + implications.
+trend         — time-based movement. Often line/bar + implication.
+comparison    — compare categories, products, geographies, cohorts. Often bar / clustered_bar / cards / table.
+breakdown     — composition or segmentation. Often pie / bar / decomposition workflow / table.
+driver_analysis — explain movement from one state to another. Often waterfall + insight.
+process       — process, workflow, hierarchy, information movement. Often workflow + insight.
+recommendation — actions, priorities, strategic choices. Often cards / bullets / roadmap workflow.
+dashboard     — metric-heavy summary. Stats, short tables, compact insights.
+proof         — validate a claim with evidence. Chart/table/workflow plus interpretation.
+roadmap       — phased plan, milestones, implementation sequencing. Workflow or structured steps.
+
+═══════════════════════════
+ZONE DEFINITION
+═══════════════════════════
+
+A zone is a self-contained messaging arc within a slide.
+It is a structured unit of meaning that communicates one distinct part of the slide argument.
+A zone is NOT merely a visual box or layout area.
+
+Each slide may contain a maximum of 4 zones.
+Title and subtitle are OUTSIDE zones.
+Each zone may contain a maximum of 2 artifacts.
+
+Each zone object must contain:
+
 {
   "zone_id": "z1",
-  "label": "short description of what this zone shows",
-  "split": "full" | "left_50" | "right_50" | "left_60" | "right_40" | "left_40" | "right_60" |
-           "top_30" | "bottom_70" | "top_40" | "bottom_60" | "top_50" | "bottom_50" |
-           "top_left_50" | "top_right_50" | "bottom_full" |
-           "left_full_50" | "top_right_50_h" | "bottom_right_50_h" |
-           "tl" | "tr" | "bl" | "br",
-  "content": { ... content object ... }
+  "zone_role": "primary_proof" | "supporting_evidence" | "implication" | "summary" | "comparison" | "breakdown" | "process" | "recommendation",
+  "message_objective": "string — one sentence: what this zone proves or communicates",
+  "narrative_weight": "primary" | "secondary" | "supporting",
+  "artifacts": [ ... ],
+  "layout_hint": {
+    "split": "full" | "left_50" | "right_50" | "left_60" | "right_40" | "left_40" | "right_60" |
+             "top_30" | "bottom_70" | "top_40" | "bottom_60" | "top_50" | "bottom_50" |
+             "top_left_50" | "top_right_50" | "bottom_full" |
+             "left_full_50" | "top_right_50_h" | "bottom_right_50_h" |
+             "tl" | "tr" | "bl" | "br"
+  }
 }
 
-SPLIT RULES:
-- All splits in a slide must together cover exactly the full content area
-- For 1 zone: use "full"
-- For 2 side-by-side zones: pair "left_XX" with "right_YY" where XX+YY=100
-- For 2 stacked zones: pair "top_XX" with "bottom_YY" where XX+YY=100
-- For 3 zones (2 top + 1 bottom): use "top_left_50" + "top_right_50" + "bottom_full"
-- For 3 zones (1 left + 2 stacked right): use "left_full_50" + "top_right_50_h" + "bottom_right_50_h"
-- For 4 zones (2x2 grid): use "tl" + "tr" + "bl" + "br"
+Zone rules:
+- max 4 zones per slide
+- max 2 artifacts per zone
+- at least 1 primary zone per content slide
+- no more than 2 primary zones per slide
+- every zone must support the slide key_message
+- every zone must communicate one coherent message objective
 
-MINIMUM ZONE SIZE GUIDANCE (Agent 5 will enforce, but respect in planning):
-- A chart needs at least 40% of height to be readable
-- A data table needs at least 0.4" per row — do not use tables for more than 6 rows in a zone
-- Stat callouts work well in top_30 (narrow top strip) or tl/tr quarters
-- Bullets/text work well in right_40 or bottom_40
-- Full-width chart works best in "full" or "bottom_70"
+ALLOWED SPLIT COMBINATIONS:
+1 zone:  full
+2 zones side by side: left_50+right_50 | left_60+right_40 | left_40+right_60
+2 zones stacked:      top_30+bottom_70 | top_40+bottom_60 | top_50+bottom_50
+3 zones:              top_left_50+top_right_50+bottom_full | left_full_50+top_right_50_h+bottom_right_50_h
+4 zones:              tl+tr+bl+br
+All zones on a slide must together cover the full content area.
 
 ═══════════════════════════
-CONTENT TYPES
+ARTIFACT TYPES
 ═══════════════════════════
 
-── title_slide ──
-{ "type": "title_slide", "title": "short name", "subtitle": "audience/context", "date": "Month Year" }
+Allowed artifact types: insight_text | chart | cards | workflow | table
 
-── divider_slide ──
-{ "type": "divider_slide", "section_name": "string", "section_descriptor": "one line" }
+Good artifact combinations inside one zone:
+- chart + insight_text
+- workflow + insight_text
+- table + insight_text
+- cards + insight_text
+- chart + table
 
-── chart ──
+Discouraged:
+- chart + chart  (use two separate zones instead)
+- table + table
+- workflow + workflow
+
+═══════════════════════════
+ARTIFACT 1: insight_text
+═══════════════════════════
+
+{
+  "type": "insight_text",
+  "heading": "Key Insight" | "So What" | "Risk Alert" | "Action Required",
+  "points": ["specific insight with data", "..."],
+  "sentiment": "positive" | "warning" | "neutral"
+}
+
+Rules:
+- max 4 points
+- each point must be SPECIFIC — include actual numbers, names, percentages
+- final point should ideally state implication or action
+- ZERO placeholder or generic text
+
+═══════════════════════════
+ARTIFACT 2: chart
+═══════════════════════════
+
 {
   "type": "chart",
   "chart_type": "bar" | "line" | "pie" | "waterfall" | "clustered_bar",
-  "chart_decision": "why this chart type was chosen",
+  "chart_decision": "one line: why this chart type was chosen",
   "chart_title": "descriptive title",
+  "chart_insight": "the one-line insight the chart proves",
   "x_label": "string",
   "y_label": "string",
-  "categories": ["string"],
-  "series": [{ "name": "string", "values": [number], "types": ["positive"|"negative"|"total"] }],
+  "categories": ["string", "string", "string"],
+  "series": [
+    { "name": "string", "values": [number, number, number], "types": ["positive"|"negative"|"total"] }
+  ],
   "show_data_labels": true,
   "show_legend": true | false
 }
 
 Chart type selection:
-- bar:           3+ categories, one metric, no time
-- line:          trend over time (months, quarters, years)
-- pie:           parts of a whole summing to ~100%, max 5 segments
-- waterfall:     bridge/variance — items have types positive/negative/total
-- clustered_bar: REQUIRES exactly 2 series on the same categories (e.g. disbursed vs outstanding)
+- bar:           compare 3+ categories, one series, no time
+- line:          trend over time (months, quarters, years in categories)
+- pie:           composition — values sum to ~100%, max 5 segments
+- waterfall:     bridge or variance — series items have types: positive/negative/total
+- clustered_bar: EXACTLY 2 series compared across the same 3+ categories
 
-CRITICAL CHART DATA RULES:
-1. categories MUST have 3 or more items for bar/line charts — NEVER use a single category
-2. series[0].values MUST have the same number of items as categories
-3. All values MUST be real numbers from the document — NOT zeros, NOT placeholders
-4. clustered_bar REQUIRES exactly 2 series — if you only have 1 series, use "bar" instead
-5. pie chart categories must sum to approximately 100 when expressed as percentages
+CRITICAL chart rules:
+- bar, line, clustered_bar: MINIMUM 3 categories
+- categories and values must match in count
+- NO zeros-only series
+- NO placeholder values
+- clustered_bar: MUST have exactly 2 series — if only 1 series exists, use bar
+- All numbers must be sourced from the document
 
-CORRECT chart example (geographic distribution):
+═══════════════════════════
+ARTIFACT 3: cards
+═══════════════════════════
+
 {
-  "type": "chart",
-  "chart_type": "bar",
-  "chart_decision": "bar chart to compare outstanding principal across 3 zones",
-  "chart_title": "Outstanding Principal by Zone (₹ Crore)",
-  "x_label": "Zone", "y_label": "₹ Crore",
-  "categories": ["North Zone", "West Zone", "East Zone"],
-  "series": [{ "name": "Outstanding", "values": [230.1, 85.7, 35.2] }],
-  "show_data_labels": true, "show_legend": false
-}
-
-CORRECT clustered_bar example (disbursed vs outstanding):
-{
-  "type": "chart",
-  "chart_type": "clustered_bar",
-  "chart_title": "Disbursed vs Outstanding by Zone (₹ Crore)",
-  "categories": ["North Zone", "West Zone", "East Zone"],
-  "series": [
-    { "name": "Disbursed",    "values": [298.5, 112.3, 46.8] },
-    { "name": "Outstanding",  "values": [230.1, 85.7,  35.2] }
-  ],
-  "show_data_labels": true, "show_legend": true
-}
-
-── stat_callout ──
-{
-  "type": "stat_callout",
-  "stats": [{ "value": "₹351Cr", "label": "string", "change": "string", "sentiment": "positive"|"negative"|"neutral" }]
-}
-Max 4 stats. Use "negative" for risk/bad metrics.
-In a narrow zone (top_30, tl, tr): use max 2-3 stats.
-
-── data_table ──
-{
-  "type": "data_table",
-  "headers": ["Col1","Col2"],
-  "rows": [["val","val"]],
-  "highlight_rows": [0],
-  "note": "optional table footnote"
-}
-Max 6 rows for readability. If more data needed, use two table zones.
-
-── bullets ──
-{
-  "type": "bullets",
-  "bullets": [
+  "type": "cards",
+  "cards": [
     {
-      "text": "specific insight with data",
-      "emphasis": [{ "text": "exact substring", "style": "bold", "color": "accent"|"positive"|"warning"|null }],
-      "sentiment": "positive"|"warning"|"neutral"
+      "title": "string",
+      "subtitle": "string",
+      "body": "string",
+      "sentiment": "positive" | "negative" | "neutral"
     }
   ]
 }
-Max 5 bullets per zone. Each must be a complete sentence with specific data.
-Emphasis rules:
-- Numbers/percentages: always bold, no color
-- Risk words (risk, decline, breach, critical, dangerous, concentration): bold + accent
-- Positive words (grew, improved, record, exceeded): bold + positive
-- Max ONE emphasis per bullet
 
-── cards ──
-{
-  "type": "cards",
-  "cards": [{ "header": "string", "body": "2-3 sentences", "sentiment": "positive"|"negative"|"neutral" }]
-}
-For 3-4 parallel items. In a full zone: up to 4 cards. In left/right zone: up to 2 cards.
-
-── insight_box ──
-{
-  "type": "insight_box",
-  "heading": "Key Insight"|"Risk Alert"|"So What"|"Action Required",
-  "text": "1-2 specific sentences with data",
-  "sentiment": "positive"|"warning"|"neutral"
-}
-Good for small zones (right_40, bottom_30, tr, br).
-
-── two_column ──
-{
-  "type": "two_column",
-  "left_header": "string",
-  "left_points": ["string"],
-  "right_header": "string",
-  "right_points": ["string"]
-}
-Only use in a "full" zone. Do not combine with other zones.
-
-── three_column ──
-{
-  "type": "three_column",
-  "columns": [{ "header": "string", "body": "string", "sentiment": "positive"|"negative"|"neutral" }]
-}
-Only use in a "full" zone. Do not combine with other zones.
-
-── process_flow ──
-{
-  "type": "process_flow",
-  "steps": [{ "step_number": 1, "title": "string", "description": "string" }]
-}
-Only use in a "full" zone. Max 5 steps.
+Rules:
+- max 4 cards in full-width zones
+- max 2 cards in side zones (left_X, right_X, tl, tr, bl, br)
+- use for metrics, parallel messages, recommendations, priorities
 
 ═══════════════════════════
-ZONE COMBINATION EXAMPLES
+ARTIFACT 4: workflow
 ═══════════════════════════
 
-Example 1 — Chart with key insight (2 zones):
-zones: [
-  { zone_id: "z1", split: "left_60", content: { type: "chart", ... } },
-  { zone_id: "z2", split: "right_40", content: { type: "insight_box", ... } }
-]
+{
+  "type": "workflow",
+  "workflow_type": "process_flow" | "hierarchy" | "decomposition" | "information_flow" | "timeline",
+  "flow_direction": "left_to_right" | "top_to_bottom" | "top_down_branching" | "bottom_up",
+  "workflow_title": "string",
+  "workflow_insight": "string",
+  "nodes": [
+    {
+      "id": "n1",
+      "label": "string",
+      "value": "string",
+      "description": "string",
+      "level": 1
+    }
+  ],
+  "connections": [
+    { "from": "n1", "to": "n2", "type": "arrow" }
+  ]
+}
 
-Example 2 — Stats above chart (2 zones):
-zones: [
-  { zone_id: "z1", split: "top_30", content: { type: "stat_callout", stats: [2-3 stats] } },
-  { zone_id: "z2", split: "bottom_70", content: { type: "chart", ... } }
-]
+Workflow type rules:
+- process_flow:       linear sequence of steps, max 5 nodes
+- hierarchy:          parent-child structure across levels, max 6 nodes
+- decomposition:      top number split into lower-level components, max 6 nodes
+- information_flow:   movement across systems/teams/stages, max 5 nodes
+- timeline:           phased progression, max 5 nodes
 
-Example 3 — Two comparison charts (2 zones):
-zones: [
-  { zone_id: "z1", split: "left_50", content: { type: "chart", chart_title: "North Zone", ... } },
-  { zone_id: "z2", split: "right_50", content: { type: "chart", chart_title: "West Zone", ... } }
-]
+Flow direction rules:
+- left_to_right:      pipelines, sequences, timelines
+- top_to_bottom:      vertical flows, approvals
+- top_down_branching: decomposition and hierarchy
+- bottom_up:          aggregation or roll-up logic
 
-Example 4 — Three charts (3 zones):
-zones: [
-  { zone_id: "z1", split: "top_left_50", content: { type: "chart", ... } },
-  { zone_id: "z2", split: "top_right_50", content: { type: "chart", ... } },
-  { zone_id: "z3", split: "bottom_full", content: { type: "bullets", ... } }
-]
+Node rules:
+- max 6 nodes total
+- label is required
+- value and description are optional
+- level is required for hierarchy / decomposition
 
-Example 5 — Main chart left, table + insight right (3 zones):
-zones: [
-  { zone_id: "z1", split: "left_full_50", content: { type: "chart", ... } },
-  { zone_id: "z2", split: "top_right_50_h", content: { type: "data_table", ... } },
-  { zone_id: "z3", split: "bottom_right_50_h", content: { type: "insight_box", ... } }
-]
+Connection rules:
+- directional arrows only
+- no crossing connections
+- max 8 connections
+- keep structure simple and readable
 
-Example 6 — 4 stat callouts in grid (4 zones):
-zones: [
-  { zone_id: "z1", split: "tl", content: { type: "stat_callout", stats: [1 stat] } },
-  { zone_id: "z2", split: "tr", content: { type: "stat_callout", stats: [1 stat] } },
-  { zone_id: "z3", split: "bl", content: { type: "stat_callout", stats: [1 stat] } },
-  { zone_id: "z4", split: "br", content: { type: "stat_callout", stats: [1 stat] } }
-]
+Use workflow when you need to show:
+- process steps
+- hierarchy
+- number or concept decomposition
+- information movement
+- phased roadmap
+
+Pair workflow with insight_text when interpretation is needed.
 
 ═══════════════════════════
-QUALITY RULES
+ARTIFACT 5: table
 ═══════════════════════════
 
-1. ZERO placeholder text — every value must be real and specific
-2. Numbers must come from the source document — no invented figures
-3. Key messages must state the insight, not describe the slide
-4. Use multiple zones when data richness justifies it
-5. Do NOT force multi-zone when a single chart or table tells the story clearly
-6. Return ONLY valid JSON array. No explanation. No markdown fences.`
+{
+  "type": "table",
+  "title": "string",
+  "headers": ["string"],
+  "rows": [["string"]],
+  "highlight_rows": [0],
+  "note": "string"
+}
+
+Rules:
+- max 6 rows
+- use when precise row/column comparison is necessary
+- table must support the message objective — not dump raw data
+- numbers must be specific and sourced
+
+═══════════════════════════
+STORYTELLING RULES
+═══════════════════════════
+
+1. Every content slide must prove ONE thing
+   title = the conclusion / key_message = the exact takeaway
+
+2. Every content slide must contain an implication
+   either via an implication zone OR via insight_text in a zone
+
+3. Every zone must contribute meaningfully
+   no decorative zones, no unrelated side content
+
+4. Visual hierarchy:
+   primary zone    = anchor proof
+   secondary zone  = interpretation or key support
+   supporting zone = detail only
+
+5. Think like a consultant:
+   what should the audience understand in 3 seconds?
+   build the slide around that answer
+
+═══════════════════════════
+QUALITY GATES
+═══════════════════════════
+
+- No placeholder text anywhere
+- No invented numbers — all figures must come from the source document
+- No vague wording
+- Max 4 zones per slide
+- Max 2 artifacts per zone
+- Insight-led titles on every content slide
+- Workflows must be structurally coherent — nodes and connections must match
+- Content must be board-ready and decision-oriented
+
+Return ONLY a valid JSON array. No explanation. No markdown. No text outside the JSON.`
 
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// HELPERS
+// SLIDE ARCHETYPE → DEFAULT ZONE STRUCTURE
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function inferDefaultZones(sectionType, slideType, slideIndex) {
-  if (slideType === 'title')   return [{ zone_id: 'z1', label: 'title', split: 'full', content: { type: 'title_slide', title: '', subtitle: '', date: '' } }]
-  if (slideType === 'divider') return [{ zone_id: 'z1', label: 'section', split: 'full', content: { type: 'divider_slide', section_name: '', section_descriptor: '' } }]
+function defaultZonesForArchetype(archetype, sectionType) {
+  switch (archetype) {
 
+    case 'dashboard':
+      return [
+        { zone_id: 'z1', zone_role: 'summary', narrative_weight: 'primary',
+          message_objective: 'Headline metrics at a glance',
+          layout_hint: { split: 'top_30' },
+          artifacts: [{ type: 'cards', cards: [] }] },
+        { zone_id: 'z2', zone_role: 'supporting_evidence', narrative_weight: 'secondary',
+          message_objective: 'Supporting detail',
+          layout_hint: { split: 'bottom_70' },
+          artifacts: [{ type: 'chart', chart_type: 'bar', categories: [], series: [] }] }
+      ]
+
+    case 'trend':
+      return [
+        { zone_id: 'z1', zone_role: 'primary_proof', narrative_weight: 'primary',
+          message_objective: 'Show trend over time',
+          layout_hint: { split: 'left_60' },
+          artifacts: [{ type: 'chart', chart_type: 'line', categories: [], series: [] }] },
+        { zone_id: 'z2', zone_role: 'implication', narrative_weight: 'secondary',
+          message_objective: 'Interpret the trend',
+          layout_hint: { split: 'right_40' },
+          artifacts: [{ type: 'insight_text', heading: 'So What', points: [], sentiment: 'neutral' }] }
+      ]
+
+    case 'comparison':
+      return [
+        { zone_id: 'z1', zone_role: 'primary_proof', narrative_weight: 'primary',
+          message_objective: 'Visual comparison across categories',
+          layout_hint: { split: 'left_60' },
+          artifacts: [{ type: 'chart', chart_type: 'bar', categories: [], series: [] }] },
+        { zone_id: 'z2', zone_role: 'implication', narrative_weight: 'secondary',
+          message_objective: 'What the comparison means',
+          layout_hint: { split: 'right_40' },
+          artifacts: [{ type: 'insight_text', heading: 'Key Insight', points: [], sentiment: 'neutral' }] }
+      ]
+
+    case 'breakdown':
+      return [
+        { zone_id: 'z1', zone_role: 'primary_proof', narrative_weight: 'primary',
+          message_objective: 'Show composition or segmentation',
+          layout_hint: { split: 'left_50' },
+          artifacts: [{ type: 'chart', chart_type: 'pie', categories: [], series: [] }] },
+        { zone_id: 'z2', zone_role: 'supporting_evidence', narrative_weight: 'secondary',
+          message_objective: 'Detail behind the segments',
+          layout_hint: { split: 'right_50' },
+          artifacts: [{ type: 'insight_text', heading: 'Key Insight', points: [], sentiment: 'neutral' }] }
+      ]
+
+    case 'driver_analysis':
+      return [
+        { zone_id: 'z1', zone_role: 'primary_proof', narrative_weight: 'primary',
+          message_objective: 'Show movement from baseline to result',
+          layout_hint: { split: 'left_60' },
+          artifacts: [{ type: 'chart', chart_type: 'waterfall', categories: [], series: [] }] },
+        { zone_id: 'z2', zone_role: 'implication', narrative_weight: 'secondary',
+          message_objective: 'Interpret the key drivers',
+          layout_hint: { split: 'right_40' },
+          artifacts: [{ type: 'insight_text', heading: 'Key Insight', points: [], sentiment: 'neutral' }] }
+      ]
+
+    case 'process':
+    case 'roadmap':
+      return [
+        { zone_id: 'z1', zone_role: 'process', narrative_weight: 'primary',
+          message_objective: 'Show process or roadmap structure',
+          layout_hint: { split: 'top_60' },
+          artifacts: [{ type: 'workflow', workflow_type: 'process_flow', flow_direction: 'left_to_right', nodes: [], connections: [] }] },
+        { zone_id: 'z2', zone_role: 'implication', narrative_weight: 'secondary',
+          message_objective: 'Key insight or action from the process',
+          layout_hint: { split: 'bottom_40' },
+          artifacts: [{ type: 'insight_text', heading: 'So What', points: [], sentiment: 'neutral' }] }
+      ]
+
+    case 'recommendation':
+      return [
+        { zone_id: 'z1', zone_role: 'recommendation', narrative_weight: 'primary',
+          message_objective: 'Recommended actions or priorities',
+          layout_hint: { split: 'full' },
+          artifacts: [{ type: 'cards', cards: [] }] }
+      ]
+
+    case 'proof':
+      return [
+        { zone_id: 'z1', zone_role: 'primary_proof', narrative_weight: 'primary',
+          message_objective: 'Evidence supporting the claim',
+          layout_hint: { split: 'left_60' },
+          artifacts: [{ type: 'chart', chart_type: 'bar', categories: [], series: [] }] },
+        { zone_id: 'z2', zone_role: 'implication', narrative_weight: 'secondary',
+          message_objective: 'Interpretation and implication of the evidence',
+          layout_hint: { split: 'right_40' },
+          artifacts: [{ type: 'insight_text', heading: 'So What', points: [], sentiment: 'neutral' }] }
+      ]
+
+    default: // summary
+      return [
+        { zone_id: 'z1', zone_role: 'summary', narrative_weight: 'primary',
+          message_objective: 'Key summary of the section',
+          layout_hint: { split: 'full' },
+          artifacts: [{ type: 'insight_text', heading: 'Key Insight', points: [], sentiment: 'neutral' }] }
+      ]
+  }
+}
+
+function inferArchetype(sectionType, slideIndex) {
   switch (sectionType) {
-    case 'financial_data':
-      return slideIndex === 0
-        ? [
-            { zone_id: 'z1', label: 'key metrics', split: 'top_30', content: { type: 'stat_callout', stats: [] } },
-            { zone_id: 'z2', label: 'trend chart', split: 'bottom_70', content: { type: 'chart', chart_type: 'bar', categories: [], series: [] } }
-          ]
-        : [
-            { zone_id: 'z1', label: 'chart', split: 'left_60', content: { type: 'chart', chart_type: 'bar', categories: [], series: [] } },
-            { zone_id: 'z2', label: 'insight', split: 'right_40', content: { type: 'insight_box', heading: 'Key Insight', text: '', sentiment: 'neutral' } }
-          ]
-
-    case 'executive_summary':
-      return [
-        { zone_id: 'z1', label: 'headline metrics', split: 'top_30', content: { type: 'stat_callout', stats: [] } },
-        { zone_id: 'z2', label: 'key points', split: 'bottom_70', content: { type: 'bullets', bullets: [] } }
-      ]
-
-    case 'strategic_analysis':
-    case 'market_analysis':
-      return [
-        { zone_id: 'z1', label: 'primary chart', split: 'left_60', content: { type: 'chart', chart_type: 'bar', categories: [], series: [] } },
-        { zone_id: 'z2', label: 'supporting bullets', split: 'right_40', content: { type: 'bullets', bullets: [] } }
-      ]
-
-    case 'recommendations':
-      return [{ zone_id: 'z1', label: 'recommendations', split: 'full', content: { type: 'cards', cards: [] } }]
-
-    case 'conclusion':
-      return [{ zone_id: 'z1', label: 'next steps', split: 'full', content: { type: 'process_flow', steps: [] } }]
-
-    case 'operational_review':
-      return [
-        { zone_id: 'z1', label: 'metrics', split: 'top_30', content: { type: 'stat_callout', stats: [] } },
-        { zone_id: 'z2', label: 'detail table', split: 'bottom_70', content: { type: 'data_table', headers: [], rows: [] } }
-      ]
-
-    default:
-      return [{ zone_id: 'z1', label: 'content', split: 'full', content: { type: 'bullets', bullets: [] } }]
+    case 'financial_data':     return slideIndex === 0 ? 'dashboard' : 'comparison'
+    case 'executive_summary':  return 'dashboard'
+    case 'strategic_analysis': return slideIndex % 2 === 0 ? 'comparison' : 'breakdown'
+    case 'market_analysis':    return 'comparison'
+    case 'recommendations':    return 'recommendation'
+    case 'conclusion':         return 'roadmap'
+    case 'operational_review': return 'dashboard'
+    default:                   return 'summary'
   }
 }
 
-function isZonePlaceholder(zone) {
-  const c = zone.content || {}
-  const type = (c.type || '').toLowerCase()
 
-  if (type === 'bullets') {
-    const bullets = c.bullets || []
-    if (!bullets.length) return true
-    return bullets.every(b => {
-      const text = typeof b === 'string' ? b : (b.text || '')
-      return !text || text.trim().length < 5 || /key point|placeholder|tbd|insert/i.test(text)
-    })
+// ═══════════════════════════════════════════════════════════════════════════════
+// VALIDATION
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function validateArtifact(artifact) {
+  const t = (artifact.type || '').toLowerCase()
+
+  if (t === 'chart') {
+    const cats = artifact.categories || []
+    const series = artifact.series || []
+
+    // Need 2+ categories (3+ ideally but 2 is minimum after normalisation)
+    if (cats.length < 2) return { valid: false, reason: 'chart needs 2+ categories, got ' + cats.length }
+
+    if (!series.length) return { valid: false, reason: 'chart has no series' }
+
+    // Values must match categories
+    for (const s of series) {
+      if ((s.values || []).length !== cats.length) {
+        return { valid: false, reason: 'series values count mismatch: ' + (s.values||[]).length + ' vs ' + cats.length }
+      }
+    }
+
+    // All-zero series
+    for (const s of series) {
+      if ((s.values || []).every(v => v === 0)) {
+        return { valid: false, reason: 'chart series has all-zero values' }
+      }
+    }
+
+    // clustered_bar needs 2 series
+    if (artifact.chart_type === 'clustered_bar' && series.length < 2) {
+      artifact.chart_type = 'bar' // auto-fix
+    }
+
+    return { valid: true }
   }
-  if (type === 'stat_callout') {
-    const stats = c.stats || []
-    if (!stats.length) return true
-    return stats.every(s => !s.value || s.value === '—' || /placeholder|tbd/i.test(s.value))
+
+  if (t === 'insight_text') {
+    const points = artifact.points || []
+    if (!points.length) return { valid: false, reason: 'insight_text has no points' }
+    if (points.every(p => !p || p.trim().length < 5)) return { valid: false, reason: 'insight_text has only placeholder points' }
+    return { valid: true }
   }
-  if (type === 'chart') {
-    if (!c.categories || c.categories.length < 2) return true  // FIX: need 2+ categories
-    if (!c.series || c.series.length === 0) return true
-    const vals = (c.series[0] || {}).values || []
-    if (vals.length === 0) return true
-    if (vals.every(v => v === 0)) return true  // FIX: all-zero values = placeholder
-    return false
+
+  if (t === 'cards') {
+    const cards = artifact.cards || []
+    if (!cards.length) return { valid: false, reason: 'cards has no items' }
+    return { valid: true }
   }
-  if (type === 'cards') {
-    return !c.cards || c.cards.length === 0 ||
-      c.cards.every(cd => !cd.body || cd.body.trim().length < 5)
+
+  if (t === 'workflow') {
+    const nodes = artifact.nodes || []
+    if (!nodes.length) return { valid: false, reason: 'workflow has no nodes' }
+    return { valid: true }
   }
-  if (type === 'data_table') {
-    return !c.headers || c.headers.length === 0 || !c.rows || c.rows.length === 0
+
+  if (t === 'table') {
+    if (!(artifact.headers || []).length) return { valid: false, reason: 'table has no headers' }
+    if (!(artifact.rows || []).length) return { valid: false, reason: 'table has no rows' }
+    return { valid: true }
   }
-  if (type === 'insight_box') {
-    return !c.text || c.text.trim().length < 10
-  }
-  return false
+
+  return { valid: true }
 }
 
 function hasPlaceholderContent(slide) {
   if (slide.slide_type !== 'content') return false
-  if (!slide.zones || slide.zones.length === 0) return true
+  if (!slide.zones || !slide.zones.length) return true
   if (!slide.key_message || slide.key_message.trim().length < 10) return true
-  return slide.zones.some(z => isZonePlaceholder(z))
+
+  for (const zone of slide.zones) {
+    for (const artifact of (zone.artifacts || [])) {
+      const check = validateArtifact(artifact)
+      if (!check.valid) return true
+    }
+  }
+  return false
 }
 
-function normaliseZone(z) {
-  if (!z) return null
-  const content = z.content || {}
-  if (!content.type) content.type = 'bullets'
 
-  if (content.type === 'chart') {
-    // Ensure chart_title
-    if (!content.chart_title) content.chart_title = z.label || ''
+// ═══════════════════════════════════════════════════════════════════════════════
+// NORMALISE
+// ═══════════════════════════════════════════════════════════════════════════════
 
-    // Ensure chart_type is set
-    if (!content.chart_type) content.chart_type = 'bar'
+function normaliseArtifact(a) {
+  if (!a || !a.type) return null
+  const t = a.type.toLowerCase()
 
-    // Ensure categories is an array
-    if (!Array.isArray(content.categories)) content.categories = []
-
-    // Ensure series is an array
-    if (!Array.isArray(content.series)) content.series = []
+  if (t === 'chart') {
+    if (!a.categories) a.categories = []
+    if (!a.series) a.series = []
+    if (!a.chart_type) a.chart_type = 'bar'
+    if (!a.chart_title) a.chart_title = ''
+    if (!a.chart_insight) a.chart_insight = ''
+    if (a.show_data_labels === undefined) a.show_data_labels = true
 
     // Normalise series values to numbers
-    content.series = content.series.map(s => ({
+    a.series = a.series.map(s => ({
       name:   s.name   || '',
       values: (s.values || []).map(v => typeof v === 'number' ? v : parseFloat(String(v).replace(/[^0-9.-]/g,'')) || 0),
       types:  s.types  || null
     }))
 
-    // FIX: clustered_bar requires 2+ series — downgrade to bar if only 1 series
-    if (content.chart_type === 'clustered_bar' && content.series.length < 2) {
-      console.warn('normaliseZone — downgrading clustered_bar to bar (only', content.series.length, 'series)')
-      content.chart_type = 'bar'
+    // Auto-fix clustered_bar with 1 series
+    if (a.chart_type === 'clustered_bar' && a.series.length < 2) {
+      a.chart_type = 'bar'
     }
 
-    // FIX: bar/line needs 2+ categories to be meaningful
-    if (['bar','line','clustered_bar'].includes(content.chart_type) && content.categories.length < 2) {
-      console.warn('normaliseZone — chart has < 2 categories, flagging as placeholder')
-      // Leave as-is — hasPlaceholderContent will catch it
-    }
-
-    // FIX: ensure values array length matches categories length
-    content.series = content.series.map(s => {
-      if (s.values.length !== content.categories.length && content.categories.length > 0) {
-        // Pad or trim values to match categories
-        while (s.values.length < content.categories.length) s.values.push(0)
-        s.values = s.values.slice(0, content.categories.length)
-      }
+    // Align values length to categories length
+    a.series = a.series.map(s => {
+      while (s.values.length < a.categories.length) s.values.push(0)
+      s.values = s.values.slice(0, a.categories.length)
       return s
     })
-
-    // show_data_labels default
-    if (content.show_data_labels === undefined) content.show_data_labels = true
   }
 
-  // Normalise stat sentiments — 'negative' is valid, keep it
-  if (content.type === 'stat_callout' && content.stats) {
-    content.stats = content.stats.map(s => ({
-      value:     s.value     || '—',
-      label:     s.label     || '',
-      change:    s.change    || '',
-      sentiment: ['positive','negative','neutral','warning'].includes(s.sentiment) ? s.sentiment : 'neutral'
+  if (t === 'insight_text') {
+    if (!a.points) a.points = []
+    if (!a.heading) a.heading = 'Key Insight'
+    if (!a.sentiment) a.sentiment = 'neutral'
+    // Normalise points — flatten if they're objects
+    a.points = a.points.map(p => typeof p === 'string' ? p : (p.text || p.point || JSON.stringify(p)))
+  }
+
+  if (t === 'cards') {
+    if (!a.cards) a.cards = []
+    a.cards = a.cards.map(c => ({
+      title:     c.title     || c.header || '',
+      subtitle:  c.subtitle  || '',
+      body:      c.body      || '',
+      sentiment: c.sentiment || 'neutral'
     }))
   }
 
-  // Normalise bullets
-  if (content.type === 'bullets' && content.bullets) {
-    content.bullets = content.bullets.map(b => {
-      if (typeof b === 'string') {
-        return { text: b, emphasis: autoEmphasis(b), sentiment: autoSentiment(b) }
-      }
-      return {
-        text:      b.text      || '',
-        emphasis:  b.emphasis  || autoEmphasis(b.text || ''),
-        sentiment: b.sentiment || autoSentiment(b.text || '')
-      }
-    }).filter(b => b.text && b.text.trim().length > 3)
+  if (t === 'workflow') {
+    if (!a.nodes) a.nodes = []
+    if (!a.connections) a.connections = []
+    if (!a.workflow_type) a.workflow_type = 'process_flow'
+    if (!a.flow_direction) a.flow_direction = 'left_to_right'
+    if (!a.workflow_title) a.workflow_title = ''
+    if (!a.workflow_insight) a.workflow_insight = ''
   }
 
-  return { zone_id: z.zone_id || 'z1', label: z.label || '', split: z.split || 'full', content }
+  if (t === 'table') {
+    if (!a.headers) a.headers = []
+    if (!a.rows) a.rows = []
+    if (!a.title) a.title = ''
+  }
+
+  return a
 }
 
-function autoEmphasis(text) {
-  const m = text.match(/[₹$€]?[\d,]+\.?\d*[%CrLKMB]*/g)
-  if (m && m[0]) return [{ text: m[0], style: 'bold', color: null }]
-  return []
-}
-
-function autoSentiment(text) {
-  const t = text.toLowerCase()
-  if (/risk|decline|fall|breach|exceed|critical|concern|dangerous|concentrat|below|deficit/.test(t)) return 'warning'
-  if (/grew|growth|strong|record|exceed.*target|improv|positive|increase/.test(t)) return 'positive'
-  return 'neutral'
+function normaliseZone(z) {
+  if (!z) return null
+  return {
+    zone_id:          z.zone_id          || 'z1',
+    zone_role:        z.zone_role        || 'primary_proof',
+    message_objective:z.message_objective|| '',
+    narrative_weight: z.narrative_weight || 'primary',
+    artifacts:        (z.artifacts || []).map(normaliseArtifact).filter(Boolean),
+    layout_hint:      { split: (z.layout_hint || {}).split || 'full' }
+  }
 }
 
 function normaliseSlide(slide, plan) {
   const slideType = slide.slide_type || plan.slide_type || 'content'
 
-  // Normalise zones
   let zones = []
 
   if (slide.zones && Array.isArray(slide.zones) && slide.zones.length > 0) {
     zones = slide.zones.map(normaliseZone).filter(Boolean)
-  } else if (slide.primary_content || slide.content) {
-    // Legacy format conversion
-    const pc = slide.primary_content || slide.content || {}
-    const sc = slide.secondary_content || null
-    const pcType = (pc.type || '').replace('bullet_list','bullets').replace('chart_bar','chart').replace('chart_line','chart')
-
-    if (!pc.type) pc.type = pcType || 'bullets'
-
-    if (sc) {
-      zones = [
-        { zone_id: 'z1', label: 'primary', split: 'left_60', content: { ...pc, type: pcType || 'bullets' } },
-        { zone_id: 'z2', label: 'secondary', split: 'right_40', content: sc }
-      ]
-    } else {
-      zones = [{ zone_id: 'z1', label: 'main', split: 'full', content: { ...pc, type: pcType || 'bullets' } }]
-    }
-    zones = zones.map(normaliseZone).filter(Boolean)
   } else {
-    zones = inferDefaultZones(plan.section_type, slideType, 0).map(normaliseZone).filter(Boolean)
+    // Build default zones from archetype
+    const archetype = slide.slide_archetype || inferArchetype(plan.section_type, plan.slide_index_in_section || 0)
+    zones = defaultZonesForArchetype(archetype, plan.section_type).map(normaliseZone).filter(Boolean)
   }
+
+  // Cap at 4 zones
+  zones = zones.slice(0, 4)
 
   return {
-    slide_number:  slide.slide_number  || plan.slide_number,
-    section_name:  slide.section_name  || plan.section_name  || '',
-    section_type:  slide.section_type  || plan.section_type  || '',
-    slide_type:    slideType,
-    title:         slide.title         || plan.section_name  || ('Slide ' + plan.slide_number),
-    subtitle:      slide.subtitle      || '',
-    key_message:   slide.key_message   || plan.so_what       || '',
-    zones:         zones,
-    speaker_note:  slide.speaker_note  || plan.purpose       || ''
+    slide_number:                 slide.slide_number                 || plan.slide_number,
+    section_name:                 slide.section_name                 || plan.section_name   || '',
+    section_type:                 slide.section_type                 || plan.section_type   || '',
+    slide_type:                   slideType,
+    slide_archetype:              slide.slide_archetype              || inferArchetype(plan.section_type, 0),
+    title:                        slide.title                        || plan.section_name   || ('Slide ' + plan.slide_number),
+    subtitle:                     slide.subtitle                     || '',
+    key_message:                  slide.key_message                  || plan.so_what        || '',
+    visual_flow_hint:             slide.visual_flow_hint             || '',
+    context_from_previous_slide:  slide.context_from_previous_slide  || '',
+    zones:                        zones,
+    speaker_note:                 slide.speaker_note                 || plan.purpose        || ''
   }
 }
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SLIDE PLAN BUILDER
+// ═══════════════════════════════════════════════════════════════════════════════
 
 function buildSlidePlan(brief, slideCount) {
   const sections = brief.sections || []
@@ -560,23 +692,30 @@ function buildSlidePlan(brief, slideCount) {
       else if (section.section_type === 'divider') slideType = 'divider'
 
       plan.push({
-        slide_number:  num,
-        section_name:  section.section_name  || '',
-        section_type:  section.section_type  || '',
-        slide_type:    slideType,
-        purpose:       section.purpose       || '',
-        key_content:   section.key_content   || [],
-        so_what:       section.so_what       || '',
-        data_available:section.data_available || false,
-        slide_index_in_section: i
+        slide_number:             num,
+        section_name:             section.section_name   || '',
+        section_type:             section.section_type   || '',
+        slide_type:               slideType,
+        purpose:                  section.purpose        || '',
+        key_content:              section.key_content    || [],
+        so_what:                  section.so_what        || '',
+        data_available:           section.data_available || false,
+        slide_index_in_section:   i,
+        suggested_archetype:      inferArchetype(section.section_type, i)
       })
       num++
     }
+
     if (num > slideCount) break
   }
 
   return plan
 }
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BATCH WRITER
+// ═══════════════════════════════════════════════════════════════════════════════
 
 async function writeSlideBatch(batchPlan, brief, contentB64, batchNum) {
   console.log('Agent 4 — batch', batchNum, ': slides', batchPlan[0].slide_number, '–', batchPlan[batchPlan.length-1].slide_number)
@@ -594,22 +733,16 @@ SLIDES TO WRITE — batch ${batchNum} (${batchPlan.length} slides):
 ${JSON.stringify(batchPlan, null, 2)}
 
 INSTRUCTIONS:
-- Write full zones[] content for each slide using the brief AND the attached source document
-- Decide how many zones each slide needs based on the richness of the data
-- Use multiple zones when comparing data sets, showing trends alongside summaries, or presenting parallel insights
-- Do NOT force multi-zone when a single chart or table tells the story clearly
-- Zone splits must be complementary — left_60 + right_40, top_30 + bottom_70 etc.
-- Title slides: SHORT name (5-8 words max), not the governing thought
-- Content slide titles: INSIGHT-LED — state the conclusion, not the topic
-
-CHART DATA ENFORCEMENT — violating these will cause slide repair:
-1. Every chart MUST have 3+ categories (never 0, never 1, never 2)
-2. Every chart series MUST have values matching the number of categories
-3. Values MUST be real numbers from the source document — never 0 for all, never placeholders
-4. clustered_bar REQUIRES 2 series — if you only have 1 series use "bar" instead
-5. Pull actual numbers from the PDF: zone totals, state amounts, industry percentages etc.
-
-Return ONLY a JSON array for these ${batchPlan.length} slides. No explanation. No markdown.`
+- For each slide, decide the archetype, write insight-led title, populate all zones with real artifacts
+- Pull all numbers from the attached source document — no invented figures
+- Title slides: zones = []
+- Divider slides: zones = []
+- Content slides: 1–4 zones, each with 1–2 artifacts
+- Every chart: MUST have 3+ categories, matching values, no all-zeros
+- clustered_bar: MUST have exactly 2 series
+- Every insight_text: MUST have specific, data-driven points
+- Workflows: fully populate nodes and connections
+- Return ONLY a valid JSON array for these ${batchPlan.length} slides`
 
   const messages = [{
     role: 'user',
@@ -631,10 +764,15 @@ Return ONLY a JSON array for these ${batchPlan.length} slides. No explanation. N
   return parsed
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// REPAIR
+// ═══════════════════════════════════════════════════════════════════════════════
+
 async function repairSlide(slide, brief, contentB64) {
   console.log('Agent 4 — repairing slide', slide.slide_number, ':', slide.title)
 
-  const prompt = `This slide has placeholder or missing content in its zones. Fix every zone with real data from the source document.
+  const prompt = `This slide has missing or invalid artifact content. Fix every zone with specific data from the source document.
 
 CONTEXT:
 Document type:  ${brief.document_type || '—'}
@@ -644,10 +782,13 @@ Key data:       ${(brief.key_data_points || []).join(' | ')}
 SLIDE TO FIX:
 ${JSON.stringify(slide, null, 2)}
 
-Rules:
-- Replace ALL placeholder content with real, specific data-driven content
-- Keep the same zones[] structure — just fill in the content
-- Numbers must come from the source document
+Fix rules:
+- Replace all placeholder or empty content with real, specific data
+- Keep the same zones[] and artifact types — only fill in the content
+- All numbers from the source document
+- Charts: 3+ categories, matching values, no all-zeros
+- insight_text: specific points with data
+- workflows: fully populated nodes and connections
 - Return ONLY a single JSON object for this one slide`
 
   const messages = [{
@@ -670,6 +811,11 @@ Rules:
   }
   return null
 }
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MAIN RUNNER
+// ═══════════════════════════════════════════════════════════════════════════════
 
 async function runAgent4(state) {
   const brief      = state.outline
@@ -717,21 +863,28 @@ async function runAgent4(state) {
   }
 
   // Summary log
-  const zoneBreakdown = {}
-  const typeBreakdown = {}
+  const archetypes = {}
+  const artifactTypes = {}
+  let totalZones = 0
+  let totalArtifacts = 0
+
   allSlides.forEach(s => {
-    const zc = (s.zones || []).length
-    zoneBreakdown[zc] = (zoneBreakdown[zc] || 0) + 1
+    archetypes[s.slide_archetype] = (archetypes[s.slide_archetype] || 0) + 1
     ;(s.zones || []).forEach(z => {
-      const t = (z.content || {}).type || 'unknown'
-      typeBreakdown[t] = (typeBreakdown[t] || 0) + 1
+      totalZones++
+      ;(z.artifacts || []).forEach(a => {
+        totalArtifacts++
+        artifactTypes[a.type] = (artifactTypes[a.type] || 0) + 1
+      })
     })
   })
 
   console.log('Agent 4 complete')
   console.log('  Total slides:', allSlides.length)
-  console.log('  Zone counts:', JSON.stringify(zoneBreakdown))
-  console.log('  Content types:', JSON.stringify(typeBreakdown))
+  console.log('  Total zones:', totalZones)
+  console.log('  Total artifacts:', totalArtifacts)
+  console.log('  Archetypes:', JSON.stringify(archetypes))
+  console.log('  Artifact types:', JSON.stringify(artifactTypes))
   console.log('  Placeholder remaining:', allSlides.filter(s => hasPlaceholderContent(s)).length)
 
   return allSlides

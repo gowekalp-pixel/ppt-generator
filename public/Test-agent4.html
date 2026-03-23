@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Agent 4 Tester — Zones Model</title>
+  <title>Agent 4 Tester — Messaging Arc Model</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: Arial, sans-serif; background: #f0f2f5; padding: 2rem; color: #111; }
-    .container { max-width: 1000px; margin: 0 auto; }
+    .container { max-width: 1040px; margin: 0 auto; }
     .badge { display: inline-block; background: #fef9c3; color: #854d0e; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; margin-bottom: 10px; }
     h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
     .subhead { font-size: 13px; color: #666; margin-bottom: 1.5rem; line-height: 1.5; }
@@ -45,104 +45,157 @@
     .results { display: none; }
     .results.show { display: block; }
 
-    /* Stats bar */
+    /* Stats */
     .stats-bar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 1.25rem; }
     .stat-pill { background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 16px; text-align: center; }
     .sp-val { font-size: 20px; font-weight: 700; color: #111; }
     .sp-lbl { font-size: 11px; color: #888; text-transform: uppercase; margin-top: 2px; }
 
-    /* Content type legend */
-    .type-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 1.25rem; }
-    .type-pill { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px; }
-    .tp-chart         { background: #dcfce7; color: #15803d; }
-    .tp-stat_callout  { background: #ede9fe; color: #5b21b6; }
-    .tp-bullets       { background: #dbeafe; color: #1d4ed8; }
-    .tp-data_table    { background: #fef3c7; color: #92400e; }
-    .tp-three_column  { background: #f0fdf4; color: #166534; }
-    .tp-two_column    { background: #f0f9ff; color: #0369a1; }
-    .tp-cards         { background: #fdf4ff; color: #6b21a8; }
-    .tp-process_flow  { background: #fff7ed; color: #7c2d12; }
-    .tp-insight_box   { background: #fef2f2; color: #991b1b; }
-    .tp-title_slide   { background: #e0e7ff; color: #3730a3; }
-    .tp-divider_slide { background: #f3f4f6; color: #6b7280; }
+    /* Archetype pills */
+    .pill-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 1.25rem; }
+    .arch-pill { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px; }
+    .arch-summary       { background:#e0e7ff;color:#3730a3; }
+    .arch-trend         { background:#dcfce7;color:#15803d; }
+    .arch-comparison    { background:#dbeafe;color:#1d4ed8; }
+    .arch-breakdown     { background:#fef3c7;color:#92400e; }
+    .arch-driver_analysis{background:#fce7f3;color:#9d174d; }
+    .arch-process       { background:#f0f9ff;color:#0369a1; }
+    .arch-recommendation{ background:#fdf4ff;color:#6b21a8; }
+    .arch-dashboard     { background:#f0fdf4;color:#166534; }
+    .arch-proof         { background:#fff7ed;color:#7c2d12; }
+    .arch-roadmap       { background:#ede9fe;color:#5b21b6; }
+    .atype-pill { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px; }
+    .atype-chart       { background:#dcfce7;color:#15803d; }
+    .atype-insight_text{ background:#dbeafe;color:#1d4ed8; }
+    .atype-cards       { background:#fdf4ff;color:#6b21a8; }
+    .atype-workflow    { background:#fef3c7;color:#92400e; }
+    .atype-table       { background:#fce7f3;color:#9d174d; }
 
     /* Slide cards */
     .slide-list { display: flex; flex-direction: column; gap: 8px; }
     .slide-card { border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; }
-
     .sc-header { display: flex; align-items: center; gap: 8px; padding: 10px 14px; cursor: pointer; flex-wrap: wrap; }
     .sc-header.title   { background: #ede9fe; }
     .sc-header.divider { background: #f3f4f6; }
     .sc-header.content { background: #f0fdf4; }
     .sc-header:hover { filter: brightness(0.97); }
-
-    .sc-num     { font-size: 11px; font-weight: 700; color: #aaa; min-width: 28px; font-family: monospace; }
-    .sc-badge   { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; text-transform: uppercase; white-space: nowrap; }
-    .badge-title   { background: #7c3aed; color: white; }
-    .badge-divider { background: #6b7280; color: white; }
-    .badge-content { background: #16a34a; color: white; }
-    .sc-title   { flex: 1; font-size: 13px; font-weight: 600; color: #111; }
-    .sc-zones   { font-size: 11px; color: #d97706; background: #fef9c3; padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
-    .sc-section { font-size: 11px; color: #aaa; white-space: nowrap; }
-    .sc-chevron { font-size: 11px; color: #aaa; transition: transform 0.2s; flex-shrink: 0; }
+    .sc-num    { font-size: 11px; font-weight: 700; color: #aaa; min-width: 26px; font-family: monospace; }
+    .sc-badge  { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; text-transform: uppercase; white-space: nowrap; }
+    .badge-title   { background:#7c3aed;color:white; }
+    .badge-divider { background:#6b7280;color:white; }
+    .badge-content { background:#16a34a;color:white; }
+    .sc-title  { flex: 1; font-size: 13px; font-weight: 600; color: #111; }
+    .sc-meta   { font-size: 11px; color: #d97706; background: #fef9c3; padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
+    .sc-chevron{ font-size: 11px; color: #aaa; transition: transform 0.2s; flex-shrink: 0; }
     .sc-chevron.open { transform: rotate(90deg); }
-
-    .sc-body { display: none; padding: 14px; border-top: 1px solid #f3f4f6; }
+    .sc-body   { display: none; padding: 14px; border-top: 1px solid #f3f4f6; }
     .sc-body.open { display: block; }
 
-    /* Key message banner */
+    /* Key message */
     .km-banner { background: #1e3a8a; color: white; border-radius: 7px; padding: 10px 14px; margin-bottom: 12px; font-size: 13px; font-weight: 600; line-height: 1.5; }
     .km-banner::before { content: 'KEY MESSAGE  '; font-size: 10px; opacity: 0.6; display: block; margin-bottom: 2px; letter-spacing: 0.06em; }
 
-    /* Zone layout preview */
-    .zone-layout { margin-bottom: 12px; }
-    .zone-layout-label { font-size: 11px; color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+    /* Slide meta row */
+    .slide-meta-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; font-size: 12px; }
+    .smr-item { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 3px 10px; }
+    .smr-label { color: #888; font-size: 10px; margin-right: 4px; text-transform: uppercase; }
 
-    /* Visual slide canvas (proportional wireframe) */
-    .slide-wireframe { width: 100%; aspect-ratio: 11.02 / 8.29; background: #f8faff; border: 1px solid #dce3f0; border-radius: 6px; position: relative; overflow: hidden; margin-bottom: 10px; }
-    .wf-zone { position: absolute; border: 1.5px solid #93c5fd; border-radius: 3px; background: white; display: flex; flex-direction: column; overflow: hidden; }
-    .wf-zone-label { font-size: 9px; font-weight: 700; color: #1d4ed8; padding: 2px 5px; background: #dbeafe; border-bottom: 1px solid #93c5fd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .wf-zone-type { font-size: 10px; font-weight: 700; padding: 3px 5px; color: #374151; }
-    .wf-zone-detail { font-size: 9px; color: #6b7280; padding: 0 5px; line-height: 1.4; overflow: hidden; }
-    .wf-title-bar { position: absolute; top: 0; left: 0; right: 0; height: 12%; background: #eff6ff; border-bottom: 1.5px solid #bfdbfe; display: flex; align-items: center; padding: 0 8px; }
+    /* Wireframe */
+    .wireframe-wrap { margin-bottom: 12px; }
+    .wf-label { font-size: 11px; color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+    .slide-wireframe { width: 100%; aspect-ratio: 11.02 / 8.29; background: #f8faff; border: 1px solid #dce3f0; border-radius: 6px; position: relative; overflow: hidden; }
+    .wf-title-bar { position: absolute; top: 0; left: 0; right: 0; height: 14%; background: #eff6ff; border-bottom: 1.5px solid #bfdbfe; display: flex; align-items: center; padding: 0 8px; }
     .wf-title-text { font-size: 9px; font-weight: 700; color: #1e3a8a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .wf-zone { position: absolute; border: 1.5px solid; border-radius: 3px; display: flex; flex-direction: column; overflow: hidden; }
+    .wf-zone-header { font-size: 8px; font-weight: 700; padding: 2px 4px; display: flex; gap: 4px; align-items: center; }
+    .wf-zone-role { font-size: 8px; padding: 1px 5px; border-radius: 10px; background: rgba(255,255,255,0.6); }
+    .wf-artifact { font-size: 8px; padding: 2px 4px; margin: 1px 3px; border-radius: 2px; background: rgba(255,255,255,0.7); color: #333; }
 
-    /* Zone detail table */
-    .zone-detail-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    .zone-detail-table th { background: #f1f5f9; color: #475569; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; padding: 5px 8px; text-align: left; border-bottom: 1px solid #e2e8f0; }
-    .zone-detail-table td { padding: 6px 8px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
-    .zone-detail-table tr:last-child td { border-bottom: none; }
+    /* Zone colors */
+    .zone-primary    { border-color: #2563eb; background: #eff6ff; }
+    .zone-secondary  { border-color: #7c3aed; background: #fdf4ff; }
+    .zone-supporting { border-color: #6b7280; background: #f9fafb; }
+    .zone-primary .wf-zone-header    { background: #2563eb; color: white; }
+    .zone-secondary .wf-zone-header  { background: #7c3aed; color: white; }
+    .zone-supporting .wf-zone-header { background: #6b7280; color: white; }
 
-    /* Content previews */
-    .mini-chart { display: flex; align-items: flex-end; gap: 3px; height: 36px; }
-    .mini-bar { border-radius: 2px 2px 0 0; min-width: 8px; }
-    .mini-label { font-size: 8px; color: #888; text-align: center; margin-top: 2px; }
-    .mini-pie { width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; }
+    /* Zone detail */
+    .zone-detail { border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 8px; overflow: hidden; }
+    .zone-detail-header { padding: 8px 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .zone-detail-header.primary   { background: #eff6ff; border-bottom: 1px solid #bfdbfe; }
+    .zone-detail-header.secondary { background: #fdf4ff; border-bottom: 1px solid #ddd6fe; }
+    .zone-detail-header.supporting{ background: #f9fafb; border-bottom: 1px solid #e5e7eb; }
+    .zdh-id   { font-size: 11px; font-weight: 700; color: #374151; font-family: monospace; }
+    .zdh-role { font-size: 10px; font-weight: 600; padding: 1px 8px; border-radius: 20px; }
+    .role-primary_proof     { background:#dbeafe;color:#1d4ed8; }
+    .role-supporting_evidence{background:#dcfce7;color:#15803d; }
+    .role-implication       { background:#fde68a;color:#92400e; }
+    .role-summary           { background:#e0e7ff;color:#3730a3; }
+    .role-comparison        { background:#fce7f3;color:#9d174d; }
+    .role-breakdown         { background:#fff7ed;color:#7c2d12; }
+    .role-process           { background:#f0f9ff;color:#0369a1; }
+    .role-recommendation    { background:#fdf4ff;color:#6b21a8; }
+    .zdh-split { font-size: 10px; color: #888; background: #f1f5f9; padding: 1px 6px; border-radius: 10px; font-family: monospace; }
+    .zdh-obj  { font-size: 12px; color: #374151; font-style: italic; flex: 1; }
+    .zone-detail-body { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
 
-    .bullet-list-mini { list-style: none; }
-    .bullet-list-mini li { font-size: 11px; color: #374151; padding: 2px 0 2px 12px; position: relative; line-height: 1.4; border-bottom: 1px solid #f5f5f5; }
-    .bullet-list-mini li::before { content: '•'; position: absolute; left: 0; color: #d97706; }
-    .bullet-list-mini li.warning { color: #dc2626; }
-    .bullet-list-mini li.positive { color: #16a34a; }
+    /* Artifact previews */
+    .artifact-block { border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden; }
+    .artifact-header { display: flex; align-items: center; gap: 6px; padding: 5px 10px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; }
+    .ah-type { font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 20px; }
+    .ah-detail { font-size: 11px; color: #555; flex: 1; }
+    .artifact-body { padding: 8px 10px; }
 
-    .stat-grid-mini { display: flex; flex-wrap: wrap; gap: 6px; }
-    .stat-mini { background: #f5f7ff; border: 1px solid #e0e4f0; border-radius: 5px; padding: 5px 8px; min-width: 80px; }
-    .stat-mini-val { font-size: 14px; font-weight: 700; color: #1e3a8a; }
-    .stat-mini-val.negative { color: #dc2626; }
-    .stat-mini-val.warning  { color: #dc2626; }
-    .stat-mini-val.positive { color: #16a34a; }
-    .stat-mini-lbl { font-size: 10px; color: #888; margin-top: 1px; }
-    .stat-mini-chg { font-size: 10px; color: #d97706; }
+    /* Chart preview */
+    .chart-meta { font-size: 11px; margin-bottom: 6px; }
+    .cm-type { font-weight: 700; color: #15803d; margin-right: 8px; }
+    .cm-insight { color: #555; font-style: italic; margin-top: 2px; }
+    .mini-bars { display: flex; align-items: flex-end; gap: 3px; height: 48px; }
+    .mb-wrap { display: flex; flex-direction: column; align-items: center; flex: 1; }
+    .mb-val { font-size: 8px; color: #555; margin-bottom: 1px; }
+    .mb-bar { width: 100%; border-radius: 2px 2px 0 0; min-height: 3px; }
+    .mb-cat { font-size: 8px; color: #888; margin-top: 2px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 38px; }
+    .pie-legend { display: flex; flex-wrap: wrap; gap: 4px; }
+    .pie-item { display: flex; align-items: center; gap: 3px; font-size: 10px; }
+    .pie-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
 
-    .insight-mini { border-left: 3px solid; padding: 6px 8px; border-radius: 0 5px 5px 0; }
-    .insight-mini.warning  { border-color: #dc2626; background: #fef2f2; }
-    .insight-mini.positive { border-color: #16a34a; background: #f0fdf4; }
-    .insight-mini.neutral  { border-color: #1e3a8a; background: #eff6ff; }
-    .insight-mini .ih { font-size: 10px; font-weight: 700; margin-bottom: 2px; }
-    .insight-mini .ib { font-size: 11px; color: #374151; line-height: 1.4; }
+    /* Insight text preview */
+    .insight-heading { font-size: 11px; font-weight: 700; margin-bottom: 4px; }
+    .insight-heading.positive { color: #16a34a; }
+    .insight-heading.warning  { color: #dc2626; }
+    .insight-heading.neutral  { color: #1e3a8a; }
+    .insight-points { list-style: none; }
+    .insight-points li { font-size: 11px; padding: 2px 0 2px 12px; position: relative; color: #374151; line-height: 1.5; border-bottom: 1px solid #f5f5f5; }
+    .insight-points li::before { content: '•'; position: absolute; left: 0; color: #d97706; }
+
+    /* Cards preview */
+    .cards-grid { display: grid; gap: 5px; }
+    .card-item { background: white; border: 1px solid #e5e7eb; border-top: 2px solid #1e3a8a; border-radius: 4px; padding: 5px 7px; }
+    .ci-title { font-size: 11px; font-weight: 700; color: #1e3a8a; }
+    .ci-subtitle { font-size: 10px; color: #888; }
+    .ci-body { font-size: 10px; color: #555; margin-top: 2px; line-height: 1.3; }
+    .card-item.positive { border-top-color: #16a34a; }
+    .card-item.negative { border-top-color: #dc2626; }
+
+    /* Workflow preview */
+    .wf-preview { overflow-x: auto; }
+    .wf-nodes { display: flex; gap: 6px; flex-wrap: wrap; }
+    .wf-node { background: #eff6ff; border: 1.5px solid #2563eb; border-radius: 5px; padding: 5px 8px; min-width: 60px; text-align: center; }
+    .wf-node-label { font-size: 10px; font-weight: 600; color: #1e3a8a; }
+    .wf-node-val   { font-size: 11px; font-weight: 700; color: #1e3a8a; margin-top: 1px; }
+    .wf-node-desc  { font-size: 9px; color: #555; margin-top: 1px; }
+    .wf-arrow { font-size: 14px; color: #d97706; align-self: center; }
+    .wf-conn-list { font-size: 10px; color: #888; margin-top: 4px; }
+
+    /* Table preview */
+    .mini-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+    .mini-table th { background: #1e3a8a; color: white; padding: 2px 5px; text-align: left; }
+    .mini-table td { padding: 2px 5px; border-bottom: 1px solid #eee; }
+    .mini-table tr:nth-child(even) td { background: #f9fafb; }
+    .mini-table tr.highlight td { background: #fef9c3; }
 
     /* Speaker note */
-    .speaker-note { font-size: 12px; color: #666; font-style: italic; border-left: 3px solid #e5e7eb; padding-left: 10px; margin-top: 10px; }
+    .speaker-note { font-size: 11px; color: #666; font-style: italic; border-left: 3px solid #e5e7eb; padding: 4px 10px; margin-top: 10px; }
 
     /* JSON */
     .json-box { background: #1e1e1e; border-radius: 8px; padding: 14px; overflow-x: auto; max-height: 360px; overflow-y: auto; }
@@ -154,9 +207,9 @@
 <body>
 <div class="container">
 
-  <div class="badge">Isolated Test — Agent 4 Zones Model</div>
-  <h1>Slide Content Writer Tester</h1>
-  <p class="subhead">Paste the Agent 3 brief JSON and upload the content PDF. Agent 4 writes fully populated zones for every slide — each slide can have 1 to 4 independent content zones with different types.</p>
+  <div class="badge">Agent 4 — Messaging Arc Model</div>
+  <h1>Slide Content Architect Tester</h1>
+  <p class="subhead">Each slide has zones (messaging arcs), each zone has up to 2 artifacts (chart, table, cards, workflow, insight text). Title and subtitle are outside zones.</p>
 
   <div class="card">
     <div class="card-title">Inputs</div>
@@ -170,7 +223,7 @@
         </div>
       </div>
       <div>
-        <div class="hint">Content PDF — source document</div>
+        <div class="hint">Content PDF</div>
         <div class="upload-zone" id="zone-pdf">
           <input type="file" accept=".pdf" onchange="loadPDF(this)">
           <div class="uz" id="pdf-label">Click to upload <span>.pdf</span></div>
@@ -182,7 +235,6 @@
         </div>
       </div>
     </div>
-
     <div class="btn-row">
       <button class="btn btn-amber" id="run-btn" onclick="runTest()" disabled>▶ Run Agent 4</button>
       <button class="btn btn-gray" onclick="resetAll()">↺ Reset</button>
@@ -199,17 +251,21 @@
     <div class="stats-bar" id="stats-bar"></div>
 
     <div class="card">
-      <div class="card-title">Content Types Across All Zones</div>
-      <div class="type-grid" id="type-grid"></div>
+      <div class="card-title">Archetypes Used</div>
+      <div class="pill-grid" id="arch-grid"></div>
+      <div style="margin-top:8px;">
+        <div class="card-title" style="margin-bottom:4px;">Artifact Types</div>
+        <div class="pill-grid" id="atype-grid"></div>
+      </div>
     </div>
 
     <div class="card">
-      <div class="card-title">Slide Manifest — click any slide to expand</div>
+      <div class="card-title">Slide Manifest — click to expand</div>
       <div class="slide-list" id="slide-list"></div>
     </div>
 
     <div class="card">
-      <div class="card-title">Raw JSON — copy to paste into Agent 5</div>
+      <div class="card-title">Raw JSON — copy to Agent 5</div>
       <div class="json-box"><pre id="raw-json"></pre></div>
       <button class="btn-copy" onclick="copyJSON()">Copy JSON to Clipboard</button>
     </div>
@@ -221,136 +277,100 @@
 <script src="app.js"></script>
 <script>
 
-  const CHART_COLORS = ['#0F2FB5','#FF8E00','#2D962D','#D60202','#2E046C','#0092D0']
+  const COLORS = ['#0F2FB5','#FF8E00','#2D962D','#D60202','#2E046C','#0092D0']
+  let pdfB64 = null, slideCount = 12, resultManifest = null
 
-  let pdfB64 = null
-  let slideCount = 12
-  let resultManifest = null
-
-  // ─── FILE LOADERS ─────────────────────────────────────────────────────────
   function loadPDF(input) {
     const file = input.files[0]; if (!file) return
     const reader = new FileReader()
-    reader.onload = e => {
-      pdfB64 = e.target.result.split(',')[1]
-      document.getElementById('pdf-label').innerHTML = '✓ <span>' + file.name + '</span>'
-      document.getElementById('zone-pdf').classList.add('ready')
-      checkReady()
-    }
+    reader.onload = e => { pdfB64 = e.target.result.split(',')[1]; document.getElementById('pdf-label').innerHTML = '✓ <span>'+file.name+'</span>'; document.getElementById('zone-pdf').classList.add('ready'); checkReady() }
     reader.readAsDataURL(file)
   }
 
   function loadFile(type, input) {
     const file = input.files[0]; if (!file) return
     const reader = new FileReader()
-    reader.onload = e => {
-      if (type === 'brief') document.getElementById('brief-input').value = e.target.result
-      document.getElementById('zone-' + type).classList.add('ready')
-      checkReady()
-    }
+    reader.onload = e => { if (type==='brief') document.getElementById('brief-input').value = e.target.result; document.getElementById('zone-'+type).classList.add('ready'); checkReady() }
     reader.readAsText(file)
   }
 
   function updateSlides(val) { slideCount = parseInt(val); document.getElementById('slide-num').textContent = val }
-
-  function checkReady() {
-    const hasBrief = (document.getElementById('brief-input').value || '').trim().length > 10
-    document.getElementById('run-btn').disabled = !(hasBrief && pdfB64)
-  }
+  function checkReady() { document.getElementById('run-btn').disabled = !((document.getElementById('brief-input').value||'').trim().length > 10 && pdfB64) }
   document.getElementById('brief-input').addEventListener('input', checkReady)
 
-  function setProgress(pct, msg) {
-    document.getElementById('prog-fill').style.width = pct + '%'
-    document.getElementById('prog-msg').textContent = msg
-  }
+  function setProgress(pct, msg) { document.getElementById('prog-fill').style.width=pct+'%'; document.getElementById('prog-msg').textContent=msg }
 
-  // ─── RUN ──────────────────────────────────────────────────────────────────
   async function runTest() {
     const brief = safeParseJSON(document.getElementById('brief-input').value, null)
     const err   = document.getElementById('error-box')
-
-    if (!brief) { err.textContent = 'Cannot parse Brief JSON'; err.classList.add('show'); return }
+    if (!brief) { err.textContent='Cannot parse Brief JSON'; err.classList.add('show'); return }
     err.classList.remove('show')
-
     document.getElementById('run-btn').disabled = true
     document.getElementById('results').classList.remove('show')
     document.getElementById('prog-wrap').classList.add('show')
     setProgress(10, 'Building slide plan...')
-
     try {
       setProgress(30, 'Writing slides in batches...')
       const manifest = await runAgent4({ outline: brief, contentB64: pdfB64, slideCount: brief.total_slides || slideCount })
       resultManifest = manifest
       setProgress(90, 'Rendering...')
       renderResults(manifest)
-      setProgress(100, '✅ ' + manifest.length + ' slides — ' + manifest.reduce((s,sl) => s + (sl.zones||[]).length, 0) + ' total zones')
-    } catch(e) {
-      err.textContent = 'Error: ' + e.message; err.classList.add('show'); console.error(e)
-    }
+      const totalArtifacts = manifest.reduce((s,sl) => s + (sl.zones||[]).reduce((zs,z) => zs+(z.artifacts||[]).length, 0), 0)
+      setProgress(100, '✅ '+manifest.length+' slides · '+manifest.reduce((s,sl)=>s+(sl.zones||[]).length,0)+' zones · '+totalArtifacts+' artifacts')
+    } catch(e) { err.textContent='Error: '+e.message; err.classList.add('show'); console.error(e) }
     document.getElementById('run-btn').disabled = false
   }
 
-  // ─── RENDER RESULTS ────────────────────────────────────────────────────────
   function renderResults(manifest) {
     document.getElementById('results').classList.add('show')
 
-    // Stats
-    const byType = {}
-    const byContentType = {}
-    let totalZones = 0
+    const archetypes = {}, atypes = {}
+    let totalZones = 0, totalArtifacts = 0
 
     manifest.forEach(s => {
-      byType[s.slide_type] = (byType[s.slide_type] || 0) + 1
-      ;(s.zones || []).forEach(z => {
+      archetypes[s.slide_archetype] = (archetypes[s.slide_archetype]||0)+1
+      ;(s.zones||[]).forEach(z => {
         totalZones++
-        const t = (z.content || {}).type || 'unknown'
-        byContentType[t] = (byContentType[t] || 0) + 1
+        ;(z.artifacts||[]).forEach(a => { totalArtifacts++; atypes[a.type]=(atypes[a.type]||0)+1 })
       })
     })
 
-    const zoneDistrib = {}
-    manifest.forEach(s => {
-      const zc = (s.zones || []).length
-      zoneDistrib[zc] = (zoneDistrib[zc] || 0) + 1
-    })
-
     document.getElementById('stats-bar').innerHTML = [
-      { val: manifest.length,         lbl: 'Total Slides' },
-      { val: byType.content || 0,     lbl: 'Content' },
-      { val: byType.divider || 0,     lbl: 'Dividers' },
-      { val: totalZones,              lbl: 'Total Zones' },
-      { val: (zoneDistrib[2]||0) + (zoneDistrib[3]||0) + (zoneDistrib[4]||0), lbl: 'Multi-Zone' }
-    ].map(s => `<div class="stat-pill"><div class="sp-val">${s.val}</div><div class="sp-lbl">${s.lbl}</div></div>`).join('')
+      { val: manifest.length, lbl: 'Slides' },
+      { val: manifest.filter(s=>s.slide_type==='content').length, lbl: 'Content' },
+      { val: totalZones, lbl: 'Zones' },
+      { val: totalArtifacts, lbl: 'Artifacts' },
+      { val: manifest.filter(s=>hasPlaceholderContent(s)).length, lbl: '⚠ Need Repair' }
+    ].map(s=>`<div class="stat-pill"><div class="sp-val">${s.val}</div><div class="sp-lbl">${s.lbl}</div></div>`).join('')
 
-    document.getElementById('type-grid').innerHTML = Object.entries(byContentType)
-      .sort((a,b) => b[1]-a[1])
-      .map(([t,c]) => `<span class="type-pill tp-${t}">${t.replace(/_/g,' ')} ×${c}</span>`)
-      .join('')
+    document.getElementById('arch-grid').innerHTML = Object.entries(archetypes).sort((a,b)=>b[1]-a[1]).map(([a,c])=>`<span class="arch-pill arch-${a}">${a} ×${c}</span>`).join('')
+    document.getElementById('atype-grid').innerHTML = Object.entries(atypes).sort((a,b)=>b[1]-a[1]).map(([a,c])=>`<span class="atype-pill atype-${a}">${a} ×${c}</span>`).join('')
 
-    // Slide list
     document.getElementById('slide-list').innerHTML = manifest.map((s, i) => {
-      const zones    = s.zones || []
-      const zoneTypes = zones.map(z => (z.content||{}).type || '?').join(' + ')
-      const zoneCount = zones.length
+      const zones = s.zones || []
+      const arcCount = zones.length
+      const artSummary = zones.map(z => (z.artifacts||[]).map(a=>a.type).join('+')).join(' | ')
 
       return `<div class="slide-card">
         <div class="sc-header ${s.slide_type}" onclick="toggle(${i})">
           <span class="sc-num">S${s.slide_number}</span>
           <span class="sc-badge badge-${s.slide_type}">${s.slide_type}</span>
-          <span class="sc-title">${s.title || '—'}</span>
-          <span class="sc-zones">${zoneCount} zone${zoneCount!==1?'s':''} · ${zoneTypes}</span>
-          <span class="sc-section">${s.section_name || ''}</span>
+          <span class="arch-pill arch-${s.slide_archetype||'summary'}" style="font-size:9px;padding:1px 6px;">${s.slide_archetype||'—'}</span>
+          <span class="sc-title">${s.title||'—'}</span>
+          ${arcCount > 0 ? `<span class="sc-meta">${arcCount}z · ${artSummary}</span>` : ''}
           <span class="sc-chevron" id="chev-${i}">▶</span>
         </div>
         <div class="sc-body" id="body-${i}">
           ${s.key_message ? `<div class="km-banner">${s.key_message}</div>` : ''}
 
-          <!-- Wireframe layout -->
-          ${s.slide_type === 'content' ? renderWireframe(s) : ''}
+          <div class="slide-meta-row">
+            <div class="smr-item"><span class="smr-label">Archetype</span>${s.slide_archetype||'—'}</div>
+            ${s.visual_flow_hint ? `<div class="smr-item"><span class="smr-label">Flow</span>${s.visual_flow_hint}</div>` : ''}
+            ${s.context_from_previous_slide ? `<div class="smr-item"><span class="smr-label">Context</span>${s.context_from_previous_slide}</div>` : ''}
+          </div>
 
-          <!-- Zone detail table -->
-          ${renderZoneTable(s)}
-
+          ${s.slide_type === 'content' && zones.length ? renderWireframe(s) : ''}
+          ${zones.length ? renderZones(s) : ''}
           ${s.speaker_note ? `<div class="speaker-note">${s.speaker_note}</div>` : ''}
         </div>
       </div>`
@@ -359,242 +379,168 @@
     document.getElementById('raw-json').textContent = JSON.stringify(manifest, null, 2)
   }
 
-  // ─── WIREFRAME RENDERER ───────────────────────────────────────────────────
+  // ─── WIREFRAME ─────────────────────────────────────────────────────────────
   function renderWireframe(slide) {
     const zones = slide.zones || []
-    if (!zones.length) return ''
+    const T = 14, H = 86  // title bar = 14%, content = 86%
 
-    const TITLE_H = 15  // % of slide height for title bar
-    const CONTENT_H = 100 - TITLE_H
-    const zoneEls = zones.map(z => getZoneRect(z.split, TITLE_H, CONTENT_H)).filter(Boolean)
+    const rects = {
+      'full':               {l:0,  t:T,     w:100, h:H       },
+      'left_50':            {l:0,  t:T,     w:50,  h:H       },
+      'right_50':           {l:50, t:T,     w:50,  h:H       },
+      'left_60':            {l:0,  t:T,     w:60,  h:H       },
+      'right_40':           {l:60, t:T,     w:40,  h:H       },
+      'left_40':            {l:0,  t:T,     w:40,  h:H       },
+      'right_60':           {l:40, t:T,     w:60,  h:H       },
+      'top_30':             {l:0,  t:T,     w:100, h:H*0.30  },
+      'bottom_70':          {l:0,  t:T+H*.30, w:100, h:H*0.70},
+      'top_40':             {l:0,  t:T,     w:100, h:H*0.40  },
+      'bottom_60':          {l:0,  t:T+H*.40, w:100, h:H*0.60},
+      'top_50':             {l:0,  t:T,     w:100, h:H*0.50  },
+      'bottom_50':          {l:0,  t:T+H*.50, w:100, h:H*0.50},
+      'top_left_50':        {l:0,  t:T,     w:50,  h:H*0.50  },
+      'top_right_50':       {l:50, t:T,     w:50,  h:H*0.50  },
+      'bottom_full':        {l:0,  t:T+H*.50, w:100, h:H*0.50},
+      'left_full_50':       {l:0,  t:T,     w:50,  h:H       },
+      'top_right_50_h':     {l:50, t:T,     w:50,  h:H*0.50  },
+      'bottom_right_50_h':  {l:50, t:T+H*.50, w:50, h:H*0.50 },
+      'tl':                 {l:0,  t:T,     w:50,  h:H*0.50  },
+      'tr':                 {l:50, t:T,     w:50,  h:H*0.50  },
+      'bl':                 {l:0,  t:T+H*.50, w:50, h:H*0.50 },
+      'br':                 {l:50, t:T+H*.50, w:50, h:H*0.50 }
+    }
 
-    const zoneHTML = zones.map((z, i) => {
-      const rect    = zoneEls[i]
-      if (!rect) return ''
-      const content = z.content || {}
-      const ctype   = content.type || '—'
-      const detail  = getContentSummary(content)
-      return `<div class="wf-zone" style="left:${rect.l}%;top:${rect.t}%;width:${rect.w}%;height:${rect.h}%;padding:2px;">
-        <div class="wf-zone-label">${z.zone_id} · ${z.split}</div>
-        <div class="wf-zone-type">${ctype.replace(/_/g,' ')}</div>
-        <div class="wf-zone-detail">${detail}</div>
+    const zoneHTML = zones.map(z => {
+      const r = rects[(z.layout_hint||{}).split || 'full']
+      if (!r) return ''
+      const nw = z.narrative_weight || 'primary'
+      const arts = (z.artifacts||[]).map(a => `<div class="wf-artifact">${a.type||'?'}${a.chart_type?' ('+a.chart_type+')':''}</div>`).join('')
+      return `<div class="wf-zone zone-${nw}" style="left:${r.l.toFixed(1)}%;top:${r.t.toFixed(1)}%;width:${r.w.toFixed(1)}%;height:${r.h.toFixed(1)}%;">
+        <div class="wf-zone-header">
+          <span>${z.zone_id}</span>
+          <span class="wf-zone-role">${z.zone_role||''}</span>
+        </div>
+        ${arts}
       </div>`
     }).join('')
 
-    return `<div class="zone-layout">
-      <div class="zone-layout-label">Slide Layout Preview</div>
+    return `<div class="wireframe-wrap">
+      <div class="wf-label">Layout Preview</div>
       <div class="slide-wireframe">
-        <div class="wf-title-bar"><span class="wf-title-text">${slide.title || ''}</span></div>
+        <div class="wf-title-bar"><span class="wf-title-text">${slide.title||''}</span></div>
         ${zoneHTML}
       </div>
     </div>`
   }
 
-  function getZoneRect(split, titleH, contentH) {
-    const T = titleH  // top of content area %
-    const H = contentH
-    const L = 0, W = 100
+  // ─── ZONE DETAIL ───────────────────────────────────────────────────────────
+  function renderZones(slide) {
+    return (slide.zones||[]).map(z => {
+      const nw   = z.narrative_weight || 'primary'
+      const role = z.zone_role || ''
+      const arts = (z.artifacts||[]).map(renderArtifact).join('')
 
-    const rects = {
-      'full':              { l:L,  t:T,        w:W,  h:H         },
-      'left_50':           { l:L,  t:T,        w:50, h:H         },
-      'right_50':          { l:50, t:T,        w:50, h:H         },
-      'left_60':           { l:L,  t:T,        w:60, h:H         },
-      'right_40':          { l:60, t:T,        w:40, h:H         },
-      'left_40':           { l:L,  t:T,        w:40, h:H         },
-      'right_60':          { l:40, t:T,        w:60, h:H         },
-      'top_30':            { l:L,  t:T,        w:W,  h:H*0.30    },
-      'bottom_70':         { l:L,  t:T+H*0.30, w:W,  h:H*0.70   },
-      'top_40':            { l:L,  t:T,        w:W,  h:H*0.40    },
-      'bottom_60':         { l:L,  t:T+H*0.40, w:W,  h:H*0.60   },
-      'top_50':            { l:L,  t:T,        w:W,  h:H*0.50    },
-      'bottom_50':         { l:L,  t:T+H*0.50, w:W,  h:H*0.50   },
-      'top_left_50':       { l:L,  t:T,        w:50, h:H*0.50    },
-      'top_right_50':      { l:50, t:T,        w:50, h:H*0.50    },
-      'bottom_full':       { l:L,  t:T+H*0.50, w:W,  h:H*0.50   },
-      'left_full_50':      { l:L,  t:T,        w:50, h:H         },
-      'top_right_50_h':    { l:50, t:T,        w:50, h:H*0.50    },
-      'bottom_right_50_h': { l:50, t:T+H*0.50, w:50, h:H*0.50   },
-      'tl':                { l:L,  t:T,        w:50, h:H*0.50    },
-      'tr':                { l:50, t:T,        w:50, h:H*0.50    },
-      'bl':                { l:L,  t:T+H*0.50, w:50, h:H*0.50   },
-      'br':                { l:50, t:T+H*0.50, w:50, h:H*0.50   }
-    }
-    return rects[split] || null
-  }
-
-  function getContentSummary(content) {
-    const type = (content.type || '').toLowerCase()
-    if (type === 'chart')        return (content.chart_type||'bar').toUpperCase() + ' · ' + (content.categories||[]).length + ' cats'
-    if (type === 'stat_callout') return (content.stats||[]).length + ' stats'
-    if (type === 'bullets')      return (content.bullets||[]).length + ' bullets'
-    if (type === 'data_table')   return (content.headers||[]).length + ' cols × ' + (content.rows||[]).length + ' rows'
-    if (type === 'cards')        return (content.cards||[]).length + ' cards'
-    if (type === 'insight_box')  return content.heading || 'Insight'
-    if (type === 'process_flow') return (content.steps||[]).length + ' steps'
-    if (type === 'three_column') return (content.columns||[]).length + ' columns'
-    if (type === 'two_column')   return 'L: ' + (content.left_points||[]).length + ' · R: ' + (content.right_points||[]).length
-    if (type === 'title_slide')  return content.title || ''
-    if (type === 'divider_slide')return content.section_name || ''
-    return ''
-  }
-
-  // ─── ZONE DETAIL TABLE ────────────────────────────────────────────────────
-  function renderZoneTable(slide) {
-    const zones = slide.zones || []
-    if (!zones.length) return '<p style="color:#aaa;font-size:12px;">No zones</p>'
-
-    const rows = zones.map(z => {
-      const content = z.content || {}
-      const type    = (content.type || '').toLowerCase()
-      return `<tr>
-        <td><strong>${z.zone_id}</strong></td>
-        <td><code style="font-size:10px;background:#f1f5f9;padding:1px 5px;border-radius:3px;">${z.split}</code></td>
-        <td><span class="type-pill tp-${type}" style="display:inline-block;">${type.replace(/_/g,' ')}</span></td>
-        <td>${z.label || ''}</td>
-        <td>${renderContentPreview(content)}</td>
-      </tr>`
+      return `<div class="zone-detail">
+        <div class="zone-detail-header ${nw}">
+          <span class="zdh-id">${z.zone_id}</span>
+          <span class="zdh-role role-${role}">${role}</span>
+          <span class="zdh-split">${(z.layout_hint||{}).split||'full'}</span>
+          <span class="arch-pill arch-${nw}" style="font-size:9px;">${nw}</span>
+          ${z.message_objective ? `<span class="zdh-obj">"${z.message_objective}"</span>` : ''}
+        </div>
+        <div class="zone-detail-body">${arts}</div>
+      </div>`
     }).join('')
-
-    return `<table class="zone-detail-table">
-      <thead><tr><th>Zone</th><th>Split</th><th>Type</th><th>Label</th><th>Content Preview</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>`
   }
 
-  // ─── CONTENT PREVIEW ──────────────────────────────────────────────────────
-  function renderContentPreview(content) {
-    if (!content) return '<span style="color:#aaa;">—</span>'
-    const type = (content.type || '').toLowerCase()
+  // ─── ARTIFACT RENDERER ─────────────────────────────────────────────────────
+  function renderArtifact(a) {
+    if (!a) return ''
+    const t = (a.type||'').toLowerCase()
+    let header = '', body = ''
 
-    if (type === 'title_slide') {
-      return `<div style="font-size:11px;"><strong>${content.title||'—'}</strong><br><span style="color:#888;">${content.subtitle||''}</span></div>`
-    }
+    if (t === 'chart') {
+      const cats = a.categories||[], series = a.series||[]
+      const vals = series[0]?(series[0].values||[]):[]
+      const max  = Math.max(...vals, 1)
+      const ct   = (a.chart_type||'bar').toUpperCase()
+      header = `<span class="ah-type atype-chart">${ct} CHART</span><span class="ah-detail">${a.chart_title||''}</span>`
 
-    if (type === 'divider_slide') {
-      return `<div style="font-size:11px;"><strong>${content.section_name||'—'}</strong><br><span style="color:#888;">${content.section_descriptor||''}</span></div>`
-    }
+      let chartBody = `<div class="chart-meta"><span class="cm-type">${ct}</span>${a.chart_decision||''}</div>`
+      if (a.chart_insight) chartBody += `<div class="cm-insight">↗ ${a.chart_insight}</div>`
 
-    if (type === 'stat_callout') {
-      const stats = (content.stats || []).slice(0, 4)
-      if (!stats.length) return '<span style="color:#dc2626;font-size:11px;">⚠ No stats</span>'
-      return `<div class="stat-grid-mini">${stats.map(s =>
-        `<div class="stat-mini">
-          <div class="stat-mini-val ${s.sentiment||''}">${s.value||'—'}</div>
-          <div class="stat-mini-lbl">${s.label||''}</div>
-          ${s.change ? `<div class="stat-mini-chg">${s.change}</div>` : ''}
-        </div>`
-      ).join('')}</div>`
-    }
-
-    if (type === 'chart') {
-      const cats   = content.categories || []
-      const series = content.series || []
-      const vals   = series[0] ? (series[0].values || []) : []
-      const max    = Math.max(...vals, 1)
-      const ct     = (content.chart_type || 'bar').toUpperCase()
-
-      let preview = `<div style="font-size:10px;color:#15803d;font-weight:700;margin-bottom:4px;">📊 ${ct} · ${content.chart_title||''}</div>`
-
-      if (content.chart_decision) {
-        preview += `<div style="font-size:10px;color:#7c3aed;font-style:italic;margin-bottom:4px;">${content.chart_decision}</div>`
-      }
-
-      if (content.chart_type === 'pie' && vals.length) {
-        const total = vals.reduce((a,b)=>a+b,0)||1
-        preview += `<div>${cats.slice(0,5).map((c,i) =>
-          `<div style="display:flex;align-items:center;gap:4px;margin-bottom:2px;">
-            <div style="width:10px;height:10px;border-radius:2px;background:${CHART_COLORS[i%CHART_COLORS.length]};flex-shrink:0;"></div>
-            <span style="font-size:10px;flex:1;">${c}</span>
-            <span style="font-size:10px;font-weight:600;">${Math.round(vals[i]/total*100)}%</span>
-          </div>`).join('')}</div>`
+      if (t === 'chart' && a.chart_type === 'pie' && vals.length) {
+        const total = vals.reduce((s,v)=>s+v,0)||1
+        chartBody += `<div class="pie-legend">${cats.map((c,i)=>`<div class="pie-item"><div class="pie-dot" style="background:${COLORS[i%COLORS.length]}"></div><span>${c}: ${Math.round(vals[i]/total*100)}%</span></div>`).join('')}</div>`
       } else if (vals.length) {
-        preview += `<div class="mini-chart">${cats.slice(0,8).map((c,i) => {
-          const h = Math.max(4, Math.round((vals[i]||0)/max*32))
-          return `<div class="mini-bar-wrap" style="display:flex;flex-direction:column;align-items:center;flex:1;">
-            <div style="font-size:8px;color:#555;margin-bottom:1px;">${vals[i]!==undefined?vals[i]:''}</div>
-            <div class="mini-bar" style="height:${h}px;width:100%;background:${CHART_COLORS[i%CHART_COLORS.length]};border-radius:2px 2px 0 0;"></div>
-            <div class="mini-label">${c.toString().slice(0,6)}</div>
-          </div>`
-        }).join('')}</div>`
+        const s2 = series[1]?(series[1].values||[]):[]
+        chartBody += `<div class="mini-bars">${cats.slice(0,8).map((c,i)=>`<div class="mb-wrap">
+          <div class="mb-val">${vals[i]!==undefined?vals[i]:''}</div>
+          <div class="mb-bar" style="height:${Math.max(3,Math.round(vals[i]/max*44))}px;background:${COLORS[0]};"></div>
+          ${s2.length?`<div class="mb-bar" style="height:${Math.max(2,Math.round((s2[i]||0)/max*44))}px;background:${COLORS[1]};margin-top:1px;"></div>`:''}
+          <div class="mb-cat">${String(c).slice(0,8)}</div>
+        </div>`).join('')}</div>`
       }
-      return preview
+      body = chartBody
     }
 
-    if (type === 'bullets') {
-      const bullets = content.bullets || []
-      if (!bullets.length) return '<span style="color:#dc2626;font-size:11px;">⚠ No bullets</span>'
-      return `<ul class="bullet-list-mini">${bullets.slice(0,4).map(b => {
-        const text      = typeof b === 'string' ? b : (b.text || '')
-        const sentiment = typeof b === 'object' ? (b.sentiment || 'neutral') : 'neutral'
-        const emph      = typeof b === 'object' ? (b.emphasis || []) : []
-        const empStr    = emph.length ? ` <em style="font-size:9px;color:#7c3aed;">[${emph.map(e=>e.text).join(', ')}]</em>` : ''
-        return `<li class="${sentiment}">${text.slice(0,90)}${text.length>90?'…':''}${empStr}</li>`
-      }).join('')}${bullets.length>4?`<li style="color:#aaa;">+${bullets.length-4} more</li>`:''}</ul>`
+    else if (t === 'insight_text') {
+      header = `<span class="ah-type atype-insight_text">INSIGHT</span><span class="ah-detail">${a.heading||'Key Insight'}</span>`
+      body = `<div class="insight-heading ${a.sentiment||'neutral'}">${a.heading||'Key Insight'}</div>
+        <ul class="insight-points">${(a.points||[]).slice(0,4).map(p=>`<li>${p}</li>`).join('')}</ul>`
     }
 
-    if (type === 'insight_box') {
-      return `<div class="insight-mini ${content.sentiment||'neutral'}">
-        ${content.heading ? `<div class="ih">${content.heading}</div>` : ''}
-        <div class="ib">${(content.text||'').slice(0,120)}${(content.text||'').length>120?'…':''}</div>
+    else if (t === 'cards') {
+      const cols = Math.min(a.cards.length, 3)
+      header = `<span class="ah-type atype-cards">CARDS</span><span class="ah-detail">${a.cards.length} cards</span>`
+      body = `<div class="cards-grid" style="grid-template-columns:repeat(${cols},1fr)">${(a.cards||[]).map(c=>`<div class="card-item ${c.sentiment||''}">
+        <div class="ci-title">${c.title||''}</div>
+        ${c.subtitle?`<div class="ci-subtitle">${c.subtitle}</div>`:''}
+        <div class="ci-body">${(c.body||'').slice(0,80)}${(c.body||'').length>80?'…':''}</div>
+      </div>`).join('')}</div>`
+    }
+
+    else if (t === 'workflow') {
+      const nodes = a.nodes||[], conns = a.connections||[]
+      header = `<span class="ah-type atype-workflow">WORKFLOW</span><span class="ah-detail">${a.workflow_type||''} · ${a.flow_direction||''}</span>`
+      const nodeHTML = nodes.slice(0,6).map((n,i) => `${i>0?'<div class="wf-arrow">→</div>':''}<div class="wf-node">
+        <div class="wf-node-label">${n.label||''}</div>
+        ${n.value?`<div class="wf-node-val">${n.value}</div>`:''}
+        ${n.description?`<div class="wf-node-desc">${n.description.slice(0,30)}</div>`:''}
+      </div>`).join('')
+      const connSummary = conns.slice(0,6).map(c=>`${c.from}→${c.to}`).join(', ')
+      body = `<div class="wf-preview">
+        ${a.workflow_insight?`<div class="cm-insight" style="margin-bottom:6px;">↗ ${a.workflow_insight}</div>`:''}
+        <div class="wf-nodes">${nodeHTML}</div>
+        ${connSummary?`<div class="wf-conn-list">Connections: ${connSummary}</div>`:''}
       </div>`
     }
 
-    if (type === 'data_table') {
-      const headers = content.headers || []
-      const rows    = content.rows    || []
-      if (!headers.length) return '<span style="color:#dc2626;font-size:11px;">⚠ Empty table</span>'
-      return `<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:10px;">
-        <tr>${headers.map(h=>`<th style="background:#1e3a8a;color:white;padding:2px 5px;text-align:left;">${h}</th>`).join('')}</tr>
-        ${rows.slice(0,4).map((row,ri)=>`<tr style="background:${ri%2?'#f5f5f5':'white'}">${row.map(c=>`<td style="padding:2px 5px;border-bottom:1px solid #eee;">${c}</td>`).join('')}</tr>`).join('')}
-        ${rows.length>4?`<tr><td colspan="${headers.length}" style="padding:2px 5px;color:#aaa;font-style:italic;">+${rows.length-4} more rows</td></tr>`:''}
-      </table></div>`
+    else if (t === 'table') {
+      const headers = a.headers||[], rows = a.rows||[], highlight = a.highlight_rows||[]
+      header = `<span class="ah-type atype-table">TABLE</span><span class="ah-detail">${a.title||''} · ${headers.length} cols × ${rows.length} rows</span>`
+      if (!headers.length) { body = '<span style="color:#dc2626;font-size:11px;">⚠ Empty table</span>' }
+      else {
+        body = `<div style="overflow-x:auto;"><table class="mini-table">
+          <tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr>
+          ${rows.slice(0,5).map((r,ri)=>`<tr class="${highlight.includes(ri)?'highlight':''}">${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}
+          ${rows.length>5?`<tr><td colspan="${headers.length}" style="color:#aaa;font-style:italic;padding:2px 5px;">+${rows.length-5} more rows</td></tr>`:''}
+        </table></div>
+        ${a.note?`<div style="font-size:10px;color:#888;margin-top:3px;">${a.note}</div>`:''}`
+      }
     }
 
-    if (type === 'cards') {
-      const cards = content.cards || []
-      if (!cards.length) return '<span style="color:#dc2626;font-size:11px;">⚠ No cards</span>'
-      return `<div style="display:grid;grid-template-columns:repeat(${Math.min(cards.length,3)},1fr);gap:4px;">${cards.map(c=>
-        `<div style="background:white;border:1px solid #e5e7eb;border-top:3px solid #1e3a8a;border-radius:4px;padding:5px;">
-          <div style="font-size:10px;font-weight:700;color:#1e3a8a;margin-bottom:2px;">${c.header||'—'}</div>
-          <div style="font-size:10px;color:#555;">${(c.body||'').slice(0,60)}${(c.body||'').length>60?'…':''}</div>
-        </div>`).join('')}</div>`
-    }
-
-    if (type === 'three_column') {
-      const cols = content.columns || []
-      return `<div style="display:grid;grid-template-columns:repeat(${cols.length},1fr);gap:4px;">${cols.map(c=>
-        `<div style="background:#f9fafb;border-left:3px solid #1e3a8a;padding:4px 6px;">
-          <div style="font-size:10px;font-weight:700;color:#1e3a8a;">${c.header||''}</div>
-          <div style="font-size:10px;color:#555;">${(c.body||'').slice(0,60)}</div>
-        </div>`).join('')}</div>`
-    }
-
-    if (type === 'two_column') {
-      return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px;">
-        <div><strong style="color:#1e3a8a;font-size:10px;">${content.left_header||'Left'}</strong>${(content.left_points||[]).slice(0,3).map(p=>`<div style="padding-left:8px;border-left:2px solid #d97706;margin-top:2px;font-size:10px;">${p.slice(0,50)}</div>`).join('')}</div>
-        <div><strong style="color:#1e3a8a;font-size:10px;">${content.right_header||'Right'}</strong>${(content.right_points||[]).slice(0,3).map(p=>`<div style="padding-left:8px;border-left:2px solid #d97706;margin-top:2px;font-size:10px;">${p.slice(0,50)}</div>`).join('')}</div>
-      </div>`
-    }
-
-    if (type === 'process_flow') {
-      const steps = content.steps || []
-      return `<div style="display:flex;gap:4px;align-items:flex-start;">${steps.slice(0,5).map((s,i)=>
-        `<div style="flex:1;background:#eff6ff;border-top:2px solid #1e3a8a;border-radius:3px;padding:4px;font-size:10px;">
-          <div style="font-weight:700;color:#1e3a8a;">${s.step_number||i+1}. ${(s.title||'').slice(0,20)}</div>
-          <div style="color:#555;">${(s.description||'').slice(0,40)}</div>
-        </div>`).join('<div style="color:#d97706;font-size:12px;margin-top:8px;">▶</div>')}</div>`
-    }
-
-    return `<span style="color:#aaa;font-size:11px;">${type}</span>`
+    return `<div class="artifact-block">
+      <div class="artifact-header">${header}</div>
+      <div class="artifact-body">${body}</div>
+    </div>`
   }
 
   // ─── HELPERS ──────────────────────────────────────────────────────────────
   function toggle(i) {
-    const body = document.getElementById('body-' + i)
-    const chev = document.getElementById('chev-' + i)
-    body.classList.toggle('open', !body.classList.contains('open'))
-    chev.classList.toggle('open', !chev.classList.contains('open'))
+    const b = document.getElementById('body-'+i), c = document.getElementById('chev-'+i)
+    b.classList.toggle('open', !b.classList.contains('open'))
+    c.classList.toggle('open', !c.classList.contains('open'))
   }
 
   function safeParseJSON(raw, fallback) {
@@ -604,21 +550,17 @@
 
   function copyJSON() {
     if (!resultManifest) return
-    navigator.clipboard.writeText(JSON.stringify(resultManifest, null, 2))
-      .then(() => alert('Copied!'))
-      .catch(() => alert('Select manually.'))
+    navigator.clipboard.writeText(JSON.stringify(resultManifest, null, 2)).then(()=>alert('Copied!')).catch(()=>alert('Select manually.'))
   }
 
   function resetAll() {
-    pdfB64 = null; resultManifest = null
-    document.getElementById('brief-input').value = ''
-    document.getElementById('pdf-label').innerHTML = 'Click to upload <span>.pdf</span>'
-    ;['pdf','brief'].forEach(t => document.getElementById('zone-'+t).classList.remove('ready'))
-    document.getElementById('run-btn').disabled = true
-    document.getElementById('results').classList.remove('show')
-    document.getElementById('error-box').classList.remove('show')
-    document.getElementById('prog-wrap').classList.remove('show')
-    document.getElementById('prog-fill').style.width = '0%'
+    pdfB64=null; resultManifest=null
+    document.getElementById('brief-input').value=''
+    document.getElementById('pdf-label').innerHTML='Click to upload <span>.pdf</span>'
+    ;['pdf','brief'].forEach(t=>document.getElementById('zone-'+t).classList.remove('ready'))
+    document.getElementById('run-btn').disabled=true
+    ;['results','error-box','prog-wrap'].forEach(id=>document.getElementById(id).classList.remove('show','open'))
+    document.getElementById('prog-fill').style.width='0%'
   }
 
 </script>
