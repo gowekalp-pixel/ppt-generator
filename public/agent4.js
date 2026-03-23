@@ -473,6 +473,25 @@ function inferArchetype(sectionType, slideIndex) {
   }
 }
 
+function compactList(arr, limit = 6, maxChars = 280) {
+  const items = (arr || []).filter(Boolean).slice(0, limit).map(v => String(v).trim())
+  const joined = items.join(' | ')
+  return joined.length > maxChars ? joined.slice(0, maxChars) + '…' : joined
+}
+
+function buildBriefSummaryForAgent4(brief) {
+  const b = brief || {}
+  return {
+    document_type: b.document_type || '',
+    governing_thought: b.governing_thought || '',
+    narrative_flow: b.narrative_flow || '',
+    tone: b.tone || 'professional',
+    key_messages: compactList(b.key_messages, 5, 260),
+    key_data_points: compactList(b.key_data_points, 6, 320),
+    recommendations: compactList(b.recommendations, 4, 220)
+  }
+}
+
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // VALIDATION
@@ -720,14 +739,15 @@ function buildSlidePlan(brief, slideCount) {
 async function writeSlideBatch(batchPlan, brief, contentB64, batchNum) {
   console.log('Agent 4 — batch', batchNum, ': slides', batchPlan[0].slide_number, '–', batchPlan[batchPlan.length-1].slide_number)
 
+  const briefSummary = buildBriefSummaryForAgent4(brief)
   const prompt = `PRESENTATION BRIEF:
-Document type:     ${brief.document_type || '—'}
-Governing thought: ${brief.governing_thought || '—'}
-Narrative flow:    ${brief.narrative_flow || '—'}
-Tone:              ${brief.tone || 'professional'}
-Key messages:      ${(brief.key_messages || []).join(' | ')}
-Key data points:   ${(brief.key_data_points || []).join(' | ')}
-Recommendations:   ${(brief.recommendations || []).join(' | ')}
+Document type:     ${briefSummary.document_type || '—'}
+Governing thought: ${briefSummary.governing_thought || '—'}
+Narrative flow:    ${briefSummary.narrative_flow || '—'}
+Tone:              ${briefSummary.tone || 'professional'}
+Key messages:      ${briefSummary.key_messages || '—'}
+Key data points:   ${briefSummary.key_data_points || '—'}
+Recommendations:   ${briefSummary.recommendations || '—'}
 
 SLIDES TO WRITE — batch ${batchNum} (${batchPlan.length} slides):
 ${JSON.stringify(batchPlan, null, 2)}
@@ -752,7 +772,7 @@ INSTRUCTIONS:
     ]
   }]
 
-  const raw    = await callClaude(AGENT4_SYSTEM, messages, 4000)
+  const raw    = await callClaude(AGENT4_SYSTEM, messages, 2600)
   const parsed = safeParseJSON(raw, null)
 
   if (!Array.isArray(parsed)) {
@@ -772,12 +792,13 @@ INSTRUCTIONS:
 async function repairSlide(slide, brief, contentB64) {
   console.log('Agent 4 — repairing slide', slide.slide_number, ':', slide.title)
 
+  const briefSummary = buildBriefSummaryForAgent4(brief)
   const prompt = `This slide has missing or invalid artifact content. Fix every zone with specific data from the source document.
 
 CONTEXT:
-Document type:  ${brief.document_type || '—'}
-Key messages:   ${(brief.key_messages || []).join(' | ')}
-Key data:       ${(brief.key_data_points || []).join(' | ')}
+Document type:  ${briefSummary.document_type || '—'}
+Key messages:   ${briefSummary.key_messages || '—'}
+Key data:       ${briefSummary.key_data_points || '—'}
 
 SLIDE TO FIX:
 ${JSON.stringify(slide, null, 2)}
@@ -799,7 +820,7 @@ Fix rules:
     ]
   }]
 
-  const raw     = await callClaude(AGENT4_SYSTEM, messages, 1500)
+  const raw     = await callClaude(AGENT4_SYSTEM, messages, 900)
   const cleaned = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
 
   try {
@@ -827,13 +848,19 @@ async function runAgent4(state) {
   const slidePlan = buildSlidePlan(brief, slideCount)
   console.log('  Slide plan:', slidePlan.length, 'slides')
 
-  // Batch into groups of 5
+  // Batch size capped at 4 slides to stay within the 30k input-token/minute rate limit.
+  // Each batch re-sends the source PDF, so we pause 65 s between batches to reset the window.
+  const BATCH_SIZE = 4
   const batches = []
-  for (let i = 0; i < slidePlan.length; i += 5) batches.push(slidePlan.slice(i, i + 5))
+  for (let i = 0; i < slidePlan.length; i += BATCH_SIZE) batches.push(slidePlan.slice(i, i + BATCH_SIZE))
 
   let allSlides = []
 
   for (let b = 0; b < batches.length; b++) {
+    if (b > 0) {
+      console.log('Agent 4 — rate-limit pause 65 s before batch', b + 1)
+      await new Promise(r => setTimeout(r, 65000))
+    }
     const batch  = batches[b]
     const result = await writeSlideBatch(batch, brief, contentB64, b + 1)
 
@@ -851,7 +878,7 @@ async function runAgent4(state) {
   const failed = allSlides.filter(s => hasPlaceholderContent(s))
   console.log('  Slides needing repair:', failed.length)
 
-  for (const slide of failed.slice(0, 5)) {
+  for (const slide of failed.slice(0, 2)) {
     const repaired = await repairSlide(slide, brief, contentB64)
     if (repaired) {
       const idx = allSlides.findIndex(s => s.slide_number === slide.slide_number)
