@@ -1,5 +1,5 @@
 // ─── AGENT 6 — PPTX GENERATOR ────────────────────────────────────────────────
-// Input:  state.finalSpec from Agent 5, state.brandRulebook from Agent 2
+// Input:  state.finalSpec (= state.reviewedSpec from Agent 5.1), state.brandRulebook from Agent 2
 // Output: downloadable .pptx file (via python-pptx on Vercel backend)
 // Makes ONE call to /api/generate-pptx (Python serverless function)
 

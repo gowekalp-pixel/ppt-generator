@@ -161,13 +161,16 @@
       <div class="p-node"><div class="circle" id="c4">4</div>Content</div>
       <div class="p-arrow">→</div>
       <div class="p-node"><div class="circle" id="c5">5</div>Design</div>
+      <div class="p-arrow">→</div>
+      <div class="p-node"><div class="circle" id="c6">5.1</div>Review</div>
     </div>
 
     <div id="s1" class="step wait">⬜ Agent 1 — Collecting & packaging inputs</div>
     <div id="s2" class="step wait">⬜ Agent 2 — Parsing brand guidelines</div>
     <div id="s3" class="step wait">⬜ Agent 3 — Analysing content & building structure</div>
     <div id="s4" class="step wait">⬜ Agent 4 — Writing detailed slide content</div>
-    <div id="s5" class="step wait">⬜ Agent 5 — Merging brand + content into final spec</div>
+    <div id="s5" class="step wait">⬜ Agent 5 — Building design specification</div>
+    <div id="s6" class="step wait">⬜ Agent 5.1 — Senior partner review</div>
 
     <div class="progress-wrap">
       <div class="progress"><div class="progress-fill" id="prog"></div></div>
@@ -200,6 +203,14 @@
       <div class="summary-item">
         <div class="s-label">Brand Colors</div>
         <div class="s-value" id="res-colors">—</div>
+      </div>
+      <div class="summary-item">
+        <div class="s-label">Partner Review</div>
+        <div class="s-value" id="res-review" style="font-size:13px;">—</div>
+      </div>
+      <div class="summary-item">
+        <div class="s-label">Issues Found</div>
+        <div class="s-value" id="res-review-issues" style="font-size:13px;">—</div>
       </div>
     </div>
 
@@ -234,6 +245,7 @@
 <script src="agent3.js"></script>
 <script src="agent4.js"></script>
 <script src="agent5.js"></script>
+<script src="agent5point1.js"></script>
 <script src="agent6.js"></script>
 <script src="app.js"></script>
 
@@ -243,17 +255,18 @@
   window.setProgress = function(pct) {
     _orig(pct)
     const nodes = [
-      { id: 'c1', at: 5  },
-      { id: 'c2', at: 20 },
-      { id: 'c3', at: 35 },
-      { id: 'c4', at: 55 },
-      { id: 'c5', at: 75 }
+      { id: 'c1', at: 5  },   // Agent 1 — Input
+      { id: 'c2', at: 15 },   // Agent 2 — Brand
+      { id: 'c3', at: 28 },   // Agent 3 — Structure
+      { id: 'c4', at: 42 },   // Agent 4 — Content
+      { id: 'c5', at: 62 },   // Agent 5 — Design
+      { id: 'c6', at: 80 }    // Agent 5.1 — Review
     ]
     nodes.forEach(n => {
       const el = document.getElementById(n.id)
       if (!el) return
       el.classList.remove('done', 'active')
-      if (pct >= n.at + 15) el.classList.add('done')
+      if (pct >= n.at + 12) el.classList.add('done')
       else if (pct >= n.at)  el.classList.add('active')
     })
   }
