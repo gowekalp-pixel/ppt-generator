@@ -150,7 +150,39 @@ Chart type selection:
 - line:          trend over time (months, quarters, years)
 - pie:           parts of a whole summing to ~100%, max 5 segments
 - waterfall:     bridge/variance — items have types positive/negative/total
-- clustered_bar: two series on same categories (actual vs target, period vs period)
+- clustered_bar: REQUIRES exactly 2 series on the same categories (e.g. disbursed vs outstanding)
+
+CRITICAL CHART DATA RULES:
+1. categories MUST have 3 or more items for bar/line charts — NEVER use a single category
+2. series[0].values MUST have the same number of items as categories
+3. All values MUST be real numbers from the document — NOT zeros, NOT placeholders
+4. clustered_bar REQUIRES exactly 2 series — if you only have 1 series, use "bar" instead
+5. pie chart categories must sum to approximately 100 when expressed as percentages
+
+CORRECT chart example (geographic distribution):
+{
+  "type": "chart",
+  "chart_type": "bar",
+  "chart_decision": "bar chart to compare outstanding principal across 3 zones",
+  "chart_title": "Outstanding Principal by Zone (₹ Crore)",
+  "x_label": "Zone", "y_label": "₹ Crore",
+  "categories": ["North Zone", "West Zone", "East Zone"],
+  "series": [{ "name": "Outstanding", "values": [230.1, 85.7, 35.2] }],
+  "show_data_labels": true, "show_legend": false
+}
+
+CORRECT clustered_bar example (disbursed vs outstanding):
+{
+  "type": "chart",
+  "chart_type": "clustered_bar",
+  "chart_title": "Disbursed vs Outstanding by Zone (₹ Crore)",
+  "categories": ["North Zone", "West Zone", "East Zone"],
+  "series": [
+    { "name": "Disbursed",    "values": [298.5, 112.3, 46.8] },
+    { "name": "Outstanding",  "values": [230.1, 85.7,  35.2] }
+  ],
+  "show_data_labels": true, "show_legend": true
+}
 
 ── stat_callout ──
 {
@@ -352,10 +384,22 @@ function isZonePlaceholder(zone) {
     return stats.every(s => !s.value || s.value === '—' || /placeholder|tbd/i.test(s.value))
   }
   if (type === 'chart') {
-    return !c.categories || c.categories.length === 0 || !c.series || c.series.length === 0
+    if (!c.categories || c.categories.length < 2) return true  // FIX: need 2+ categories
+    if (!c.series || c.series.length === 0) return true
+    const vals = (c.series[0] || {}).values || []
+    if (vals.length === 0) return true
+    if (vals.every(v => v === 0)) return true  // FIX: all-zero values = placeholder
+    return false
   }
   if (type === 'cards') {
-    return !c.cards || c.cards.length === 0
+    return !c.cards || c.cards.length === 0 ||
+      c.cards.every(cd => !cd.body || cd.body.trim().length < 5)
+  }
+  if (type === 'data_table') {
+    return !c.headers || c.headers.length === 0 || !c.rows || c.rows.length === 0
+  }
+  if (type === 'insight_box') {
+    return !c.text || c.text.trim().length < 10
   }
   return false
 }
@@ -372,14 +416,60 @@ function normaliseZone(z) {
   const content = z.content || {}
   if (!content.type) content.type = 'bullets'
 
-  // Ensure chart has chart_title
-  if (content.type === 'chart' && !content.chart_title) {
-    content.chart_title = z.label || ''
+  if (content.type === 'chart') {
+    // Ensure chart_title
+    if (!content.chart_title) content.chart_title = z.label || ''
+
+    // Ensure chart_type is set
+    if (!content.chart_type) content.chart_type = 'bar'
+
+    // Ensure categories is an array
+    if (!Array.isArray(content.categories)) content.categories = []
+
+    // Ensure series is an array
+    if (!Array.isArray(content.series)) content.series = []
+
+    // Normalise series values to numbers
+    content.series = content.series.map(s => ({
+      name:   s.name   || '',
+      values: (s.values || []).map(v => typeof v === 'number' ? v : parseFloat(String(v).replace(/[^0-9.-]/g,'')) || 0),
+      types:  s.types  || null
+    }))
+
+    // FIX: clustered_bar requires 2+ series — downgrade to bar if only 1 series
+    if (content.chart_type === 'clustered_bar' && content.series.length < 2) {
+      console.warn('normaliseZone — downgrading clustered_bar to bar (only', content.series.length, 'series)')
+      content.chart_type = 'bar'
+    }
+
+    // FIX: bar/line needs 2+ categories to be meaningful
+    if (['bar','line','clustered_bar'].includes(content.chart_type) && content.categories.length < 2) {
+      console.warn('normaliseZone — chart has < 2 categories, flagging as placeholder')
+      // Leave as-is — hasPlaceholderContent will catch it
+    }
+
+    // FIX: ensure values array length matches categories length
+    content.series = content.series.map(s => {
+      if (s.values.length !== content.categories.length && content.categories.length > 0) {
+        // Pad or trim values to match categories
+        while (s.values.length < content.categories.length) s.values.push(0)
+        s.values = s.values.slice(0, content.categories.length)
+      }
+      return s
+    })
+
+    // show_data_labels default
+    if (content.show_data_labels === undefined) content.show_data_labels = true
   }
 
-  // Ensure chart type is set
-  if (content.type === 'chart' && !content.chart_type) {
-    content.chart_type = 'bar'
+  // Normalise stat sentiments — 'negative' is valid, keep it
+  if (content.type === 'stat_callout' && content.stats) {
+    content.stats = content.stats.map(s => ({
+      value:     s.value     || '—',
+      label:     s.label     || '',
+      change:    s.change    || '',
+      sentiment: ['positive','negative','neutral','warning'].includes(s.sentiment) ? s.sentiment : 'neutral'
+    }))
   }
 
   // Normalise bullets
@@ -393,7 +483,7 @@ function normaliseZone(z) {
         emphasis:  b.emphasis  || autoEmphasis(b.text || ''),
         sentiment: b.sentiment || autoSentiment(b.text || '')
       }
-    })
+    }).filter(b => b.text && b.text.trim().length > 3)
   }
 
   return { zone_id: z.zone_id || 'z1', label: z.label || '', split: z.split || 'full', content }
@@ -510,10 +600,16 @@ INSTRUCTIONS:
 - Do NOT force multi-zone when a single chart or table tells the story clearly
 - Zone splits must be complementary — left_60 + right_40, top_30 + bottom_70 etc.
 - Title slides: SHORT name (5-8 words max), not the governing thought
-- Content slide titles: INSIGHT-LED — state the conclusion
-- All numbers must come from the source document
-- ZERO placeholder content
-- Return ONLY a JSON array for these ${batchPlan.length} slides`
+- Content slide titles: INSIGHT-LED — state the conclusion, not the topic
+
+CHART DATA ENFORCEMENT — violating these will cause slide repair:
+1. Every chart MUST have 3+ categories (never 0, never 1, never 2)
+2. Every chart series MUST have values matching the number of categories
+3. Values MUST be real numbers from the source document — never 0 for all, never placeholders
+4. clustered_bar REQUIRES 2 series — if you only have 1 series use "bar" instead
+5. Pull actual numbers from the PDF: zone totals, state amounts, industry percentages etc.
+
+Return ONLY a JSON array for these ${batchPlan.length} slides. No explanation. No markdown.`
 
   const messages = [{
     role: 'user',
