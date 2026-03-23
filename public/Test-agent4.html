@@ -13,103 +13,133 @@
     .subhead { font-size: 13px; color: #666; margin-bottom: 1.5rem; line-height: 1.5; }
     .card { background: white; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.25rem; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
     .card-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #888; margin-bottom: 1rem; }
-
     .two-up { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-
-    .upload-zone { border: 2px dashed #d1d5db; border-radius: 10px; padding: 1rem; cursor: pointer; position: relative; background: #fafafa; transition: all 0.15s; margin-bottom: 10px; }
+    .hint { font-size: 12px; color: #888; margin-bottom: 6px; }
+    textarea { width: 100%; height: 140px; font-family: monospace; font-size: 11px; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; resize: vertical; background: #fafafa; color: #333; }
+    textarea:focus { outline: none; border-color: #d97706; }
+    .upload-zone { border: 2px dashed #d1d5db; border-radius: 10px; padding: 1rem; cursor: pointer; position: relative; background: #fafafa; transition: background 0.15s; margin-top: 6px; }
     .upload-zone:hover { background: #f3f4f6; }
     .upload-zone.ready { border-color: #22c55e; border-style: solid; background: #f0fdf4; }
     .upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
-    .uz { font-size: 13px; color: #555; pointer-events: none; }
-    .uz span { font-weight: 600; color: #2563eb; }
-    .upload-zone.ready .uz { color: #16a34a; font-weight: 500; }
-
-    textarea { width: 100%; height: 140px; font-family: monospace; font-size: 11px; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; resize: vertical; background: #fafafa; color: #333; }
-    textarea:focus { outline: none; border-color: #2563eb; }
-
-    .slider-row { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+    .uz { font-size: 12px; color: #888; pointer-events: none; }
+    .uz span { color: #d97706; font-weight: 600; }
+    .upload-zone.ready .uz { color: #16a34a; }
+    .slider-row { display: flex; align-items: center; gap: 14px; margin-top: 10px; }
     .slider-row label { font-size: 13px; font-weight: 600; color: #333; white-space: nowrap; }
-    .slider-row input { flex: 1; accent-color: #854d0e; }
+    .slider-row input { flex: 1; accent-color: #d97706; }
     .slide-num { font-size: 18px; font-weight: 700; min-width: 40px; text-align: center; background: #fef9c3; padding: 5px 10px; border-radius: 8px; color: #854d0e; }
-
-    .btn-row { display: flex; gap: 10px; }
+    .btn-row { display: flex; gap: 10px; margin-top: 1rem; }
     .btn { flex: 1; padding: 12px; font-size: 14px; font-weight: 700; border: none; border-radius: 10px; cursor: pointer; }
     .btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .btn-amber { background: #d97706; color: white; }
     .btn-amber:hover:not(:disabled) { background: #b45309; }
-    .btn-gray  { background: #e5e7eb; color: #374151; }
-    .btn-gray:hover:not(:disabled)  { background: #d1d5db; }
-
+    .btn-gray { background: #e5e7eb; color: #374151; }
+    .btn-gray:hover:not(:disabled) { background: #d1d5db; }
     .progress-wrap { display: none; margin-top: 12px; }
     .progress-wrap.show { display: block; }
     .progress { height: 4px; background: #e5e7eb; border-radius: 99px; overflow: hidden; }
     .progress-fill { height: 100%; background: #d97706; border-radius: 99px; width: 0%; transition: width 0.5s ease; }
     .progress-msg { font-size: 12px; color: #666; margin-top: 5px; }
-
     .error-box { display: none; background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #dc2626; margin-top: 10px; }
     .error-box.show { display: block; }
-
     .results { display: none; }
     .results.show { display: block; }
 
     /* Stats bar */
     .stats-bar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 1.25rem; }
     .stat-pill { background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 16px; text-align: center; }
-    .stat-pill .sp-val { font-size: 22px; font-weight: 700; color: #111; }
-    .stat-pill .sp-lbl { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+    .sp-val { font-size: 20px; font-weight: 700; color: #111; }
+    .sp-lbl { font-size: 11px; color: #888; text-transform: uppercase; margin-top: 2px; }
 
-    /* Visual type breakdown */
-    .vt-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 1.25rem; }
-    .vt-pill { font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 20px; }
-    .vt-title_slide    { background: #e0e7ff; color: #3730a3; }
-    .vt-divider_slide  { background: #f3f4f6; color: #6b7280; }
-    .vt-bullet_list    { background: #dbeafe; color: #1d4ed8; }
-    .vt-three_column   { background: #dcfce7; color: #15803d; }
-    .vt-two_column     { background: #d1fae5; color: #065f46; }
-    .vt-data_table     { background: #fef3c7; color: #92400e; }
-    .vt-stat_callout   { background: #ede9fe; color: #5b21b6; }
-    .vt-chart_bar      { background: #fee2e2; color: #991b1b; }
-    .vt-chart_line     { background: #ffedd5; color: #9a3412; }
-    .vt-chart_waterfall{ background: #fce7f3; color: #9d174d; }
-    .vt-quote_callout  { background: #f0fdf4; color: #14532d; }
-    .vt-icon_cards     { background: #fdf4ff; color: #6b21a8; }
-    .vt-process_flow   { background: #fff7ed; color: #7c2d12; }
+    /* Content type pills */
+    .type-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 1.25rem; }
+    .type-pill { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px; }
+    .tp-chart        { background: #dcfce7; color: #15803d; }
+    .tp-stat_callout { background: #ede9fe; color: #5b21b6; }
+    .tp-bullets      { background: #dbeafe; color: #1d4ed8; }
+    .tp-data_table   { background: #fef3c7; color: #92400e; }
+    .tp-three_column { background: #f0fdf4; color: #166534; }
+    .tp-two_column   { background: #f0f9ff; color: #0369a1; }
+    .tp-cards        { background: #fdf4ff; color: #6b21a8; }
+    .tp-process_flow { background: #fff7ed; color: #7c2d12; }
+    .tp-title_slide  { background: #e0e7ff; color: #3730a3; }
+    .tp-divider_slide{ background: #f3f4f6; color: #6b7280; }
 
     /* Slide cards */
-    .slide-manifest { display: flex; flex-direction: column; gap: 10px; }
+    .slide-list { display: flex; flex-direction: column; gap: 8px; }
     .slide-card { border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; }
-    .slide-card-header { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; cursor: pointer; }
-    .slide-card-header:hover { background: #f3f4f6; }
-    .sh-num  { font-size: 11px; font-weight: 700; color: #aaa; min-width: 28px; font-family: monospace; }
-    .sh-type { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; text-transform: uppercase; }
-    .sh-type.title   { background: #e0e7ff; color: #3730a3; }
-    .sh-type.divider { background: #f3f4f6; color: #6b7280; }
-    .sh-type.content { background: #dcfce7; color: #15803d; }
-    .sh-title { flex: 1; font-size: 13px; font-weight: 600; color: #111; }
-    .sh-vt    { font-size: 11px; color: #888; background: #f3f4f6; padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
-    .sh-section { font-size: 11px; color: #aaa; white-space: nowrap; }
-    .sh-chevron { font-size: 12px; color: #aaa; transition: transform 0.2s; }
-    .sh-chevron.open { transform: rotate(90deg); }
 
-    .slide-card-body { display: none; padding: 14px; border-top: 1px solid #f3f4f6; }
-    .slide-card-body.open { display: block; }
+    .sc-header { display: flex; align-items: center; gap: 8px; padding: 10px 14px; cursor: pointer; flex-wrap: wrap; }
+    .sc-header.title   { background: #ede9fe; }
+    .sc-header.divider { background: #f3f4f6; }
+    .sc-header.content { background: #f0fdf4; }
+    .sc-header:hover { filter: brightness(0.97); }
 
-    .km-banner { background: #0f2fb5; color: white; border-radius: 7px; padding: 10px 14px; margin-bottom: 12px; font-size: 13px; font-weight: 600; line-height: 1.5; }
+    .sc-num   { font-size: 11px; font-weight: 700; color: #aaa; min-width: 28px; font-family: monospace; }
+    .sc-badge { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; text-transform: uppercase; }
+    .badge-title   { background: #7c3aed; color: white; }
+    .badge-divider { background: #6b7280; color: white; }
+    .badge-content { background: #16a34a; color: white; }
+    .badge-mixed   { background: #ea580c; color: white; margin-left: 4px; }
+
+    .sc-title   { flex: 1; font-size: 13px; font-weight: 600; color: #111; }
+    .sc-ptype   { font-size: 11px; color: #7c3aed; background: #fdf4ff; padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
+    .sc-section { font-size: 11px; color: #aaa; white-space: nowrap; }
+    .sc-chevron { font-size: 11px; color: #aaa; transition: transform 0.2s; flex-shrink: 0; }
+    .sc-chevron.open { transform: rotate(90deg); }
+
+    .sc-body { display: none; padding: 14px; border-top: 1px solid #f3f4f6; }
+    .sc-body.open { display: block; }
+
+    /* Key message banner */
+    .km-banner { background: #1e3a8a; color: white; border-radius: 7px; padding: 10px 14px; margin-bottom: 12px; font-size: 13px; font-weight: 600; line-height: 1.5; }
     .km-banner::before { content: 'KEY MESSAGE: '; font-size: 10px; opacity: 0.7; display: block; margin-bottom: 2px; }
 
-    .content-block { background: #f9fafb; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
-    .content-block .cb-label { font-size: 11px; color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
-    .content-block pre { font-family: monospace; font-size: 11px; color: #333; white-space: pre-wrap; line-height: 1.6; }
+    /* Primary / secondary panels */
+    .content-panels { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+    .content-panels.single { grid-template-columns: 1fr; }
+    .content-block { background: #f9fafb; border-radius: 8px; padding: 12px; }
+    .cb-label { font-size: 11px; color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+    .cb-type { font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 20px; background: #e5e7eb; color: #555; }
+    .cb-content pre { font-family: monospace; font-size: 11px; color: #333; white-space: pre-wrap; line-height: 1.6; max-height: 200px; overflow-y: auto; }
 
+    /* Bullet preview */
+    .bullet-preview { list-style: none; }
+    .bullet-preview li { padding: 4px 0 4px 16px; position: relative; font-size: 12px; color: #333; border-bottom: 1px solid #f0f0f0; line-height: 1.5; }
+    .bullet-preview li::before { content: '●'; position: absolute; left: 0; color: #d97706; font-size: 8px; top: 7px; }
+    .bullet-preview li.warning { color: #dc2626; }
+    .bullet-preview li.positive { color: #16a34a; }
+
+    /* Chart preview */
+    .chart-info { font-size: 12px; }
+    .chart-info .ci-type { font-size: 14px; font-weight: 700; color: #15803d; margin-bottom: 6px; }
+    .chart-info .ci-row { display: flex; gap: 8px; margin-bottom: 3px; font-size: 11px; }
+    .ci-label { color: #888; min-width: 70px; }
+    .ci-value { color: #333; font-weight: 500; }
+    .chart-bars { display: flex; align-items: flex-end; gap: 4px; height: 60px; margin-top: 8px; padding: 0 4px; }
+    .chart-bar-wrap { display: flex; flex-direction: column; align-items: center; flex: 1; }
+    .chart-bar { width: 100%; border-radius: 3px 3px 0 0; min-height: 4px; }
+    .chart-bar-label { font-size: 9px; color: #888; margin-top: 2px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40px; }
+    .chart-bar-val { font-size: 9px; color: #555; margin-bottom: 2px; text-align: center; }
+
+    /* Stat preview */
+    .stat-preview { display: flex; flex-wrap: wrap; gap: 8px; }
+    .stat-card { background: white; border: 1px solid #e5e7eb; border-radius: 6px; padding: 8px 12px; min-width: 120px; }
+    .stat-val { font-size: 16px; font-weight: 700; color: #1e3a8a; }
+    .stat-val.negative { color: #dc2626; }
+    .stat-val.warning  { color: #dc2626; }
+    .stat-val.positive { color: #16a34a; }
+    .stat-lbl { font-size: 11px; color: #888; margin-top: 2px; }
+    .stat-chg { font-size: 10px; color: #d97706; margin-top: 2px; }
+
+    /* Speaker note */
     .speaker-note { font-size: 12px; color: #666; font-style: italic; border-left: 3px solid #e5e7eb; padding-left: 10px; margin-top: 8px; }
 
-    /* JSON */
-    .json-box { background: #1e1e1e; border-radius: 8px; padding: 14px; overflow-x: auto; max-height: 400px; overflow-y: auto; }
+    /* Raw JSON */
+    .json-box { background: #1e1e1e; border-radius: 8px; padding: 14px; overflow-x: auto; max-height: 360px; overflow-y: auto; }
     .json-box pre { font-family: monospace; font-size: 11px; color: #d4d4d4; white-space: pre-wrap; line-height: 1.6; }
     .btn-copy { width: 100%; padding: 10px; font-size: 13px; font-weight: 600; background: #374151; color: white; border: none; border-radius: 8px; cursor: pointer; margin-top: 10px; }
     .btn-copy:hover { background: #1f2937; }
-
-    .hint { font-size: 12px; color: #888; margin-bottom: 8px; line-height: 1.4; }
   </style>
 </head>
 <body>
@@ -117,42 +147,37 @@
 
   <div class="badge">Isolated Test — Agent 4 Only</div>
   <h1>Slide Content Writer Tester</h1>
-  <p class="subhead">Paste the Agent 3 brief JSON and upload the content PDF. Agent 4 will produce a fully populated slide manifest — title, key message, visual type, and content for every slide.</p>
+  <p class="subhead">Paste the Agent 3 brief JSON and upload the content PDF. Agent 4 writes fully populated content for every slide — with primary and secondary content for mixed slides.</p>
 
   <div class="card">
     <div class="card-title">Inputs</div>
     <div class="two-up">
 
       <div>
-        <div class="hint">Paste Agent 3 brief JSON here (copy from test-agent3.html)</div>
-        <textarea id="brief-input" placeholder='{ "governing_thought": "...", "sections": [...], "total_slides": 12 ... }'></textarea>
-        <div style="margin-top:8px;">
-          <div class="hint">Or load a saved brief JSON file</div>
-          <div class="upload-zone" id="zone-brief">
-            <input type="file" accept=".json" onchange="loadBriefFile(this)">
-            <div class="uz" id="label-brief">Click to upload <span>brief.json</span></div>
-          </div>
+        <div class="hint">Agent 3 brief JSON — paste or upload</div>
+        <textarea id="brief-input" placeholder='{ "governing_thought": "...", "sections": [...], "total_slides": 12 }'></textarea>
+        <div class="upload-zone" id="zone-brief">
+          <input type="file" accept=".json" onchange="loadJSON('brief', this)">
+          <div class="uz">Or upload <span>brief.json</span></div>
         </div>
       </div>
 
       <div>
-        <div class="hint">Upload the original content PDF (used as fallback for missing detail)</div>
+        <div class="hint">Content PDF — source document for Agent 4</div>
         <div class="upload-zone" id="zone-pdf">
           <input type="file" accept=".pdf" onchange="loadPDF(this)">
-          <div class="uz" id="label-pdf">Click to upload <span>.pdf</span></div>
+          <div class="uz" id="pdf-label">Click to upload <span>.pdf</span></div>
         </div>
-        <div style="margin-top:12px;">
-          <div class="slider-row">
-            <label>Slide count</label>
-            <input type="range" min="5" max="40" value="12" step="1" oninput="updateSlides(this.value)">
-            <div class="slide-num" id="slide-num">12</div>
-          </div>
+        <div class="slider-row">
+          <label>Slides</label>
+          <input type="range" min="5" max="40" value="12" step="1" oninput="updateSlides(this.value)">
+          <div class="slide-num" id="slide-num">12</div>
         </div>
       </div>
 
     </div>
 
-    <div class="btn-row" style="margin-top:12px;">
+    <div class="btn-row">
       <button class="btn btn-amber" id="run-btn" onclick="runTest()" disabled>▶ Run Agent 4 — Write Slides</button>
       <button class="btn btn-gray" onclick="resetAll()">↺ Reset</button>
     </div>
@@ -166,61 +191,55 @@
 
   <div class="results" id="results">
 
-    <!-- Stats -->
     <div class="stats-bar" id="stats-bar"></div>
-
-    <!-- Visual type breakdown -->
     <div class="card">
-      <div class="card-title">Visual Types Used</div>
-      <div class="vt-grid" id="vt-grid"></div>
+      <div class="card-title">Content Types Used</div>
+      <div class="type-grid" id="type-grid"></div>
     </div>
 
-    <!-- Slide manifest -->
     <div class="card">
-      <div class="card-title">Slide Manifest — Click Any Slide to Expand</div>
-      <div class="slide-manifest" id="slide-manifest"></div>
+      <div class="card-title">Slide Manifest — click any slide to expand</div>
+      <div class="slide-list" id="slide-list"></div>
     </div>
 
-    <!-- Raw JSON -->
     <div class="card">
-      <div class="card-title">Raw Manifest JSON — Passed to Agent 5</div>
+      <div class="card-title">Raw JSON — copy to paste into Agent 5</div>
       <div class="json-box"><pre id="raw-json"></pre></div>
       <button class="btn-copy" onclick="copyJSON()">Copy JSON to Clipboard</button>
     </div>
 
   </div>
-
 </div>
 
 <script src="agent4.js"></script>
 <script src="app.js"></script>
 <script>
+
   let pdfB64       = null
-  let briefData    = null
   let slideCount   = 12
   let resultManifest = null
 
+  // ─── FILE LOADERS ─────────────────────────────────────────────────────────
   function loadPDF(input) {
     const file = input.files[0]
     if (!file) return
     const reader = new FileReader()
-    reader.onload = (e) => {
+    reader.onload = e => {
       pdfB64 = e.target.result.split(',')[1]
-      document.getElementById('label-pdf').innerHTML = '✓ <span>' + file.name + '</span>'
+      document.getElementById('pdf-label').innerHTML = '✓ <span>' + file.name + '</span>'
       document.getElementById('zone-pdf').classList.add('ready')
       checkReady()
     }
     reader.readAsDataURL(file)
   }
 
-  function loadBriefFile(input) {
+  function loadJSON(type, input) {
     const file = input.files[0]
     if (!file) return
     const reader = new FileReader()
-    reader.onload = (e) => {
-      document.getElementById('brief-input').value = e.target.result
-      document.getElementById('label-brief').innerHTML = '✓ <span>' + file.name + '</span>'
-      document.getElementById('zone-brief').classList.add('ready')
+    reader.onload = e => {
+      if (type === 'brief') document.getElementById('brief-input').value = e.target.result
+      document.getElementById('zone-' + type).classList.add('ready')
       checkReady()
     }
     reader.readAsText(file)
@@ -232,9 +251,8 @@
   }
 
   function checkReady() {
-    const hasBrief = document.getElementById('brief-input').value.trim().length > 10
-    const hasPDF   = pdfB64 !== null
-    document.getElementById('run-btn').disabled = !(hasBrief && hasPDF)
+    const hasBrief = (document.getElementById('brief-input').value || '').trim().length > 10
+    document.getElementById('run-btn').disabled = !(hasBrief && pdfB64)
   }
 
   document.getElementById('brief-input').addEventListener('input', checkReady)
@@ -244,86 +262,104 @@
     document.getElementById('prog-msg').textContent  = msg
   }
 
+  // ─── RUN ──────────────────────────────────────────────────────────────────
   async function runTest() {
     const briefRaw = document.getElementById('brief-input').value.trim()
-    briefData = safeParseJSON(briefRaw, null)
-    if (!briefData) {
-      document.getElementById('error-box').textContent = 'Could not parse the brief JSON. Check the format.'
-      document.getElementById('error-box').classList.add('show')
-      return
-    }
+    const brief    = safeParseJSON(briefRaw, null)
+
+    const err = document.getElementById('error-box')
+    if (!brief) { err.textContent = 'Cannot parse Brief JSON'; err.classList.add('show'); return }
+    err.classList.remove('show')
 
     document.getElementById('run-btn').disabled = true
-    document.getElementById('error-box').classList.remove('show')
     document.getElementById('results').classList.remove('show')
     document.getElementById('prog-wrap').classList.add('show')
-    setProgress(10, 'Sending brief + PDF to Claude...')
+    setProgress(10, 'Building slide plan...')
 
     try {
       const mockState = {
-        outline:    briefData,
+        outline:    brief,
         contentB64: pdfB64,
-        slideCount: briefData.total_slides || slideCount
+        slideCount: brief.total_slides || slideCount
       }
 
-      setProgress(30, 'Agent 4 writing slide content...')
+      setProgress(30, 'Writing slides in batches...')
       const manifest = await runAgent4(mockState)
       resultManifest = manifest
-      setProgress(90, 'Rendering slide manifest...')
+
+      setProgress(90, 'Rendering results...')
       renderResults(manifest)
       setProgress(100, '✅ ' + manifest.length + ' slides written.')
-    } catch (err) {
-      document.getElementById('error-box').textContent = 'Error: ' + err.message
-      document.getElementById('error-box').classList.add('show')
-      console.error(err)
+
+    } catch(e) {
+      err.textContent = 'Error: ' + e.message
+      err.classList.add('show')
+      console.error(e)
     }
 
     document.getElementById('run-btn').disabled = false
   }
 
+  // ─── RENDER RESULTS ────────────────────────────────────────────────────────
   function renderResults(manifest) {
     document.getElementById('results').classList.add('show')
 
-    // Stats
+    // Stats bar
     const byType = { title: 0, divider: 0, content: 0 }
-    const vtCount = {}
+    const byPType = {}
+    let mixedCount = 0
+
     manifest.forEach(s => {
       byType[s.slide_type] = (byType[s.slide_type] || 0) + 1
-      vtCount[s.visual_type] = (vtCount[s.visual_type] || 0) + 1
+      const pt = (s.primary_content || {}).type || 'unknown'
+      byPType[pt] = (byPType[pt] || 0) + 1
+      if (s.is_mixed) mixedCount++
     })
+
     document.getElementById('stats-bar').innerHTML = [
-      { val: manifest.length, lbl: 'Total Slides' },
-      { val: byType.title || 0, lbl: 'Title Slides' },
+      { val: manifest.length,     lbl: 'Total Slides' },
+      { val: byType.title   || 0, lbl: 'Title' },
       { val: byType.divider || 0, lbl: 'Dividers' },
-      { val: byType.content || 0, lbl: 'Content Slides' },
-      { val: Object.keys(vtCount).length, lbl: 'Visual Types' }
+      { val: byType.content || 0, lbl: 'Content' },
+      { val: mixedCount,          lbl: 'Mixed Slides' }
     ].map(s => `<div class="stat-pill"><div class="sp-val">${s.val}</div><div class="sp-lbl">${s.lbl}</div></div>`).join('')
 
-    // Visual type breakdown
-    document.getElementById('vt-grid').innerHTML = Object.entries(vtCount)
+    // Content type pills
+    document.getElementById('type-grid').innerHTML = Object.entries(byPType)
       .sort((a,b) => b[1]-a[1])
-      .map(([vt, count]) => `<span class="vt-pill vt-${vt}">${vt.replace(/_/g,' ')} ×${count}</span>`)
+      .map(([t,c]) => `<span class="type-pill tp-${t}">${t.replace(/_/g,' ')} ×${c}</span>`)
       .join('')
 
-    // Slide manifest
-    document.getElementById('slide-manifest').innerHTML = manifest.map((s, i) => {
-      const contentStr = JSON.stringify(s.content, null, 2)
-      return `<div class="slide-card" id="sc-${i}">
-        <div class="slide-card-header" onclick="toggleSlide(${i})">
-          <span class="sh-num">S${s.slide_number}</span>
-          <span class="sh-type ${s.slide_type}">${s.slide_type}</span>
-          <span class="sh-title">${s.title}</span>
-          <span class="sh-vt">${(s.visual_type || '').replace(/_/g,' ')}</span>
-          <span class="sh-section">${s.section_name || ''}</span>
-          <span class="sh-chevron" id="chev-${i}">▶</span>
+    // Slide list
+    document.getElementById('slide-list').innerHTML = manifest.map((s, i) => {
+      const pt  = (s.primary_content || {}).type || '—'
+      const st  = (s.secondary_content || {}).type || null
+      const isMixed = s.is_mixed && st
+
+      return `<div class="slide-card">
+        <div class="sc-header ${s.slide_type}" onclick="toggleSlide(${i})">
+          <span class="sc-num">S${s.slide_number}</span>
+          <span class="sc-badge badge-${s.slide_type}">${s.slide_type}</span>
+          ${isMixed ? `<span class="sc-badge badge-mixed">MIXED</span>` : ''}
+          <span class="sc-title">${s.title || '—'}</span>
+          <span class="sc-ptype">${pt.replace(/_/g,' ')}${isMixed ? ' + ' + st.replace(/_/g,' ') : ''}</span>
+          <span class="sc-section">${s.section_name || ''}</span>
+          <span class="sc-chevron" id="chev-${i}">▶</span>
         </div>
-        <div class="slide-card-body" id="body-${i}">
-          ${s.key_message ? '<div class="km-banner">' + s.key_message + '</div>' : ''}
-          <div class="content-block">
-            <div class="cb-label">Content (${(s.visual_type||'').replace(/_/g,' ')})</div>
-            <pre>${contentStr}</pre>
+        <div class="sc-body" id="body-${i}">
+          ${s.key_message ? `<div class="km-banner">${s.key_message}</div>` : ''}
+          <div class="content-panels ${isMixed ? '' : 'single'}">
+            <div class="content-block">
+              <div class="cb-label">Primary Content <span class="cb-type">${pt.replace(/_/g,' ')}</span></div>
+              <div class="cb-content">${renderContentPreview(s.primary_content)}</div>
+            </div>
+            ${isMixed ? `
+            <div class="content-block">
+              <div class="cb-label">Secondary Content <span class="cb-type">${st ? st.replace(/_/g,' ') : '—'}</span></div>
+              <div class="cb-content">${renderContentPreview(s.secondary_content)}</div>
+            </div>` : ''}
           </div>
-          ${s.speaker_note ? '<div class="speaker-note">' + s.speaker_note + '</div>' : ''}
+          ${s.speaker_note ? `<div class="speaker-note">${s.speaker_note}</div>` : ''}
         </div>
       </div>`
     }).join('')
@@ -331,19 +367,171 @@
     document.getElementById('raw-json').textContent = JSON.stringify(manifest, null, 2)
   }
 
+  // ─── CONTENT PREVIEW RENDERER ─────────────────────────────────────────────
+  function renderContentPreview(pc) {
+    if (!pc) return '<span style="color:#aaa;font-size:12px;">null</span>'
+
+    const type = (pc.type || '').toLowerCase()
+
+    if (type === 'title_slide') {
+      return `<div style="font-size:12px;">
+        <div style="font-weight:700;margin-bottom:4px;">${pc.title || '—'}</div>
+        <div style="color:#888;">${pc.subtitle || ''}</div>
+        <div style="color:#aaa;font-size:11px;">${pc.date || ''}</div>
+      </div>`
+    }
+
+    if (type === 'divider_slide') {
+      return `<div style="font-size:12px;">
+        <div style="font-weight:700;margin-bottom:4px;">${pc.section_name || '—'}</div>
+        <div style="color:#666;">${pc.section_descriptor || ''}</div>
+      </div>`
+    }
+
+    if (type === 'stat_callout') {
+      const stats = pc.stats || []
+      if (!stats.length) return '<span style="color:#dc2626;font-size:12px;">⚠ Empty stats array</span>'
+      return `<div class="stat-preview">${stats.map(s =>
+        `<div class="stat-card">
+          <div class="stat-val ${s.sentiment || ''}">${s.value || '—'}</div>
+          <div class="stat-lbl">${s.label || ''}</div>
+          ${s.change ? `<div class="stat-chg">${s.change}</div>` : ''}
+        </div>`
+      ).join('')}</div>`
+    }
+
+    if (type === 'chart') {
+      const cats   = pc.categories || []
+      const series = pc.series || []
+      const vals   = series[0] ? series[0].values || [] : []
+      const max    = Math.max(...vals, 1)
+      const chartColors = ['#0F2FB5','#FF8E00','#2D962D','#D60202','#2E046C','#0092D0']
+
+      const chartDecision = pc.chart_decision || ''
+
+      let chartHTML = `<div class="chart-info">
+        <div class="ci-type">📊 ${(pc.chart_type || 'bar').toUpperCase()} CHART</div>
+        <div class="ci-row"><span class="ci-label">Title:</span><span class="ci-value">${pc.chart_title || '—'}</span></div>
+        <div class="ci-row"><span class="ci-label">Categories:</span><span class="ci-value">${cats.length} items</span></div>
+        <div class="ci-row"><span class="ci-label">Series:</span><span class="ci-value">${series.length}</span></div>
+        ${chartDecision ? `<div class="ci-row"><span class="ci-label">Decision:</span><span class="ci-value" style="color:#7c3aed;font-style:italic;">${chartDecision}</span></div>` : ''}
+      </div>`
+
+      if (pc.chart_type === 'pie' && vals.length > 0) {
+        const total = vals.reduce((a,b) => a+b, 0)
+        chartHTML += `<div style="margin-top:8px;">${cats.map((c,i) =>
+          `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
+            <div style="width:12px;height:12px;border-radius:2px;background:${chartColors[i % chartColors.length]};flex-shrink:0;"></div>
+            <span style="font-size:11px;flex:1;">${c}</span>
+            <span style="font-size:11px;font-weight:600;">${vals[i]} (${Math.round(vals[i]/total*100)}%)</span>
+          </div>`
+        ).join('')}</div>`
+      } else if (vals.length > 0) {
+        chartHTML += `<div class="chart-bars">${cats.map((c,i) =>
+          `<div class="chart-bar-wrap">
+            <div class="chart-bar-val">${vals[i] !== undefined ? vals[i] : ''}</div>
+            <div class="chart-bar" style="height:${Math.round((vals[i]||0)/max*50)+4}px;background:${chartColors[i % chartColors.length]};"></div>
+            <div class="chart-bar-label">${c}</div>
+          </div>`
+        ).join('')}</div>`
+      }
+
+      return chartHTML
+    }
+
+    if (type === 'bullets') {
+      const bullets = pc.bullets || []
+      if (!bullets.length) return '<span style="color:#dc2626;font-size:12px;">⚠ Empty bullets array</span>'
+      return `<ul class="bullet-preview">${bullets.map(b => {
+        const text      = typeof b === 'string' ? b : (b.text || '')
+        const sentiment = typeof b === 'object' ? (b.sentiment || 'neutral') : 'neutral'
+        const emphasis  = typeof b === 'object' ? (b.emphasis || []) : []
+        const empStr    = emphasis.length ? ` <span style="font-size:10px;color:#7c3aed;">[bold: ${emphasis.map(e=>e.text).join(', ')}]</span>` : ''
+        return `<li class="${sentiment}">${text}${empStr}</li>`
+      }).join('')}</ul>`
+    }
+
+    if (type === 'insight_box') {
+      const sentColor = pc.sentiment === 'positive' ? '#16a34a' : pc.sentiment === 'warning' ? '#dc2626' : '#1e3a8a'
+      return `<div style="border-left:3px solid ${sentColor};padding:8px 10px;background:${sentColor}15;border-radius:0 6px 6px 0;">
+        ${pc.heading ? `<div style="font-size:11px;font-weight:700;color:${sentColor};margin-bottom:4px;">${pc.heading}</div>` : ''}
+        <div style="font-size:12px;color:#333;line-height:1.5;">${pc.text || '—'}</div>
+      </div>`
+    }
+
+    if (type === 'three_column') {
+      const cols = pc.columns || []
+      if (!cols.length) return '<span style="color:#dc2626;font-size:12px;">⚠ Empty columns</span>'
+      return `<div style="display:grid;grid-template-columns:repeat(${cols.length},1fr);gap:8px;">${cols.map(c =>
+        `<div style="background:white;border:1px solid #e5e7eb;border-radius:6px;padding:8px;">
+          <div style="font-size:11px;font-weight:700;color:#1e3a8a;margin-bottom:4px;">${c.header || '—'}</div>
+          <div style="font-size:11px;color:#555;line-height:1.4;">${(c.body || '').slice(0,120)}${(c.body||'').length>120?'…':''}</div>
+        </div>`
+      ).join('')}</div>`
+    }
+
+    if (type === 'two_column') {
+      return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:11px;">
+        <div>
+          <div style="font-weight:700;color:#1e3a8a;margin-bottom:4px;">${pc.left_header || 'Left'}</div>
+          ${(pc.left_points || []).map(p => `<div style="padding:2px 0 2px 10px;border-left:2px solid #d97706;">${p}</div>`).join('')}
+        </div>
+        <div>
+          <div style="font-weight:700;color:#1e3a8a;margin-bottom:4px;">${pc.right_header || 'Right'}</div>
+          ${(pc.right_points || []).map(p => `<div style="padding:2px 0 2px 10px;border-left:2px solid #d97706;">${p}</div>`).join('')}
+        </div>
+      </div>`
+    }
+
+    if (type === 'cards') {
+      const cards = pc.cards || []
+      if (!cards.length) return '<span style="color:#dc2626;font-size:12px;">⚠ Empty cards</span>'
+      return `<div style="display:grid;grid-template-columns:repeat(${Math.min(cards.length,3)},1fr);gap:6px;">${cards.map(c =>
+        `<div style="background:white;border:1px solid #e5e7eb;border-radius:6px;padding:8px;border-top:3px solid #1e3a8a;">
+          <div style="font-size:11px;font-weight:700;color:#1e3a8a;margin-bottom:4px;">${c.header || '—'}</div>
+          <div style="font-size:11px;color:#555;line-height:1.4;">${(c.body || '').slice(0,100)}${(c.body||'').length>100?'…':''}</div>
+        </div>`
+      ).join('')}</div>`
+    }
+
+    if (type === 'data_table') {
+      const headers = pc.headers || []
+      const rows    = pc.rows    || []
+      if (!headers.length) return '<span style="color:#dc2626;font-size:12px;">⚠ Empty table</span>'
+      return `<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:11px;">
+        <tr>${headers.map(h => `<th style="background:#1e3a8a;color:white;padding:4px 8px;text-align:left;">${h}</th>`).join('')}</tr>
+        ${rows.slice(0,5).map((row,ri) => `<tr style="background:${ri%2?'#f5f5f5':'white'}">${row.map(c => `<td style="padding:3px 8px;border-bottom:1px solid #eee;">${c}</td>`).join('')}</tr>`).join('')}
+        ${rows.length > 5 ? `<tr><td colspan="${headers.length}" style="padding:4px 8px;color:#888;font-style:italic;">... ${rows.length-5} more rows</td></tr>` : ''}
+      </table></div>`
+    }
+
+    if (type === 'process_flow') {
+      const steps = pc.steps || []
+      if (!steps.length) return '<span style="color:#dc2626;font-size:12px;">⚠ Empty steps</span>'
+      return `<div>${steps.map(s =>
+        `<div style="display:flex;gap:8px;margin-bottom:6px;align-items:flex-start;">
+          <div style="background:#1e3a8a;color:white;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;">${s.step_number}</div>
+          <div><div style="font-size:11px;font-weight:700;">${s.title || ''}</div><div style="font-size:11px;color:#555;">${(s.description||'').slice(0,80)}</div></div>
+        </div>`
+      ).join('')}</div>`
+    }
+
+    // Fallback — show raw JSON
+    return `<pre style="font-size:10px;color:#555;white-space:pre-wrap;">${JSON.stringify(pc, null, 2).slice(0, 400)}</pre>`
+  }
+
+  // ─── HELPERS ──────────────────────────────────────────────────────────────
   function toggleSlide(i) {
-    const body  = document.getElementById('body-' + i)
-    const chev  = document.getElementById('chev-' + i)
-    const isOpen = body.classList.contains('open')
-    body.classList.toggle('open', !isOpen)
-    chev.classList.toggle('open', !isOpen)
+    const body = document.getElementById('body-' + i)
+    const chev = document.getElementById('chev-' + i)
+    const open = body.classList.contains('open')
+    body.classList.toggle('open', !open)
+    chev.classList.toggle('open', !open)
   }
 
   function safeParseJSON(raw, fallback) {
-    try {
-      const cleaned = raw.replace(/```json\s*/g,'').replace(/```\s*/g,'').trim()
-      return JSON.parse(cleaned)
-    } catch(e) { return fallback }
+    try { return JSON.parse((raw||'').replace(/```json\s*/g,'').replace(/```\s*/g,'').trim()) }
+    catch(e) { return fallback }
   }
 
   function copyJSON() {
@@ -354,10 +542,9 @@
   }
 
   function resetAll() {
-    pdfB64 = null; briefData = null; resultManifest = null
+    pdfB64 = null; resultManifest = null
     document.getElementById('brief-input').value = ''
-    document.getElementById('label-pdf').innerHTML   = 'Click to upload <span>.pdf</span>'
-    document.getElementById('label-brief').innerHTML = 'Click to upload <span>brief.json</span>'
+    document.getElementById('pdf-label').innerHTML = 'Click to upload <span>.pdf</span>'
     document.getElementById('zone-pdf').classList.remove('ready')
     document.getElementById('zone-brief').classList.remove('ready')
     document.getElementById('run-btn').disabled = true
@@ -366,6 +553,7 @@
     document.getElementById('prog-wrap').classList.remove('show')
     document.getElementById('prog-fill').style.width = '0%'
   }
+
 </script>
 </body>
 </html>
