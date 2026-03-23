@@ -246,9 +246,20 @@ Allowed types: insight_text | chart | cards | workflow | table
     "font_weight": "regular",
     "color": "hex",
     "line_spacing": number,
-    "bullet_indent": number
+    "bullet_indent": number,
+    "bullet_char": "•" | "–" | "▪",
+    "space_before_pt": number
   }
 }
+
+insight_text box styling rules:
+- The renderer ALWAYS draws a left accent bar automatically — do NOT add a separate border or box
+- style.fill_color: use null (transparent) or a very light brand background tint — NEVER cream, yellow, or warm off-white unless that is explicitly in the brand palette
+- style.border_color: null — do NOT add a full-perimeter border; it clashes with the accent bar
+- style.border_width: 0
+- heading_style.color: use the brand primary color or an accent color — red only for "Risk Alert" headings when red is in the brand palette
+- body_style.bullet_char: use "•" as default; match brand spec if available
+- body_style.space_before_pt: 4–6pt for comfortable reading, never less than 3
 
 ═══════════════════════════
 2. CHART
@@ -292,6 +303,16 @@ Chart rules:
 - primary series uses primary brand color
 - minimum axis font size: 8pt
 - if chart + table in zone: chart takes 60–75% of zone width
+- PIE CHART CRITICAL: a pie has ONE series but MULTIPLE segments (one per category).
+  The renderer colors each segment from series_style[i]. You MUST output one series_style
+  entry PER DATA POINT, each with a UNIQUE fill_color drawn from chart_palette in order.
+  Example for 3 categories: series_style = [
+    { "series_name": "cat1", "fill_color": chart_palette[0], ... },
+    { "series_name": "cat2", "fill_color": chart_palette[1], ... },
+    { "series_name": "cat3", "fill_color": chart_palette[2], ... }
+  ]
+  NEVER repeat the same color for two segments. If chart_palette has fewer colors than
+  segments, cycle through it (palette[i % palette.length]).
 
 ═══════════════════════════
 3. CARDS
@@ -483,41 +504,55 @@ function r2(n) { return Math.round(n * 100) / 100 }
 function extractBrandTokens(brand) {
   const primaryLogo = brand.primary_logo || ((brand.logos || [])[0] || null)
   return {
-    slide_width_inches:  r2(brand.slide_width_inches  || 13.33),
-    slide_height_inches: r2(brand.slide_height_inches || 7.50),
-    primary_colors:      brand.primary_colors      || [],
-    secondary_colors:    brand.secondary_colors    || [],
-    background_colors:   brand.background_colors   || ['#FFFFFF'],
-    text_colors:         brand.text_colors         || ['#111111'],
-    accent_colors:       brand.accent_colors       || [],
-    chart_colors:        brand.chart_colors        || [],
-    all_colors:          brand.all_colors          || {},
-    title_font:          brand.title_font          || {},
-    body_font:           brand.body_font           || {},
-    caption_font:        brand.caption_font        || {},
-    visual_style:        brand.visual_style        || 'corporate',
-    color_scheme_name:   brand.color_scheme_name   || '',
-    logo_asset:          primaryLogo ? {
+    slide_width_inches:   r2(brand.slide_width_inches  || 13.33),
+    slide_height_inches:  r2(brand.slide_height_inches || 7.50),
+    primary_colors:       brand.primary_colors       || [],
+    secondary_colors:     brand.secondary_colors     || [],
+    background_colors:    brand.background_colors    || ['#FFFFFF'],
+    text_colors:          brand.text_colors          || ['#111111'],
+    accent_colors:        brand.accent_colors        || [],
+    chart_colors:         brand.chart_colors         || [],
+    chart_color_sequence: brand.chart_color_sequence || brand.chart_colors || [],
+    all_colors:           brand.all_colors           || {},
+    title_font:           brand.title_font           || {},
+    body_font:            brand.body_font            || {},
+    caption_font:         brand.caption_font         || {},
+    typography_hierarchy: brand.typography_hierarchy || {},
+    bullet_style:         brand.bullet_style         || { char: '•', indent_inches: 0.12, space_before_pt: 4 },
+    insight_box_style:    brand.insight_box_style    || { fill_color: null, border_color: null, corner_radius: 4 },
+    visual_style:         brand.visual_style         || 'corporate',
+    color_scheme_name:    brand.color_scheme_name    || '',
+    logo_asset:           primaryLogo ? {
       name:        primaryLogo.name || 'logo',
       mime_type:   primaryLogo.mime_type || 'image/png',
       width_px:    primaryLogo.width_px || 0,
       height_px:   primaryLogo.height_px || 0,
       base64:      primaryLogo.base64 || ''
     } : null,
-    logo_local_ref:      brand.primary_logo_local_ref || '',
-    logo_position:       brand.logo_position       || 'top-right',
-    spacing_notes:       brand.spacing_notes       || '',
-    layout_blueprints:   (brand.layout_blueprints || []).slice(0, 12),
-    master_blueprints:   (brand.master_blueprints || brand.slide_masters || []).slice(0, 6),
-    slide_masters:       (brand.slide_masters || []).slice(0, 4)
+    logo_local_ref:       brand.primary_logo_local_ref || '',
+    logo_position:        brand.logo_position        || 'top-right',
+    spacing_notes:        brand.spacing_notes        || '',
+    layout_blueprints:    (brand.layout_blueprints || []).slice(0, 12),
+    master_blueprints:    (brand.master_blueprints || brand.slide_masters || []).slice(0, 6),
+    slide_masters:        (brand.slide_masters || []).slice(0, 4)
     // slide_layouts intentionally excluded
   }
 }
 
 function buildBrandBrief(brand, brief) {
   const b = brief || {}
+  const tokens = extractBrandTokens(brand)
   return 'BRAND DESIGN TOKENS:\n' +
-    JSON.stringify(extractBrandTokens(brand), null, 2) +
+    JSON.stringify(tokens, null, 2) +
+    '\n\nBRAND COMPLIANCE RULES (MUST follow exactly):' +
+    '\n- Fonts: use title_font.family for all titles/headings, body_font.family for all body/bullet text' +
+    '\n- Title font size: typography_hierarchy.title_size_pt (content slides), larger for title/divider slides' +
+    '\n- Body font size: typography_hierarchy.body_size_pt — do NOT guess; use the extracted value' +
+    '\n- Chart colors: use chart_color_sequence in order — each series/segment gets a DIFFERENT color' +
+    '\n- Pie charts: series_style must have one entry PER DATA POINT (category), each with a unique fill_color' +
+    '\n- Bullet char: bullet_style.char — use exactly this character, not substitutes' +
+    '\n- Bullet spacing: bullet_style.space_before_pt — pass directly into body_style.space_before_pt' +
+    '\n- Insight boxes: insight_box_style.fill_color and border_color — a left accent bar is always rendered; do NOT add a full perimeter border' +
     '\n\nPRESENTATION BRIEF:' +
     '\nDocument type:     ' + (b.document_type     || 'Business document') +
     '\nGoverning thought: ' + (b.governing_thought || 'Key insights from the document') +

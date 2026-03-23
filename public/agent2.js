@@ -34,13 +34,42 @@ Add this field to each layout object:
 Return ONLY valid JSON. No explanation. No markdown fences.`
 
 const AGENT2_GLOBAL_ENRICH_SYSTEM = `You are a senior brand designer reviewing extracted PowerPoint brand metadata.
-Use the slide masters and layout summary to infer deck-level design guidance.
+Use the slide masters, layout summary, colors, and fonts to infer comprehensive deck-level design rules.
 Return ONLY a valid JSON object with exactly these fields:
 {
-  "visual_style": "string",
-  "spacing_notes": "string",
-  "logo_position": "string"
+  "visual_style": "string — e.g. 'clean corporate', 'bold financial', 'minimal consulting'",
+  "spacing_notes": "string — margin and padding conventions derived from placeholder positions",
+  "logo_position": "string — 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left'",
+  "typography_hierarchy": {
+    "title_size_pt": number,
+    "subtitle_size_pt": number,
+    "body_size_pt": number,
+    "caption_size_pt": number,
+    "title_color": "#hex — from primary/accent colors",
+    "body_color": "#hex — from text colors"
+  },
+  "chart_color_sequence": ["#hex1", "#hex2", "#hex3", "#hex4", "#hex5", "#hex6"],
+  "bullet_style": {
+    "char": "• or – or ▪",
+    "indent_inches": number,
+    "space_before_pt": number,
+    "space_after_pt": number
+  },
+  "insight_box_style": {
+    "fill_color": "#hex or null",
+    "border_color": "null — insight boxes use a left accent bar, not a full border",
+    "corner_radius": number
+  },
+  "divider_style": {
+    "line_color": "#hex",
+    "line_width_pt": number
+  }
 }
+Rules:
+- chart_color_sequence must have 6 visually DISTINCT colors drawn from accent1–accent6; if fewer accents exist pad with brand-appropriate alternatives
+- typography_hierarchy sizes must come from the actual placeholder font_size_pt values in the master data, not guesses
+- bullet_style.space_before_pt should be 4–6 for comfortable reading
+- insight_box_style.border_color must always be null (left accent bar is rendered separately)
 No markdown. No explanation.`
 
 const AGENT2_LAYOUT_ENRICH_SYSTEM = `You are a senior brand designer reviewing PowerPoint slide layouts.
@@ -373,21 +402,41 @@ function buildRulebook(data) {
   const text       = d.text_colors       || ['#000000']
   const chart      = d.chart_colors      || [...primary, ...secondary, ...accent].slice(0, 6)
 
+  // Extract actual font sizes from master placeholder data when available
+  const typo = d.typography_hierarchy || {}
+  const masterTitleStyle = ((d.slide_masters || [])[0] || {}).text_style_summary || {}
+  const masterTitlePt = (masterTitleStyle.title && masterTitleStyle.title.font_size_pt) || null
+  const masterBodyPt  = (masterTitleStyle.body  && masterTitleStyle.body.font_size_pt)  || null
+
+  const titleFontSize = typo.title_size_pt ? (typo.title_size_pt + 'pt')
+    : masterTitlePt ? (masterTitlePt + 'pt') : '24pt'
+  const bodyFontSize  = typo.body_size_pt  ? (typo.body_size_pt  + 'pt')
+    : masterBodyPt  ? (masterBodyPt  + 'pt') : '12pt'
+
   const titleFont = d.title_font || {
     family: (d.raw_fonts && d.raw_fonts.major) || 'Arial',
-    size:   '28pt',
+    size:   titleFontSize,
     weight: 'bold',
-    color:  primary[0] || '#000000'
+    color:  typo.title_color || primary[0] || '#000000'
   }
+  // Override size even if title_font already exists but has a hardcoded default
+  if (d.title_font && d.title_font.size === '28pt' && masterTitlePt) {
+    titleFont.size = masterTitlePt + 'pt'
+  }
+
   const bodyFont = d.body_font || {
     family: (d.raw_fonts && d.raw_fonts.minor) || 'Arial',
-    size:   '14pt',
+    size:   bodyFontSize,
     weight: 'regular',
-    color:  text[0] || '#000000'
+    color:  typo.body_color || text[0] || '#000000'
   }
+  if (d.body_font && d.body_font.size === '14pt' && masterBodyPt) {
+    bodyFont.size = masterBodyPt + 'pt'
+  }
+
   const captionFont = d.caption_font || {
     family: bodyFont.family,
-    size:   '9pt',
+    size:   typo.caption_size_pt ? (typo.caption_size_pt + 'pt') : '9pt',
     weight: 'regular',
     color:  '#666666'
   }
@@ -425,34 +474,57 @@ function buildRulebook(data) {
   const primaryLogo = d.primary_logo || ((d.logos || [])[0] || null)
   const localLogoRef = cachePrimaryLogoLocally(primaryLogo)
 
+  // Build distinct chart color sequence — use enriched sequence if available,
+  // otherwise fall back to accent1–6 from all_colors, ensuring 6 distinct entries
+  const allC = d.all_colors || {}
+  const enrichedChartSeq = d.chart_color_sequence || []
+  const accentSeq = ['accent1','accent2','accent3','accent4','accent5','accent6']
+    .map(k => allC[k]).filter(Boolean)
+  const chartColorSeq = enrichedChartSeq.length >= 3 ? enrichedChartSeq : accentSeq.length >= 2 ? accentSeq : chart
+
+  const bulletStyle = d.bullet_style || { char: '•', indent_inches: 0.12, space_before_pt: 4, space_after_pt: 0 }
+  const insightBoxStyle = d.insight_box_style || { fill_color: null, border_color: null, corner_radius: 4 }
+  const typographyHierarchy = d.typography_hierarchy || {
+    title_size_pt:    parseInt(titleFont.size) || 24,
+    subtitle_size_pt: parseInt(titleFont.size) ? parseInt(titleFont.size) - 6 : 18,
+    body_size_pt:     parseInt(bodyFont.size)  || 12,
+    caption_size_pt:  9,
+    title_color:      titleFont.color,
+    body_color:       bodyFont.color
+  }
+
   const rulebook = {
-    color_scheme_name:   d.color_scheme_name || 'Brand',
-    font_scheme_name:    d.font_scheme_name  || 'Brand',
-    visual_style:        d.visual_style      || 'corporate',
-    primary_colors:      primary,
-    secondary_colors:    secondary,
-    background_colors:   background,
-    text_colors:         text,
-    accent_colors:       accent,
-    chart_colors:        chart,
-    all_colors:          d.all_colors        || {},
-    title_font:          titleFont,
-    body_font:           bodyFont,
-    caption_font:        captionFont,
-    slide_width_inches:  widthIn,
-    slide_height_inches: heightIn,
-    slide_width_pt:      d.slide_width_pt    || Math.round(widthIn  * 72),
-    slide_height_pt:     d.slide_height_pt   || Math.round(heightIn * 72),
-    slide_layouts:       layouts,
-    slide_masters:       slideMasters,
-    layout_blueprints:   buildLayoutBlueprints(layouts),
-    master_blueprints:   buildMasterBlueprints(slideMasters),
-    logos:               d.logos             || [],
-    primary_logo:        primaryLogo,
+    color_scheme_name:    d.color_scheme_name  || 'Brand',
+    font_scheme_name:     d.font_scheme_name   || 'Brand',
+    visual_style:         d.visual_style       || 'corporate',
+    primary_colors:       primary,
+    secondary_colors:     secondary,
+    background_colors:    background,
+    text_colors:          text,
+    accent_colors:        accent,
+    chart_colors:         chart,
+    chart_color_sequence: chartColorSeq,
+    all_colors:           allC,
+    title_font:           titleFont,
+    body_font:            bodyFont,
+    caption_font:         captionFont,
+    typography_hierarchy: typographyHierarchy,
+    bullet_style:         bulletStyle,
+    insight_box_style:    insightBoxStyle,
+    slide_width_inches:   widthIn,
+    slide_height_inches:  heightIn,
+    slide_width_pt:       d.slide_width_pt    || Math.round(widthIn  * 72),
+    slide_height_pt:      d.slide_height_pt   || Math.round(heightIn * 72),
+    slide_layouts:        layouts,
+    slide_masters:        slideMasters,
+    layout_blueprints:    buildLayoutBlueprints(layouts),
+    master_blueprints:    buildMasterBlueprints(slideMasters),
+    logos:                d.logos             || [],
+    primary_logo:         primaryLogo,
     primary_logo_local_ref: localLogoRef,
-    logo_position:       d.logo_position     || 'top-right',
-    spacing_notes:       d.spacing_notes     || '0.5 inch margins',
-    extraction_source:   d.source            || 'agent2'
+    logo_position:        d.logo_position     || 'top-right',
+    spacing_notes:        d.spacing_notes     || '0.5 inch margins',
+    extraction_source:    d.source            || 'agent2'
   }
 
   console.log('Agent 2 — rulebook complete:')

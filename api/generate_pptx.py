@@ -243,14 +243,14 @@ def render_insight_text(slide, artifact, bt):
 
     # Body points
     if points:
-        b_font  = bs.get('font_family', bt.get('body_font_family', 'Arial'))
-        b_size  = bs.get('font_size', 10)
-        b_color = bs.get('color', '#111111')
-        ls      = bs.get('line_spacing', 1.4)
+        b_font        = bs.get('font_family', bt.get('body_font_family', 'Arial'))
+        b_size        = bs.get('font_size', 10)
+        b_color       = bs.get('color', '#111111')
+        bullet_char   = bs.get('bullet_char', '•')
+        space_bef_pt  = max(1, int(bs.get('space_before_pt', 4)))
 
-        body_text = '\n'.join(['• ' + str(p) for p in points])
-        pt_y      = y + 0.42
-        pt_h      = h - 0.48
+        pt_y  = y + 0.42
+        pt_h  = h - 0.48
         txBox = slide.shapes.add_textbox(
             inches(x + 0.12), inches(pt_y), inches(w - 0.18), inches(pt_h)
         )
@@ -264,9 +264,9 @@ def render_insight_text(slide, artifact, bt):
                 first = False
             else:
                 p_obj = tf.add_paragraph()
-            p_obj.space_before = pt(2)
+            p_obj.space_before = pt(space_bef_pt)
             run = p_obj.add_run()
-            run.text = '• ' + str(point)
+            run.text = bullet_char + ' ' + str(point)
             set_font(run, b_font, b_size, False, False, b_color)
 
 
@@ -377,6 +377,24 @@ def render_chart(slide, artifact, bt):
                     pass
     except Exception:
         pass
+
+    # Pie charts: color each slice (data point) individually from the palette
+    # A pie chart has one series but N data points — the series-level loop above
+    # gives the whole pie one color; this block overrides each point separately.
+    if chart_type_str == 'pie':
+        try:
+            for ser_obj in chart.series:
+                for pi, point_obj in enumerate(ser_obj.points):
+                    color_hex = None
+                    if pi < len(series_styles):
+                        color_hex = series_styles[pi].get('fill_color')
+                    if not color_hex and pi < len(chart_palette):
+                        color_hex = chart_palette[pi]
+                    if color_hex:
+                        point_obj.format.fill.solid()
+                        point_obj.format.fill.fore_color.rgb = hex_to_rgb(color_hex)
+        except Exception:
+            pass
 
     # Axis font sizes
     try:
