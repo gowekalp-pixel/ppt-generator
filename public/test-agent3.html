@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent 3 Tester — Presentation Brief</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: #f0f2f5; padding: 2rem; color: #111; }
+    .container { max-width: 900px; margin: 0 auto; }
+    .badge { display: inline-block; background: #dcfce7; color: #16a34a; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; margin-bottom: 10px; }
+    h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+    .subhead { font-size: 13px; color: #666; margin-bottom: 1.5rem; line-height: 1.5; }
+    .card { background: white; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.25rem; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
+    .card-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #888; margin-bottom: 1rem; }
+    .upload-zone { border: 2px dashed #d1d5db; border-radius: 10px; padding: 1.2rem; cursor: pointer; position: relative; background: #fafafa; transition: all 0.15s; margin-bottom: 12px; }
+    .upload-zone:hover { background: #f3f4f6; }
+    .upload-zone.ready { border-color: #22c55e; border-style: solid; background: #f0fdf4; }
+    .upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+    .uz { font-size: 13px; color: #555; pointer-events: none; }
+    .uz span { font-weight: 600; color: #2563eb; }
+    .upload-zone.ready .uz { color: #16a34a; font-weight: 500; }
+    .slider-row { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+    .slider-row label { font-size: 13px; font-weight: 600; color: #333; white-space: nowrap; }
+    .slider-row input { flex: 1; accent-color: #16a34a; }
+    .slide-num { font-size: 18px; font-weight: 700; min-width: 40px; text-align: center; background: #f3f4f6; padding: 5px 10px; border-radius: 8px; color: #16a34a; }
+    .btn-row { display: flex; gap: 10px; }
+    .btn { flex: 1; padding: 12px; font-size: 14px; font-weight: 700; border: none; border-radius: 10px; cursor: pointer; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-green { background: #16a34a; color: white; }
+    .btn-green:hover:not(:disabled) { background: #15803d; }
+    .btn-gray { background: #e5e7eb; color: #374151; }
+    .btn-gray:hover:not(:disabled) { background: #d1d5db; }
+    .progress-wrap { display: none; margin-top: 12px; }
+    .progress-wrap.show { display: block; }
+    .progress { height: 4px; background: #e5e7eb; border-radius: 99px; overflow: hidden; }
+    .progress-fill { height: 100%; background: #16a34a; border-radius: 99px; width: 0%; transition: width 0.5s ease; }
+    .progress-msg { font-size: 12px; color: #666; margin-top: 5px; }
+    .error-box { display: none; background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #dc2626; margin-top: 12px; }
+    .error-box.show { display: block; }
+    .results { display: none; }
+    .results.show { display: block; }
+    .governing-banner { background: #0f2fb5; color: white; border-radius: 10px; padding: 18px 20px; margin-bottom: 1.25rem; }
+    .gb-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; opacity: 0.7; margin-bottom: 6px; }
+    .gb-thought { font-size: 18px; font-weight: 700; line-height: 1.4; }
+    .gb-type { font-size: 12px; opacity: 0.7; margin-top: 6px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 1.25rem; }
+    .meta-item { background: #f9fafb; border-radius: 8px; padding: 10px 14px; }
+    .mi-label { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+    .mi-value { font-size: 13px; font-weight: 600; color: #111; }
+    .msg-list { list-style: none; }
+    .msg-list li { padding: 8px 12px; margin-bottom: 6px; background: #f0fdf4; border-left: 3px solid #16a34a; border-radius: 0 6px 6px 0; font-size: 13px; color: #111; line-height: 1.5; }
+    .data-list { display: flex; flex-wrap: wrap; gap: 8px; }
+    .data-pill { background: #dbeafe; color: #1d4ed8; font-size: 12px; font-weight: 600; padding: 4px 12px; border-radius: 20px; }
+    .risk-list { list-style: none; }
+    .risk-list li { padding: 6px 12px; margin-bottom: 4px; background: #fef2f2; border-left: 3px solid #dc2626; border-radius: 0 6px 6px 0; font-size: 13px; color: #111; }
+    .section-flow { display: flex; flex-direction: column; gap: 10px; }
+    .section-card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px 16px; }
+    .section-card.type-title                { border-left: 4px solid #6366f1; }
+    .section-card.type-executive_summary    { border-left: 4px solid #0f2fb5; }
+    .section-card.type-divider              { border-left: 4px solid #9ca3af; background: #f9fafb; }
+    .section-card.type-financial_data       { border-left: 4px solid #16a34a; }
+    .section-card.type-market_analysis      { border-left: 4px solid #0092d0; }
+    .section-card.type-strategic_analysis   { border-left: 4px solid #ff8e00; }
+    .section-card.type-operational_review   { border-left: 4px solid #d60202; }
+    .section-card.type-recommendations      { border-left: 4px solid #2d962d; }
+    .section-card.type-conclusion           { border-left: 4px solid #2e046c; }
+    .sc-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; flex-wrap: wrap; }
+    .sc-num { width: 24px; height: 24px; border-radius: 50%; background: #f3f4f6; color: #555; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .sc-name { font-size: 14px; font-weight: 700; color: #111; flex: 1; }
+    .sc-slides { font-size: 11px; font-weight: 600; background: #f3f4f6; color: #555; padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
+    .sc-data-badge { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 20px; }
+    .has-data { background: #dcfce7; color: #16a34a; }
+    .no-data  { background: #f3f4f6; color: #9ca3af; }
+    .sc-type    { font-size: 10px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; }
+    .sc-purpose { font-size: 12px; color: #555; margin-bottom: 5px; line-height: 1.5; }
+    .sc-sowhat  { font-size: 12px; color: #0f2fb5; font-weight: 600; margin-bottom: 6px; }
+    .sc-content { display: flex; flex-wrap: wrap; gap: 4px; }
+    .sc-content-pill { font-size: 11px; background: #f0f9ff; color: #0369a1; padding: 2px 8px; border-radius: 4px; }
+    .json-box { background: #1e1e1e; border-radius: 8px; padding: 14px; overflow-x: auto; max-height: 400px; overflow-y: auto; }
+    .json-box pre { font-family: monospace; font-size: 11px; color: #d4d4d4; white-space: pre-wrap; line-height: 1.6; }
+    .btn-copy { width: 100%; padding: 10px; font-size: 13px; font-weight: 600; background: #374151; color: white; border: none; border-radius: 8px; cursor: pointer; margin-top: 10px; }
+    .btn-copy:hover { background: #1f2937; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <div class="badge">Isolated Test — Agent 3 Only</div>
+  <h1>Presentation Brief Tester</h1>
+  <p class="subhead">Upload a content PDF. Agent 3 will analyse it and produce a complete presentation brief — governing thought, key messages, section structure — which Agent 4 uses to write the actual slides.</p>
+
+  <div class="card">
+    <div class="card-title">Upload Content Document</div>
+    <div class="upload-zone" id="upload-zone">
+      <input type="file" accept=".pdf" onchange="handleUpload(this)">
+      <div class="uz" id="upload-label">Click to upload &nbsp;<span>.pdf only</span></div>
+    </div>
+    <div class="slider-row">
+      <label>Slide count</label>
+      <input type="range" min="5" max="40" value="12" step="1" oninput="updateSlides(this.value)">
+      <div class="slide-num" id="slide-num">12</div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-green" id="run-btn" onclick="runTest()" disabled>▶ Run Agent 3 Analysis</button>
+      <button class="btn btn-gray" onclick="resetAll()">↺ Reset</button>
+    </div>
+    <div class="progress-wrap" id="prog-wrap">
+      <div class="progress"><div class="progress-fill" id="prog-fill"></div></div>
+      <div class="progress-msg" id="prog-msg"></div>
+    </div>
+    <div class="error-box" id="error-box"></div>
+  </div>
+
+  <div class="results" id="results">
+
+    <div class="governing-banner">
+      <div class="gb-label">Governing Thought</div>
+      <div class="gb-thought" id="gov-thought">—</div>
+      <div class="gb-type" id="gov-type">—</div>
+    </div>
+
+    <div class="meta-grid">
+      <div class="meta-item"><div class="mi-label">Document Type</div><div class="mi-value" id="m-doctype">—</div></div>
+      <div class="meta-item"><div class="mi-label">Narrative Flow</div><div class="mi-value" id="m-flow">—</div></div>
+      <div class="meta-item"><div class="mi-label">Audience</div><div class="mi-value" id="m-audience">—</div></div>
+      <div class="meta-item"><div class="mi-label">Total Slides</div><div class="mi-value" id="m-slides">—</div></div>
+      <div class="meta-item"><div class="mi-label">Tone</div><div class="mi-value" id="m-tone">—</div></div>
+      <div class="meta-item"><div class="mi-label">Data Heavy</div><div class="mi-value" id="m-data">—</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Document Summary</div>
+      <p style="font-size:13px;color:#333;line-height:1.7;" id="r-summary">—</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Key Messages — What Senior Management Must Walk Away With</div>
+      <ul class="msg-list" id="r-messages"></ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Key Data Points & Metrics</div>
+      <div class="data-list" id="r-datapoints"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Risks & Issues Identified</div>
+      <ul class="risk-list" id="r-risks"></ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Presentation Structure — Section by Section</div>
+      <div class="section-flow" id="r-sections"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Opening & Closing Guidance for Agent 4</div>
+      <div style="margin-bottom:12px;">
+        <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Opening</div>
+        <p style="font-size:13px;color:#333;line-height:1.6;" id="r-opening">—</p>
+      </div>
+      <div>
+        <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Closing</div>
+        <p style="font-size:13px;color:#333;line-height:1.6;" id="r-closing">—</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Raw Brief JSON — Passed to Agent 4</div>
+      <div class="json-box"><pre id="raw-json"></pre></div>
+      <button class="btn-copy" onclick="copyJSON()">Copy JSON to Clipboard</button>
+    </div>
+
+  </div>
+</div>
+
+<script src="agent3.js"></script>
+<script src="app.js"></script>
+<script>
+  let fileState   = { contentB64: null, slideCount: 12 }
+  let resultBrief = null
+
+  function handleUpload(input) {
+    const file = input.files[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      fileState.contentB64 = e.target.result.split(',')[1]
+      document.getElementById('upload-label').innerHTML = '✓ <span>' + file.name + '</span>'
+      document.getElementById('upload-zone').classList.add('ready')
+      document.getElementById('run-btn').disabled = false
+    }
+    reader.readAsDataURL(file)
+  }
+
+  function updateSlides(val) {
+    fileState.slideCount = parseInt(val)
+    document.getElementById('slide-num').textContent = val
+  }
+
+  function setProgress(pct, msg) {
+    document.getElementById('prog-fill').style.width = pct + '%'
+    document.getElementById('prog-msg').textContent  = msg
+  }
+
+  async function runTest() {
+    document.getElementById('run-btn').disabled = true
+    document.getElementById('error-box').classList.remove('show')
+    document.getElementById('results').classList.remove('show')
+    document.getElementById('prog-wrap').classList.add('show')
+    setProgress(10, 'Sending document to Claude for analysis...')
+
+    try {
+      setProgress(30, 'Agent 3 reading and analysing document...')
+      const brief = await runAgent3({ contentB64: fileState.contentB64, slideCount: fileState.slideCount })
+      resultBrief = brief
+      setProgress(90, 'Rendering presentation brief...')
+      renderResults(brief)
+      setProgress(100, '✅ Analysis complete.')
+    } catch (err) {
+      document.getElementById('error-box').textContent = 'Error: ' + err.message
+      document.getElementById('error-box').classList.add('show')
+      console.error(err)
+    }
+
+    document.getElementById('run-btn').disabled = false
+  }
+
+  function renderResults(b) {
+    document.getElementById('results').classList.add('show')
+    document.getElementById('gov-thought').textContent = b.governing_thought || '—'
+    document.getElementById('gov-type').textContent    = (b.document_type || '') + ' · ' + (b.narrative_flow || '')
+    document.getElementById('m-doctype').textContent   = b.document_type   || '—'
+    document.getElementById('m-flow').textContent      = b.narrative_flow  || '—'
+    document.getElementById('m-audience').textContent  = b.audience        || '—'
+    document.getElementById('m-slides').textContent    = b.total_slides    || '—'
+    document.getElementById('m-tone').textContent      = b.tone            || '—'
+    document.getElementById('m-data').textContent      = b.data_heavy ? '✅ Yes' : '❌ No'
+    document.getElementById('r-summary').textContent   = b.document_summary || '—'
+
+    const msgs = b.key_messages || []
+    document.getElementById('r-messages').innerHTML = msgs.length
+      ? msgs.map(m => '<li>' + m + '</li>').join('')
+      : '<li style="color:#aaa">No key messages extracted</li>'
+
+    const dps = b.key_data_points || []
+    document.getElementById('r-datapoints').innerHTML = dps.length
+      ? dps.map(d => '<div class="data-pill">' + d + '</div>').join('')
+      : '<span style="color:#aaa;font-size:13px;">No data points extracted</span>'
+
+    const risks = b.risks_and_issues || []
+    document.getElementById('r-risks').innerHTML = risks.length
+      ? risks.map(r => '<li>' + r + '</li>').join('')
+      : '<li style="color:#aaa">No risks identified</li>'
+
+    const sections = b.sections || []
+    document.getElementById('r-sections').innerHTML = sections.map(s => {
+      const typeClass = 'type-' + (s.section_type || 'content').replace(/[^a-z_]/g, '_')
+      const content   = (s.key_content || []).slice(0, 5)
+      return `<div class="section-card ${typeClass}">
+        <div class="sc-header">
+          <div class="sc-num">${s.section_number}</div>
+          <div class="sc-name">${s.section_name}</div>
+          <div class="sc-slides">${s.suggested_slide_count} slide${s.suggested_slide_count !== 1 ? 's' : ''}</div>
+          <span class="sc-data-badge ${s.data_available ? 'has-data' : 'no-data'}">${s.data_available ? 'Data ✓' : 'No data'}</span>
+        </div>
+        <div class="sc-type">${(s.section_type || '').replace(/_/g, ' ')}</div>
+        ${s.purpose  ? '<div class="sc-purpose">' + s.purpose + '</div>' : ''}
+        ${s.so_what  ? '<div class="sc-sowhat">'  + s.so_what + '</div>' : ''}
+        ${content.length ? '<div class="sc-content">' + content.map(c => '<span class="sc-content-pill">' + c + '</span>').join('') + '</div>' : ''}
+      </div>`
+    }).join('')
+
+    document.getElementById('r-opening').textContent = b.opening_guidance || '—'
+    document.getElementById('r-closing').textContent = b.closing_guidance || '—'
+    document.getElementById('raw-json').textContent  = JSON.stringify(b, null, 2)
+  }
+
+  function copyJSON() {
+    if (!resultBrief) return
+    navigator.clipboard.writeText(JSON.stringify(resultBrief, null, 2))
+      .then(() => alert('JSON copied!'))
+      .catch(() => alert('Copy failed — select manually.'))
+  }
+
+  function resetAll() {
+    fileState = { contentB64: null, slideCount: 12 }
+    resultBrief = null
+    document.getElementById('upload-label').innerHTML = 'Click to upload &nbsp;<span>.pdf only</span>'
+    document.getElementById('upload-zone').classList.remove('ready')
+    document.getElementById('run-btn').disabled = true
+    document.getElementById('results').classList.remove('show')
+    document.getElementById('error-box').classList.remove('show')
+    document.getElementById('prog-wrap').classList.remove('show')
+    document.getElementById('prog-fill').style.width = '0%'
+  }
+</script>
+</body>
+</html>
