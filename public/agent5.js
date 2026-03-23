@@ -464,81 +464,129 @@ Return ONLY a valid JSON array.
 No explanation. No markdown. No text outside JSON.`
 
 
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// BRAND BRIEF BUILDER
+// UTILITIES
 // ═══════════════════════════════════════════════════════════════════════════════
+
+// Round to 2 decimal places — kills JS float drift (10.219999... -> 10.22)
+const r2 = (n) => Math.round(n * 100) / 100
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BRAND TOKEN EXTRACTOR
+// Strips slide_layouts and other bulky fields before sending to Claude.
+// slide_layouts contains full placeholder XML — can be 10K+ tokens alone.
+// Agent 5 only needs design tokens: colors, fonts, slide size.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function extractBrandTokens(brand) {
+  return {
+    slide_width_inches:  r2(brand.slide_width_inches  || 13.33),
+    slide_height_inches: r2(brand.slide_height_inches || 7.50),
+    primary_colors:      brand.primary_colors      || [],
+    secondary_colors:    brand.secondary_colors    || [],
+    background_colors:   brand.background_colors   || ['#FFFFFF'],
+    text_colors:         brand.text_colors         || ['#111111'],
+    accent_colors:       brand.accent_colors       || [],
+    chart_colors:        brand.chart_colors        || [],
+    all_colors:          brand.all_colors          || {},
+    title_font:          brand.title_font          || {},
+    body_font:           brand.body_font           || {},
+    caption_font:        brand.caption_font        || {},
+    visual_style:        brand.visual_style        || 'corporate',
+    color_scheme_name:   brand.color_scheme_name   || '',
+    logo_position:       brand.logo_position       || 'top-right',
+    spacing_notes:       brand.spacing_notes       || ''
+    // slide_layouts intentionally excluded
+  }
+}
 
 function buildBrandBrief(brand, brief) {
-  return `BRAND GUIDELINE:
-${JSON.stringify(brand, null, 2)}
-
-PRESENTATION BRIEF:
-Document type:     ${(brief || {}).document_type     || '—'}
-Governing thought: ${(brief || {}).governing_thought || '—'}
-Narrative flow:    ${(brief || {}).narrative_flow    || '—'}
-Tone:              ${(brief || {}).tone              || 'professional'}
-Data heavy:        ${(brief || {}).data_heavy        ? 'yes' : 'no'}`
+  const b = brief || {}
+  return 'BRAND DESIGN TOKENS:\n' +
+    JSON.stringify(extractBrandTokens(brand), null, 2) +
+    '\n\nPRESENTATION BRIEF:' +
+    '\nDocument type:     ' + (b.document_type     || 'Business document') +
+    '\nGoverning thought: ' + (b.governing_thought || 'Key insights from the document') +
+    '\nNarrative flow:    ' + (b.narrative_flow    || 'Situation to Recommendation') +
+    '\nTone:              ' + (b.tone              || 'professional') +
+    '\nData heavy:        ' + (b.data_heavy        ? 'yes' : 'no')
 }
 
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // BATCH WRITER
+// Sends one batch of slides to Claude and returns the array of layout specs
 // ═══════════════════════════════════════════════════════════════════════════════
 
 async function designSlideBatch(batchManifest, brand, brief, batchNum) {
   const slideNums = batchManifest.map(s => s.slide_number)
-  console.log('Agent 5 — batch', batchNum, ': slides', slideNums.join(', '))
+  console.log('Agent 5 batch', batchNum, ':', slideNums.join(', '))
 
-  const prompt = `${buildBrandBrief(brand, brief)}
+  const prompt =
+    buildBrandBrief(brand, brief) +
+    '\n\nSLIDE BATCH ' + batchNum + ' (' + batchManifest.length + ' slides):\n' +
+    JSON.stringify(batchManifest, null, 2) +
+    '\n\nINSTRUCTIONS:' +
+    '\n- Process ONLY these ' + batchManifest.length + ' slides' +
+    '\n- Apply brand design tokens exactly' +
+    '\n- Compute exact coordinates for every element (2 decimal places)' +
+    '\n- FULLY specify all artifacts including all style sub-objects' +
+    '\n- chart: must have chart_style and series_style[]' +
+    '\n- workflow: must have workflow_style, nodes[] with x/y/w/h, connections[] with path[]' +
+    '\n- table: must have table_style, column_widths[], row_heights[]' +
+    '\n- cards: must have card_style, card_frames[] with x/y/w/h per card' +
+    '\n- insight_text: must have style, heading_style, body_style' +
+    '\n- Return a valid JSON array of exactly ' + batchManifest.length + ' slide objects'
 
-SLIDE BATCH ${batchNum} — ${batchManifest.length} slides:
-${JSON.stringify(batchManifest, null, 2)}
-
-INSTRUCTIONS:
-- Process ONLY these ${batchManifest.length} slides
-- Apply brand guideline exactly
-- Compute exact coordinates for every element
-- Fully specify all artifacts — no missing style fields
-- Return a valid JSON array of ${batchManifest.length} slide objects`
-
-  const raw    = await callClaude(AGENT5_SYSTEM, [{ role: 'user', content: prompt }], 4500)
+  const raw    = await callClaude(AGENT5_SYSTEM, [{ role: 'user', content: prompt }], 6000)
   const parsed = safeParseJSON(raw, null)
 
   if (!Array.isArray(parsed)) {
-    console.warn('Agent 5 batch', batchNum, '— parse failed. Raw length:', raw.length)
+    console.warn('Agent 5 batch', batchNum, '-- parse failed. Raw length:', raw.length)
+    console.warn('  First 400 chars:', raw.slice(0, 400))
     return null
   }
 
-  console.log('Agent 5 batch', batchNum, '— got', parsed.length, 'slides')
+  console.log('Agent 5 batch', batchNum, '-- got', parsed.length, 'slides')
   return parsed
 }
 
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SLIDE VALIDATOR
+// Returns list of structural issues. Empty array = valid.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function validateDesignedSlide(slide) {
   const issues = []
 
-  if (!slide.canvas)              issues.push('missing canvas')
-  if (!slide.brand_tokens)        issues.push('missing brand_tokens')
-  if (!slide.title_block)         issues.push('missing title_block')
-  if (!slide.title_block?.text)   issues.push('empty title_block.text')
+  if (!slide.canvas)            issues.push('missing canvas')
+  if (!slide.brand_tokens)      issues.push('missing brand_tokens')
+  if (!slide.title_block)       issues.push('missing title_block')
+  if (!slide.title_block?.text) issues.push('empty title')
 
   if (slide.slide_type === 'content') {
-    if (!slide.zones || slide.zones.length === 0) issues.push('no zones on content slide')
+    if (!slide.zones || slide.zones.length === 0) issues.push('no zones')
   }
 
   ;(slide.zones || []).forEach((z, zi) => {
-    if (!z.frame)             issues.push(`z${zi}: missing frame`)
-    if (!z.artifacts?.length) issues.push(`z${zi}: no artifacts`)
+    if (!z.frame)             issues.push('z' + zi + ': missing frame')
+    if (!z.artifacts?.length) issues.push('z' + zi + ': no artifacts')
     ;(z.artifacts || []).forEach((a, ai) => {
-      if (!a.type)                                    issues.push(`z${zi}.a${ai}: missing type`)
-      if (a.type === 'chart'    && !a.chart_style)    issues.push(`z${zi}.a${ai}: chart missing chart_style`)
-      if (a.type === 'workflow' && !a.nodes?.length)  issues.push(`z${zi}.a${ai}: workflow missing nodes`)
-      if (a.type === 'table'    && !a.table_style)    issues.push(`z${zi}.a${ai}: table missing table_style`)
-      if (a.type === 'cards'    && !a.card_frames?.length) issues.push(`z${zi}.a${ai}: cards missing card_frames`)
+      const p = 'z' + zi + '.a' + ai
+      if (!a.type)                                     issues.push(p + ': missing type')
+      if (a.type === 'chart'    && !a.chart_style)     issues.push(p + ': chart missing chart_style')
+      if (a.type === 'chart'    && !a.series_style)    issues.push(p + ': chart missing series_style')
+      if (a.type === 'workflow' && !a.nodes?.length)   issues.push(p + ': workflow missing nodes')
+      if (a.type === 'workflow' && !a.workflow_style)  issues.push(p + ': workflow missing workflow_style')
+      if (a.type === 'table'    && !a.table_style)     issues.push(p + ': table missing table_style')
+      if (a.type === 'table'    && !a.column_widths)   issues.push(p + ': table missing column_widths')
+      if (a.type === 'cards'    && !a.card_frames?.length) issues.push(p + ': cards missing card_frames')
+      if (a.type === 'cards'    && !a.card_style)      issues.push(p + ': cards missing card_style')
+      if (a.type === 'insight_text' && !a.heading_style) issues.push(p + ': insight_text missing heading_style')
+      if (a.type === 'insight_text' && !a.body_style)    issues.push(p + ': insight_text missing body_style')
     })
   })
 
@@ -547,20 +595,103 @@ function validateDesignedSlide(slide) {
 
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// FALLBACK BUILDER
+// CLAUDE-BASED FALLBACK
+// When a slide fails (bad parse, missing artifacts, truncation) — ask Claude to
+// build the best possible layout for just that one slide.
+// Uses a tight focused prompt: no batch overhead, brand tokens only, one slide.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function buildFallbackDesign(manifestSlide, brand) {
-  const w         = brand.slide_width_inches  || 13.33
-  const h         = brand.slide_height_inches || 7.50
-  const primary   = (brand.primary_colors    || ['#1A3C8F'])[0]
-  const secondary = (brand.secondary_colors  || ['#E8A020'])[0]
-  const bg        = (brand.background_colors || ['#FFFFFF'])[0]
-  const titleFont = (brand.title_font  || {}).family || 'Calibri'
-  const bodyFont  = (brand.body_font   || {}).family || 'Calibri'
+const AGENT5_FALLBACK_SYSTEM = `You are a senior presentation designer.
+A slide failed to render correctly and needs to be rebuilt from scratch.
+
+Build the best possible board-ready corporate layout for this single slide.
+Use the brand design tokens exactly — colors, fonts, slide size.
+Return a single valid JSON object (not an array) matching the full slide schema.
+
+CRITICAL — all artifacts must be FULLY specified:
+- chart: include chart_style{} AND series_style[]
+- workflow: include workflow_style{}, nodes[] with x/y/w/h, connections[] with path[]
+- table: include table_style{}, column_widths[], row_heights[]
+- cards: include card_style{}, card_frames[] with x/y/w/h per card
+- insight_text: include style{}, heading_style{}, body_style{}
+
+All coordinates in decimal inches, 2 decimal places.
+Return ONLY a valid JSON object. No explanation. No markdown.`
+
+async function buildFallbackDesign(manifestSlide, brand, brief) {
+  console.log('Agent 5 -- fallback Claude call for S' + manifestSlide.slide_number)
+
+  const tokens = extractBrandTokens(brand)
+  const b      = brief || {}
+
+  const prompt =
+    'BRAND DESIGN TOKENS:\n' +
+    JSON.stringify(tokens, null, 2) +
+    '\n\nSLIDE TO REBUILD:\n' +
+    JSON.stringify(manifestSlide, null, 2) +
+    '\n\nContext:' +
+    '\nDocument type: ' + (b.document_type || 'Business document') +
+    '\nTone: ' + (b.tone || 'professional') +
+    '\n\nBuild the best possible layout for this slide.' +
+    '\nPreserve the title, key_message, zones structure and artifact content from the manifest.' +
+    '\nChoose the cleanest, most board-ready layout given the archetype: ' + (manifestSlide.slide_archetype || 'summary') +
+    '\nReturn a single JSON object for this one slide.'
+
+  try {
+    const raw    = await callClaude(AGENT5_FALLBACK_SYSTEM, [{ role: 'user', content: prompt }], 3000)
+    const parsed = safeParseJSON(raw, null)
+
+    // Claude may return an array with one item or a bare object
+    const candidate = Array.isArray(parsed) ? parsed[0] : parsed
+
+    if (candidate && typeof candidate === 'object' && candidate.canvas && candidate.zones) {
+      const issues = validateDesignedSlide(candidate)
+      if (issues.length === 0) {
+        console.log('Agent 5 -- fallback Claude succeeded for S' + manifestSlide.slide_number)
+        return candidate
+      }
+      console.warn('Agent 5 -- fallback Claude still has issues for S' + manifestSlide.slide_number + ':', issues.join('; '))
+      // Return anyway -- better than nothing, zone repair will patch what it can
+      return candidate
+    }
+  } catch (e) {
+    console.warn('Agent 5 -- fallback Claude call failed for S' + manifestSlide.slide_number + ':', e.message)
+  }
+
+  // Last resort: minimal structurally valid object derived purely from brand tokens
+  // No hardcoded content — pull everything from manifest and brand
+  return buildMinimalSafeSlide(manifestSlide, tokens)
+}
+
+
+// ─── Minimal safe slide — only used if the fallback Claude call itself fails ──
+// This is the true last resort. It still uses real brand values and real content.
+function buildMinimalSafeSlide(manifestSlide, tokens) {
+  const w         = r2(tokens.slide_width_inches  || 13.33)
+  const h         = r2(tokens.slide_height_inches || 7.50)
+  const primary   = (tokens.primary_colors    || ['#1A3C8F'])[0]
+  const secondary = (tokens.secondary_colors  || ['#E8A020'])[0]
+  const bg        = (tokens.background_colors || ['#FFFFFF'])[0]
+  const titleFont = (tokens.title_font   || {}).family || 'Calibri'
+  const bodyFont  = (tokens.body_font    || {}).family || 'Calibri'
   const isDark    = ['title', 'divider'].includes(manifestSlide.slide_type)
 
-  const designed = {
+  const ct  = 1.05
+  const cw  = r2(w - 0.80)
+  const ch  = r2(h - ct - 0.40)
+
+  // Pull real key_message points from the manifest zones if available
+  const manifestPoints = []
+  ;(manifestSlide.zones || []).forEach(z =>
+    (z.artifacts || []).forEach(a => {
+      if (a.type === 'insight_text') (a.points || []).forEach(p => manifestPoints.push(p))
+    })
+  )
+  const bodyPoints = manifestPoints.length > 0
+    ? manifestPoints.slice(0, 4)
+    : [manifestSlide.key_message || 'See source document for details']
+
+  return {
     slide_number:    manifestSlide.slide_number,
     slide_type:      manifestSlide.slide_type      || 'content',
     slide_archetype: manifestSlide.slide_archetype || 'summary',
@@ -573,18 +704,18 @@ function buildFallbackDesign(manifestSlide, brand) {
       title_font_family:   titleFont,
       body_font_family:    bodyFont,
       caption_font_family: bodyFont,
-      title_color:         isDark ? '#FFFFFF' : primary,
-      body_color:          isDark ? '#CCDDFF' : '#111111',
-      caption_color:       '#888888',
-      primary_color:       primary,
-      secondary_color:     secondary,
-      accent_colors:       brand.accent_colors || [],
-      chart_palette:       brand.chart_colors  || [primary, secondary, '#2E9E5B', '#C82333']
+      title_color:   isDark ? '#FFFFFF' : primary,
+      body_color:    isDark ? '#CCDDFF' : '#111111',
+      caption_color: '#888888',
+      primary_color:   primary,
+      secondary_color: secondary,
+      accent_colors:   tokens.accent_colors || [],
+      chart_palette:   tokens.chart_colors  || [primary, secondary, '#2E9E5B', '#C82333']
     },
     title_block: {
       text:        manifestSlide.title || '',
-      x: 0.40, y: 0.20, w: w - 0.80,
-      h:           isDark ? 2.00 : 0.72,
+      x: 0.40, y: 0.15, w: cw,
+      h:           isDark ? 2.00 : 0.75,
       font_family: titleFont,
       font_size:   isDark ? 30 : 18,
       font_weight: 'bold',
@@ -593,80 +724,227 @@ function buildFallbackDesign(manifestSlide, brand) {
     },
     subtitle_block: manifestSlide.subtitle ? {
       text:        manifestSlide.subtitle,
-      x: 0.40, y: isDark ? 2.60 : 0.98,
-      w: w - 0.80, h: 0.50,
+      x: 0.40, y: isDark ? 2.60 : 0.95,
+      w: cw, h: 0.45,
       font_family: bodyFont, font_size: 14, font_weight: 'regular',
       color:       isDark ? '#BBCCFF' : '#555555',
       align: 'left', valign: 'top', wrap: true
     } : null,
-    zones: [],
+    zones: manifestSlide.slide_type === 'content' ? [{
+      zone_id:           'z1',
+      zone_role:         'primary_proof',
+      message_objective: manifestSlide.key_message || '',
+      narrative_weight:  'primary',
+      frame: {
+        x: 0.40, y: ct, w: cw, h: ch,
+        padding: { top: 0.10, right: 0.10, bottom: 0.10, left: 0.10 }
+      },
+      artifacts: [{
+        type: 'insight_text',
+        x: 0.50, y: r2(ct + 0.10), w: r2(cw - 0.20), h: r2(ch - 0.20),
+        style:         { fill_color: null, border_color: primary + '33', border_width: 0.5, corner_radius: 3 },
+        heading_style: { font_family: titleFont, font_size: 12, font_weight: 'bold', color: primary },
+        body_style:    { font_family: bodyFont, font_size: 11, font_weight: 'regular', color: '#111111', line_spacing: 1.4, bullet_indent: 0.15 },
+        // Pass actual points through for Agent 6 to render
+        heading: 'Key Insight',
+        points:  bodyPoints,
+        sentiment: 'neutral'
+      }]
+    }] : [],
     global_elements: {
       footer: {
-        show: true, x: 0.40, y: h - 0.28, w: 3.00, h: 0.22,
+        show: true, x: 0.40, y: r2(h - 0.26), w: 3.00, h: 0.20,
         font_family: bodyFont, font_size: 8, color: '#AAAAAA', align: 'left'
       },
       page_number: {
-        show: true, x: w - 0.90, y: h - 0.28, w: 0.65, h: 0.22,
+        show: true, x: r2(w - 0.88), y: r2(h - 0.26), w: 0.65, h: 0.20,
         font_family: bodyFont, font_size: 8, color: '#AAAAAA', align: 'right'
       }
-    }
+    },
+    _fallback: true
   }
+}
 
-  // Minimal content zone for content slides
-  if (manifestSlide.slide_type === 'content') {
-    const ct = 1.10  // content top
-    designed.zones = [{
-      zone_id: 'z1_fallback', zone_role: 'primary_proof',
-      message_objective: manifestSlide.key_message || '',
-      narrative_weight:  'primary',
-      frame: { x: 0.40, y: ct, w: w - 0.80, h: h - ct - 0.45,
-               padding: { top: 0.10, right: 0.10, bottom: 0.10, left: 0.10 } },
-      artifacts: [{
-        type: 'insight_text',
-        x: 0.50, y: ct + 0.10, w: w - 1.00, h: h - ct - 0.65,
-        style:          { fill_color: null, border_color: null, border_width: 0, corner_radius: 0 },
-        heading_style:  { font_family: titleFont, font_size: 12, font_weight: 'bold',    color: primary },
-        body_style:     { font_family: bodyFont,  font_size: 11, font_weight: 'regular', color: '#111111', line_spacing: 1.4, bullet_indent: 0.15 }
-      }]
-    }]
-  }
 
-  return designed
+// ═══════════════════════════════════════════════════════════════════════════════
+// CONTENT MERGER
+// Injects Agent 4 manifest artifact content into Agent 5 designed artifacts.
+// Agent 5 produces layout + style. Agent 4 holds the actual data.
+// This merge produces a single self-contained object Agent 6 can render directly.
+//
+// Matching strategy: zone index first, then zone_id string match as fallback.
+// Within a zone: artifact matched by position index (Agent 4 and Agent 5 should
+// produce the same number of artifacts per zone in the same order).
+//
+// Content fields injected per artifact type:
+//   insight_text : heading, points[], sentiment
+//   chart        : chart_type, chart_title, chart_insight, x_label, y_label,
+//                  categories[], series[], show_data_labels, show_legend
+//   cards        : cards[] (title, subtitle, body, sentiment per card)
+//   workflow     : workflow_type, flow_direction, workflow_title, workflow_insight,
+//                  node labels/values/descriptions/levels, connection from/to/type
+//   table        : title, headers[], rows[][], highlight_rows[], note
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function mergeContentIntoZones(designedZones, manifestZones) {
+  if (!designedZones || !manifestZones) return designedZones || []
+
+  return designedZones.map((dZone, zi) => {
+    // Find the matching manifest zone — by index first, then by zone_id
+    const mZone = manifestZones[zi]
+               || manifestZones.find(z => z.zone_id === dZone.zone_id)
+    if (!mZone) return dZone
+
+    const mergedArtifacts = (dZone.artifacts || []).map((dArt, ai) => {
+      // Match manifest artifact by position index
+      const mArt = (mZone.artifacts || [])[ai]
+      if (!mArt || mArt.type !== dArt.type) return dArt
+
+      const t = dArt.type
+
+      if (t === 'insight_text') {
+        return {
+          ...dArt,
+          heading:   mArt.heading   || dArt.heading   || 'Key Insight',
+          points:    mArt.points    || dArt.points     || [],
+          sentiment: mArt.sentiment || dArt.sentiment  || 'neutral'
+        }
+      }
+
+      if (t === 'chart') {
+        return {
+          ...dArt,
+          chart_type:       mArt.chart_type       || dArt.chart_type       || 'bar',
+          chart_title:      mArt.chart_title      || dArt.chart_title      || '',
+          chart_insight:    mArt.chart_insight    || dArt.chart_insight    || '',
+          x_label:          mArt.x_label          || dArt.x_label          || '',
+          y_label:          mArt.y_label          || dArt.y_label          || '',
+          categories:       mArt.categories       || dArt.categories       || [],
+          series:           mArt.series           || dArt.series           || [],
+          show_data_labels: mArt.show_data_labels !== undefined
+                              ? mArt.show_data_labels : (dArt.show_data_labels !== false),
+          show_legend:      mArt.show_legend      !== undefined
+                              ? mArt.show_legend      : !!dArt.show_legend
+        }
+      }
+
+      if (t === 'cards') {
+        return {
+          ...dArt,
+          cards: mArt.cards || dArt.cards || []
+        }
+      }
+
+      if (t === 'workflow') {
+        // Merge node content (label, value, description, level) into designed nodes
+        // Designed nodes have x/y/w/h; manifest nodes have the text content.
+        const designedNodes   = dArt.nodes   || []
+        const manifestNodes   = mArt.nodes   || []
+        const mergedNodes = designedNodes.map((dn, ni) => {
+          const mn = manifestNodes.find(n => n.id === dn.id) || manifestNodes[ni]
+          if (!mn) return dn
+          return {
+            ...dn,                        // keep x, y, w, h from Agent 5
+            label:       mn.label       || dn.label       || dn.id,
+            value:       mn.value       || dn.value       || '',
+            description: mn.description || dn.description || '',
+            level:       mn.level       !== undefined ? mn.level : (dn.level || 1)
+          }
+        })
+
+        // Merge connection from/to/type from manifest into designed connections
+        // Designed connections have path[] waypoints; manifest has from/to/type.
+        const designedConns  = dArt.connections || []
+        const manifestConns  = mArt.connections || []
+        const mergedConns = designedConns.map((dc, ci) => {
+          const mc = manifestConns[ci]
+                  || manifestConns.find(c => c.from === dc.from && c.to === dc.to)
+          if (!mc) return dc
+          return {
+            ...dc,                        // keep path[] from Agent 5
+            from: mc.from || dc.from,
+            to:   mc.to   || dc.to,
+            type: mc.type || dc.type || 'arrow'
+          }
+        })
+
+        return {
+          ...dArt,
+          workflow_type:    mArt.workflow_type    || dArt.workflow_type    || 'process_flow',
+          flow_direction:   mArt.flow_direction   || dArt.flow_direction   || 'left_to_right',
+          workflow_title:   mArt.workflow_title   || dArt.workflow_title   || '',
+          workflow_insight: mArt.workflow_insight || dArt.workflow_insight || '',
+          nodes:            mergedNodes,
+          connections:      mergedConns
+        }
+      }
+
+      if (t === 'table') {
+        return {
+          ...dArt,
+          title:          mArt.title          || dArt.title          || '',
+          headers:        mArt.headers        || dArt.headers        || [],
+          rows:           mArt.rows           || dArt.rows           || [],
+          highlight_rows: mArt.highlight_rows || dArt.highlight_rows || [],
+          note:           mArt.note           || dArt.note           || ''
+        }
+      }
+
+      return dArt
+    })
+
+    return { ...dZone, artifacts: mergedArtifacts }
+  })
 }
 
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // NORMALISER
-// Merges manifest metadata into the designed slide and adds helper fields
+// 1. Validates the designed slide structure
+// 2. Merges Agent 4 artifact content into Agent 5 layout artifacts
+// 3. Carries all manifest metadata through for Agent 5.1 and Agent 6
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function normaliseDesignedSlide(designed, manifestSlide, brand) {
-  if (!designed || typeof designed !== 'object') {
-    return buildFallbackDesign(manifestSlide, brand)
-  }
+  if (!designed || typeof designed !== 'object') return null  // caller handles null -> fallback
 
   const issues = validateDesignedSlide(designed)
   if (issues.length > 0) {
-    console.warn('Agent 5 — S' + (designed.slide_number || '?') + ' validation issues:', issues.join('; '))
+    console.warn('Agent 5 -- S' + (designed.slide_number || '?') + ' issues:', issues.join('; '))
   }
+
+  // Merge Agent 4 content into Agent 5 layout zones
+  const mergedZones = mergeContentIntoZones(
+    designed.zones || [],
+    manifestSlide.zones || []
+  )
+
+  // Log merge summary
+  const contentCounts = { insight_text: 0, chart: 0, cards: 0, workflow: 0, table: 0 }
+  mergedZones.forEach(z => (z.artifacts || []).forEach(a => {
+    if (contentCounts[a.type] !== undefined) contentCounts[a.type]++
+  }))
+  console.log('  S' + manifestSlide.slide_number + ' merged content:',
+    Object.entries(contentCounts).filter(([,n]) => n > 0).map(([t,n]) => t + ':' + n).join(' ') || 'none')
 
   return {
     ...designed,
-    // Always carry manifest numbers/types (Claude may drift on these)
-    slide_number:      manifestSlide.slide_number,
-    slide_type:        manifestSlide.slide_type      || designed.slide_type,
-    slide_archetype:   manifestSlide.slide_archetype || designed.slide_archetype || 'summary',
-    // Metadata for display and Agent 5.1 review
-    section_name:      manifestSlide.section_name    || '',
-    section_type:      manifestSlide.section_type    || '',
-    title:             (designed.title_block || {}).text || manifestSlide.title       || '',
-    subtitle:          (designed.subtitle_block || {}).text || manifestSlide.subtitle || '',
-    key_message:       manifestSlide.key_message      || '',
-    visual_flow_hint:  manifestSlide.visual_flow_hint || '',
-    speaker_note:      manifestSlide.speaker_note     || '',
-    layout_name:       inferLayoutName(manifestSlide, brand),
-    // Condensed zone summary for Agent 5.1
-    zones_summary:     (designed.zones || []).map(z => ({
+    zones: mergedZones,
+    // Always override with manifest ground truth (Claude may drift on slide_number etc.)
+    slide_number:     manifestSlide.slide_number,
+    slide_type:       manifestSlide.slide_type      || designed.slide_type,
+    slide_archetype:  manifestSlide.slide_archetype || designed.slide_archetype || 'summary',
+    section_name:     manifestSlide.section_name    || '',
+    section_type:     manifestSlide.section_type    || '',
+    // Slide-level content metadata
+    title:            (designed.title_block || {}).text || manifestSlide.title    || '',
+    subtitle:         (designed.subtitle_block || {}).text || manifestSlide.subtitle || '',
+    key_message:      manifestSlide.key_message      || '',
+    visual_flow_hint: manifestSlide.visual_flow_hint || '',
+    speaker_note:     manifestSlide.speaker_note     || '',
+    layout_name:      inferLayoutName(manifestSlide, brand),
+    // Condensed zone summary for Agent 5.1 review
+    zones_summary:    mergedZones.map(z => ({
       zone_id:          z.zone_id,
       zone_role:        z.zone_role,
       narrative_weight: z.narrative_weight,
@@ -682,15 +960,13 @@ function inferLayoutName(manifestSlide, brand) {
   const avail= brand.slide_layouts || []
   const find = (kws) => avail.find(l => kws.some(k => (l.name || '').toLowerCase().includes(k.toLowerCase())))
 
-  if (st === 'title')   return (find(['Title Slide', 'title'])     || {}).name || 'Title Slide'
-  if (st === 'divider') return (find(['Section', 'Divider', 'section header']) || {}).name || 'Section Divider'
-
+  if (st === 'title')   return (find(['Title Slide', 'title'])                     || {}).name || 'Title Slide'
+  if (st === 'divider') return (find(['Section', 'Divider', 'section header'])     || {}).name || 'Section Divider'
   if (['recommendation','process','roadmap'].includes(arch))
-    return (find(['3 Across','3 across','body text']) || {}).name || 'Body Text'
+    return (find(['3 Across','3 across','body text'])                              || {}).name || 'Body Text'
   if (['dashboard','summary'].includes(arch))
-    return (find(['2 Across','1 Across','2 across','1 across']) || {}).name || '1 Across'
-
-  return (find(['1 Across','Body Text','1 across','body text']) || {}).name || 'Body Text'
+    return (find(['2 Across','1 Across','2 across','1 across'])                   || {}).name || '1 Across'
+  return (find(['1 Across','Body Text','1 across','body text'])                    || {}).name || 'Body Text'
 }
 
 
@@ -704,17 +980,20 @@ async function runAgent5(state) {
   const brief    = state.outline || {}
 
   if (!manifest || !manifest.length) {
-    console.error('Agent 5 — slideManifest is empty')
+    console.error('Agent 5 -- slideManifest is empty')
     return []
   }
 
-  console.log('Agent 5 starting — slides to design:', manifest.length)
-  console.log('  Brand primary:', (brand.primary_colors || [])[0] || '—')
-  console.log('  Slide size:', (brand.slide_width_inches || 13.33) + '" × ' + (brand.slide_height_inches || 7.50) + '"')
-  console.log('  Deck type:', brief.document_type || '—')
+  const tokens = extractBrandTokens(brand)
+  console.log('Agent 5 starting -- slides:', manifest.length)
+  console.log('  Primary color:', (tokens.primary_colors || [])[0] || 'none')
+  console.log('  Slide size:', tokens.slide_width_inches + '" x ' + tokens.slide_height_inches + '"')
+  console.log('  Title font:', (tokens.title_font || {}).family || 'default')
+  console.log('  Deck type:', brief.document_type || 'unknown')
 
-  // Batch into groups of 4
-  const BATCH_SIZE = 4
+  // Batch into groups of 3 — smaller batches mean more token headroom per slide,
+  // which is the primary cause of incomplete artifact specs
+  const BATCH_SIZE = 3
   const batches    = []
   for (let i = 0; i < manifest.length; i += BATCH_SIZE) {
     batches.push(manifest.slice(i, i + BATCH_SIZE))
@@ -728,22 +1007,69 @@ async function runAgent5(state) {
     const result = await designSlideBatch(batch, brand, brief, b + 1)
 
     if (!result) {
-      console.warn('Agent 5 — batch', b + 1, 'failed entirely, using fallbacks')
-      batch.forEach(ms => allDesigned.push(buildFallbackDesign(ms, brand)))
+      // Entire batch failed to parse — fall back per slide via Claude
+      console.warn('Agent 5 -- batch', b + 1, 'failed entirely, running per-slide fallbacks')
+      for (const ms of batch) {
+        const fb = await buildFallbackDesign(ms, brand, brief)
+        allDesigned.push(normaliseDesignedSlide(fb, ms, brand) || buildMinimalSafeSlide(ms, tokens))
+      }
       continue
     }
 
-    batch.forEach((mSlide, idx) => {
-      const match = result.find(r => r.slide_number === mSlide.slide_number)
-                 || result[idx]
-                 || null
-      allDesigned.push(normaliseDesignedSlide(match, mSlide, brand))
-    })
+    // Match each manifest slide to the returned result
+    for (let i = 0; i < batch.length; i++) {
+      const mSlide = batch[i]
+      const match  = result.find(r => r.slide_number === mSlide.slide_number)
+                  || result[i]
+                  || null
+
+      if (!match) {
+        console.warn('Agent 5 -- no match for S' + mSlide.slide_number + ', running fallback')
+        const fb = await buildFallbackDesign(mSlide, brand, brief)
+        allDesigned.push(normaliseDesignedSlide(fb, mSlide, brand) || buildMinimalSafeSlide(mSlide, tokens))
+        continue
+      }
+
+      const issues = validateDesignedSlide(match)
+
+      if (issues.length === 0) {
+        // Fully valid — normalise and accept
+        allDesigned.push(normaliseDesignedSlide(match, mSlide, brand))
+      } else {
+        // Has issues — check if they're critical (missing zones/artifacts) or cosmetic
+        const critical = issues.filter(i =>
+          i.includes('missing canvas') ||
+          i.includes('missing brand_tokens') ||
+          i.includes('no zones') ||
+          i.includes('no artifacts') ||
+          i.includes('missing chart_style') ||
+          i.includes('missing series_style') ||
+          i.includes('missing workflow_style') ||
+          i.includes('missing nodes') ||
+          i.includes('missing table_style') ||
+          i.includes('missing card_frames') ||
+          i.includes('missing heading_style') ||
+          i.includes('missing body_style')
+        )
+
+        if (critical.length > 0) {
+          // Critical structural gaps — fallback Claude call for this slide
+          console.warn('Agent 5 -- S' + mSlide.slide_number + ' has critical issues, running fallback:', critical.join('; '))
+          const fb = await buildFallbackDesign(mSlide, brand, brief)
+          allDesigned.push(normaliseDesignedSlide(fb, mSlide, brand) || buildMinimalSafeSlide(mSlide, tokens))
+        } else {
+          // Minor issues (e.g. empty title) — accept Claude's work with warnings
+          console.warn('Agent 5 -- S' + mSlide.slide_number + ' minor issues (accepting):', issues.join('; '))
+          allDesigned.push(normaliseDesignedSlide(match, mSlide, brand))
+        }
+      }
+    }
   }
 
   // Summary
-  const withIssues = allDesigned.filter(s => s._validation_issues?.length > 0)
-  const typeCounts = {}
+  const withIssues    = allDesigned.filter(s => s._validation_issues?.length > 0)
+  const withFallback  = allDesigned.filter(s => s._fallback)
+  const typeCounts    = {}
   allDesigned.forEach(s =>
     (s.zones || []).forEach(z =>
       (z.artifacts || []).forEach(a => { typeCounts[a.type] = (typeCounts[a.type] || 0) + 1 })
@@ -751,12 +1077,10 @@ async function runAgent5(state) {
   )
 
   console.log('Agent 5 complete')
-  console.log('  Slides designed:', allDesigned.length)
+  console.log('  Slides:', allDesigned.length,
+    '| fallback:', withFallback.length,
+    '| with issues:', withIssues.length)
   console.log('  Artifact types:', JSON.stringify(typeCounts))
-  console.log('  Slides with validation issues:', withIssues.length)
-  withIssues.forEach(s =>
-    console.warn('  S' + s.slide_number + ':', s._validation_issues.join('; '))
-  )
 
   return allDesigned
 }

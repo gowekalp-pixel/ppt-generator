@@ -70,6 +70,7 @@
     .slide-btn.type-divider { border-left: 3px solid #6b7280; }
     .slide-btn.type-content { border-left: 3px solid #16a34a; }
     .slide-btn.has-issues   { border-bottom: 2px solid #f59e0b; }
+    .slide-btn.is-fallback  { border-right: 3px solid #ef4444; }
 
     /* Main slide view: canvas left, inspector right */
     .slide-view { display: grid; grid-template-columns: 1fr 380px; gap: 1rem; align-items: start; }
@@ -240,6 +241,31 @@
   let activeSlide = 0
 
   // ─── JSON HELPERS ──────────────────────────────────────────────────────────
+  // Round display values to 2dp — prevents 10.21999... in inspector
+  const d = (n) => (typeof n === "number" ? Math.round(n * 100) / 100 : n)
+
+  // Summarises content merge status for a slide — shown in info strip
+  function contentMergeSummary(slide) {
+    if (!slide.zones || slide.slide_type !== 'content') return '<span style="color:#888;">n/a</span>'
+    const counts = { ok: 0, empty: 0 }
+    slide.zones.forEach(z => {
+      ;(z.artifacts || []).forEach(a => {
+        const t = a.type
+        const hasContent =
+          (t === 'insight_text' && (a.points || []).length > 0) ||
+          (t === 'chart'        && (a.categories || []).length > 0) ||
+          (t === 'cards'        && (a.cards || []).length > 0) ||
+          (t === 'workflow'     && (a.nodes || []).some(n => n.label && n.label !== n.id)) ||
+          (t === 'table'        && (a.headers || []).length > 0)
+        if (hasContent) counts.ok++ else counts.empty++
+      })
+    })
+    const total = counts.ok + counts.empty
+    if (total === 0) return '<span style="color:#888;">no artifacts</span>'
+    const color = counts.empty === 0 ? '#16a34a' : counts.ok === 0 ? '#dc2626' : '#d97706'
+    return '<span style="color:' + color + ';font-weight:700;">' + counts.ok + '/' + total + ' merged</span>'
+  }
+
   function safeJSON(raw, fallback) {
     try { return JSON.parse((raw || '').replace(/```json\s*/g,'').replace(/```\s*/g,'').trim()) }
     catch(e) { return fallback }
@@ -321,40 +347,58 @@
     // Stats
     const totalZones     = spec.reduce((n, s) => n + (s.zones || []).length, 0)
     const totalArtifacts = spec.reduce((n, s) => n + (s.zones || []).reduce((m, z) => m + (z.artifacts || []).length, 0), 0)
-    const withIssues     = spec.filter(s => s._validation_issues?.length > 0)
+    const withIssues    = spec.filter(s => s._validation_issues?.length > 0)
+    const withFallback  = spec.filter(s => s._fallback === true)
 
     const artCounts = {}
     spec.forEach(s => (s.zones || []).forEach(z =>
       (z.artifacts || []).forEach(a => { artCounts[a.type] = (artCounts[a.type] || 0) + 1 })
     ))
 
-    document.getElementById('stats-bar').innerHTML = [
-      { val: spec.length, lbl: 'Slides' },
-      { val: spec.filter(s => s.slide_type === 'title').length,   lbl: 'Title' },
-      { val: spec.filter(s => s.slide_type === 'divider').length, lbl: 'Dividers' },
-      { val: spec.filter(s => s.slide_type === 'content').length, lbl: 'Content' },
-      { val: totalZones,     lbl: 'Zones' },
-      { val: totalArtifacts, lbl: 'Artifacts' },
-      { val: withIssues.length, lbl: '⚠ Issues' }
-    ].map(s => `<div class="stat-pill"><div class="sp-val">${s.val}</div><div class="sp-lbl">${s.lbl}</div></div>`).join('')
+    // Artifact type breakdown for stats
+    const artPills = Object.entries(artCounts)
+      .map(([t, n]) => `<span style="font-size:11px;background:#e0e7ff;color:#3730a3;padding:2px 7px;border-radius:20px;font-weight:600;">${t}: ${n}</span>`)
+      .join(' ')
 
-    // Validation warnings strip
+    document.getElementById('stats-bar').innerHTML = [
+      { val: spec.length,                                           lbl: 'Slides' },
+      { val: spec.filter(s => s.slide_type === 'title').length,    lbl: 'Title' },
+      { val: spec.filter(s => s.slide_type === 'divider').length,  lbl: 'Dividers' },
+      { val: spec.filter(s => s.slide_type === 'content').length,  lbl: 'Content' },
+      { val: totalZones,                                            lbl: 'Zones' },
+      { val: totalArtifacts,                                        lbl: 'Artifacts' },
+      { val: withFallback.length, lbl: 'Fallback' },
+      { val: withIssues.length,   lbl: 'Issues' }
+    ].map(s => {
+      const isWarn = s.lbl === 'Fallback' && s.val > 0
+      const isErr  = s.lbl === 'Issues'   && s.val > 0
+      const color  = isWarn ? '#d97706' : isErr ? '#dc2626' : '#111'
+      return `<div class="stat-pill"><div class="sp-val" style="color:${color}">${s.val}</div><div class="sp-lbl">${s.lbl}</div></div>`
+    }).join('') + (artPills ? `<div class="stat-pill" style="flex:1;text-align:left;"><div class="sp-lbl" style="margin-bottom:4px;">Artifact types</div><div>${artPills}</div></div>` : '')
+
+    // Warnings strip
     const warnEl = document.getElementById('warn-strip')
-    if (withIssues.length > 0) {
-      warnEl.innerHTML = '<strong>⚠ ' + withIssues.length + ' slide(s) have validation issues (fallback applied):</strong><br>' +
-        withIssues.map(s => 'S' + s.slide_number + ': ' + s._validation_issues.join('; ')).join('<br>')
+    const warnItems = []
+    if (withFallback.length > 0)
+      warnItems.push('<strong>Claude fallback used for ' + withFallback.length + ' slide(s):</strong> ' +
+        withFallback.map(s => 'S' + s.slide_number).join(', '))
+    if (withIssues.length > 0)
+      warnItems.push('<strong>Validation issues remain:</strong> ' +
+        withIssues.map(s => 'S' + s.slide_number + ' (' + s._validation_issues.length + ')').join(', '))
+    if (warnItems.length > 0) {
+      warnEl.innerHTML = warnItems.join('<br>')
       warnEl.classList.add('show')
     } else {
       warnEl.classList.remove('show')
     }
 
-    // Slide nav
+    // Slide nav — fallback slides get red right border, issue slides get amber bottom border
     document.getElementById('slide-nav').innerHTML = spec.map((s, i) => {
-      const hasIssues = s._validation_issues?.length > 0
-      return `<button class="slide-btn type-${s.slide_type} ${i === 0 ? 'active' : ''} ${hasIssues ? 'has-issues' : ''}"
-        onclick="showSlide(${i})" title="${s.title || ''}">
-        S${s.slide_number} · ${s.slide_archetype || s.slide_type}
-      </button>`
+      const hasIssues  = s._validation_issues?.length > 0
+      const isFallback = s._fallback === true
+      const extra = (hasIssues ? ' has-issues' : '') + (isFallback ? ' is-fallback' : '')
+      const label = isFallback ? 'S' + s.slide_number + ' ⚠ fallback' : 'S' + s.slide_number + ' · ' + (s.slide_archetype || s.slide_type)
+      return '<button class="slide-btn type-' + s.slide_type + (i === 0 ? ' active' : '') + extra + '" onclick="showSlide(' + i + ')" title="' + (s.title || '') + '">' + label + '</button>'
     }).join('')
 
     document.getElementById('raw-json').textContent = JSON.stringify(spec, null, 2)
@@ -381,6 +425,7 @@
       { lbl: 'Canvas',    val: (cvs.width_in || '—') + '" × ' + (cvs.height_in || '—') + '"' },
       { lbl: 'Zones',     val: (slide.zones || []).length },
     ].map(it => `<div class="si-item"><div class="si-lbl">${it.lbl}</div><div class="si-val">${it.val}</div></div>`).join('') +
+`<div class="si-item"><div class="si-lbl">Content</div><div class="si-val" style="font-size:11px;">` + contentMergeSummary(slide) + `</div></div>` +
     `<div class="si-item" style="flex:1;"><div class="si-lbl">Key Message</div><div class="si-val si-msg" style="font-size:11px;">${slide.key_message || '—'}</div></div>`
 
     // Canvas
@@ -415,41 +460,109 @@
       html += `<div class="insp-section">
         <div class="insp-title">Title Block</div>
         <div class="meta-row"><span class="meta-lbl">Text</span><span class="meta-val" style="font-size:11px;">${(tb.text || '').slice(0,60)}${tb.text?.length > 60 ? '…' : ''}</span></div>
-        <div class="meta-row"><span class="meta-lbl">Position</span><span class="meta-val" style="font-family:monospace;">${tb.x}"  ${tb.y}"  ${tb.w}"×${tb.h}"</span></div>
+        <div class="meta-row"><span class="meta-lbl">Position</span><span class="meta-val" style="font-family:monospace;">${d(tb.x)}"  ${d(tb.y)}"  ${d(tb.w)}"×${d(tb.h)}"</span></div>
         <div class="meta-row"><span class="meta-lbl">Font</span><span class="meta-val">${tb.font_family} ${tb.font_size}pt ${tb.font_weight}</span></div>
       </div>`
     }
 
     // Zones
     if ((slide.zones || []).length > 0) {
-      html += `<div class="insp-section"><div class="insp-title">Zones (${slide.zones.length})</div><div class="zone-list">`
-      slide.zones.forEach(z => {
+      html += '<div class="insp-section"><div class="insp-title">Zones (' + slide.zones.length + ')</div><div class="zone-list">'
+      slide.zones.forEach(function(z) {
         const f = z.frame || {}
-        html += `<div class="zone-card weight-${z.narrative_weight || 'supporting'}">
-          <div class="zone-header">
-            <span class="zone-id">${z.zone_id || '—'} · ${z.zone_role || '—'}</span>
-            <span class="zone-weight wt-${z.narrative_weight || 'supporting'}">${z.narrative_weight || '—'}</span>
-          </div>
-          <div class="zone-obj">${(z.message_objective || '').slice(0, 80)}</div>
-          <div class="zone-frame">${f.x}"  ${f.y}"  ${f.w}"×${f.h}"</div>
-          <div class="artifact-pills">`
-        ;(z.artifacts || []).forEach(a => {
-          html += `<span class="art-pill ap-${a.type || 'unknown'}">${a.type || '?'}</span>`
+        html += '<div class="zone-card weight-' + (z.narrative_weight || 'supporting') + '">' +
+          '<div class="zone-header">' +
+          '<span class="zone-id">' + (z.zone_id || '—') + ' · ' + (z.zone_role || '—').replace(/_/g,' ') + '</span>' +
+          '<span class="zone-weight wt-' + (z.narrative_weight || 'supporting') + '">' + (z.narrative_weight || '—') + '</span>' +
+          '</div>' +
+          '<div class="zone-obj">' + (z.message_objective || '').slice(0, 90) + '</div>' +
+          '<div class="zone-frame">' + d(f.x) + '"  ' + d(f.y) + '"  ' + d(f.w) + '"×' + d(f.h) + '"</div>'
+
+        // Artifacts — show type pill + content preview
+        ;(z.artifacts || []).forEach(function(a) {
+          const t = a.type || 'unknown'
+
+          // Content preview string per artifact type
+          let preview = ''
+          let hasContent = false
+
+          if (t === 'insight_text') {
+            const pts = a.points || []
+            hasContent = pts.length > 0
+            preview = hasContent
+              ? pts.length + ' point' + (pts.length > 1 ? 's' : '') + ' — "' + String(pts[0] || '').slice(0, 45) + (pts[0]?.length > 45 ? '…' : '') + '"'
+              : 'no points'
+          }
+          else if (t === 'chart') {
+            const cats = a.categories || []
+            const ser  = a.series     || []
+            hasContent = cats.length > 0
+            preview = hasContent
+              ? (a.chart_type || 'bar') + ' · ' + cats.length + ' cats · ' + ser.length + ' series'
+                + (a.chart_title ? ' — ' + a.chart_title.slice(0, 30) : '')
+              : 'no data'
+          }
+          else if (t === 'cards') {
+            const cards = a.cards || []
+            hasContent = cards.length > 0
+            preview = hasContent
+              ? cards.length + ' card' + (cards.length > 1 ? 's' : '') + ' — ' + cards.map(c => c.title || '').slice(0,2).join(', ')
+              : 'no cards'
+          }
+          else if (t === 'workflow') {
+            const nodes = a.nodes || []
+            const conns = a.connections || []
+            const hasLabels = nodes.some(n => n.label && n.label !== n.id)
+            hasContent = nodes.length > 0 && hasLabels
+            preview = nodes.length + ' nodes · ' + conns.length + ' connections'
+              + (hasLabels ? ' · ' + nodes.slice(0,2).map(n => n.label || n.id).join(' → ') : ' (no labels)')
+          }
+          else if (t === 'table') {
+            const hdrs = a.headers || []
+            const rows = a.rows    || []
+            hasContent = hdrs.length > 0
+            preview = hasContent
+              ? hdrs.length + ' cols · ' + rows.length + ' rows — [' + hdrs.slice(0,3).join(', ') + ']'
+              : 'no headers'
+          }
+
+          const contentDot = hasContent
+            ? '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#16a34a;margin-right:3px;vertical-align:middle;" title="Content merged"></span>'
+            : '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#ef4444;margin-right:3px;vertical-align:middle;" title="No content"></span>'
+
+          html += '<div style="margin-top:5px;">' +
+            '<div style="display:flex;align-items:center;gap:5px;margin-bottom:2px;">' +
+            contentDot +
+            '<span class="art-pill ap-' + t + '">' + t + '</span>' +
+            '</div>' +
+            '<div style="font-size:10px;color:#555;padding-left:11px;line-height:1.4;">' + preview + '</div>' +
+            '</div>'
         })
-        html += `</div></div>`
+
+        html += '</div>'  // close zone-card
       })
-      html += `</div></div>`
+      html += '</div></div>'
+    }
+
+    // Fallback badge
+    if (slide._fallback) {
+      html += '<div class="insp-section" style="background:#fef2f2;border-radius:6px;padding:8px 10px;">' +
+        '<div class="insp-title" style="color:#dc2626;">&#128313; Claude Fallback Used</div>' +
+        '<div style="font-size:11px;color:#7f1d1d;line-height:1.5;">The batch response was missing critical artifact specs for this slide. ' +
+        'Agent 5 ran a focused single-slide fallback Claude call to rebuild it. ' +
+        'If this persists, check the console for the raw Claude response.</div>' +
+        '</div>'
     }
 
     // Validation issues
     if (slide._validation_issues?.length > 0) {
-      html += `<div class="insp-section">
-        <div class="insp-title" style="color:#b45309;">⚠ Validation Issues</div>
-        <div class="issue-list">`
-      slide._validation_issues.forEach(issue => {
-        html += `<div class="issue-row">${issue}</div>`
+      html += '<div class="insp-section">' +
+        '<div class="insp-title" style="color:#b45309;">&#9888; Remaining Validation Issues (' + slide._validation_issues.length + ')</div>' +
+        '<div class="issue-list">'
+      slide._validation_issues.forEach(function(issue) {
+        html += '<div class="issue-row">' + issue + '</div>'
       })
-      html += `</div></div>`
+      html += '</div></div>'
     }
 
     ins.innerHTML = html
@@ -586,156 +699,400 @@
   function drawArtifact(ctx, art, SCALE, zoneColor, bt, idx) {
     const t = art.type || ''
 
-    // insight_text — colored block
+    // ── insight_text ────────────────────────────────────────────────────────
     if (t === 'insight_text') {
       const ax = art.x * SCALE, ay = art.y * SCALE
       const aw = art.w * SCALE, ah = art.h * SCALE
-      const fill = (art.style || {}).fill_color
-      if (fill) { ctx.fillStyle = fill; ctx.fillRect(ax, ay, aw, ah) }
-      // Heading
-      const hs   = art.heading_style || {}
+      const st = art.style || {}
+      const hs = art.heading_style || {}
+      const bs = art.body_style    || {}
+
+      // Background fill + border
+      if (st.fill_color) {
+        ctx.fillStyle = st.fill_color
+        if (st.corner_radius > 0) { roundRect(ctx, ax, ay, aw, ah, st.corner_radius * SCALE/72); ctx.fill() }
+        else { ctx.fillRect(ax, ay, aw, ah) }
+      }
+      if (st.border_color && st.border_width > 0) {
+        ctx.strokeStyle = st.border_color; ctx.lineWidth = st.border_width
+        if (st.corner_radius > 0) { roundRect(ctx, ax, ay, aw, ah, st.corner_radius * SCALE/72); ctx.stroke() }
+        else ctx.strokeRect(ax, ay, aw, ah)
+      }
+
+      // Left accent bar
+      ctx.fillStyle = hs.color || zoneColor
+      ctx.fillRect(ax, ay, 3, ah)
+
+      const pad  = 10
       const hfs  = Math.max(8, (hs.font_size || 11) * SCALE / 72)
+      const bfs  = Math.max(7, (bs.font_size  || 10) * SCALE / 72)
+      const lh   = bfs * (bs.line_spacing || 1.5)
+
+      // Heading — use actual heading field
       ctx.fillStyle = hs.color || zoneColor
       ctx.font      = 'bold ' + hfs + 'px ' + (hs.font_family || 'Arial')
       ctx.textAlign = 'left'
-      ctx.fillText('Key Insight', ax + 6, ay + hfs + 4)
-      // Body lines preview
-      ctx.fillStyle = (art.body_style || {}).color || '#333'
-      ctx.font      = '9px Arial'
-      ctx.fillText('▸ Point 1 from Agent 4 data', ax + 6, ay + hfs + 18)
-      ctx.fillText('▸ Point 2 from Agent 4 data', ax + 6, ay + hfs + 30)
+      ctx.fillText(art.heading || 'Key Insight', ax + pad + 4, ay + pad + hfs)
+
+      // Separator line under heading
+      ctx.strokeStyle = (hs.color || zoneColor) + '44'; ctx.lineWidth = 0.5
+      ctx.beginPath(); ctx.moveTo(ax + pad + 4, ay + pad + hfs + 4)
+      ctx.lineTo(ax + aw - pad, ay + pad + hfs + 4); ctx.stroke()
+
+      // Body points — use actual points[] from artifact
+      const points = art.points || []
+      ctx.fillStyle = bs.color || '#111111'
+      ctx.font      = bfs + 'px ' + (bs.font_family || 'Arial')
+      let lineY = ay + pad + hfs + 6 + lh
+      points.slice(0, 5).forEach(pt => {
+        if (lineY + lh > ay + ah - 4) return
+        // bullet
+        ctx.fillStyle = hs.color || zoneColor
+        ctx.fillRect(ax + pad + 4, lineY - bfs * 0.35, 4, 4)
+        // text — truncate to fit width
+        ctx.fillStyle = bs.color || '#111111'
+        const maxW = aw - pad * 2 - 14
+        let txt = String(pt || '')
+        while (txt.length > 4 && ctx.measureText(txt).width > maxW) txt = txt.slice(0, -4) + '...'
+        ctx.fillText(txt, ax + pad + 12, lineY)
+        lineY += lh
+      })
     }
 
-    // chart — styled placeholder
+    // ── chart ───────────────────────────────────────────────────────────────
     else if (t === 'chart') {
       const ax = art.x * SCALE, ay = art.y * SCALE
       const aw = art.w * SCALE, ah = art.h * SCALE
-      const bg = (art.chart_style || {}).background_color || '#F8FAFF'
-      ctx.fillStyle = bg; ctx.fillRect(ax, ay, aw, ah)
-      ctx.strokeStyle = '#C7D2FE'; ctx.lineWidth = 1; ctx.strokeRect(ax, ay, aw, ah)
+      const cs = art.chart_style  || {}
+      const ss = art.series_style || []
+      const chartType = art.chart_type || (art.series && art.series[0]?.types ? 'waterfall' : 'bar')
 
-      // Chart type label
-      const ss = (art.series_style || [{}])[0] || {}
-      ctx.fillStyle = ss.fill_color || zoneColor
-      ctx.font = 'bold 11px Arial'; ctx.textAlign = 'center'
-      ctx.fillText('CHART', ax + aw/2, ay + 18)
+      // Background
+      ctx.fillStyle = cs.background_color || '#F8FAFF'
+      ctx.fillRect(ax, ay, aw, ah)
+      if (cs.show_border) {
+        ctx.strokeStyle = cs.border_color || '#C7D2FE'; ctx.lineWidth = 1; ctx.strokeRect(ax, ay, aw, ah)
+      }
 
-      // Mini bar preview using series_style colors
-      const barCount = 5
-      const bw       = Math.min(30, (aw - 30) / barCount - 4)
-      const barArea  = ah - 40
-      ;(art.series_style || []).slice(0, 1).forEach(() => {
-        for (let i = 0; i < barCount; i++) {
-          const bh = barArea * (0.4 + Math.random() * 0.5)
-          const bx = ax + 15 + i * (bw + 4)
-          const by = ay + ah - 20 - bh
-          ctx.fillStyle = ss.fill_color || zoneColor
-          ctx.fillRect(bx, by, bw, bh)
+      const pad = 12
+      const titleH = 18
+
+      // Chart type badge
+      const typeColor = ss[0]?.fill_color || zoneColor
+      ctx.fillStyle = typeColor + '22'; ctx.fillRect(ax, ay, aw, titleH + 4)
+      ctx.fillStyle = typeColor
+      ctx.font = 'bold 9px ' + (cs.title_font_family || 'Arial')
+      ctx.textAlign = 'left'
+      ctx.fillText((chartType).toUpperCase() + ' CHART', ax + pad, ay + titleH - 2)
+
+      // Chart title from agent data
+      const chartTitle = art.chart_title || ''
+      if (chartTitle) {
+        ctx.fillStyle = cs.title_color || '#333'
+        ctx.font = '8px ' + (cs.title_font_family || 'Arial')
+        ctx.textAlign = 'left'
+        const ttxt = chartTitle.length > 50 ? chartTitle.slice(0, 50) + '...' : chartTitle
+        ctx.fillText(ttxt, ax + pad, ay + titleH + 14)
+      }
+
+      // Draw actual data if available (uses categories + series from Agent 4 manifest)
+      const categories = art.categories || []
+      const series     = art.series     || (ss.length ? [{ values: [] }] : [])
+      const dataTop    = ay + titleH + (chartTitle ? 26 : 8)
+      const dataH      = ah - (dataTop - ay) - pad
+      const dataW      = aw - pad * 2
+
+      if (categories.length > 0 && series.length > 0 && chartType !== 'pie') {
+        const allVals  = series.flatMap(s => (s.values || []).map(Number).filter(n => !isNaN(n)))
+        const maxVal   = Math.max(...allVals, 1)
+        const minVal   = Math.min(...allVals, 0)
+        const range    = maxVal - minVal || 1
+        const zeroY    = dataTop + dataH * (maxVal / range)
+        const nCats    = categories.length
+        const nSeries  = series.length
+        const groupW   = dataW / nCats
+        const barW     = Math.min(groupW * 0.7 / nSeries, 24)
+
+        // Gridlines
+        if (cs.show_gridlines !== false) {
+          ctx.strokeStyle = cs.gridline_color || '#E5E7EB'; ctx.lineWidth = 0.5
+          for (let g = 0; g <= 4; g++) {
+            const gy = dataTop + (dataH / 4) * g
+            ctx.beginPath(); ctx.moveTo(ax + pad, gy); ctx.lineTo(ax + aw - pad, gy); ctx.stroke()
+          }
         }
-      })
-      ctx.fillStyle = '#666'; ctx.font = '8px Arial'; ctx.textAlign = 'center'
-      ctx.fillText('categories ↑ series colors from brand', ax + aw/2, ay + ah - 5)
+
+        // Bars
+        series.forEach((ser, si) => {
+          const color = (ss[si] || {}).fill_color || (bt.chart_palette || [])[si] || zoneColor
+          ;(ser.values || []).slice(0, nCats).forEach((val, ci) => {
+            const v  = Number(val) || 0
+            const bx = ax + pad + ci * groupW + si * barW + groupW * 0.15
+            const bh = Math.abs(v / range * dataH)
+            const by = v >= 0 ? zeroY - bh : zeroY
+            ctx.fillStyle = color
+            ctx.fillRect(bx, by, barW, bh)
+          })
+        })
+
+        // Zero line
+        ctx.strokeStyle = cs.axis_color || '#888'; ctx.lineWidth = 1
+        ctx.beginPath(); ctx.moveTo(ax + pad, zeroY); ctx.lineTo(ax + aw - pad, zeroY); ctx.stroke()
+
+        // Category labels
+        const axFs = Math.max(6, (cs.axis_font_size || 8) * SCALE / 72)
+        ctx.fillStyle = cs.axis_color || '#888'
+        ctx.font = axFs + 'px ' + (cs.axis_font_family || 'Arial')
+        ctx.textAlign = 'center'
+        categories.slice(0, 8).forEach((cat, ci) => {
+          const lx = ax + pad + ci * groupW + groupW / 2
+          const label = String(cat).slice(0, 8)
+          ctx.fillText(label, lx, dataTop + dataH + 10)
+        })
+
+      } else if (chartType === 'pie' && categories.length > 0) {
+        // Simple pie
+        const allVals  = (series[0]?.values || []).map(Number)
+        const total    = allVals.reduce((a, b) => a + b, 0) || 1
+        const cx2 = ax + aw / 2, cy2 = dataTop + dataH / 2
+        const radius = Math.min(aw, dataH) * 0.38
+        let angle = -Math.PI / 2
+        allVals.forEach((val, i) => {
+          const slice = (val / total) * Math.PI * 2
+          ctx.beginPath(); ctx.moveTo(cx2, cy2)
+          ctx.arc(cx2, cy2, radius, angle, angle + slice)
+          ctx.closePath()
+          ctx.fillStyle = (bt.chart_palette || [])[i] || zoneColor
+          ctx.fill()
+          ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke()
+          angle += slice
+        })
+      } else {
+        // No data — placeholder label
+        ctx.fillStyle = '#AAA'; ctx.font = '9px Arial'; ctx.textAlign = 'center'
+        ctx.fillText('Chart data from manifest', ax + aw/2, dataTop + dataH/2)
+      }
     }
 
-    // cards
+    // ── cards ───────────────────────────────────────────────────────────────
     else if (t === 'cards') {
-      const ctr = art.container || {}
-      const cx  = (ctr.x || art.x || 0) * SCALE
-      const cy  = (ctr.y || art.y || 0) * SCALE
-      const cw  = (ctr.w || art.w || 2) * SCALE
-      const ch  = (ctr.h || art.h || 1) * SCALE
-      const cs  = art.card_style || {}
+      const cs     = art.card_style  || {}
+      const ts     = art.title_style || {}
+      const sub_s  = art.subtitle_style || {}
+      const bs     = art.body_style  || {}
       const frames = art.card_frames || []
+      // Card data lives in the manifest — Agent 5 only produces layout, not content.
+      // We label cards by index so designer can see the count and positions.
+      const cardData = art.cards || []  // may exist if Agent 5 passed through manifest data
 
       frames.forEach((cf, fi) => {
         const fx = cf.x * SCALE, fy = cf.y * SCALE
         const fw = cf.w * SCALE, fh = cf.h * SCALE
-        ctx.fillStyle   = cs.fill_color || '#F8FAFF'
-        ctx.strokeStyle = cs.border_color || '#C7D2FE'
-        ctx.lineWidth   = cs.border_width || 1
-        roundRect(ctx, fx, fy, fw, fh, (cs.corner_radius || 4) * (SCALE/72))
-        ctx.fill(); ctx.stroke()
+        const cr = (cs.corner_radius || 3) * (SCALE / 72)
 
-        ctx.fillStyle = (art.title_style || {}).color || zoneColor
-        ctx.font      = 'bold 9px Arial'; ctx.textAlign = 'center'
-        ctx.fillText('Card ' + (fi + 1), fx + fw/2, fy + 16)
+        // Card background
+        ctx.fillStyle   = cs.fill_color  || '#F8FAFF'
+        ctx.strokeStyle = cs.border_color || zoneColor + '44'
+        ctx.lineWidth   = cs.border_width || 0.5
+        roundRect(ctx, fx, fy, fw, fh, cr); ctx.fill(); ctx.stroke()
+
+        // Top accent strip using primary color
+        ctx.fillStyle = ts.color || zoneColor
+        roundRect(ctx, fx, fy, fw, 4, cr); ctx.fill()
+
+        // Card title — use actual data if available, else numbered label
+        const card = cardData[fi] || {}
+        const cardTitle = card.title || ('Card ' + (fi + 1))
+        const tfs = Math.max(7, (ts.font_size || 10) * SCALE / 72)
+        ctx.fillStyle = ts.color || zoneColor
+        ctx.font = 'bold ' + tfs + 'px ' + (ts.font_family || 'Arial')
+        ctx.textAlign = 'left'
+        const truncTitle = cardTitle.length > 22 ? cardTitle.slice(0, 22) + '...' : cardTitle
+        ctx.fillText(truncTitle, fx + 8, fy + 8 + tfs)
+
+        // Subtitle / metric
+        if (card.subtitle) {
+          const sfs = Math.max(6, (sub_s.font_size || 9) * SCALE / 72)
+          ctx.fillStyle = sub_s.color || '#666'
+          ctx.font = sfs + 'px ' + (sub_s.font_family || 'Arial')
+          ctx.fillText(card.subtitle.slice(0, 20), fx + 8, fy + 10 + tfs + sfs)
+        }
+
+        // Body preview
+        if (card.body) {
+          const bfs2 = Math.max(6, (bs.font_size || 9) * SCALE / 72)
+          ctx.fillStyle = bs.color || '#333'
+          ctx.font = bfs2 + 'px ' + (bs.font_family || 'Arial')
+          const bodyY = card.subtitle ? fy + 12 + tfs * 2 + 4 : fy + 10 + tfs + 8
+          const trunc = card.body.length > 40 ? card.body.slice(0, 40) + '...' : card.body
+          ctx.fillText(trunc, fx + 8, bodyY)
+        }
       })
 
+      // If no card_frames yet (validation issue), draw placeholder
       if (!frames.length) {
-        // Fallback if card_frames missing
-        ctx.fillStyle = '#F8FAFF'; ctx.fillRect(cx, cy, cw, ch)
-        ctx.strokeStyle = '#C7D2FE'; ctx.lineWidth = 1; ctx.strokeRect(cx, cy, cw, ch)
-        ctx.fillStyle = '#888'; ctx.font = '10px Arial'; ctx.textAlign = 'center'
-        ctx.fillText('CARDS', cx + cw/2, cy + ch/2)
+        const ctr = art.container || {}
+        const cx2 = (ctr.x || 0) * SCALE, cy2 = (ctr.y || 0) * SCALE
+        const cw2 = (ctr.w || 4) * SCALE, ch2 = (ctr.h || 2) * SCALE
+        ctx.fillStyle = '#F8FAFF'; ctx.fillRect(cx2, cy2, cw2, ch2)
+        ctx.strokeStyle = '#C7D2FE'; ctx.lineWidth = 1; ctx.strokeRect(cx2, cy2, cw2, ch2)
+        ctx.fillStyle = '#AAA'; ctx.font = '9px Arial'; ctx.textAlign = 'center'
+        ctx.fillText('CARDS — no card_frames', cx2 + cw2/2, cy2 + ch2/2)
       }
     }
 
-    // workflow
+    // ── workflow ────────────────────────────────────────────────────────────
     else if (t === 'workflow') {
       const ctr = art.container || {}
-      const wx  = (ctr.x || 0) * SCALE
-      const wy  = (ctr.y || 0) * SCALE
-      const ww  = (ctr.w || 4) * SCALE
-      const wh  = (ctr.h || 2) * SCALE
+      const wx  = (ctr.x || 0) * SCALE, wy = (ctr.y || 0) * SCALE
+      const ww  = (ctr.w || 4) * SCALE, wh = (ctr.h || 2) * SCALE
       const ws  = art.workflow_style || {}
 
-      ctx.fillStyle = '#F5F3FF'; ctx.fillRect(wx, wy, ww, wh)
+      // Background
+      ctx.fillStyle = '#F7F5FF'; ctx.fillRect(wx, wy, ww, wh)
 
-      const nodes = art.nodes || []
-      nodes.forEach(node => {
-        const nx = node.x * SCALE, ny = node.y * SCALE
-        const nw = node.w * SCALE, nh = node.h * SCALE
-        ctx.fillStyle   = ws.node_fill_color || zoneColor
-        ctx.strokeStyle = ws.node_border_color || '#FFFFFF'
-        ctx.lineWidth   = ws.node_border_width || 1
-        roundRect(ctx, nx, ny, nw, nh, (ws.node_corner_radius || 4) * (SCALE/72))
-        ctx.fill(); ctx.stroke()
-
-        ctx.fillStyle = ws.node_title_color || '#FFFFFF'
-        ctx.font      = '8px Arial'; ctx.textAlign = 'center'
-        ctx.fillText(node.id || '', nx + nw/2, ny + nh/2 + 3)
-      })
-
-      // Connections
-      ctx.strokeStyle = ws.connector_color || '#888'
-      ctx.lineWidth   = ws.connector_width || 1
+      // Draw connections first (behind nodes)
+      ctx.strokeStyle = ws.connector_color || zoneColor + '88'
+      ctx.lineWidth   = ws.connector_width || 1.5
       ;(art.connections || []).forEach(conn => {
         const path = conn.path || []
         if (path.length >= 2) {
           ctx.beginPath()
           ctx.moveTo(path[0].x * SCALE, path[0].y * SCALE)
-          for (let i = 1; i < path.length; i++) ctx.lineTo(path[i].x * SCALE, path[i].y * SCALE)
+          for (let pi = 1; pi < path.length; pi++) ctx.lineTo(path[pi].x * SCALE, path[pi].y * SCALE)
           ctx.stroke()
+          // Arrowhead at last point
+          const last = path[path.length - 1]
+          const prev = path[path.length - 2]
+          const angle = Math.atan2(last.y - prev.y, last.x - prev.x)
+          const aSize = 5
+          const lx = last.x * SCALE, ly = last.y * SCALE
+          ctx.beginPath()
+          ctx.moveTo(lx, ly)
+          ctx.lineTo(lx - aSize * Math.cos(angle - 0.4), ly - aSize * Math.sin(angle - 0.4))
+          ctx.lineTo(lx - aSize * Math.cos(angle + 0.4), ly - aSize * Math.sin(angle + 0.4))
+          ctx.closePath()
+          ctx.fillStyle = ws.connector_color || zoneColor
+          ctx.fill()
+        }
+      })
+
+      // Draw nodes
+      ;(art.nodes || []).forEach(node => {
+        const nx = node.x * SCALE, ny = node.y * SCALE
+        const nw = node.w * SCALE, nh = node.h * SCALE
+        const cr = (ws.node_corner_radius || 4) * (SCALE / 72)
+
+        ctx.fillStyle   = ws.node_fill_color   || zoneColor
+        ctx.strokeStyle = ws.node_border_color || '#FFFFFF'
+        ctx.lineWidth   = ws.node_border_width || 1
+        roundRect(ctx, nx, ny, nw, nh, cr); ctx.fill(); ctx.stroke()
+
+        // Node label — use actual label field
+        const label = node.label || node.id || ''
+        const nfs   = Math.max(6, (ws.node_title_font_size || 9) * SCALE / 72)
+        ctx.fillStyle = ws.node_title_color || '#FFFFFF'
+        ctx.font      = 'bold ' + nfs + 'px ' + (ws.node_title_font_family || 'Arial')
+        ctx.textAlign = 'center'
+        // Word-wrap inside node
+        const words = label.split(' ')
+        let line = '', lineY = ny + nh / 2 - (words.length > 2 ? nfs : 0)
+        words.forEach(w => {
+          const test = line + w + ' '
+          if (ctx.measureText(test).width > nw - 8 && line) {
+            ctx.fillText(line.trim(), nx + nw/2, lineY); line = w + ' '; lineY += nfs * 1.3
+          } else line = test
+        })
+        ctx.fillText(line.trim(), nx + nw/2, lineY)
+
+        // Node value (secondary metric)
+        if (node.value) {
+          const vfs = Math.max(5, (ws.node_value_font_size || 8) * SCALE / 72)
+          ctx.fillStyle = ws.node_value_color || '#CCDDFF'
+          ctx.font = vfs + 'px ' + (ws.node_value_font_family || 'Arial')
+          ctx.fillText(String(node.value), nx + nw/2, lineY + vfs + 2)
         }
       })
     }
 
-    // table
+    // ── table ───────────────────────────────────────────────────────────────
     else if (t === 'table') {
       const tx = art.x * SCALE, ty = art.y * SCALE
       const tw = art.w * SCALE, th = art.h * SCALE
       const ts = art.table_style || {}
 
+      const headerH = Math.min(22, th * 0.18)
+      const bodyH   = th - headerH
+      const rows    = art.rows    || []
+      const headers = art.headers || []
+      const cols    = art.column_widths || []
+      const nRows   = rows.length || 4
+      const rowH    = bodyH / Math.max(nRows, 1)
+
+      // Header
       ctx.fillStyle = ts.header_fill_color || zoneColor
-      ctx.fillRect(tx, ty, tw, Math.min(24, th * 0.2))
-      ctx.fillStyle = ts.body_fill_color || '#FFFFFF'
-      ctx.fillRect(tx, ty + Math.min(24, th*0.2), tw, th - Math.min(24, th*0.2))
-      ctx.strokeStyle = ts.grid_color || '#E5E7EB'; ctx.lineWidth = 1
-      ctx.strokeRect(tx, ty, tw, th)
+      ctx.fillRect(tx, ty, tw, headerH)
 
-      ctx.fillStyle = ts.header_text_color || '#FFFFFF'
-      ctx.font = 'bold 9px Arial'; ctx.textAlign = 'center'
-      ctx.fillText('TABLE', tx + tw/2, ty + 14)
+      // Header text
+      const hfs = Math.max(7, (ts.header_font_size || 9) * SCALE / 72)
+      ctx.fillStyle   = ts.header_text_color || '#FFFFFF'
+      ctx.font        = 'bold ' + hfs + 'px ' + (ts.header_font_family || 'Arial')
+      ctx.textAlign   = 'left'
+      let cumColX = tx
+      const colWidths = cols.length ? cols.map(c => c * SCALE) : headers.map(() => tw / Math.max(headers.length, 1))
+      headers.forEach((h, hi) => {
+        const cw2 = colWidths[hi] || tw / headers.length
+        const pad = ts.cell_padding ? ts.cell_padding * SCALE / 72 : 5
+        ctx.fillText(String(h).slice(0, 14), cumColX + pad, ty + headerH - 5)
+        cumColX += cw2
+      })
 
-      // Column lines
-      const cols   = art.column_widths || []
-      let   cumX   = tx
-      cols.forEach(colW => {
-        cumX += colW * SCALE
-        if (cumX < tx + tw) {
-          ctx.beginPath(); ctx.moveTo(cumX, ty); ctx.lineTo(cumX, ty + th); ctx.stroke()
+      // Body rows
+      const bfs = Math.max(6, (ts.body_font_size || 9) * SCALE / 72)
+      rows.slice(0, 8).forEach((row, ri) => {
+        const ry = ty + headerH + ri * rowH
+        ctx.fillStyle = ri % 2 === 1 && ts.body_alt_fill_color
+          ? ts.body_alt_fill_color
+          : ts.body_fill_color || '#FFFFFF'
+        ctx.fillRect(tx, ry, tw, rowH)
+
+        // Highlight rows
+        if ((art.highlight_rows || []).includes(ri)) {
+          ctx.fillStyle = ts.highlight_fill_color || zoneColor + '22'
+          ctx.fillRect(tx, ry, tw, rowH)
+        }
+
+        ctx.fillStyle = ts.body_text_color || '#111'
+        ctx.font = bfs + 'px ' + (ts.body_font_family || 'Arial')
+        ctx.textAlign = 'left'
+        let cx2 = tx
+        ;(Array.isArray(row) ? row : []).slice(0, 6).forEach((cell, ci) => {
+          const cw2 = colWidths[ci] || tw / Math.max(headers.length, 1)
+          const pad = ts.cell_padding ? ts.cell_padding * SCALE / 72 : 5
+          ctx.fillText(String(cell || '').slice(0, 12), cx2 + pad, ry + rowH * 0.65)
+          cx2 += cw2
+        })
+      })
+
+      // Grid lines
+      ctx.strokeStyle = ts.grid_color || '#E5E7EB'
+      ctx.lineWidth   = ts.grid_width || 0.5
+      // Horizontal
+      for (let ri = 0; ri <= Math.min(rows.length, 8); ri++) {
+        const gy = ty + headerH + ri * rowH
+        ctx.beginPath(); ctx.moveTo(tx, gy); ctx.lineTo(tx + tw, gy); ctx.stroke()
+      }
+      // Vertical
+      let cvx = tx
+      colWidths.forEach(cw2 => {
+        cvx += cw2
+        if (cvx < tx + tw) {
+          ctx.beginPath(); ctx.moveTo(cvx, ty); ctx.lineTo(cvx, ty + th); ctx.stroke()
         }
       })
+      // Outer border
+      ctx.strokeStyle = ts.grid_color || '#CCC'; ctx.lineWidth = 1
+      ctx.strokeRect(tx, ty, tw, th)
     }
   }
 
