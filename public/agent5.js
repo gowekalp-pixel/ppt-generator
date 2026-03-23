@@ -17,7 +17,7 @@
 // SYSTEM PROMPT
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const AGENT5_SYSTEM = `You are a senior presentation designer and layout system architect.
+var AGENT5_SYSTEM = `You are a senior presentation designer and layout system architect.
 
 You will receive:
 1. A slide content manifest created by Agent 4
@@ -470,7 +470,7 @@ No explanation. No markdown. No text outside JSON.`
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // Round to 2 decimal places — kills JS float drift (10.219999... -> 10.22)
-const r2 = (n) => Math.round(n * 100) / 100
+function r2(n) { return Math.round(n * 100) / 100 }
 
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -601,7 +601,7 @@ function validateDesignedSlide(slide) {
 // Uses a tight focused prompt: no batch overhead, brand tokens only, one slide.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const AGENT5_FALLBACK_SYSTEM = `You are a senior presentation designer.
+var AGENT5_FALLBACK_SYSTEM = `You are a senior presentation designer.
 A slide failed to render correctly and needs to be rebuilt from scratch.
 
 Build the best possible board-ready corporate layout for this single slide.

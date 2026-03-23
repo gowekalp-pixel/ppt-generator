@@ -144,13 +144,16 @@ async function runPipeline() {
     setStep(4, 'done')
     setProgress(55)
 
-    // ── AGENT 5 — Design Executor ─────────────────────────────────────────────
-    // Pure JS — reads slideManifest + brandRulebook, outputs positioned elements[]
-    // No Claude API call
+    // ── AGENT 5 — Layout & Design Engine ────────────────────────────────────────
+    // Calls Claude in batches — produces canvas/zones/artifacts schema per slide
+    // Content from Agent 4 manifest is merged in automatically
     setStep(5, 'active')
     state.designedSpec = await runAgent5(state)
-    const totalEl = state.designedSpec.reduce((s, sl) => s + sl.elements.length, 0)
-    console.log('Agent 5 — Designed Spec:', state.designedSpec.length, 'slides,', totalEl, 'elements')
+    const totalZones = state.designedSpec.reduce((s, sl) => s + (sl.zones || []).length, 0)
+    const totalArts  = state.designedSpec.reduce((s, sl) =>
+      s + (sl.zones || []).reduce((m, z) => m + (z.artifacts || []).length, 0), 0)
+    console.log('Agent 5 — Designed Spec:', state.designedSpec.length, 'slides |',
+      totalZones, 'zones |', totalArts, 'artifacts')
     setStep(5, 'done')
     setProgress(72)
 

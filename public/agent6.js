@@ -38,7 +38,9 @@ async function generatePPTX() {
     }
 
     console.log('Agent 6 — payload slides:', payload.finalSpec.length)
-    console.log('Agent 6 — brand primary color:', payload.brandRulebook.primary_colors)
+    console.log('Agent 6 — brand primary color:', (payload.brandRulebook.primary_colors || [])[0] || 'none')
+    console.log('Agent 6 — schema check: first slide has',
+      payload.finalSpec[0] ? (payload.finalSpec[0].zones ? 'zones[]' : 'elements[]') : 'nothing')
 
     const res = await fetch('/api/generate-pptx', {
       method:  'POST',
