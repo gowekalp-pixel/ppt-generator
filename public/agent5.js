@@ -481,6 +481,7 @@ function r2(n) { return Math.round(n * 100) / 100 }
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function extractBrandTokens(brand) {
+  const primaryLogo = brand.primary_logo || ((brand.logos || [])[0] || null)
   return {
     slide_width_inches:  r2(brand.slide_width_inches  || 13.33),
     slide_height_inches: r2(brand.slide_height_inches || 7.50),
@@ -496,8 +497,19 @@ function extractBrandTokens(brand) {
     caption_font:        brand.caption_font        || {},
     visual_style:        brand.visual_style        || 'corporate',
     color_scheme_name:   brand.color_scheme_name   || '',
+    logo_asset:          primaryLogo ? {
+      name:        primaryLogo.name || 'logo',
+      mime_type:   primaryLogo.mime_type || 'image/png',
+      width_px:    primaryLogo.width_px || 0,
+      height_px:   primaryLogo.height_px || 0,
+      base64:      primaryLogo.base64 || ''
+    } : null,
+    logo_local_ref:      brand.primary_logo_local_ref || '',
     logo_position:       brand.logo_position       || 'top-right',
-    spacing_notes:       brand.spacing_notes       || ''
+    spacing_notes:       brand.spacing_notes       || '',
+    layout_blueprints:   (brand.layout_blueprints || []).slice(0, 12),
+    master_blueprints:   (brand.master_blueprints || brand.slide_masters || []).slice(0, 6),
+    slide_masters:       (brand.slide_masters || []).slice(0, 4)
     // slide_layouts intentionally excluded
   }
 }
@@ -511,7 +523,8 @@ function buildBrandBrief(brand, brief) {
     '\nGoverning thought: ' + (b.governing_thought || 'Key insights from the document') +
     '\nNarrative flow:    ' + (b.narrative_flow    || 'Situation to Recommendation') +
     '\nTone:              ' + (b.tone              || 'professional') +
-    '\nData heavy:        ' + (b.data_heavy        ? 'yes' : 'no')
+    '\nData heavy:        ' + (b.data_heavy        ? 'yes' : 'no') +
+    '\nLogo policy:       Use the provided logo asset when available and keep it inside safe margins'
 }
 
 
@@ -590,7 +603,205 @@ function validateDesignedSlide(slide) {
     })
   })
 
+  if (slide.global_elements?.logo?.show && !slide.global_elements.logo.image_base64) {
+    issues.push('logo missing image_base64')
+  }
+
   return issues
+}
+
+function clamp(n, min, max) {
+  return Math.min(Math.max(n, min), max)
+}
+
+function rectWithin(rect, bounds) {
+  const x = clamp(rect.x || 0, bounds.x, bounds.x + Math.max(0, bounds.w - 0.05))
+  const y = clamp(rect.y || 0, bounds.y, bounds.y + Math.max(0, bounds.h - 0.05))
+  const maxW = Math.max(0.05, bounds.x + bounds.w - x)
+  const maxH = Math.max(0.05, bounds.y + bounds.h - y)
+  return {
+    ...rect,
+    x: r2(x),
+    y: r2(y),
+    w: r2(clamp(rect.w || maxW, 0.05, maxW)),
+    h: r2(clamp(rect.h || maxH, 0.05, maxH))
+  }
+}
+
+function getZoneInnerBounds(zone) {
+  const frame = zone.frame || {}
+  const p = frame.padding || {}
+  return {
+    x: r2((frame.x || 0) + (p.left || 0)),
+    y: r2((frame.y || 0) + (p.top || 0)),
+    w: r2(Math.max(0.1, (frame.w || 0) - (p.left || 0) - (p.right || 0))),
+    h: r2(Math.max(0.1, (frame.h || 0) - (p.top || 0) - (p.bottom || 0)))
+  }
+}
+
+function normalizeTableSizing(artifact) {
+  const cols = artifact.column_widths || []
+  const rows = artifact.row_heights || []
+  const totalW = cols.reduce((s, n) => s + (+n || 0), 0)
+  const totalH = rows.reduce((s, n) => s + (+n || 0), 0)
+  const colCount = Math.max(1, (artifact.headers || []).length || cols.length)
+  const rowCount = Math.max(1, ((artifact.rows || []).length + 1) || rows.length)
+
+  artifact.column_widths = totalW > 0
+    ? cols.map(v => r2((+v || 0) * artifact.w / totalW))
+    : Array.from({ length: colCount }, () => r2(artifact.w / colCount))
+
+  artifact.row_heights = totalH > 0
+    ? rows.map(v => r2((+v || 0) * artifact.h / totalH))
+    : Array.from({ length: rowCount }, () => r2(artifact.h / rowCount))
+
+  const ts = artifact.table_style || {}
+  const density = rowCount * colCount
+  const bodySize = density > 30 ? 8.5 : density > 20 ? 9 : (ts.body_font_size || 10)
+  artifact.table_style = {
+    ...ts,
+    body_font_size: Math.max(8, bodySize),
+    header_font_size: Math.max(9, Math.min(ts.header_font_size || 11, bodySize + 1))
+  }
+}
+
+function enforceArtifactBounds(zone) {
+  const inner = getZoneInnerBounds(zone)
+  zone.artifacts = (zone.artifacts || []).map(artifact => {
+    const a = { ...artifact }
+
+    if (['insight_text', 'chart', 'table'].includes(a.type)) {
+      Object.assign(a, rectWithin(a, inner))
+    }
+
+    if (a.type === 'insight_text') {
+      const pointCount = (a.points || []).length
+      const avgChars = pointCount ? Math.round((a.points || []).join(' ').length / pointCount) : 0
+      const baseSize = (a.body_style || {}).font_size || 10
+      const fitted = pointCount > 6 || avgChars > 120 ? Math.max(8, baseSize - 2)
+        : pointCount > 4 || avgChars > 80 ? Math.max(8.5, baseSize - 1)
+        : baseSize
+      a.body_style = { ...(a.body_style || {}), font_size: fitted }
+    }
+
+    if (a.type === 'cards') {
+      const container = rectWithin(a.container || inner, inner)
+      a.container = container
+      a.card_frames = (a.card_frames || []).map(frame => rectWithin(frame, container))
+      const longestBody = Math.max(0, ...(a.cards || []).map(c => String(c.body || '').length))
+      const bodyBase = (a.body_style || {}).font_size || 10
+      a.body_style = { ...(a.body_style || {}), font_size: longestBody > 180 ? Math.max(8, bodyBase - 1.5) : bodyBase }
+    }
+
+    if (a.type === 'workflow') {
+      const container = rectWithin(a.container || inner, inner)
+      a.container = container
+      a.nodes = (a.nodes || []).map(node => rectWithin(node, container))
+      a.connections = (a.connections || []).map(conn => ({
+        ...conn,
+        path: (conn.path || []).map(pt => ({
+          x: r2(clamp(pt.x || 0, container.x, container.x + container.w)),
+          y: r2(clamp(pt.y || 0, container.y, container.y + container.h))
+        }))
+      }))
+      const nodeCount = (a.nodes || []).length
+      if (nodeCount >= 5) {
+        a.workflow_style = {
+          ...(a.workflow_style || {}),
+          node_title_font_size: Math.max(8, ((a.workflow_style || {}).node_title_font_size || 11) - 1),
+          node_value_font_size: Math.max(7, ((a.workflow_style || {}).node_value_font_size || 10) - 1)
+        }
+      }
+    }
+
+    if (a.type === 'table') {
+      normalizeTableSizing(a)
+    }
+
+    return a
+  })
+  return zone
+}
+
+function buildLogoElement(slide, brand) {
+  const logo = brand.primary_logo || ((brand.logos || [])[0] || null)
+  if (!logo || !logo.base64) return null
+
+  const canvas = slide.canvas || {}
+  const margin = canvas.margin || {}
+  const slideW = canvas.width_in || brand.slide_width_inches || 13.33
+  const slideH = canvas.height_in || brand.slide_height_inches || 7.5
+  const maxW = slide.slide_type === 'title' ? 1.8 : 1.35
+  const maxH = slide.slide_type === 'title' ? 0.7 : 0.45
+  const ratio = (logo.width_px && logo.height_px) ? (logo.width_px / Math.max(logo.height_px, 1)) : 3
+  let w = maxW
+  let h = r2(w / Math.max(ratio, 0.5))
+  if (h > maxH) {
+    h = maxH
+    w = r2(h * Math.max(ratio, 0.5))
+  }
+
+  const pos = (brand.logo_position || 'top-right').toLowerCase()
+  const left = margin.left || 0.4
+  const right = slideW - (margin.right || 0.4) - w
+  const top = margin.top || 0.15
+  const bottom = slideH - (margin.bottom || 0.3) - h
+
+  let x = right
+  let y = top
+  if (pos.includes('left')) x = left
+  if (pos.includes('bottom')) y = bottom
+  if (pos.includes('center')) x = r2((slideW - w) / 2)
+
+  return {
+    show: true,
+    x: r2(x),
+    y: r2(y),
+    w: r2(w),
+    h: r2(h),
+    image_base64: logo.base64,
+    image_mime_type: logo.mime_type || 'image/png',
+    preserve_aspect_ratio: true
+  }
+}
+
+function applyBrandGuidelineOverrides(slide, manifestSlide, brand) {
+  if (!slide || !brand) return slide
+
+  const normalized = JSON.parse(JSON.stringify(slide))
+  normalized.global_elements = normalized.global_elements || {}
+
+  const logo = buildLogoElement(normalized, brand)
+  if (logo) {
+    normalized.global_elements.logo = logo
+    const tb = normalized.title_block
+    if (tb && tb.y < logo.y + logo.h + 0.1 && tb.x < logo.x + logo.w) {
+      tb.w = r2(Math.max(1.5, Math.min(tb.w || (logo.x - tb.x), logo.x - tb.x - 0.18)))
+    }
+  }
+
+  const slideW = normalized.canvas?.width_in || brand.slide_width_inches || 13.33
+  const slideH = normalized.canvas?.height_in || brand.slide_height_inches || 7.5
+  const margin = normalized.canvas?.margin || { left: 0.4, right: 0.4, top: 0.15, bottom: 0.3 }
+  const contentBounds = {
+    x: margin.left || 0.4,
+    y: margin.top || 0.15,
+    w: slideW - (margin.left || 0.4) - (margin.right || 0.4),
+    h: slideH - (margin.top || 0.15) - (margin.bottom || 0.3)
+  }
+
+  normalized.title_block = normalized.title_block ? rectWithin(normalized.title_block, contentBounds) : normalized.title_block
+  normalized.subtitle_block = normalized.subtitle_block ? rectWithin(normalized.subtitle_block, contentBounds) : normalized.subtitle_block
+
+  normalized.zones = (normalized.zones || []).map(zone => {
+    const z = { ...zone, frame: rectWithin(zone.frame || contentBounds, contentBounds) }
+    return enforceArtifactBounds(z)
+  })
+
+  if (manifestSlide?.title && normalized.title_block) normalized.title_block.text = normalized.title_block.text || manifestSlide.title
+  if (manifestSlide?.subtitle && normalized.subtitle_block) normalized.subtitle_block.text = normalized.subtitle_block.text || manifestSlide.subtitle
+
+  return normalized
 }
 
 
@@ -908,14 +1119,15 @@ function mergeContentIntoZones(designedZones, manifestZones) {
 function normaliseDesignedSlide(designed, manifestSlide, brand) {
   if (!designed || typeof designed !== 'object') return null  // caller handles null -> fallback
 
-  const issues = validateDesignedSlide(designed)
+  const branded = applyBrandGuidelineOverrides(designed, manifestSlide, brand)
+  const issues = validateDesignedSlide(branded)
   if (issues.length > 0) {
-    console.warn('Agent 5 -- S' + (designed.slide_number || '?') + ' issues:', issues.join('; '))
+    console.warn('Agent 5 -- S' + (branded.slide_number || '?') + ' issues:', issues.join('; '))
   }
 
   // Merge Agent 4 content into Agent 5 layout zones
   const mergedZones = mergeContentIntoZones(
-    designed.zones || [],
+    branded.zones || [],
     manifestSlide.zones || []
   )
 
@@ -928,7 +1140,7 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
     Object.entries(contentCounts).filter(([,n]) => n > 0).map(([t,n]) => t + ':' + n).join(' ') || 'none')
 
   return {
-    ...designed,
+    ...branded,
     zones: mergedZones,
     // Always override with manifest ground truth (Claude may drift on slide_number etc.)
     slide_number:     manifestSlide.slide_number,

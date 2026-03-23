@@ -400,14 +400,17 @@ async function runAgent51(state) {
           : null
 
         if (match && match.canvas && (match.zones || []).length > 0) {
+          const normalized = typeof normaliseDesignedSlide === 'function'
+            ? normaliseDesignedSlide(match, mSlide, brand)
+            : match
           // Merge: use rebuilt layout but preserve key content fields
           fixedSpec[dIdx] = {
-            ...match,
+            ...normalized,
             slide_number:    slideNum,
             slide_type:      mSlide.slide_type      || fixedSpec[dIdx].slide_type,
             slide_archetype: mSlide.slide_archetype || fixedSpec[dIdx].slide_archetype,
-            title:           match.title            || mSlide.title,
-            key_message:     match.key_message      || mSlide.key_message,
+            title:           normalized.title       || mSlide.title,
+            key_message:     normalized.key_message || mSlide.key_message,
             speaker_note:    mSlide.speaker_note    || fixedSpec[dIdx].speaker_note,
             _redesigned_by_51: true,
             _redesign_issues:  (issuesBySlide[slideNum] || []).map(i => i.criterion)
@@ -421,8 +424,11 @@ async function runAgent51(state) {
             try {
               const fb = await buildFallbackDesign(mSlide, brand, brief)
               if (fb && fb.canvas) {
+                const normalizedFb = typeof normaliseDesignedSlide === 'function'
+                  ? normaliseDesignedSlide(fb, mSlide, brand)
+                  : fb
                 fixedSpec[dIdx] = {
-                  ...fb,
+                  ...normalizedFb,
                   slide_number:    slideNum,
                   slide_type:      mSlide.slide_type,
                   slide_archetype: mSlide.slide_archetype,

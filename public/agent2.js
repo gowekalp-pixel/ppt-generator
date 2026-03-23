@@ -17,9 +17,10 @@ const AGENT2_CLAUDE_SYSTEM = `You are a senior brand designer reviewing extracte
 You will receive structured data extracted directly from a PowerPoint brand template.
 Your job is to:
 1. Add a clear "visual_style" description (e.g. "clean corporate", "bold financial", "minimal consulting")
-2. For each slide layout, add a "usage_guidance" field — one sentence on when to use it
-3. Add "spacing_notes" based on the slide dimensions and layout patterns
-4. Add "logo_position" based on layout analysis
+2. Review slide masters and linked slide layouts together, not independently
+3. For each slide layout, add a "usage_guidance" field — one sentence on when to use it
+4. Add "spacing_notes" based on the slide dimensions, master regions, and layout patterns
+5. Add "logo_position" based on layout analysis, especially title/master slides
 
 Return the enriched data as valid JSON only. Keep all existing fields exactly as-is.
 Add these new fields at the top level:
@@ -31,6 +32,49 @@ Add this field to each layout object:
 - usage_guidance: string
 
 Return ONLY valid JSON. No explanation. No markdown fences.`
+
+function cachePrimaryLogoLocally(primaryLogo) {
+  if (!primaryLogo || !primaryLogo.base64) return null
+  const localRef = 'brand-logo-' + Date.now()
+  try {
+    localStorage.setItem(localRef, JSON.stringify({
+      name: primaryLogo.name || 'logo',
+      mime_type: primaryLogo.mime_type || 'image/png',
+      base64: primaryLogo.base64
+    }))
+    return localRef
+  } catch (e) {
+    console.warn('Agent 2 — could not cache logo locally:', e.message)
+    return null
+  }
+}
+
+function buildLayoutBlueprints(layouts) {
+  return (layouts || []).map(l => ({
+    name: l.name || 'Unknown',
+    type: l.type || 'custom',
+    structure: l.structure || 'Content layout',
+    master_name: l.master_name || '',
+    ph_count: l.ph_count || 0,
+    grid_summary: l.grid_summary || { rows: 0, columns: 0, content_blocks: 0 },
+    title_placeholder: l.title_placeholder || null,
+    body_placeholder: l.body_placeholder || null,
+    usage_guidance: l.usage_guidance || ''
+  }))
+}
+
+function buildMasterBlueprints(masters) {
+  return (masters || []).map(m => ({
+    name: m.name || 'Master',
+    background_color: m.background_color || null,
+    placeholder_count: m.placeholder_count || 0,
+    grid_summary: m.grid_summary || { rows: 0, columns: 0, content_blocks: 0 },
+    text_style_summary: m.text_style_summary || {},
+    regions: m.regions || {},
+    layout_names: m.layout_names || [],
+    media_refs: m.media_refs || []
+  }))
+}
 
 const AGENT2_VISION_SYSTEM = `You are an expert brand designer analyzing a brand guideline document.
 Extract ALL design rules and return as a single valid JSON object with these exact fields:
@@ -208,8 +252,29 @@ function buildRulebook(data) {
     structure:      l.structure      || 'Content layout',
     usage_guidance: l.usage_guidance || '',
     ph_count:       l.ph_count       || 0,
+    grid_summary:   l.grid_summary   || { rows: 0, columns: 0, content_blocks: 0 },
+    master_name:    l.master_name    || '',
+    master_summary: l.master_summary || null,
+    title_placeholder: l.title_placeholder || null,
+    body_placeholder:  l.body_placeholder  || null,
     placeholders:   l.placeholders   || []
   }))
+  const slideMasters = (d.slide_masters || []).map(m => ({
+    name: m.name || 'Master',
+    path: m.path || '',
+    background_color: m.background_color || null,
+    placeholder_count: m.placeholder_count || 0,
+    grid_summary: m.grid_summary || { rows: 0, columns: 0, content_blocks: 0 },
+    text_style_summary: m.text_style_summary || {},
+    regions: m.regions || {},
+    media_refs: m.media_refs || [],
+    layout_paths: m.layout_paths || [],
+    layout_names: m.layout_names || [],
+    title_placeholder: m.title_placeholder || null,
+    body_placeholder: m.body_placeholder || null
+  }))
+  const primaryLogo = d.primary_logo || ((d.logos || [])[0] || null)
+  const localLogoRef = cachePrimaryLogoLocally(primaryLogo)
 
   const rulebook = {
     color_scheme_name:   d.color_scheme_name || 'Brand',
@@ -230,6 +295,12 @@ function buildRulebook(data) {
     slide_width_pt:      d.slide_width_pt    || Math.round(widthIn  * 72),
     slide_height_pt:     d.slide_height_pt   || Math.round(heightIn * 72),
     slide_layouts:       layouts,
+    slide_masters:       slideMasters,
+    layout_blueprints:   buildLayoutBlueprints(layouts),
+    master_blueprints:   buildMasterBlueprints(slideMasters),
+    logos:               d.logos             || [],
+    primary_logo:        primaryLogo,
+    primary_logo_local_ref: localLogoRef,
     logo_position:       d.logo_position     || 'top-right',
     spacing_notes:       d.spacing_notes     || '0.5 inch margins',
     extraction_source:   d.source            || 'agent2'

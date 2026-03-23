@@ -29,7 +29,7 @@ from http.server import BaseHTTPRequestHandler
 from pptx import Presentation
 from pptx.util import Inches, Pt, Emu
 from pptx.dml.color import RGBColor
-from pptx.enum.text import PP_ALIGN
+from pptx.enum.text import PP_ALIGN, MSO_ANCHOR, MSO_AUTO_SIZE
 from pptx.enum.chart import XL_CHART_TYPE
 from pptx.chart.data import ChartData
 from pptx.util import Inches, Pt
@@ -82,6 +82,50 @@ def set_font(run_or_para, font_family, font_size, bold=False, italic=False, colo
     except Exception:
         pass
 
+
+def enable_text_fit(text_frame):
+    """Keep text inside the shape whenever possible."""
+    try:
+        text_frame.word_wrap = True
+        text_frame.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
+        text_frame.margin_left = 0
+        text_frame.margin_right = 0
+        text_frame.margin_top = 0
+        text_frame.margin_bottom = 0
+    except Exception:
+        pass
+
+
+def estimate_fit_font_size(text, width_in, height_in, max_size=12, min_size=7):
+    """Cheap heuristic for table cells and dense text."""
+    text = str(text or '')
+    if not text.strip():
+        return max_size
+
+    width_pts = max(1, width_in * 72)
+    height_pts = max(1, height_in * 72)
+    usable_chars = max(6, int(width_pts / 5.4))
+    lines = 0
+    for chunk in text.split('\n'):
+        lines += max(1, int(len(chunk) / usable_chars) + 1)
+
+    if lines <= 1:
+        return max_size
+
+    size = min(max_size, int(height_pts / max(lines * 1.45, 1)))
+    return max(min_size, size)
+
+
+def add_image_box(slide, image_b64, x, y, w, h):
+    """Render an image from base64."""
+    if not image_b64:
+        return None
+    try:
+        blob = base64.b64decode(image_b64)
+        return slide.shapes.add_picture(io.BytesIO(blob), inches(x), inches(y), inches(w), inches(h))
+    except Exception:
+        return None
+
 def add_text_box(slide, x, y, w, h, text, font_family='Arial', font_size=12,
                  bold=False, color_hex='#111111', align='left', valign='top',
                  wrap=True, italic=False):
@@ -89,9 +133,9 @@ def add_text_box(slide, x, y, w, h, text, font_family='Arial', font_size=12,
     txBox = slide.shapes.add_textbox(inches(x), inches(y), inches(w), inches(h))
     tf    = txBox.text_frame
     tf.word_wrap = wrap
+    enable_text_fit(tf)
 
     # Vertical alignment
-    from pptx.enum.text import MSO_ANCHOR
     valign_map = { 'middle': MSO_ANCHOR.MIDDLE, 'bottom': MSO_ANCHOR.BOTTOM, 'top': MSO_ANCHOR.TOP }
     tf.vertical_anchor = valign_map.get(valign, MSO_ANCHOR.TOP)
 
@@ -211,7 +255,7 @@ def render_insight_text(slide, artifact, bt):
             inches(x + 0.12), inches(pt_y), inches(w - 0.18), inches(pt_h)
         )
         tf = txBox.text_frame
-        tf.word_wrap = True
+        enable_text_fit(tf)
 
         first = True
         for point in points:
@@ -547,11 +591,19 @@ def render_table(slide, artifact, bt):
         for ci, hdr in enumerate(headers):
             cell = table.cell(0, ci)
             cell.text = str(hdr)
+            enable_text_fit(cell.text_frame)
             cell.fill.solid()
             cell.fill.fore_color.rgb = hex_to_rgb(h_fill)
             try:
                 run = cell.text_frame.paragraphs[0].runs[0]
-                set_font(run, h_font, h_size, True, False, h_text)
+                fit_size = estimate_fit_font_size(
+                    hdr,
+                    (col_ws[ci] if ci < len(col_ws) else w / n_cols),
+                    (row_hs[0] if row_hs else h / n_rows),
+                    h_size,
+                    8
+                )
+                set_font(run, h_font, fit_size, True, False, h_text)
                 cell.text_frame.paragraphs[0].alignment = PP_ALIGN.LEFT
             except Exception:
                 pass
@@ -567,11 +619,19 @@ def render_table(slide, artifact, bt):
                 cell = table.cell(row_idx, ci)
                 cell_text = str(row[ci]) if ci < len(row) else ''
                 cell.text = cell_text
+                enable_text_fit(cell.text_frame)
                 cell.fill.solid()
                 cell.fill.fore_color.rgb = hex_to_rgb(row_fill or b_fill)
                 try:
                     run = cell.text_frame.paragraphs[0].runs[0]
-                    set_font(run, b_font, b_size, False, False, b_text)
+                    fit_size = estimate_fit_font_size(
+                        cell_text,
+                        (col_ws[ci] if ci < len(col_ws) else w / n_cols),
+                        (row_hs[row_idx] if row_idx < len(row_hs) else h / n_rows),
+                        b_size,
+                        7
+                    )
+                    set_font(run, b_font, fit_size, False, False, b_text)
                 except Exception:
                     pass
 
@@ -654,6 +714,15 @@ def build_slide(prs, slide_spec):
 
     # ── Global elements ───────────────────────────────────────────────────────
     ge = slide_spec.get('global_elements', {})
+
+    logo = ge.get('logo', {})
+    if logo.get('show') and logo.get('image_base64'):
+        add_image_box(
+            slide,
+            logo.get('image_base64'),
+            logo.get('x', 0.0), logo.get('y', 0.0),
+            logo.get('w', 1.2), logo.get('h', 0.4)
+        )
 
     footer = ge.get('footer', {})
     if footer.get('show'):

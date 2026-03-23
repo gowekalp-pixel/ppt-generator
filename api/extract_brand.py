@@ -3,6 +3,8 @@ import io
 import base64
 import zipfile
 import re
+import posixpath
+import struct
 from http.server import BaseHTTPRequestHandler
 
 
@@ -42,6 +44,328 @@ def clean_hex(val):
     return None
 
 
+def image_dimensions(image_bytes, filename=''):
+    """Best-effort image size extractor for PNG/JPEG/GIF without external deps."""
+    name = (filename or '').lower()
+    try:
+        if name.endswith('.png') and image_bytes[:8] == b'\x89PNG\r\n\x1a\n':
+            return struct.unpack('>II', image_bytes[16:24])
+        if name.endswith(('.jpg', '.jpeg')) and image_bytes[:2] == b'\xff\xd8':
+            i = 2
+            while i < len(image_bytes) - 9:
+                if image_bytes[i] != 0xFF:
+                    i += 1
+                    continue
+                marker = image_bytes[i + 1]
+                if marker in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
+                    h, w = struct.unpack('>HH', image_bytes[i + 5:i + 9])
+                    return (w, h)
+                seg_len = struct.unpack('>H', image_bytes[i + 2:i + 4])[0]
+                i += 2 + seg_len
+        if name.endswith('.gif') and image_bytes[:6] in (b'GIF87a', b'GIF89a'):
+            return struct.unpack('<HH', image_bytes[6:10])
+    except Exception:
+        pass
+    return (0, 0)
+
+
+def collect_media_usage(files, z):
+    """Count how often each media asset is referenced by slides/layouts/masters."""
+    usage = {}
+    rel_files = [f for f in files if f.startswith('ppt/') and '/_rels/' in f and f.endswith('.rels')]
+
+    for rel_path in rel_files:
+        try:
+            rel_xml = z.read(rel_path).decode('utf-8', errors='ignore')
+        except Exception:
+            continue
+
+        if 'slideMasters/' in rel_path:
+            source_weight = 6
+        elif 'slideLayouts/' in rel_path:
+            source_weight = 4
+        elif 'slides/' in rel_path:
+            source_weight = 1
+        else:
+            source_weight = 0
+
+        if source_weight == 0:
+            continue
+
+        base_dir = posixpath.dirname(rel_path).replace('/_rels', '')
+        for target in re.findall(r'Target="([^"]+)"', rel_xml):
+            normalized = posixpath.normpath(posixpath.join(base_dir, target))
+            if normalized.startswith('ppt/media/'):
+                usage[normalized] = usage.get(normalized, 0) + source_weight
+
+    return usage
+
+
+def extract_logo_candidates(files, z):
+    """Extract likely logo assets from embedded PPT media."""
+    media_usage = collect_media_usage(files, z)
+    media_files = [f for f in files if f.startswith('ppt/media/')]
+    candidates = []
+
+    for media_path in media_files:
+        name = posixpath.basename(media_path)
+        lower = name.lower()
+        ext = lower.split('.')[-1] if '.' in lower else ''
+        if ext not in ('png', 'jpg', 'jpeg', 'gif'):
+            continue
+
+        try:
+            blob = z.read(media_path)
+        except Exception:
+            continue
+
+        width_px, height_px = image_dimensions(blob, name)
+        byte_size = len(blob)
+
+        score = 0
+        if any(tag in lower for tag in ('logo', 'brand', 'mark', 'wordmark')):
+            score += 120
+        score += media_usage.get(media_path, 0) * 10
+        if ext == 'png':
+            score += 12
+        if 2_000 <= byte_size <= 350_000:
+            score += 18
+        if width_px and height_px:
+            area = width_px * height_px
+            aspect = width_px / max(height_px, 1)
+            if 2.0 <= aspect <= 8.0:
+                score += 20
+            if 4_000 <= area <= 500_000:
+                score += 15
+            elif area > 2_500_000:
+                score -= 25
+        if media_usage.get(media_path, 0) == 0:
+            score -= 20
+
+        candidates.append({
+            'name': name,
+            'path': media_path,
+            'mime_type': 'image/jpeg' if ext in ('jpg', 'jpeg') else 'image/' + ext,
+            'base64': base64.b64encode(blob).decode('utf-8'),
+            'width_px': width_px,
+            'height_px': height_px,
+            'byte_size': byte_size,
+            'usage_score': media_usage.get(media_path, 0),
+            'score': score
+        })
+
+    candidates.sort(key=lambda c: (c['score'], c['usage_score'], -c['byte_size']), reverse=True)
+    return candidates[:5]
+
+
+def read_relationships(z, rel_path):
+    """Read OpenXML relationship file and return rid -> normalized target path."""
+    rels = {}
+    try:
+        rel_xml = z.read(rel_path).decode('utf-8', errors='ignore')
+    except Exception:
+        return rels
+
+    base_dir = posixpath.dirname(rel_path).replace('/_rels', '')
+    for rid, target in re.findall(r'Id="([^"]+)"[^>]*Target="([^"]+)"', rel_xml):
+        rels[rid] = posixpath.normpath(posixpath.join(base_dir, target))
+    return rels
+
+
+def extract_shape_style(block):
+    """Extract best-effort text and fill style from a placeholder shape block."""
+    style = {}
+
+    sz_match = re.search(r'<a:rPr[^>]*sz="(\d+)"', block)
+    if sz_match:
+        style['font_size_pt'] = half_pt_to_pt(sz_match.group(1))
+
+    latin_match = re.search(r'<a:latin[^>]*typeface="([^"]+)"', block)
+    if latin_match and not latin_match.group(1).startswith('+'):
+        style['font_family'] = latin_match.group(1)
+
+    color_match = re.search(r'<a:(?:srgbClr|schemeClr) val="([0-9A-Fa-f]{6}|[A-Za-z0-9]+)"', block)
+    if color_match:
+        style['font_color'] = clean_hex(color_match.group(1)) or color_match.group(1)
+
+    bold_match = re.search(r'<a:rPr[^>]*b="1"', block)
+    if bold_match:
+        style['font_weight'] = 'bold'
+
+    align_match = re.search(r'<a:pPr[^>]*algn="([^"]+)"', block)
+    if align_match:
+        style['align'] = align_match.group(1)
+
+    fill_match = re.search(r'<a:solidFill>\s*<a:(?:srgbClr|schemeClr) val="([0-9A-Fa-f]{6}|[A-Za-z0-9]+)"', block)
+    if fill_match:
+        style['fill_color'] = clean_hex(fill_match.group(1)) or fill_match.group(1)
+
+    return style
+
+
+def extract_placeholders_from_xml(xml_text):
+    """Extract placeholder geometry + style from layout/master XML."""
+    placeholders = []
+    ph_blocks = re.findall(r'<p:sp>(.*?)</p:sp>', xml_text, re.DOTALL)
+
+    for block in ph_blocks:
+        ph_match = re.search(r'<p:ph([^>]*)/>|<p:ph([^>]*)>', block)
+        if not ph_match:
+            continue
+
+        ph_attrs = ph_match.group(1) or ph_match.group(2) or ''
+        type_match = re.search(r'type="([^"]+)"', ph_attrs)
+        idx_match = re.search(r'idx="(\d+)"', ph_attrs)
+        ph_type = type_match.group(1) if type_match else 'body'
+        ph_idx = int(idx_match.group(1)) if idx_match else 0
+
+        off_match = re.search(r'<a:off x="(-?\d+)" y="(-?\d+)"', block)
+        ext_match = re.search(r'<a:ext cx="(\d+)" cy="(\d+)"', block)
+        if not (off_match and ext_match):
+            continue
+
+        ph = {
+            'type': ph_type,
+            'idx': ph_idx,
+            'x_in': emu_to_inches(off_match.group(1)),
+            'y_in': emu_to_inches(off_match.group(2)),
+            'w_in': emu_to_inches(ext_match.group(1)),
+            'h_in': emu_to_inches(ext_match.group(2))
+        }
+
+        style = extract_shape_style(block)
+        if style:
+            ph['style'] = style
+            if style.get('font_size_pt'):
+                ph['font_size_pt'] = style['font_size_pt']
+
+        text_match = re.findall(r'<a:t>([^<]+)</a:t>', block)
+        if text_match:
+            ph['default_text'] = ' '.join(t.strip() for t in text_match if t.strip())
+
+        placeholders.append(ph)
+
+    return placeholders
+
+
+def cluster_axis(values, tolerance=0.45):
+    groups = []
+    for v in sorted(values):
+        if not groups or abs(v - groups[-1][-1]) > tolerance:
+            groups.append([v])
+        else:
+            groups[-1].append(v)
+    return [round(sum(g) / len(g), 2) for g in groups]
+
+
+def analyze_placeholder_grid(placeholders):
+    """Summarize row/column grouping so Agent 5 can reason about grids."""
+    content = [p for p in placeholders if p.get('type') not in ('title', 'ctrTitle', 'subTitle', 'dt', 'ftr', 'sldNum')]
+    if not content:
+        return {'rows': 0, 'columns': 0, 'content_blocks': 0}
+
+    x_centers = [round(p['x_in'] + p['w_in'] / 2, 2) for p in content]
+    y_centers = [round(p['y_in'] + p['h_in'] / 2, 2) for p in content]
+    cols = cluster_axis(x_centers)
+    rows = cluster_axis(y_centers)
+
+    return {
+        'rows': len(rows),
+        'columns': len(cols),
+        'content_blocks': len(content),
+        'grid_detected': len(rows) >= 2 and len(cols) >= 2,
+        'header_body_pairs_likely': len(content) >= 4 and len(rows) >= 2
+    }
+
+
+def summarize_text_styles(placeholders):
+    """Summarize dominant text styles by placeholder role."""
+    summary = {
+        'title': {},
+        'body': {},
+        'other': {}
+    }
+
+    for ph in placeholders:
+        style = ph.get('style') or {}
+        role = 'other'
+        if ph.get('type') in ('title', 'ctrTitle', 'subTitle'):
+            role = 'title'
+        elif ph.get('type') == 'body':
+            role = 'body'
+
+        target = summary[role]
+        if not target.get('font_family') and style.get('font_family'):
+            target['font_family'] = style.get('font_family')
+        if not target.get('font_size_pt') and style.get('font_size_pt'):
+            target['font_size_pt'] = style.get('font_size_pt')
+        if not target.get('font_color') and style.get('font_color'):
+            target['font_color'] = style.get('font_color')
+        if not target.get('font_weight') and style.get('font_weight'):
+            target['font_weight'] = style.get('font_weight')
+        if not target.get('align') and style.get('align'):
+            target['align'] = style.get('align')
+
+    return summary
+
+
+def summarize_regions(placeholders):
+    """Summarize major regions on a master/layout."""
+    title = next((p for p in placeholders if p.get('type') in ('title', 'ctrTitle')), None)
+    subtitle = next((p for p in placeholders if p.get('type') == 'subTitle'), None)
+    bodies = [p for p in placeholders if p.get('type') == 'body']
+
+    return {
+        'title_region': title,
+        'subtitle_region': subtitle,
+        'body_regions': bodies[:12],
+        'body_region_count': len(bodies)
+    }
+
+
+def extract_media_refs(z, rel_path):
+    """Return master/layout media targets."""
+    refs = []
+    rels = read_relationships(z, rel_path)
+    for rid, target in rels.items():
+        if target.startswith('ppt/media/'):
+            refs.append({
+                'rel_id': rid,
+                'target': target,
+                'name': posixpath.basename(target)
+            })
+    return refs
+
+
+def extract_master_info(master_xml, filename, media_refs=None):
+    """Extract master-level layout guidance from a slide master."""
+    name_match = re.search(r'<p:cSld[^>]*name="([^"]+)"', master_xml)
+    master_name = name_match.group(1) if name_match else posixpath.basename(filename)
+
+    placeholders = extract_placeholders_from_xml(master_xml)
+    bg_match = re.search(r'<a:solidFill>\s*<a:srgbClr val="([0-9A-Fa-f]{6})"', master_xml)
+    background_color = clean_hex(bg_match.group(1)) if bg_match else None
+
+    title_ph = next((p for p in placeholders if p.get('type') in ('title', 'ctrTitle')), None)
+    body_ph = next((p for p in placeholders if p.get('type') == 'body'), None)
+
+    return {
+        'name': master_name,
+        'path': filename,
+        'background_color': background_color,
+        'placeholder_count': len(placeholders),
+        'grid_summary': analyze_placeholder_grid(placeholders),
+        'text_style_summary': summarize_text_styles(placeholders),
+        'regions': summarize_regions(placeholders),
+        'media_refs': media_refs or [],
+        'title_placeholder': title_ph,
+        'body_placeholder': body_ph,
+        'placeholders': placeholders,
+        'layout_paths': [],
+        'layout_names': []
+    }
+
+
 # ─── EXTRACT FROM ZIP ─────────────────────────────────────────────────────────
 
 def extract_brand_from_pptx(pptx_bytes):
@@ -69,6 +393,9 @@ def extract_brand_from_pptx(pptx_bytes):
         'title_font':          {},
         'body_font':           {},
         'slide_layouts':       [],
+        'slide_masters':       [],
+        'logos':               [],
+        'primary_logo':        None,
         'raw_fonts':           {},
         'errors':              []
     }
@@ -105,7 +432,30 @@ def extract_brand_from_pptx(pptx_bytes):
                 extract_theme_colors(theme_xml, result)
                 extract_theme_fonts(theme_xml, result)
 
-            # ── 3. Slide layouts ──────────────────────────────────────────
+            # ── 3. Slide masters + layouts ───────────────────────────────
+            master_files = sorted(
+                [f for f in files if re.match(r'ppt/slideMasters/slideMaster\d+\.xml$', f)],
+                key=lambda x: int(re.search(r'(\d+)', x).group(1))
+            )
+            masters_by_path = {}
+            layout_to_master = {}
+
+            for mf in master_files:
+                master_xml = z.read(mf).decode('utf-8', errors='ignore')
+                media_refs = extract_media_refs(
+                    z,
+                    posixpath.join(posixpath.dirname(mf), '_rels', posixpath.basename(mf) + '.rels')
+                )
+                master_info = extract_master_info(master_xml, mf, media_refs)
+                result['slide_masters'].append(master_info)
+                masters_by_path[mf] = master_info
+
+                rel_path = posixpath.join(posixpath.dirname(mf), '_rels', posixpath.basename(mf) + '.rels')
+                rels = read_relationships(z, rel_path)
+                for target in rels.values():
+                    if target.startswith('ppt/slideLayouts/'):
+                        layout_to_master[target] = mf
+
             layout_files = sorted(
                 [f for f in files if re.match(r'ppt/slideLayouts/slideLayout\d+\.xml$', f)],
                 key=lambda x: int(re.search(r'(\d+)', x).group(1))
@@ -113,9 +463,17 @@ def extract_brand_from_pptx(pptx_bytes):
 
             for lf in layout_files:
                 layout_xml = z.read(lf).decode('utf-8', errors='ignore')
-                layout_info = extract_layout_info(layout_xml, lf)
+                master_path = layout_to_master.get(lf)
+                layout_info = extract_layout_info(layout_xml, lf, masters_by_path.get(master_path))
                 if layout_info:
                     result['slide_layouts'].append(layout_info)
+                    if master_path in masters_by_path:
+                        masters_by_path[master_path]['layout_paths'].append(lf)
+                        masters_by_path[master_path]['layout_names'].append(layout_info.get('name', lf))
+
+            logos = extract_logo_candidates(files, z)
+            result['logos'] = logos
+            result['primary_logo'] = logos[0] if logos else None
 
     except Exception as e:
         result['errors'].append(str(e))
@@ -238,7 +596,7 @@ def extract_theme_fonts(theme_xml, result):
     }
 
 
-def extract_layout_info(layout_xml, filename):
+def extract_layout_info(layout_xml, filename, master_info=None):
     """
     Extract name and placeholder structure from a slide layout XML.
     Returns a dict describing the layout.
@@ -252,52 +610,30 @@ def extract_layout_info(layout_xml, filename):
     type_match = re.search(r'<p:sldLayout[^>]*type="([^"]+)"', layout_xml)
     layout_type = type_match.group(1) if type_match else 'unknown'
 
-    # Extract all placeholders
-    placeholders = []
-    ph_blocks = re.findall(r'<p:sp>(.*?)</p:sp>', layout_xml, re.DOTALL)
-
-    for block in ph_blocks:
-        ph = {}
-
-        # Placeholder type and index
-        ph_match = re.search(r'<p:ph[^>]*type="([^"]+)"', block)
-        idx_match = re.search(r'<p:ph[^>]* idx="(\d+)"', block)
-        ph_type = ph_match.group(1) if ph_match else 'body'
-        ph_idx  = int(idx_match.group(1)) if idx_match else 0
-
-        # Position and size
-        off_match = re.search(r'<a:off x="(-?\d+)" y="(-?\d+)"', block)
-        ext_match = re.search(r'<a:ext cx="(\d+)" cy="(\d+)"', block)
-
-        if off_match and ext_match:
-            ph['type']   = ph_type
-            ph['idx']    = ph_idx
-            ph['x_in']   = emu_to_inches(off_match.group(1))
-            ph['y_in']   = emu_to_inches(off_match.group(2))
-            ph['w_in']   = emu_to_inches(ext_match.group(1))
-            ph['h_in']   = emu_to_inches(ext_match.group(2))
-
-            # Font size if specified
-            sz_match = re.search(r'<a:r[^>]*>.*?<a:rPr[^>]*sz="(\d+)"', block, re.DOTALL)
-            if sz_match:
-                ph['font_size_pt'] = half_pt_to_pt(sz_match.group(1))
-
-            # Any explicit text (for fixed-content placeholders)
-            text_match = re.findall(r'<a:t>([^<]+)</a:t>', block)
-            if text_match:
-                ph['default_text'] = ' '.join(t.strip() for t in text_match if t.strip())
-
-            placeholders.append(ph)
+    placeholders = extract_placeholders_from_xml(layout_xml)
 
     # Determine column structure from placeholder positions
     structure = determine_structure(placeholders, layout_name)
+    grid_summary = analyze_placeholder_grid(placeholders)
+    master_name = (master_info or {}).get('name', '')
+    matched_title = next((p for p in placeholders if p.get('type') in ('title', 'ctrTitle')), None)
+    matched_body = next((p for p in placeholders if p.get('type') == 'body'), None)
 
     return {
         'name':         layout_name,
         'type':         layout_type,
         'placeholders': placeholders,
         'structure':    structure,
-        'ph_count':     len(placeholders)
+        'ph_count':     len(placeholders),
+        'grid_summary': grid_summary,
+        'master_name':  master_name,
+        'master_summary': {
+            'background_color': (master_info or {}).get('background_color'),
+            'title_placeholder': (master_info or {}).get('title_placeholder'),
+            'body_placeholder': (master_info or {}).get('body_placeholder')
+        } if master_info else None,
+        'title_placeholder': matched_title,
+        'body_placeholder': matched_body
     }
 
 
