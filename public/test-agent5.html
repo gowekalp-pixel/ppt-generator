@@ -183,7 +183,7 @@
     </div>
 
     <div class="btn-row">
-      <button class="btn btn-purple" id="run-btn" onclick="runTest()">▶ Run Agent 5 — Design Slides</button>
+      <button class="btn btn-purple" id="run-btn" onclick="if(typeof runTest==='function'){runTest()}else{var eb=document.getElementById('error-box');eb.textContent='JS load error: runTest is not defined. Check browser console (F12) for script errors.';eb.classList.add('show');}">▶ Run Agent 5 — Design Slides</button>
       <button class="btn btn-gray" onclick="resetAll()">↺ Reset</button>
     </div>
 
@@ -266,6 +266,20 @@ function safeParseJSON(raw, fallback) {
 </script>
 
 <script>
+  // Catch any global JS errors and surface them visibly
+  window.addEventListener('error', function(e) {
+    var eb = document.getElementById('error-box')
+    if (eb) { eb.textContent = 'Script error: ' + e.message + ' (line ' + e.lineno + ')'; eb.classList.add('show') }
+    console.error('[Agent5] Script error:', e.message, 'line', e.lineno, e.filename)
+  })
+  // Startup check: confirm agent5.js loaded
+  window.addEventListener('DOMContentLoaded', function() {
+    if (typeof runAgent5 !== 'function') {
+      var eb = document.getElementById('error-box')
+      if (eb) { eb.textContent = 'agent5.js failed to load — check Network tab (F12)'; eb.classList.add('show') }
+    } else { console.log('[Agent5] agent5.js loaded OK — runAgent5 is defined') }
+  })
+
   let resultSpec  = null
   let activeSlide = 0
 
@@ -318,6 +332,8 @@ function safeParseJSON(raw, fallback) {
 
   // ─── MAIN TEST RUNNER ─────────────────────────────────────────────────────
   async function runTest() {
+    console.log('[Agent5] runTest() called')
+    document.getElementById('error-box').classList.remove('show')
     const brand    = safeJSON(document.getElementById('brand-input').value,    null)
     const manifest = safeJSON(document.getElementById('manifest-input').value, null)
     const brief    = safeJSON(document.getElementById('brief-input').value,    {})
@@ -327,8 +343,8 @@ function safeParseJSON(raw, fallback) {
     const errEl = document.getElementById('error-box')
     errEl.classList.remove('show')
 
-    if (!brand)    { errEl.textContent = 'Brand Rulebook JSON is missing or invalid.'; errEl.classList.add('show'); return }
-    if (!manifest) { errEl.textContent = 'Slide Manifest JSON is missing or invalid.'; errEl.classList.add('show'); return }
+    if (!brand)    { errEl.textContent = 'Brand Rulebook JSON is missing or invalid.'; errEl.classList.add('show'); errEl.scrollIntoView({behavior:'smooth'}); return }
+    if (!manifest) { errEl.textContent = 'Slide Manifest JSON is missing or invalid.'; errEl.classList.add('show'); errEl.scrollIntoView({behavior:'smooth'}); return }
 
     const manifestArr   = Array.isArray(manifest) ? manifest : [manifest]
     const filteredSlides = manifestArr.filter(s => s.slide_number >= fromSlide && s.slide_number <= toSlide)
