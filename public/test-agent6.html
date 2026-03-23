@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent 6 Tester — PPTX Generator</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: #f0f2f5; padding: 2rem; color: #111; }
+    .container { max-width: 860px; margin: 0 auto; }
+
+    .badge { display: inline-block; background: #f0fdf4; color: #166534; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; margin-bottom: 10px; }
+    h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+    .subhead { font-size: 13px; color: #666; margin-bottom: 1.5rem; line-height: 1.5; max-width: 680px; }
+
+    .card { background: white; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.25rem; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
+    .card-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #888; margin-bottom: 1rem; }
+
+    .hint { font-size: 12px; color: #888; margin-bottom: 6px; line-height: 1.4; }
+    textarea { width: 100%; height: 160px; font-family: monospace; font-size: 11px; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; resize: vertical; background: #fafafa; color: #333; }
+    textarea:focus { outline: none; border-color: #059669; }
+
+    .upload-zone { border: 2px dashed #d1d5db; border-radius: 8px; padding: 10px 14px; cursor: pointer; position: relative; background: #fafafa; margin-top: 6px; transition: background 0.15s; }
+    .upload-zone:hover { background: #f3f4f6; }
+    .upload-zone.ready { border-color: #22c55e; border-style: solid; background: #f0fdf4; }
+    .upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+    .uz { font-size: 12px; color: #888; pointer-events: none; }
+    .uz span { color: #059669; font-weight: 600; }
+
+    .btn-row { display: flex; gap: 10px; margin-top: 1rem; }
+    .btn { flex: 1; padding: 13px; font-size: 14px; font-weight: 700; border: none; border-radius: 10px; cursor: pointer; transition: all 0.15s; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-green  { background: #059669; color: white; }
+    .btn-green:hover:not(:disabled)  { background: #047857; }
+    .btn-gray   { background: #e5e7eb; color: #374151; }
+    .btn-gray:hover:not(:disabled)   { background: #d1d5db; }
+
+    .progress-wrap { display: none; margin-top: 12px; }
+    .progress-wrap.show { display: block; }
+    .progress { height: 5px; background: #e5e7eb; border-radius: 99px; overflow: hidden; }
+    .progress-fill { height: 100%; background: #059669; border-radius: 99px; width: 0%; transition: width 0.4s ease; }
+    .progress-msg { font-size: 12px; color: #666; margin-top: 5px; }
+
+    .error-box { display: none; background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #dc2626; margin-top: 10px; line-height: 1.5; }
+    .error-box.show { display: block; }
+
+    /* Spec summary */
+    .spec-summary { display: none; background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 12px 16px; margin-top: 10px; font-size: 12px; }
+    .spec-summary.show { display: block; }
+    .sum-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 8px; }
+    .sum-item { text-align: center; background: white; border-radius: 6px; padding: 8px; }
+    .sum-val { font-size: 20px; font-weight: 700; color: #059669; }
+    .sum-lbl { font-size: 10px; color: #888; text-transform: uppercase; margin-top: 2px; }
+
+    /* Slide list */
+    .slide-list { border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; max-height: 280px; overflow-y: auto; }
+    .slide-row { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid #f3f4f6; font-size: 12px; }
+    .slide-row:last-child { border-bottom: none; }
+    .slide-row:nth-child(even) { background: #fafafa; }
+    .sn { font-family: monospace; font-size: 10px; color: #aaa; min-width: 24px; }
+    .st-badge { font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 20px; text-transform: uppercase; min-width: 52px; text-align: center; flex-shrink: 0; }
+    .st-title   { background: #dbeafe; color: #1d4ed8; }
+    .st-divider { background: #fef9c3; color: #854d0e; }
+    .st-content { background: #dcfce7; color: #166534; }
+    .slide-title-text { flex: 1; color: #333; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .art-pills { display: flex; gap: 3px; flex-shrink: 0; }
+    .ap { font-size: 9px; padding: 1px 5px; border-radius: 20px; font-weight: 600; }
+    .ap-insight_text { background: #dbeafe; color: #1d4ed8; }
+    .ap-chart        { background: #dcfce7; color: #166534; }
+    .ap-cards        { background: #fef3c7; color: #92400e; }
+    .ap-workflow     { background: #fdf4ff; color: #6b21a8; }
+    .ap-table        { background: #f0fdf4; color: #15803d; }
+
+    /* Download card */
+    .dl-card { display: none; background: #f0fdf4; border: 1.5px solid #22c55e; border-radius: 10px; padding: 16px 20px; margin-top: 14px; }
+    .dl-card.show { display: block; }
+    .dl-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #16a34a; margin-bottom: 10px; }
+    .dl-card a { display: block; padding: 12px 16px; background: #16a34a; color: white; border-radius: 8px; font-size: 14px; font-weight: 700; text-decoration: none; text-align: center; }
+    .dl-card a:hover { background: #15803d; }
+    .dl-note { font-size: 11px; color: #666; margin-top: 7px; text-align: center; }
+
+    /* Progress bar (reused as Agent 6 status bar) */
+    .a6-bar { height: 4px; background: #e5e7eb; border-radius: 99px; margin-top: 6px; }
+    .a6-fill { height: 100%; background: #059669; border-radius: 99px; width: 0%; transition: width 0.4s ease; }
+    .a6-status { font-size: 13px; color: #555; min-height: 18px; line-height: 1.4; margin-top: 8px; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <div class="badge">Isolated Test — Agent 6 Only</div>
+  <h1>PPTX Generator Tester</h1>
+  <p class="subhead">Paste or upload the Agent 5 output JSON (the full designed spec array). Agent 6 sends it to the python-pptx backend and downloads the finished PowerPoint file.</p>
+
+  <!-- INPUT -->
+  <div class="card">
+    <div class="card-title">Input — Agent 5 Designed Spec JSON</div>
+
+    <div class="hint">Paste the full JSON array from Agent 5 output (the array of slide objects with canvas, zones, artifacts)</div>
+    <textarea id="spec-input" placeholder='[ { "slide_number": 1, "slide_type": "title", "canvas": { "width_in": 11.02, ... }, "zones": [], ... }, ... ]'></textarea>
+
+    <div class="upload-zone" id="zone-spec">
+      <input type="file" accept=".json" onchange="loadSpecFile(this)">
+      <div class="uz">Or upload <span>agent5-output.json</span></div>
+    </div>
+
+    <!-- Spec summary (shown after valid JSON is detected) -->
+    <div class="spec-summary" id="spec-summary">
+      <div class="sum-grid" id="sum-grid"></div>
+      <div class="slide-list" id="slide-list"></div>
+    </div>
+
+    <div class="error-box" id="error-box"></div>
+
+    <div class="btn-row">
+      <button class="btn btn-green" id="run-btn" onclick="runAgent6()">▶ Generate PPTX</button>
+      <button class="btn btn-gray"  onclick="resetAll()">↺ Reset</button>
+    </div>
+
+    <div class="a6-status" id="a6-status"></div>
+    <div class="a6-bar"><div class="a6-fill" id="a6-fill"></div></div>
+
+    <div class="dl-card" id="dl-card">
+      <div class="dl-label">✅ PPTX Ready</div>
+      <a id="dl-link" href="#" download>⬇ Download presentation.pptx</a>
+      <div class="dl-note">Link stays active until you refresh the page</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  let parsedSpec = null
+
+  // ─── FILE LOAD ──────────────────────────────────────────────────────────────
+  function loadSpecFile(input) {
+    const file = input.files[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = e => {
+      document.getElementById('spec-input').value = e.target.result
+      document.getElementById('zone-spec').classList.add('ready')
+      tryParseSpec(e.target.result)
+    }
+    reader.readAsText(file)
+  }
+
+  // Auto-parse when user types / pastes
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('spec-input').addEventListener('input', e => {
+      tryParseSpec(e.target.value)
+    })
+  })
+
+  function tryParseSpec(raw) {
+    try {
+      const cleaned = (raw || '').replace(/```json\s*/g,'').replace(/```\s*/g,'').trim()
+      const parsed  = JSON.parse(cleaned)
+      const arr     = Array.isArray(parsed) ? parsed : [parsed]
+      if (arr.length > 0 && arr[0].canvas) {
+        parsedSpec = arr
+        showSummary(arr)
+        document.getElementById('error-box').classList.remove('show')
+      } else {
+        parsedSpec = null
+        document.getElementById('spec-summary').classList.remove('show')
+      }
+    } catch(e) {
+      parsedSpec = null
+      document.getElementById('spec-summary').classList.remove('show')
+    }
+  }
+
+  // ─── SPEC SUMMARY ────────────────────────────────────────────────────────────
+  function showSummary(spec) {
+    const totalZones = spec.reduce((n, s) => n + (s.zones || []).length, 0)
+    const artCounts  = {}
+    spec.forEach(s => (s.zones || []).forEach(z =>
+      (z.artifacts || []).forEach(a => { artCounts[a.type] = (artCounts[a.type] || 0) + 1 })
+    ))
+
+    document.getElementById('sum-grid').innerHTML = [
+      { val: spec.length,                                       lbl: 'Slides' },
+      { val: spec.filter(s => s.slide_type === 'content').length, lbl: 'Content' },
+      { val: totalZones,                                        lbl: 'Zones' },
+      { val: Object.values(artCounts).reduce((a,b)=>a+b, 0),  lbl: 'Artifacts' }
+    ].map(i => `<div class="sum-item"><div class="sum-val">${i.val}</div><div class="sum-lbl">${i.lbl}</div></div>`).join('')
+
+    // Art type breakdown
+    const artBar = Object.entries(artCounts)
+      .map(([t, n]) => `<span class="ap ap-${t}">${t}: ${n}</span>`).join(' ')
+    document.getElementById('sum-grid').innerHTML +=
+      `<div style="grid-column:1/-1;display:flex;gap:4px;flex-wrap:wrap;">${artBar}</div>`
+
+    // Slide list
+    document.getElementById('slide-list').innerHTML = spec.map(s => {
+      const arts = (s.zones || []).flatMap(z => (z.artifacts || []).map(a => a.type))
+      const uniqueArts = [...new Set(arts)]
+      return `<div class="slide-row">
+        <span class="sn">S${s.slide_number}</span>
+        <span class="st-badge st-${s.slide_type}">${s.slide_type}</span>
+        <span class="slide-title-text">${(s.title || s.title_block?.text || '—').slice(0, 70)}</span>
+        <div class="art-pills">${uniqueArts.map(t => `<span class="ap ap-${t}">${t}</span>`).join('')}</div>
+      </div>`
+    }).join('')
+
+    document.getElementById('spec-summary').classList.add('show')
+  }
+
+  // ─── MAIN RUNNER ─────────────────────────────────────────────────────────────
+  async function runAgent6() {
+    const errEl = document.getElementById('error-box')
+    errEl.classList.remove('show')
+
+    // Parse on demand if not already done
+    if (!parsedSpec) {
+      tryParseSpec(document.getElementById('spec-input').value)
+    }
+
+    if (!parsedSpec || parsedSpec.length === 0) {
+      errEl.textContent = 'No valid Agent 5 spec found. Paste or upload the JSON array first.'
+      errEl.classList.add('show')
+      return
+    }
+
+    // Validate schema
+    const first = parsedSpec[0]
+    if (!first.canvas) {
+      errEl.textContent = 'Invalid schema — expected canvas/zones format from the new Agent 5. Old elements[] format is not supported.'
+      errEl.classList.add('show')
+      return
+    }
+
+    const btn    = document.getElementById('run-btn')
+    const status = document.getElementById('a6-status')
+    const fill   = document.getElementById('a6-fill')
+    const dlCard = document.getElementById('dl-card')
+
+    btn.disabled  = true
+    btn.textContent = '⏳ Generating...'
+    dlCard.classList.remove('show')
+    setProgress(10, 'Sending ' + parsedSpec.length + ' slides to python-pptx...')
+
+    try {
+      setProgress(30, 'python-pptx building slides on server...')
+
+      const res = await fetch('/api/generate-pptx', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          finalSpec:     parsedSpec,
+          brandRulebook: extractBrandRulebook(parsedSpec)
+        })
+      })
+
+      setProgress(70, 'Decoding response...')
+
+      let json
+      try {
+        json = await res.json()
+      } catch(e) {
+        throw new Error('Server returned non-JSON (status ' + res.status + '). Is the server running?')
+      }
+
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || json.message || 'Server error ' + res.status)
+      }
+      if (!json.data || json.data.length < 100) {
+        throw new Error('Server returned empty PPTX data.')
+      }
+
+      setProgress(88, 'Preparing download...')
+
+      // base64 → Blob
+      const binary  = atob(json.data)
+      const bytes   = new Uint8Array(binary.length)
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+      const blob    = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' })
+      const url     = URL.createObjectURL(blob)
+      const fname   = json.filename || ('presentation_' + todayStr() + '.pptx')
+
+      // Show download card
+      const link    = document.getElementById('dl-link')
+      link.href     = url
+      link.download = fname
+      link.textContent = '⬇  Download ' + fname + ' (' + json.slides + ' slides)'
+      dlCard.classList.add('show')
+
+      // Auto-trigger
+      const a = document.createElement('a')
+      a.href = url; a.download = fname
+      document.body.appendChild(a); a.click(); document.body.removeChild(a)
+
+      setProgress(100, '✅ ' + json.slides + ' slides generated — ' + fname)
+      btn.disabled    = false
+      btn.textContent = '↺ Regenerate PPTX'
+
+    } catch(err) {
+      console.error('Agent 6 test error:', err)
+      let msg = err.message
+      if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
+        msg = 'Cannot reach server. Make sure your Vercel dev server is running (vercel dev).'
+      } else if (msg.includes('500') || msg.includes('502')) {
+        msg = 'Server error (500/502). Check python-pptx is installed: pip install python-pptx'
+      }
+      setProgress(0, '❌ ' + msg)
+      btn.disabled    = false
+      btn.textContent = '▶ Generate PPTX'
+    }
+  }
+
+  // ─── HELPERS ─────────────────────────────────────────────────────────────────
+
+  function setProgress(pct, msg) {
+    document.getElementById('a6-fill').style.width  = pct + '%'
+    document.getElementById('a6-status').textContent = msg || ''
+  }
+
+  // Extract a minimal brandRulebook from the designed spec's brand_tokens
+  // so the backend has fallback values even without a separate rulebook upload
+  function extractBrandRulebook(spec) {
+    const bt = (spec[0] || {}).brand_tokens || {}
+    return {
+      primary_colors:    [bt.primary_color   || '#1A3C8F'],
+      secondary_colors:  [bt.secondary_color || '#E8A020'],
+      background_colors: ['#FFFFFF'],
+      text_colors:       [bt.body_color      || '#111111'],
+      chart_colors:      bt.chart_palette    || [bt.primary_color || '#1A3C8F'],
+      title_font:        { family: bt.title_font_family || 'Arial' },
+      body_font:         { family: bt.body_font_family  || 'Arial' },
+      slide_width_inches:  ((spec[0] || {}).canvas || {}).width_in  || 11.02,
+      slide_height_inches: ((spec[0] || {}).canvas || {}).height_in || 8.29
+    }
+  }
+
+  function todayStr() {
+    const d = new Date()
+    const p = n => n < 10 ? '0' + n : String(n)
+    return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate())
+  }
+
+  function resetAll() {
+    parsedSpec = null
+    document.getElementById('spec-input').value = ''
+    document.getElementById('zone-spec').classList.remove('ready')
+    document.getElementById('spec-summary').classList.remove('show')
+    document.getElementById('error-box').classList.remove('show')
+    document.getElementById('dl-card').classList.remove('show')
+    document.getElementById('run-btn').disabled = false
+    document.getElementById('run-btn').textContent = '▶ Generate PPTX'
+    setProgress(0, '')
+  }
+</script>
+</body>
+</html>

@@ -1,216 +1,735 @@
+"""
+/api/generate-pptx.py
+Vercel Python serverless function.
+Receives Agent 5 finalSpec JSON → builds PPTX using python-pptx → returns base64.
+
+Input (POST body JSON):
+  {
+    "finalSpec": [...],       # Agent 5 designed spec array
+    "brandRulebook": {...}    # Agent 2 brand rulebook (for fallback values)
+  }
+
+Output (JSON):
+  {
+    "success": true,
+    "data": "<base64 pptx>",
+    "slides": 12,
+    "filename": "presentation_20241115.pptx"
+  }
+"""
+
 import json
-import io
 import base64
+import io
+import traceback
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler
+
+# python-pptx imports
 from pptx import Presentation
-from pptx.util import Inches, Pt
+from pptx.util import Inches, Pt, Emu
 from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN
+from pptx.enum.chart import XL_CHART_TYPE
+from pptx.chart.data import ChartData
+from pptx.util import Inches, Pt
+import pptx.oxml.ns as nsmap
+from lxml import etree
 
+
+# ─── HELPERS ──────────────────────────────────────────────────────────────────
 
 def hex_to_rgb(hex_color):
+    """Convert #RRGGBB or #RGB to RGBColor."""
+    if not hex_color or not isinstance(hex_color, str):
+        return RGBColor(0x11, 0x11, 0x11)
+    h = hex_color.lstrip('#')
+    if len(h) == 3:
+        h = h[0]*2 + h[1]*2 + h[2]*2
+    if len(h) != 6:
+        return RGBColor(0x11, 0x11, 0x11)
     try:
-        h = str(hex_color).replace('#', '').strip()
-        if len(h) == 3:
-            h = h[0]*2 + h[1]*2 + h[2]*2
-        if len(h) != 6:
-            return RGBColor(0x1A, 0x3C, 0x6E)
         return RGBColor(int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
     except Exception:
-        return RGBColor(0x1A, 0x3C, 0x6E)
+        return RGBColor(0x11, 0x11, 0x11)
 
+def inches(val):
+    """Safe inches conversion — handles None and strings."""
+    try:
+        return Inches(float(val or 0))
+    except Exception:
+        return Inches(0)
 
-def safe_list(brand, key, default):
-    val = brand.get(key, [])
-    return val if isinstance(val, list) and val else [default]
+def pt(val):
+    """Safe Pt conversion."""
+    try:
+        return Pt(float(val or 12))
+    except Exception:
+        return Pt(12)
 
+def set_font(run_or_para, font_family, font_size, bold=False, italic=False, color_hex=None):
+    """Apply font properties to a run or paragraph."""
+    try:
+        font = run_or_para.font
+        if font_family:
+            font.name = str(font_family)
+        if font_size:
+            font.size = pt(font_size)
+        font.bold   = bool(bold)
+        font.italic = bool(italic)
+        if color_hex:
+            font.color.rgb = hex_to_rgb(color_hex)
+    except Exception:
+        pass
 
-def safe_font(brand, key):
-    f = brand.get(key, {})
-    return f.get('family', 'Calibri') if isinstance(f, dict) else 'Calibri'
+def add_text_box(slide, x, y, w, h, text, font_family='Arial', font_size=12,
+                 bold=False, color_hex='#111111', align='left', valign='top',
+                 wrap=True, italic=False):
+    """Add a text box to a slide with full formatting."""
+    txBox = slide.shapes.add_textbox(inches(x), inches(y), inches(w), inches(h))
+    tf    = txBox.text_frame
+    tf.word_wrap = wrap
 
+    # Vertical alignment
+    from pptx.enum.text import MSO_ANCHOR
+    valign_map = { 'middle': MSO_ANCHOR.MIDDLE, 'bottom': MSO_ANCHOR.BOTTOM, 'top': MSO_ANCHOR.TOP }
+    tf.vertical_anchor = valign_map.get(valign, MSO_ANCHOR.TOP)
 
-def clean_hex(val):
-    return str(val).replace('#', '').strip() or '1A3C6E'
-
-
-def add_text(slide, text, x, y, w, h, size=16, bold=False,
-             color='1A1A1A', font='Calibri', align=PP_ALIGN.LEFT):
-    tb = slide.shapes.add_textbox(Inches(x), Inches(y), Inches(w), Inches(h))
-    tf = tb.text_frame
-    tf.word_wrap = True
-    p = tf.paragraphs[0]
-    p.alignment = align
+    # Clear default paragraph and set text
+    p   = tf.paragraphs[0]
     run = p.add_run()
-    run.text = str(text)
-    run.font.size = Pt(size)
-    run.font.bold = bold
-    run.font.name = font
-    run.font.color.rgb = hex_to_rgb(color)
+    run.text = str(text or '')
 
+    # Paragraph alignment
+    align_map = { 'left': PP_ALIGN.LEFT, 'center': PP_ALIGN.CENTER, 'right': PP_ALIGN.RIGHT }
+    p.alignment = align_map.get(align, PP_ALIGN.LEFT)
 
-def add_rect(slide, x, y, w, h, color='1A3C6E'):
-    s = slide.shapes.add_shape(1, Inches(x), Inches(y), Inches(w), Inches(h))
-    s.fill.solid()
-    s.fill.fore_color.rgb = hex_to_rgb(color)
-    s.line.fill.background()
+    set_font(run, font_family, font_size, bold, italic, color_hex)
+    return txBox
 
+def add_filled_rect(slide, x, y, w, h, fill_hex=None, border_hex=None,
+                    border_pt=0, corner_radius=0):
+    """Add a filled rectangle shape (used for backgrounds, cards, etc.)"""
+    from pptx.enum.shapes import MSO_SHAPE_TYPE
+    shape = slide.shapes.add_shape(
+        1,  # MSO_SHAPE.RECTANGLE
+        inches(x), inches(y), inches(w), inches(h)
+    )
 
-def build_title_slide(slide, spec, brand):
-    p  = clean_hex(safe_list(brand, 'primary_colors',   '#1A3C6E')[0])
-    s  = clean_hex(safe_list(brand, 'secondary_colors', '#F4A300')[0])
-    tf = safe_font(brand, 'title_font')
-    bf = safe_font(brand, 'body_font')
-
-    add_rect(slide, 0, 0, 10, 7.5, p)
-    add_rect(slide, 0, 4.6, 10, 0.1, s)
-    add_text(slide, spec.get('title', 'Presentation'),
-             0.8, 1.6, 8.4, 2.0, size=40, bold=True, color='FFFFFF', font=tf)
-    sub = spec.get('subtitle', '')
-    if sub:
-        add_text(slide, sub, 0.8, 3.7, 8.4, 0.8, size=20, color='DDDDDD', font=bf)
-    from datetime import date
-    add_text(slide, date.today().strftime('%B %Y'),
-             6.5, 5.1, 3.0, 0.4, size=11, color='AAAAAA', font=bf, align=PP_ALIGN.RIGHT)
-
-
-def build_divider_slide(slide, spec, brand):
-    p  = clean_hex(safe_list(brand, 'primary_colors',   '#1A3C6E')[0])
-    s  = clean_hex(safe_list(brand, 'secondary_colors', '#F4A300')[0])
-    tf = safe_font(brand, 'title_font')
-
-    add_rect(slide, 0, 0, 10, 7.5, p)
-    add_rect(slide, 0, 0, 0.15, 7.5, s)
-    add_text(slide, 'SECTION', 0.5, 2.8, 9, 0.5, size=12, bold=True, color=s, font=tf)
-    add_text(slide, spec.get('title', ''), 0.5, 3.4, 9, 1.6,
-             size=34, bold=True, color='FFFFFF', font=tf)
-
-
-def build_bullets(slide, bullets, accent, font):
-    if not bullets:
-        return
-    row_h = min(0.75, 5.6 / max(len(bullets), 1))
-    for i, b in enumerate(bullets):
-        y = 1.1 + i * row_h
-        add_rect(slide, 0.5, y + 0.2, 0.12, 0.12, accent)
-        add_text(slide, str(b), 0.75, y, 8.8, row_h, size=15, color='1A1A1A', font=font)
-
-
-def build_three_col(slide, bullets, accent, font):
-    bullets = list(bullets or [])
-    while len(bullets) < 3:
-        bullets.append('—')
-    for i in range(3):
-        x = 0.5 + i * 3.05
-        card = slide.shapes.add_shape(1, Inches(x), Inches(1.1), Inches(2.8), Inches(6.0))
-        card.fill.solid()
-        card.fill.fore_color.rgb = hex_to_rgb('F9FAFB')
-        card.line.color.rgb = hex_to_rgb('E5E7EB')
-        add_rect(slide, x, 1.1, 2.8, 0.1, accent)
-        add_text(slide, str(i+1).zfill(2), x+0.15, 1.28, 0.6, 0.5,
-                 size=22, bold=True, color=accent, font=font)
-        add_text(slide, str(bullets[i]), x+0.15, 1.9, 2.5, 4.9,
-                 size=13, color='1A1A1A', font=font)
-
-
-def build_two_col(slide, bullets, primary, font):
-    mid   = len(bullets) // 2 + len(bullets) % 2
-    left  = bullets[:mid]
-    right = bullets[mid:]
-    add_rect(slide, 5.0, 1.0, 0.03, 6.2, 'E5E7EB')
-
-    def col(items, x):
-        for idx, b in enumerate(items):
-            y = 1.1 + idx * 0.95
-            add_rect(slide, x, y+0.12, 0.07, 0.55, primary)
-            add_text(slide, str(b), x+0.22, y, 4.0, 0.9, size=14, color='1A1A1A', font=font)
-
-    col(left, 0.5)
-    col(right, 5.3)
-
-
-def build_quote(slide, bullets, secondary, title_font, body_font):
-    quote = str(bullets[0]) if bullets else 'Key insight.'
-    add_text(slide, '\u201c', 0.5, 0.9, 1.2, 1.5, size=80, bold=True,
-             color=secondary, font=title_font)
-    add_text(slide, quote, 1.3, 1.6, 8.2, 3.2, size=22, color='1A1A1A', font=title_font)
-    add_rect(slide, 1.3, 5.0, 3.5, 0.07, secondary)
-    if len(bullets) > 1:
-        add_text(slide, str(bullets[1]), 1.3, 5.2, 8.0, 0.5,
-                 size=12, color='555555', font=body_font)
-
-
-def build_content_slide(slide, spec, brand):
-    p   = clean_hex(safe_list(brand, 'primary_colors',   '#1A3C6E')[0])
-    s   = clean_hex(safe_list(brand, 'secondary_colors', '#F4A300')[0])
-    tf  = safe_font(brand, 'title_font')
-    bf  = safe_font(brand, 'body_font')
-    bul = spec.get('bullets', [])
-    vt  = str(spec.get('visual_type', 'text')).lower().replace('-', '_').replace(' ', '_')
-
-    add_rect(slide, 0, 0, 10, 0.1, p)
-    add_text(slide, spec.get('title', ''), 0.5, 0.18, 9.0, 0.7,
-             size=24, bold=True, color=p, font=tf)
-    add_rect(slide, 0.5, 0.93, 9.0, 0.03, 'E5E7EB')
-
-    if vt in ('three_column', 'icons'):
-        build_three_col(slide, bul, s, bf)
-    elif vt == 'two_column':
-        build_two_col(slide, bul, p, bf)
-    elif vt == 'quote':
-        build_quote(slide, bul, s, tf, bf)
+    # Fill
+    if fill_hex:
+        shape.fill.solid()
+        shape.fill.fore_color.rgb = hex_to_rgb(fill_hex)
     else:
-        build_bullets(slide, bul, s, bf)
+        shape.fill.background()
 
-    add_text(slide, str(spec.get('slide_number', '')),
-             9.2, 7.1, 0.6, 0.3, size=10, color='AAAAAA', font=bf, align=PP_ALIGN.RIGHT)
+    # Border
+    if border_hex and border_pt and border_pt > 0:
+        shape.line.color.rgb = hex_to_rgb(border_hex)
+        shape.line.width     = pt(border_pt)
+    else:
+        shape.line.fill.background()
 
-    note = spec.get('speaker_note', '')
-    if note:
+    # Corner radius — set via XML
+    if corner_radius and corner_radius > 0:
         try:
-            slide.notes_slide.notes_text_frame.text = str(note)
+            sp  = shape._element
+            prstGeom = sp.find('.//' + '{http://schemas.openxmlformats.org/drawingml/2006/main}prstGeom')
+            if prstGeom is not None:
+                prstGeom.set('prst', 'roundRect')
+                avLst = prstGeom.find('{http://schemas.openxmlformats.org/drawingml/2006/main}avLst')
+                if avLst is None:
+                    avLst = etree.SubElement(prstGeom, '{http://schemas.openxmlformats.org/drawingml/2006/main}avLst')
+                # corner radius as percentage of shape size (max 50000 = 50%)
+                radius_pct = min(int(corner_radius * 5000), 50000)
+                gd = etree.SubElement(avLst, '{http://schemas.openxmlformats.org/drawingml/2006/main}gd')
+                gd.set('name', 'adj')
+                gd.set('fmla', 'val ' + str(radius_pct))
         except Exception:
             pass
 
+    return shape
 
-def generate_pptx(final_spec, brand_rulebook):
+def rgb_tuple(hex_color):
+    """Return (r, g, b) tuple from hex."""
+    h = (hex_color or '#000000').lstrip('#')
+    if len(h) == 3: h = h[0]*2 + h[1]*2 + h[2]*2
+    try:
+        return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+    except Exception:
+        return (0, 0, 0)
+
+
+# ─── SLIDE RENDERERS ──────────────────────────────────────────────────────────
+
+def render_insight_text(slide, artifact, bt):
+    """Render an insight_text artifact."""
+    x = artifact.get('x', 0)
+    y = artifact.get('y', 0)
+    w = artifact.get('w', 4)
+    h = artifact.get('h', 2)
+
+    style   = artifact.get('style', {})
+    hs      = artifact.get('heading_style', {})
+    bs      = artifact.get('body_style', {})
+    heading = artifact.get('heading', 'Key Insight')
+    points  = artifact.get('points', [])
+
+    # Background fill + border
+    fill   = style.get('fill_color')
+    border = style.get('border_color')
+    bw     = style.get('border_width', 0)
+    cr     = style.get('corner_radius', 0)
+
+    if fill or (border and bw):
+        add_filled_rect(slide, x, y, w, h, fill_hex=fill,
+                        border_hex=border, border_pt=bw, corner_radius=cr)
+
+    # Left accent bar (3px wide)
+    accent_color = hs.get('color') or bt.get('primary_color', '#1A3C8F')
+    add_filled_rect(slide, x, y, 0.06, h, fill_hex=accent_color)
+
+    # Heading
+    h_font  = hs.get('font_family', bt.get('title_font_family', 'Arial'))
+    h_size  = hs.get('font_size', 12)
+    h_color = hs.get('color', accent_color)
+    h_bold  = hs.get('font_weight', 'bold') in ('bold', 'semibold')
+    add_text_box(slide, x + 0.12, y + 0.06, w - 0.18, 0.32,
+                 str(heading), h_font, h_size, h_bold, h_color, 'left', 'middle')
+
+    # Body points
+    if points:
+        b_font  = bs.get('font_family', bt.get('body_font_family', 'Arial'))
+        b_size  = bs.get('font_size', 10)
+        b_color = bs.get('color', '#111111')
+        ls      = bs.get('line_spacing', 1.4)
+
+        body_text = '\n'.join(['• ' + str(p) for p in points])
+        pt_y      = y + 0.42
+        pt_h      = h - 0.48
+        txBox = slide.shapes.add_textbox(
+            inches(x + 0.12), inches(pt_y), inches(w - 0.18), inches(pt_h)
+        )
+        tf = txBox.text_frame
+        tf.word_wrap = True
+
+        first = True
+        for point in points:
+            if first:
+                p_obj = tf.paragraphs[0]
+                first = False
+            else:
+                p_obj = tf.add_paragraph()
+            p_obj.space_before = pt(2)
+            run = p_obj.add_run()
+            run.text = '• ' + str(point)
+            set_font(run, b_font, b_size, False, False, b_color)
+
+
+def render_chart(slide, artifact, bt):
+    """Render a chart artifact using python-pptx native charts."""
+    x  = artifact.get('x', 0)
+    y  = artifact.get('y', 0)
+    w  = artifact.get('w', 5)
+    h  = artifact.get('h', 3)
+
+    chart_type_str = artifact.get('chart_type', 'bar')
+    categories     = artifact.get('categories', [])
+    series_data    = artifact.get('series', [])
+    chart_title    = artifact.get('chart_title', '')
+    x_label        = artifact.get('x_label', '')
+    y_label        = artifact.get('y_label', '')
+    show_labels    = artifact.get('show_data_labels', True)
+    show_legend    = artifact.get('show_legend', False)
+    series_styles  = artifact.get('series_style', [])
+    cs             = artifact.get('chart_style', {})
+    chart_palette  = bt.get('chart_palette', ['#0F2FB5', '#FF8E00', '#2D962D', '#D60202'])
+
+    # Map chart type string to XL_CHART_TYPE
+    chart_type_map = {
+        'bar':          XL_CHART_TYPE.COLUMN_CLUSTERED,
+        'clustered_bar':XL_CHART_TYPE.COLUMN_CLUSTERED,
+        'line':         XL_CHART_TYPE.LINE,
+        'pie':          XL_CHART_TYPE.PIE,
+        'waterfall':    XL_CHART_TYPE.COLUMN_CLUSTERED,  # approximate
+    }
+    xl_type = chart_type_map.get(chart_type_str, XL_CHART_TYPE.COLUMN_CLUSTERED)
+
+    if not categories or not series_data:
+        # No data — draw placeholder
+        add_filled_rect(slide, x, y, w, h, fill_hex='#F0F4FF', border_hex='#C0C8E0', border_pt=1)
+        add_text_box(slide, x + 0.1, y + h/2 - 0.2, w - 0.2, 0.4,
+                     'Chart: ' + chart_type_str + ' (no data)', 'Arial', 10,
+                     False, '#888888', 'center', 'middle')
+        return
+
+    # Build ChartData
+    cd = ChartData()
+    cd.categories = [str(c) for c in categories]
+
+    for si, ser in enumerate(series_data):
+        ser_name   = ser.get('name', 'Series ' + str(si + 1))
+        ser_values = [float(v) if v is not None else 0 for v in (ser.get('values') or [])]
+        # Pad/trim to match category count
+        while len(ser_values) < len(categories): ser_values.append(0)
+        ser_values = ser_values[:len(categories)]
+        cd.add_series(ser_name, ser_values)
+
+    # Add chart
+    chart = slide.shapes.add_chart(
+        xl_type,
+        inches(x), inches(y), inches(w), inches(h),
+        cd
+    ).chart
+
+    # Title
+    chart.has_title = bool(chart_title)
+    if chart_title:
+        chart.chart_title.text_frame.text = str(chart_title)
+        try:
+            tf_run = chart.chart_title.text_frame.paragraphs[0].runs[0]
+            set_font(tf_run,
+                     cs.get('title_font_family', 'Arial'),
+                     cs.get('title_font_size', 12),
+                     True, False,
+                     cs.get('title_color', '#000000'))
+        except Exception:
+            pass
+
+    # Legend
+    chart.has_legend = show_legend
+    if show_legend and chart.has_legend:
+        try:
+            chart.legend.position = 2  # bottom
+            chart.legend.include_in_layout = False
+        except Exception:
+            pass
+
+    # Series colors
+    try:
+        for si, ser_obj in enumerate(chart.series):
+            color_hex = None
+            if si < len(series_styles):
+                color_hex = series_styles[si].get('fill_color')
+            if not color_hex and si < len(chart_palette):
+                color_hex = chart_palette[si]
+            if color_hex:
+                pt_obj = ser_obj.format.fill
+                pt_obj.solid()
+                pt_obj.fore_color.rgb = hex_to_rgb(color_hex)
+            # Data labels
+            if show_labels:
+                try:
+                    ser_obj.data_labels.show_value = True
+                    if si < len(series_styles):
+                        lbl_color = series_styles[si].get('data_label_color', '#000000')
+                        for lbl in ser_obj.data_labels:
+                            try:
+                                lbl.font.color.rgb = hex_to_rgb(lbl_color)
+                                lbl.font.size = Pt(8)
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    # Axis font sizes
+    try:
+        ax_font_size = cs.get('axis_font_size', 9)
+        ax_color     = cs.get('axis_color', '#000000')
+        for ax in (chart.category_axis, chart.value_axis):
+            try:
+                ax.tick_labels.font.size  = Pt(ax_font_size)
+                ax.tick_labels.font.color.rgb = hex_to_rgb(ax_color)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+
+def render_cards(slide, artifact, bt):
+    """Render a cards artifact — each card as a styled rectangle + text."""
+    cs       = artifact.get('card_style', {})
+    ts       = artifact.get('title_style', {})
+    sub_s    = artifact.get('subtitle_style', {})
+    bs       = artifact.get('body_style', {})
+    frames   = artifact.get('card_frames', [])
+    cards    = artifact.get('cards', [])
+
+    fill_hex   = cs.get('fill_color', '#F5F5F5')
+    border_hex = cs.get('border_color')
+    border_w   = cs.get('border_width', 1)
+    corner_r   = cs.get('corner_radius', 4)
+    padding    = cs.get('internal_padding', 0.15)
+
+    t_font  = ts.get('font_family', bt.get('title_font_family', 'Arial'))
+    t_size  = ts.get('font_size', 14)
+    t_color = ts.get('color', bt.get('primary_color', '#1A3C8F'))
+    t_bold  = ts.get('font_weight', 'bold') in ('bold', 'semibold')
+
+    su_font  = sub_s.get('font_family', bt.get('body_font_family', 'Arial'))
+    su_size  = sub_s.get('font_size', 11)
+    su_color = sub_s.get('color', '#000000')
+
+    b_font  = bs.get('font_family', bt.get('body_font_family', 'Arial'))
+    b_size  = bs.get('font_size', 10)
+    b_color = bs.get('color', '#111111')
+
+    for fi, frame in enumerate(frames):
+        fx = frame.get('x', 0)
+        fy = frame.get('y', 0)
+        fw = frame.get('w', 2)
+        fh = frame.get('h', 1)
+
+        card = cards[fi] if fi < len(cards) else {}
+
+        # Card background
+        add_filled_rect(slide, fx, fy, fw, fh,
+                        fill_hex=fill_hex,
+                        border_hex=border_hex,
+                        border_pt=border_w,
+                        corner_radius=corner_r)
+
+        # Top accent strip (4px)
+        accent = ts.get('color', bt.get('primary_color', '#1A3C8F'))
+        add_filled_rect(slide, fx, fy, fw, 0.055, fill_hex=accent)
+
+        # Title
+        card_title = card.get('title', '')
+        if card_title:
+            add_text_box(slide, fx + padding, fy + 0.08, fw - padding*2, 0.45,
+                         str(card_title), t_font, t_size, t_bold, t_color, 'left', 'top')
+
+        # Subtitle
+        card_sub = card.get('subtitle', '')
+        if card_sub:
+            add_text_box(slide, fx + padding, fy + 0.52, fw - padding*2, 0.30,
+                         str(card_sub), su_font, su_size, False, su_color, 'left', 'top')
+
+        # Body
+        card_body = card.get('body', '')
+        body_y = fy + (0.85 if card_sub else 0.56)
+        body_h = fh - (body_y - fy) - padding
+        if card_body and body_h > 0.1:
+            add_text_box(slide, fx + padding, body_y, fw - padding*2, body_h,
+                         str(card_body), b_font, b_size, False, b_color, 'left', 'top')
+
+
+def render_workflow(slide, artifact, bt):
+    """Render a workflow artifact — nodes as rectangles, connections as lines."""
+    ws    = artifact.get('workflow_style', {})
+    nodes = artifact.get('nodes', [])
+    conns = artifact.get('connections', [])
+
+    node_fill   = ws.get('node_fill_color', bt.get('primary_color', '#1A3C8F'))
+    node_border = ws.get('node_border_color', '#FFFFFF')
+    node_bw     = ws.get('node_border_width', 1.5)
+    node_cr     = ws.get('node_corner_radius', 4)
+    conn_color  = ws.get('connector_color', bt.get('primary_color', '#1A3C8F'))
+
+    t_font  = ws.get('node_title_font_family', bt.get('title_font_family', 'Arial'))
+    t_size  = ws.get('node_title_font_size', 11)
+    t_color = ws.get('node_title_color', '#FFFFFF')
+    t_bold  = ws.get('node_title_font_weight', 'bold') in ('bold', 'semibold')
+
+    v_font  = ws.get('node_value_font_family', bt.get('body_font_family', 'Arial'))
+    v_size  = ws.get('node_value_font_size', 10)
+    v_color = ws.get('node_value_color', '#FFFFFF')
+
+    # Draw connections first (behind nodes)
+    for conn in conns:
+        path = conn.get('path', [])
+        if len(path) >= 2:
+            try:
+                from pptx.util import Emu
+                from pptx.oxml.ns import qn
+                # Use a connector shape for simple lines
+                x1 = float(path[0].get('x', 0))
+                y1 = float(path[0].get('y', 0))
+                x2 = float(path[-1].get('x', 0))
+                y2 = float(path[-1].get('y', 0))
+
+                connector = slide.shapes.add_connector(
+                    1,  # MSO_CONNECTOR_TYPE.STRAIGHT
+                    inches(x1), inches(y1), inches(x2), inches(y2)
+                )
+                connector.line.color.rgb = hex_to_rgb(conn_color)
+                connector.line.width     = Pt(ws.get('connector_width', 2))
+            except Exception:
+                pass
+
+    # Draw nodes
+    node_map = {n.get('id'): n for n in nodes}
+    for node in nodes:
+        nx = node.get('x', 0)
+        ny = node.get('y', 0)
+        nw = node.get('w', 2)
+        nh = node.get('h', 0.8)
+
+        add_filled_rect(slide, nx, ny, nw, nh,
+                        fill_hex=node_fill,
+                        border_hex=node_border,
+                        border_pt=node_bw,
+                        corner_radius=node_cr)
+
+        # Node label (primary text)
+        label = node.get('label', node.get('id', ''))
+        if label:
+            add_text_box(slide, nx + 0.1, ny + 0.06, nw - 0.2, nh * 0.45,
+                         str(label), t_font, t_size, t_bold, t_color, 'center', 'middle')
+
+        # Node value (secondary metric)
+        value = node.get('value', '')
+        if value:
+            add_text_box(slide, nx + 0.1, ny + nh * 0.45, nw - 0.2, nh * 0.3,
+                         str(value), v_font, v_size, False, v_color, 'center', 'middle')
+
+        # Description (small text below value)
+        desc = node.get('description', '')
+        if desc and nh > 0.9:
+            add_text_box(slide, nx + 0.08, ny + nh * 0.72, nw - 0.16, nh * 0.25,
+                         str(desc), v_font, max(7, v_size - 2), False, v_color, 'center', 'top')
+
+
+def render_table(slide, artifact, bt):
+    """Render a table artifact using python-pptx native table."""
+    x = artifact.get('x', 0)
+    y = artifact.get('y', 0)
+    w = artifact.get('w', 6)
+    h = artifact.get('h', 2)
+
+    ts      = artifact.get('table_style', {})
+    headers = artifact.get('headers', [])
+    rows    = artifact.get('rows', [])
+    col_ws  = artifact.get('column_widths', [])
+    row_hs  = artifact.get('row_heights', [])
+    hl_rows = artifact.get('highlight_rows', [])
+
+    if not headers:
+        add_text_box(slide, x, y, w, h, 'Table (no headers)', 'Arial', 10,
+                     False, '#888888', 'center', 'middle')
+        return
+
+    n_cols  = len(headers)
+    n_rows  = len(rows) + 1   # +1 for header row
+    data_rows = rows
+
+    try:
+        table_shape = slide.shapes.add_table(n_rows, n_cols, inches(x), inches(y), inches(w), inches(h))
+        table       = table_shape.table
+
+        # Column widths
+        if col_ws and len(col_ws) == n_cols:
+            for ci, cw in enumerate(col_ws):
+                table.columns[ci].width = inches(cw)
+
+        # Row heights
+        if row_hs and len(row_hs) >= n_rows:
+            for ri in range(n_rows):
+                table.rows[ri].height = inches(row_hs[ri] if ri < len(row_hs) else h / n_rows)
+
+        # Header row styles
+        h_fill  = ts.get('header_fill_color', bt.get('primary_color', '#1A3C8F'))
+        h_text  = ts.get('header_text_color', '#FFFFFF')
+        h_font  = ts.get('header_font_family', bt.get('title_font_family', 'Arial'))
+        h_size  = ts.get('header_font_size', 11)
+
+        b_fill  = ts.get('body_fill_color', '#FFFFFF')
+        b_alt   = ts.get('body_alt_fill_color')
+        b_text  = ts.get('body_text_color', '#111111')
+        b_font  = ts.get('body_font_family', bt.get('body_font_family', 'Arial'))
+        b_size  = ts.get('body_font_size', 10)
+        hl_fill = ts.get('highlight_fill_color')
+        grid_c  = ts.get('grid_color', '#CCCCCC')
+        cell_p  = ts.get('cell_padding', 0.08)
+
+        for ci, hdr in enumerate(headers):
+            cell = table.cell(0, ci)
+            cell.text = str(hdr)
+            cell.fill.solid()
+            cell.fill.fore_color.rgb = hex_to_rgb(h_fill)
+            try:
+                run = cell.text_frame.paragraphs[0].runs[0]
+                set_font(run, h_font, h_size, True, False, h_text)
+                cell.text_frame.paragraphs[0].alignment = PP_ALIGN.LEFT
+            except Exception:
+                pass
+
+        # Body rows
+        for ri, row in enumerate(data_rows):
+            row_idx = ri + 1
+            use_alt = (b_alt and ri % 2 == 1)
+            use_hl  = (hl_fill and ri in hl_rows)
+            row_fill = hl_fill if use_hl else (b_alt if use_alt else b_fill)
+
+            for ci in range(n_cols):
+                cell = table.cell(row_idx, ci)
+                cell_text = str(row[ci]) if ci < len(row) else ''
+                cell.text = cell_text
+                cell.fill.solid()
+                cell.fill.fore_color.rgb = hex_to_rgb(row_fill or b_fill)
+                try:
+                    run = cell.text_frame.paragraphs[0].runs[0]
+                    set_font(run, b_font, b_size, False, False, b_text)
+                except Exception:
+                    pass
+
+    except Exception as e:
+        # Fallback — plain text box
+        all_text = ' | '.join(headers) + '\n' + '\n'.join([' | '.join([str(c) for c in r]) for r in rows])
+        add_text_box(slide, x, y, w, h, all_text, 'Arial', 9, False, '#111111')
+
+
+def render_artifact(slide, artifact, bt):
+    """Dispatch to the correct renderer based on artifact type."""
+    t = (artifact.get('type') or '').lower()
+    try:
+        if   t == 'insight_text': render_insight_text(slide, artifact, bt)
+        elif t == 'chart':        render_chart(slide, artifact, bt)
+        elif t == 'cards':        render_cards(slide, artifact, bt)
+        elif t == 'workflow':     render_workflow(slide, artifact, bt)
+        elif t == 'table':        render_table(slide, artifact, bt)
+    except Exception as e:
+        print(f'render_artifact error ({t}):', e)
+        traceback.print_exc()
+
+
+# ─── SLIDE BUILDER ─────────────────────────────────────────────────────────────
+
+def build_slide(prs, slide_spec):
+    """Build one slide from its spec object."""
+    # Use blank layout
+    blank_layout = prs.slide_layouts[6]  # blank
+    slide = prs.slides.add_slide(blank_layout)
+
+    cvs = slide_spec.get('canvas', {})
+    bt  = slide_spec.get('brand_tokens', {})
+
+    # ── Background ──────────────────────────────────────────────────────────
+    bg_color = (cvs.get('background') or {}).get('color', '#FFFFFF')
+    background = slide.background
+    fill = background.fill
+    fill.solid()
+    fill.fore_color.rgb = hex_to_rgb(bg_color)
+
+    # ── Title block ──────────────────────────────────────────────────────────
+    tb = slide_spec.get('title_block')
+    if tb and tb.get('text'):
+        add_text_box(
+            slide,
+            tb.get('x', 0.4), tb.get('y', 0.15),
+            tb.get('w', 9), tb.get('h', 0.8),
+            tb.get('text', ''),
+            tb.get('font_family', bt.get('title_font_family', 'Arial')),
+            tb.get('font_size', 20),
+            tb.get('font_weight', 'bold') in ('bold', 'semibold'),
+            tb.get('color', bt.get('title_color', '#1A3C8F')),
+            tb.get('align', 'left'),
+            tb.get('valign', 'middle'),
+            True
+        )
+
+    # ── Subtitle block ────────────────────────────────────────────────────────
+    sb = slide_spec.get('subtitle_block')
+    if sb and sb.get('text'):
+        add_text_box(
+            slide,
+            sb.get('x', 0.4), sb.get('y', 1.0),
+            sb.get('w', 9), sb.get('h', 0.5),
+            sb.get('text', ''),
+            sb.get('font_family', bt.get('body_font_family', 'Arial')),
+            sb.get('font_size', 14),
+            sb.get('font_weight', 'semibold') in ('bold', 'semibold'),
+            sb.get('color', bt.get('body_color', '#333333')),
+            sb.get('align', 'left'),
+            sb.get('valign', 'middle'),
+            True
+        )
+
+    # ── Zones → Artifacts ─────────────────────────────────────────────────────
+    for zone in slide_spec.get('zones', []):
+        for artifact in zone.get('artifacts', []):
+            render_artifact(slide, artifact, bt)
+
+    # ── Global elements ───────────────────────────────────────────────────────
+    ge = slide_spec.get('global_elements', {})
+
+    footer = ge.get('footer', {})
+    if footer.get('show'):
+        add_text_box(
+            slide,
+            footer.get('x', 0.4), footer.get('y', 7.5),
+            footer.get('w', 5),   footer.get('h', 0.25),
+            'Confidential',
+            footer.get('font_family', 'Arial'),
+            footer.get('font_size', 8),
+            False,
+            footer.get('color', '#AAAAAA'),
+            footer.get('align', 'left'),
+            'middle'
+        )
+
+    pn = ge.get('page_number', {})
+    if pn.get('show'):
+        slide_num = slide_spec.get('slide_number', '')
+        add_text_box(
+            slide,
+            pn.get('x', 9.5),  pn.get('y', 7.5),
+            pn.get('w', 0.8),  pn.get('h', 0.25),
+            str(slide_num),
+            pn.get('font_family', 'Arial'),
+            pn.get('font_size', 8),
+            False,
+            pn.get('color', '#AAAAAA'),
+            'right',
+            'middle'
+        )
+
+    # ── Speaker notes ─────────────────────────────────────────────────────────
+    note_text = slide_spec.get('speaker_note', '')
+    if note_text:
+        try:
+            notes_slide = slide.notes_slide
+            tf = notes_slide.notes_text_frame
+            tf.text = str(note_text)
+        except Exception:
+            pass
+
+    return slide
+
+
+# ─── MAIN BUILDER ─────────────────────────────────────────────────────────────
+
+def build_presentation(final_spec, brand_rulebook):
+    """Build a complete Presentation from the Agent 5 final spec."""
     prs = Presentation()
-    prs.slide_width  = Inches(10)
-    prs.slide_height = Inches(7.5)
-    blank = prs.slide_layouts[6]
 
-    for spec in final_spec:
-        slide = prs.slides.add_slide(blank)
+    if not final_spec:
+        raise ValueError('finalSpec is empty')
 
-        bg = spec.get('background_color') or \
-             (safe_list(brand_rulebook, 'background_colors', '#FFFFFF')[0])
-        fill = slide.background.fill
-        fill.solid()
-        fill.fore_color.rgb = hex_to_rgb(bg)
+    # Set slide dimensions from first slide's canvas
+    first_canvas = (final_spec[0].get('canvas') or {})
+    w_in = float(first_canvas.get('width_in')  or 11.02)
+    h_in = float(first_canvas.get('height_in') or 8.29)
+    prs.slide_width  = Inches(w_in)
+    prs.slide_height = Inches(h_in)
 
-        stype = str(spec.get('type', 'content')).lower()
-        if stype == 'title':
-            build_title_slide(slide, spec, brand_rulebook)
-        elif stype == 'divider':
-            build_divider_slide(slide, spec, brand_rulebook)
-        else:
-            build_content_slide(slide, spec, brand_rulebook)
+    for slide_spec in final_spec:
+        try:
+            build_slide(prs, slide_spec)
+        except Exception as e:
+            print(f"Error building slide {slide_spec.get('slide_number', '?')}:", e)
+            traceback.print_exc()
+            # Add blank slide rather than aborting
+            prs.slides.add_slide(prs.slide_layouts[6])
 
-    buf = io.BytesIO()
-    prs.save(buf)
-    buf.seek(0)
-    return buf
+    return prs
 
+
+# ─── VERCEL HANDLER ──────────────────────────────────────────────────────────
 
 class handler(BaseHTTPRequestHandler):
-
-    def do_OPTIONS(self):
-        self.send_response(200)
-        self._cors()
-        self.end_headers()
-
-    def do_GET(self):
-        self._json(405, {'error': 'Use POST'})
 
     def do_POST(self):
         try:
@@ -222,36 +741,53 @@ class handler(BaseHTTPRequestHandler):
             brand_rulebook = data.get('brandRulebook', {})
 
             if not final_spec:
-                self._json(400, {'error': 'finalSpec is required'})
+                self._json(400, {'success': False, 'error': 'finalSpec is missing or empty'})
                 return
 
-            buf     = generate_pptx(final_spec, brand_rulebook)
-            encoded = base64.b64encode(buf.read()).decode('utf-8')
+            # Build the presentation
+            prs = build_presentation(final_spec, brand_rulebook)
+
+            # Serialize to bytes
+            buf = io.BytesIO()
+            prs.save(buf)
+            buf.seek(0)
+            pptx_bytes = buf.read()
+
+            # Encode as base64
+            b64 = base64.b64encode(pptx_bytes).decode('utf-8')
+
+            # Filename
+            date_str = datetime.now().strftime('%Y%m%d')
+            title_raw = (final_spec[0].get('title') or 'presentation')
+            title_slug = ''.join(c if c.isalnum() else '_' for c in title_raw.lower())[:30]
+            filename = title_slug + '_' + date_str + '.pptx'
 
             self._json(200, {
                 'success':  True,
-                'filename': 'presentation.pptx',
-                'data':     encoded,
-                'slides':   len(final_spec)
+                'data':     b64,
+                'slides':   len(final_spec),
+                'filename': filename
             })
 
         except Exception as e:
-            import traceback
-            self._json(500, {'error': str(e), 'details': traceback.format_exc()})
+            traceback.print_exc()
+            self._json(500, {'success': False, 'error': str(e)})
 
-    def _cors(self):
-        self.send_header('Access-Control-Allow-Origin',  '*')
-        self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-
-    def _json(self, status, obj):
-        body = json.dumps(obj).encode()
+    def _json(self, status, payload):
+        body = json.dumps(payload).encode('utf-8')
         self.send_response(status)
-        self._cors()
         self.send_header('Content-Type',   'application/json')
         self.send_header('Content-Length', str(len(body)))
+        self.send_header('Access-Control-Allow-Origin', '*')
         self.end_headers()
         self.wfile.write(body)
 
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin',  '*')
+        self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
+
     def log_message(self, format, *args):
-        pass
+        pass  # suppress default request logging
