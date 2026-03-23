@@ -234,7 +234,36 @@
 
 <!-- Load agents -->
 <script src="agent5.js"></script>
-<script src="app.js"></script>
+<script>
+// ─── SELF-CONTAINED DEPENDENCIES ─────────────────────────────────────────────
+// callClaude and safeParseJSON are normally provided by app.js in the full
+// pipeline. The test file embeds them directly so it runs standalone.
+
+async function callClaude(system, messages, max_tokens = 2000) {
+  const res = await fetch('/api/claude', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ system, messages, max_tokens })
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.error || 'API call failed — status ' + res.status)
+  }
+  const data = await res.json()
+  return data.content.map(b => b.text || '').join('')
+}
+
+function safeParseJSON(raw, fallback) {
+  try {
+    const cleaned = (raw || '').replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
+    return JSON.parse(cleaned)
+  } catch(e) {
+    console.warn('JSON parse failed:', e.message)
+    console.warn('Raw (first 300):', (raw || '').slice(0, 300))
+    return fallback
+  }
+}
+</script>
 
 <script>
   let resultSpec  = null
