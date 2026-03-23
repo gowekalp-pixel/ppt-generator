@@ -1,108 +1,220 @@
 // ─── AGENT 4 — SLIDE CONTENT WRITER ──────────────────────────────────────────
 // Input:  state.outline        — presentationBrief from Agent 3
-//         state.contentB64     — original PDF (fallback for detail)
-// Output: slideManifest        — flat JSON array, one object per slide
+//         state.contentB64     — original PDF
+// Output: slideManifest        — flat JSON array
 //
-// Key fixes in this version:
-// 1. Splits into batches of 6 slides — prevents token exhaustion
-// 2. Validates every slide — re-requests any slide with placeholder content
-// 3. Title slide gets a clean name, not the governing thought as title
-// 4. Strong prompt enforcement — no placeholders allowed
+// Key responsibilities:
+// 1. Write specific, data-driven content for every slide
+// 2. Decide primary + secondary content for mixed slides
+// 3. Select the best chart type based on data signals
+// 4. Format bullets with emphasis markers for important numbers/words
+// 5. Split into batches to avoid token limits
 
-const AGENT4_SYSTEM = `You are a senior management consultant and presentation specialist.
-You will be given a presentation brief and a batch of slides to write content for.
+const AGENT4_SYSTEM = `You are a senior management consultant creating slide content for a board presentation.
 
-For EACH slide in the batch, produce a fully populated slide object.
+You will receive a presentation brief and a batch of slides to populate.
 
-Each slide object must have EXACTLY these fields:
+Return a JSON array — one object per slide — with EXACTLY these fields:
 
 {
   "slide_number": number,
   "section_name": "string",
   "section_type": "string",
   "slide_type": "title" | "divider" | "content",
-  "title": "string — insight-led title, specific to the content",
-  "subtitle": "string — for title slides only, empty string for others",
-  "key_message": "string — THE single most important insight this slide communicates. Specific, data-driven, not generic.",
-  "visual_type": "string",
-  "content": { ... fully populated, see rules below ... },
-  "speaker_note": "string — what presenter says that is NOT on the slide"
+  "title": "string — insight-led, specific. For title slides: short name 5-8 words max",
+  "subtitle": "string — for title slides only",
+  "key_message": "string — the single most important insight. Specific, data-driven.",
+  "is_mixed": true | false,
+  "primary_content": { ... see rules below ... },
+  "secondary_content": null OR { ... see rules below ... },
+  "speaker_note": "string"
 }
 
-TITLE SLIDE RULES:
-- title: short presentation name (e.g. "Retail Portfolio Risk Review — Q3 2025") NOT the governing thought
-- subtitle: audience or date
-- key_message: the governing thought (the single most important insight)
-- visual_type: "title_slide"
-- content: { "title": same short name, "subtitle": audience/date, "date": "" }
+═══ MIXED CONTENT RULES ═══
 
-DIVIDER SLIDE RULES:
-- title: section name only
-- visual_type: "divider_slide"
-- content: { "section_name": "string", "section_descriptor": "one line on what this section covers" }
-- key_message: what the audience will learn in this section
+Set is_mixed: true when the slide has BOTH numbers AND narrative insight that together tell a stronger story.
+Set is_mixed: false for: title slides, divider slides, data_table, three_column, process_flow (these need full space).
 
-CONTENT SLIDE RULES — visual_type determines content structure:
+When is_mixed: true — populate BOTH primary_content and secondary_content.
+When is_mixed: false — populate primary_content only, set secondary_content: null.
 
-"bullet_list":
-content: { "bullets": ["specific insight with data", "specific insight", "specific insight"] }
-— 3 to 5 bullets. Each must be a COMPLETE SENTENCE with SPECIFIC information. NO generic text.
+═══ PRIMARY CONTENT TYPES ═══
 
-"three_column":
-content: { "columns": [ { "header": "string", "body": "2-3 sentence description" }, { "header": "string", "body": "string" }, { "header": "string", "body": "string" } ] }
+type: "chart"
+{
+  "type": "chart",
+  "chart_type": "bar" | "line" | "pie" | "waterfall" | "clustered_bar" | "combo",
+  "chart_decision": "string — why this chart type was chosen",
+  "chart_title": "string",
+  "x_label": "string",
+  "y_label": "string",
+  "categories": ["string"],
+  "series": [{ "name": "string", "values": [number], "types": ["positive"|"negative"|"total"] }],
+  "show_data_labels": true | false,
+  "show_legend": true | false
+}
 
-"two_column":
-content: { "left_header": "string", "left_points": ["point","point"], "right_header": "string", "right_points": ["point","point"] }
+type: "stat_callout"
+{
+  "type": "stat_callout",
+  "stats": [{ "value": "string", "label": "string", "change": "string", "sentiment": "positive"|"negative"|"neutral" }]
+}
 
-"data_table":
-content: { "headers": ["Col1","Col2","Col3"], "rows": [ ["val","val","val"], ["val","val","val"] ] }
-— Use REAL data from the document. Every cell must have actual values.
+type: "data_table"
+{
+  "type": "data_table",
+  "headers": ["string"],
+  "rows": [["string"]],
+  "highlight_rows": [number]
+}
 
-"stat_callout":
-content: { "stats": [ { "value": "₹450Cr", "label": "Total Disbursed", "change": "+18% YoY" }, ... ] }
-— 2 to 4 stats. Values must be REAL numbers from the document.
+type: "three_column"
+{
+  "type": "three_column",
+  "columns": [{ "header": "string", "body": "string", "sentiment": "positive"|"negative"|"neutral" }]
+}
 
-"chart_bar":
-content: { "chart_title": "string", "x_label": "string", "y_label": "string", "series": [ { "name": "string", "data": [ { "label": "Category", "value": 123 }, ... ] } ] }
-— Use REAL data points from the document.
+type: "two_column"
+{
+  "type": "two_column",
+  "left_header": "string",
+  "left_points": ["string"],
+  "right_header": "string",
+  "right_points": ["string"]
+}
 
-"chart_line":
-content: { "chart_title": "string", "x_label": "string", "y_label": "string", "series": [ { "name": "string", "data": [ { "label": "Period", "value": 123 }, ... ] } ] }
+type: "cards"
+{
+  "type": "cards",
+  "cards": [{ "header": "string", "body": "string", "sentiment": "positive"|"negative"|"neutral" }]
+}
 
-"chart_waterfall":
-content: { "chart_title": "string", "items": [ { "label": "string", "value": number, "type": "positive|negative|total" }, ... ] }
+type: "process_flow"
+{
+  "type": "process_flow",
+  "steps": [{ "step_number": number, "title": "string", "description": "string" }]
+}
 
-"quote_callout":
-content: { "quote": "the full insight statement", "attribution": "source or context" }
+type: "title_slide"
+{
+  "type": "title_slide",
+  "title": "string — short presentation name",
+  "subtitle": "string",
+  "date": ""
+}
 
-"icon_cards":
-content: { "cards": [ { "icon": "icon concept", "header": "string", "description": "string" }, ... ] }
+type: "divider_slide"
+{
+  "type": "divider_slide",
+  "section_name": "string",
+  "section_descriptor": "string — one line on what this section covers"
+}
 
-"process_flow":
-content: { "steps": [ { "step_number": 1, "title": "string", "description": "string" }, ... ] }
+═══ SECONDARY CONTENT TYPES ═══
 
-CRITICAL RULES — these will be validated:
-1. ZERO placeholder text allowed. "Key point from this slide", "TBD", "Insert data here" = FAILURE
-2. Every bullet must contain SPECIFIC information from the document — names, numbers, percentages, facts
-3. Every stat must contain REAL values — not "X%", not "N/A", not placeholder numbers
-4. Every chart must have REAL data points from the source document
-5. key_message must be specific — "66% of portfolio concentrated in North Zone" not "concentration risk exists"
-6. Title slide title must be SHORT (5-8 words max) — a presentation name, NOT a paragraph
+type: "bullets"
+{
+  "type": "bullets",
+  "bullets": [
+    {
+      "text": "string — full bullet text",
+      "emphasis": [{ "text": "string — exact substring to emphasise", "style": "bold", "color": "accent"|"positive"|"warning"|null }],
+      "sentiment": "positive"|"warning"|"neutral"
+    }
+  ]
+}
 
-Return ONLY a valid JSON array for the slides in this batch. No explanation. No markdown fences.`
+type: "insight_box"
+{
+  "type": "insight_box",
+  "heading": "string — short label like 'Key Insight' or 'So What'",
+  "text": "string — 1-2 sentences",
+  "sentiment": "positive"|"warning"|"neutral"
+}
+
+type: "stat_callout" — same structure as primary stat_callout but smaller (1-2 stats only)
+
+═══ CHART TYPE DECISION RULES ═══
+
+bar:           comparison across 3+ categories, one metric, no time dimension
+line:          trend over time — labels are months/quarters/years
+pie:           part of a whole — values sum to ~100%, max 5 segments
+waterfall:     bridge/variance — items have types: positive/negative/total
+clustered_bar: two series compared across same categories (actual vs target)
+combo:         two metrics with different scales on same categories
+
+═══ BULLET EMPHASIS RULES ═══
+
+- Numbers and percentages: ALWAYS bold + no color change (e.g. "18%" → bold)
+- Risk/warning signals (risk, decline, fall, breach, exceed, critical, concern): bold + accent color
+- Positive signals (grew, growth, strong, record, exceeded): bold + positive color
+- Key entity names (zone names, product names, company names): bold only
+- Max ONE emphasis per bullet — the single most important element only
+- Never emphasise generic words like "the", "and", "is"
+
+═══ CRITICAL RULES ═══
+
+1. ZERO placeholder text — every bullet, stat, number must be specific and real
+2. Title slide: title is SHORT (5-8 words) — NOT the governing thought
+3. Numbers in slides must match the source document
+4. key_message must be an INSIGHT not a description
+5. Return ONLY valid JSON array. No explanation. No markdown fences.`
 
 
-// ─── PLACEHOLDER DETECTOR ─────────────────────────────────────────────────────
+// ─── CHART TYPE SELECTOR ─────────────────────────────────────────────────────
+function selectChartType(content, sectionType, slideTitle) {
+  const text = (slideTitle + ' ' + sectionType).toLowerCase()
+
+  // Check for waterfall signals
+  if (content && content.items && content.items.some(i => i.type)) return 'waterfall'
+
+  // Check series count
+  const seriesCount = (content && content.series) ? content.series.length : 0
+  if (seriesCount >= 2) return 'clustered_bar'
+
+  // Check categories
+  const categories = content && content.categories ? content.categories : []
+
+  // Time series detection
+  const timeLabels = ['q1','q2','q3','q4','jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec','fy','h1','h2','2020','2021','2022','2023','2024','2025']
+  const hasTimeLabels = categories.some(c => timeLabels.some(t => String(c).toLowerCase().includes(t)))
+  if (hasTimeLabels) return 'line'
+
+  // Percentage/composition detection
+  if (text.includes('distribution') || text.includes('breakdown') || text.includes('mix') || text.includes('composition') || text.includes('share')) {
+    const values = content && content.series && content.series[0] ? content.series[0].values || [] : []
+    const sum = values.reduce((a, b) => a + b, 0)
+    if (sum > 90 && sum < 110 && categories.length <= 5) return 'pie'
+  }
+
+  // Default comparison
+  return 'bar'
+}
+
+
+// ─── MIXED CONTENT DETECTOR ──────────────────────────────────────────────────
+function shouldBeMixed(sectionType, slideType, visualType) {
+  if (slideType === 'title' || slideType === 'divider') return false
+  if (['data_table', 'three_column', 'process_flow', 'two_column'].includes(visualType)) return false
+  if (['executive_summary'].includes(sectionType)) return false
+
+  // These benefit from mixed treatment
+  if (['financial_data', 'strategic_analysis', 'market_analysis', 'operational_review'].includes(sectionType)) return true
+  if (['recommendations'].includes(sectionType)) return true
+
+  return false
+}
+
+
+// ─── PLACEHOLDER DETECTOR ────────────────────────────────────────────────────
 const PLACEHOLDER_PATTERNS = [
   /key point from this slide/i,
   /insert data here/i,
-  /tbd/i,
+  /\btbd\b/i,
   /placeholder/i,
-  /lorem ipsum/i,
   /sample text/i,
-  /your (text|content|data) here/i,
-  /\[.*?\]/,  // [anything in brackets]
-  /^\s*-\s*$/  // just a dash
+  /^\s*-\s*$/,
+  /click to edit/i
 ]
 
 function isPlaceholder(text) {
@@ -112,36 +224,22 @@ function isPlaceholder(text) {
 }
 
 function hasPlaceholderContent(slide) {
-  const content = slide.content || {}
+  const pc = slide.primary_content || {}
 
-  // Check bullets
-  if (content.bullets) {
-    if (content.bullets.length === 0) return true
-    if (content.bullets.every(b => isPlaceholder(b))) return true
+  if (pc.type === 'bullets' || pc.bullets) {
+    const bullets = pc.bullets || []
+    if (bullets.length === 0) return true
+    if (bullets.every(b => isPlaceholder(typeof b === 'string' ? b : b.text))) return true
   }
 
-  // Check stats
-  if (content.stats) {
-    if (content.stats.every(s => isPlaceholder(s.value) || s.value === '—')) return true
+  if (pc.stats) {
+    if (pc.stats.every(s => isPlaceholder(s.value) || s.value === '—')) return true
   }
 
-  // Check columns
-  if (content.columns) {
-    if (content.columns.every(c => isPlaceholder(c.body))) return true
+  if (pc.series) {
+    if (pc.series.length === 0) return true
   }
 
-  // Check chart data
-  if (content.series) {
-    if (content.series.length === 0) return true
-    if (content.series.every(s => (s.data || []).length === 0)) return true
-  }
-
-  // Check rows
-  if (content.rows) {
-    if (content.rows.length === 0) return true
-  }
-
-  // Check key message
   if (isPlaceholder(slide.key_message)) return true
 
   return false
@@ -149,12 +247,10 @@ function hasPlaceholderContent(slide) {
 
 
 // ─── SLIDE PLAN BUILDER ──────────────────────────────────────────────────────
-// Creates the slide plan from the brief — what each slide should cover
-
 function buildSlidePlan(brief, slideCount) {
   const sections = brief.sections || []
-  const plan = []
-  let slideNum = 1
+  const plan     = []
+  let   slideNum = 1
 
   for (const section of sections) {
     const count = Math.max(1, section.suggested_slide_count || 1)
@@ -162,27 +258,30 @@ function buildSlidePlan(brief, slideCount) {
     for (let i = 0; i < count; i++) {
       if (slideNum > slideCount) break
 
-      let slideType   = 'content'
-      let visualType  = inferVisualType(section.section_type, i, count)
+      let slideType  = 'content'
+      let visualType = inferVisualType(section.section_type, i, count)
 
       if (slideNum === 1) {
         slideType  = 'title'
         visualType = 'title_slide'
-      } else if (section.section_type === 'divider' || section.section_type === 'title') {
-        slideType  = section.section_type === 'title' ? 'title' : 'divider'
-        visualType = section.section_type === 'title' ? 'title_slide' : 'divider_slide'
+      } else if (section.section_type === 'divider') {
+        slideType  = 'divider'
+        visualType = 'divider_slide'
       }
 
+      const mixed = shouldBeMixed(section.section_type, slideType, visualType)
+
       plan.push({
-        slide_number:  slideNum,
-        section_name:  section.section_name,
-        section_type:  section.section_type,
-        slide_type:    slideType,
+        slide_number:          slideNum,
+        section_name:          section.section_name,
+        section_type:          section.section_type,
+        slide_type:            slideType,
         suggested_visual_type: visualType,
-        purpose:       section.purpose || '',
-        key_content:   section.key_content || [],
-        so_what:       section.so_what || '',
-        data_available: section.data_available || false
+        suggested_mixed:       mixed,
+        purpose:               section.purpose || '',
+        key_content:           section.key_content || [],
+        so_what:               section.so_what || '',
+        data_available:        section.data_available || false
       })
 
       slideNum++
@@ -195,29 +294,21 @@ function buildSlidePlan(brief, slideCount) {
 
 function inferVisualType(sectionType, slideIndex, totalInSection) {
   switch (sectionType) {
-    case 'financial_data':
-      return slideIndex === 0 ? 'stat_callout' : 'chart_bar'
-    case 'executive_summary':
-      return 'stat_callout'
-    case 'strategic_analysis':
-      return slideIndex === 0 ? 'bullet_list' : 'chart_bar'
-    case 'market_analysis':
-      return 'chart_bar'
-    case 'recommendations':
-      return totalInSection > 1 ? 'three_column' : 'bullet_list'
-    case 'conclusion':
-      return 'process_flow'
-    case 'operational_review':
-      return 'data_table'
-    default:
-      return 'bullet_list'
+    case 'financial_data':       return slideIndex === 0 ? 'stat_callout' : 'chart'
+    case 'executive_summary':    return 'stat_callout'
+    case 'strategic_analysis':   return slideIndex % 2 === 0 ? 'chart' : 'bullets'
+    case 'market_analysis':      return 'chart'
+    case 'recommendations':      return totalInSection > 1 ? 'three_column' : 'cards'
+    case 'conclusion':           return 'process_flow'
+    case 'operational_review':   return 'data_table'
+    default:                     return 'bullets'
   }
 }
 
 
-// ─── WRITE A BATCH OF SLIDES ──────────────────────────────────────────────────
+// ─── WRITE A BATCH OF SLIDES ─────────────────────────────────────────────────
 async function writeSlideBatch(batchPlan, brief, contentB64, batchNum) {
-  console.log('Agent 4 — writing batch', batchNum, '— slides', batchPlan[0].slide_number, 'to', batchPlan[batchPlan.length-1].slide_number)
+  console.log('Agent 4 — batch', batchNum, ': slides', batchPlan[0].slide_number, '–', batchPlan[batchPlan.length-1].slide_number)
 
   const batchPrompt = `PRESENTATION BRIEF:
 Document type: ${brief.document_type || '—'}
@@ -228,25 +319,24 @@ Key messages: ${(brief.key_messages || []).join(' | ')}
 Key data points: ${(brief.key_data_points || []).join(' | ')}
 Recommendations: ${(brief.recommendations || []).join(' | ')}
 
-SLIDES TO WRITE (batch ${batchNum}):
+SLIDES TO WRITE — batch ${batchNum} (${batchPlan.length} slides):
 ${JSON.stringify(batchPlan, null, 2)}
 
 INSTRUCTIONS:
-- Write full content for each of the ${batchPlan.length} slides above
-- Use the key_content and so_what from each slide as your starting point
-- Pull REAL data from the source document (attached) — actual numbers, names, percentages
-- For financial slides: use real figures from the document
-- For title slide: title must be SHORT (5-8 words) — the presentation name, not the governing thought
-- ZERO placeholder content — every bullet, stat, and data point must be specific
+- Write full content for each slide using the brief and source document
+- Where suggested_mixed is true: populate BOTH primary_content AND secondary_content
+- Where suggested_mixed is false: primary_content only, secondary_content: null
+- For chart types: use chart_decision rules to select the best format
+- For bullets: apply emphasis rules — bold numbers, flag warnings with accent color
+- Title slide: SHORT name (5-8 words max) not the governing thought
+- Use REAL data from the source document — actual numbers, percentages, names
+- ZERO placeholder content
 - Return ONLY a JSON array for these ${batchPlan.length} slides`
 
   const messages = [{
     role: 'user',
     content: [
-      {
-        type: 'document',
-        source: { type: 'base64', media_type: 'application/pdf', data: contentB64 }
-      },
+      { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: contentB64 } },
       { type: 'text', text: batchPrompt }
     ]
   }]
@@ -255,7 +345,7 @@ INSTRUCTIONS:
   const parsed = safeParseJSON(raw, null)
 
   if (!Array.isArray(parsed)) {
-    console.warn('Agent 4 batch', batchNum, '— parse failed, raw length:', raw.length)
+    console.warn('Agent 4 batch', batchNum, '— parse failed')
     return null
   }
 
@@ -264,42 +354,35 @@ INSTRUCTIONS:
 }
 
 
-// ─── REPAIR A FAILED SLIDE ────────────────────────────────────────────────────
+// ─── REPAIR A FAILED SLIDE ───────────────────────────────────────────────────
 async function repairSlide(slide, brief, contentB64) {
-  console.log('Agent 4 — repairing slide', slide.slide_number, '(placeholder content detected)')
+  console.log('Agent 4 — repairing slide', slide.slide_number)
 
-  const repairPrompt = `This slide has placeholder content that needs to be replaced with real content.
+  const repairPrompt = `Fix this slide — it has placeholder or missing content.
 
-PRESENTATION CONTEXT:
+CONTEXT:
 Document type: ${brief.document_type || '—'}
-Governing thought: ${brief.governing_thought || '—'}
 Key messages: ${(brief.key_messages || []).join(' | ')}
 Key data: ${(brief.key_data_points || []).join(' | ')}
 
 SLIDE TO FIX:
 ${JSON.stringify(slide, null, 2)}
 
-Write the FULL content for this ONE slide.
-- Replace all placeholder text with specific, data-driven content from the document
-- For title slide: use a SHORT presentation name (5-8 words max)
-- For content slides: use real numbers, facts, and insights from the source document
-- Return ONLY a single JSON object for this one slide. No array. No explanation.`
+Replace ALL placeholder content with specific data-driven content from the source document.
+For title slides: SHORT name (5-8 words).
+Return ONLY a single JSON object. No array. No explanation.`
 
   const messages = [{
     role: 'user',
     content: [
-      {
-        type: 'document',
-        source: { type: 'base64', media_type: 'application/pdf', data: contentB64 }
-      },
+      { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: contentB64 } },
       { type: 'text', text: repairPrompt }
     ]
   }]
 
-  const raw    = await callClaude(AGENT4_SYSTEM, messages, 1500)
-  const cleaned = raw.replace(/```json\s*/g,'').replace(/```\s*/g,'').trim()
+  const raw     = await callClaude(AGENT4_SYSTEM, messages, 1500)
+  const cleaned = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
 
-  // Handle both object and array response
   try {
     const parsed = JSON.parse(cleaned)
     if (Array.isArray(parsed) && parsed.length > 0) return parsed[0]
@@ -312,50 +395,61 @@ Write the FULL content for this ONE slide.
 }
 
 
-// ─── NORMALISE A SLIDE ────────────────────────────────────────────────────────
+// ─── NORMALISE A SLIDE ───────────────────────────────────────────────────────
 function normaliseSlide(slide, plan) {
   const slideType = slide.slide_type || plan.slide_type || 'content'
-  const vt        = slide.visual_type || plan.suggested_visual_type || 'bullet_list'
+  const isMixed   = slide.is_mixed   !== undefined ? slide.is_mixed : plan.suggested_mixed || false
+
+  // Normalise primary content
+  let primaryContent = slide.primary_content || null
+  if (!primaryContent) {
+    // Legacy format fallback — Agent 4 might return old format
+    if (slide.content) {
+      primaryContent = normaliseLegacyContent(slide.content, slide.visual_type || plan.suggested_visual_type)
+    } else {
+      primaryContent = buildEmptyContent(plan.suggested_visual_type, slideType, plan)
+    }
+  }
+
+  // Ensure chart type is decided
+  if (primaryContent && primaryContent.type === 'chart' && !primaryContent.chart_type) {
+    primaryContent.chart_type = selectChartType(primaryContent, plan.section_type, slide.title || '')
+    primaryContent.chart_decision = primaryContent.chart_decision || 'defaulted to bar chart'
+  }
 
   return {
-    slide_number:  slide.slide_number  || plan.slide_number,
-    section_name:  slide.section_name  || plan.section_name,
-    section_type:  slide.section_type  || plan.section_type,
-    slide_type:    slideType,
-    title:         slide.title         || plan.section_name || ('Slide ' + plan.slide_number),
-    subtitle:      slide.subtitle      || '',
-    key_message:   slide.key_message   || plan.so_what || '',
-    visual_type:   vt,
-    content:       normaliseContent(slide.content, vt, slide),
-    speaker_note:  slide.speaker_note  || plan.purpose || ''
+    slide_number:      slide.slide_number      || plan.slide_number,
+    section_name:      slide.section_name      || plan.section_name,
+    section_type:      slide.section_type      || plan.section_type,
+    slide_type:        slideType,
+    title:             slide.title             || plan.section_name || 'Slide ' + plan.slide_number,
+    subtitle:          slide.subtitle          || '',
+    key_message:       slide.key_message       || plan.so_what || '',
+    is_mixed:          isMixed,
+    primary_content:   primaryContent,
+    secondary_content: isMixed ? (slide.secondary_content || null) : null,
+    speaker_note:      slide.speaker_note      || plan.purpose || ''
   }
 }
 
-function normaliseContent(content, vt, slide) {
-  if (content && typeof content === 'object' && Object.keys(content).length > 0) {
-    // Check if bullets are all placeholders — if so, return minimal shell for repair
-    if (content.bullets && content.bullets.every(b => isPlaceholder(b))) {
-      return { bullets: [] }
-    }
-    return content
-  }
+function normaliseLegacyContent(content, visualType) {
+  if (!content) return null
+  const type = (visualType || 'bullets').replace('bullet_list', 'bullets').replace('chart_bar','chart').replace('chart_line','chart')
+  return { type, ...content }
+}
 
-  // Minimal valid content by visual type
-  switch ((vt || '').toLowerCase()) {
-    case 'title_slide':   return { title: slide.title || '', subtitle: slide.subtitle || '', date: '' }
-    case 'divider_slide': return { section_name: slide.title || '', section_descriptor: '' }
-    case 'bullet_list':   return { bullets: [] }
-    case 'three_column':  return { columns: [] }
-    case 'two_column':    return { left_header: '', left_points: [], right_header: '', right_points: [] }
-    case 'data_table':    return { headers: [], rows: [] }
-    case 'stat_callout':  return { stats: [] }
-    case 'chart_bar':     return { chart_title: '', x_label: '', y_label: '', series: [] }
-    case 'chart_line':    return { chart_title: '', x_label: '', y_label: '', series: [] }
-    case 'chart_waterfall': return { chart_title: '', items: [] }
-    case 'quote_callout': return { quote: slide.key_message || '', attribution: '' }
-    case 'icon_cards':    return { cards: [] }
-    case 'process_flow':  return { steps: [] }
-    default:              return {}
+function buildEmptyContent(visualType, slideType, plan) {
+  if (slideType === 'title')   return { type: 'title_slide',   title: plan.section_name || '', subtitle: '', date: '' }
+  if (slideType === 'divider') return { type: 'divider_slide', section_name: plan.section_name || '', section_descriptor: plan.purpose || '' }
+
+  switch (visualType) {
+    case 'chart':        return { type: 'chart', chart_type: 'bar', categories: [], series: [] }
+    case 'stat_callout': return { type: 'stat_callout', stats: [] }
+    case 'data_table':   return { type: 'data_table', headers: [], rows: [] }
+    case 'three_column': return { type: 'three_column', columns: [] }
+    case 'cards':        return { type: 'cards', cards: [] }
+    case 'process_flow': return { type: 'process_flow', steps: [] }
+    default:             return { type: 'bullets', bullets: [] }
   }
 }
 
@@ -370,19 +464,18 @@ async function runAgent4(state) {
   console.log('  Target slides:', slideCount)
   console.log('  Document type:', brief.document_type || '—')
 
-  // Step 1 — Build slide plan from brief
+  // Step 1 — Build plan
   const slidePlan = buildSlidePlan(brief, slideCount)
-  console.log('Agent 4 — slide plan built:', slidePlan.length, 'slides')
+  console.log('Agent 4 — plan:', slidePlan.length, 'slides,', slidePlan.filter(s => s.suggested_mixed).length, 'mixed')
 
-  // Step 2 — Split into batches of 5
+  // Step 2 — Batch into groups of 5
   const BATCH_SIZE = 5
   const batches    = []
   for (let i = 0; i < slidePlan.length; i += BATCH_SIZE) {
     batches.push(slidePlan.slice(i, i + BATCH_SIZE))
   }
-  console.log('Agent 4 — split into', batches.length, 'batches of max', BATCH_SIZE)
 
-  // Step 3 — Write each batch
+  // Step 3 — Write batches
   let allSlides = []
 
   for (let b = 0; b < batches.length; b++) {
@@ -390,42 +483,20 @@ async function runAgent4(state) {
     const batchResult = await writeSlideBatch(batch, brief, contentB64, b + 1)
 
     if (!batchResult) {
-      // Batch failed — use plan as shell for repair
-      console.warn('Agent 4 — batch', b+1, 'failed, using plan shells')
-      batch.forEach(plan => {
-        allSlides.push(normaliseSlide({
-          slide_number: plan.slide_number,
-          section_name: plan.section_name,
-          section_type: plan.section_type,
-          slide_type:   plan.slide_type,
-          title:        plan.section_name,
-          key_message:  plan.so_what,
-          visual_type:  plan.suggested_visual_type,
-          content:      normaliseContent({}, plan.suggested_visual_type, plan),
-          speaker_note: plan.purpose
-        }, plan))
-      })
+      batch.forEach(plan => allSlides.push(normaliseSlide({}, plan)))
     } else {
-      // Merge batch results with plan
       batch.forEach((plan, idx) => {
         const result = batchResult[idx] || batchResult.find(s => s.slide_number === plan.slide_number)
-        if (result) {
-          allSlides.push(normaliseSlide(result, plan))
-        } else {
-          allSlides.push(normaliseSlide({ slide_number: plan.slide_number }, plan))
-        }
+        allSlides.push(normaliseSlide(result || {}, plan))
       })
     }
   }
 
-  // Step 4 — Validate and repair placeholder slides
-  console.log('Agent 4 — validating', allSlides.length, 'slides for placeholder content...')
+  // Step 4 — Validate and repair
   const failedSlides = allSlides.filter(s => hasPlaceholderContent(s) && s.slide_type === 'content')
   console.log('Agent 4 — slides needing repair:', failedSlides.length)
 
-  // Repair failed slides (max 5 repairs to avoid excessive API calls)
-  const toRepair = failedSlides.slice(0, 5)
-  for (const slide of toRepair) {
+  for (const slide of failedSlides.slice(0, 5)) {
     const repaired = await repairSlide(slide, brief, contentB64)
     if (repaired) {
       const idx = allSlides.findIndex(s => s.slide_number === slide.slide_number)
@@ -436,19 +507,28 @@ async function runAgent4(state) {
     }
   }
 
-  // Step 5 — Final validation log
-  const finalFailed = allSlides.filter(s => hasPlaceholderContent(s) && s.slide_type === 'content')
-  if (finalFailed.length > 0) {
-    console.warn('Agent 4 — slides still with placeholder content after repair:', finalFailed.map(s => s.slide_number).join(', '))
-  }
+  // Step 5 — Finalise chart types
+  allSlides = allSlides.map(slide => {
+    const pc = slide.primary_content
+    if (pc && pc.type === 'chart' && !pc.chart_type) {
+      pc.chart_type     = selectChartType(pc, slide.section_type, slide.title)
+      pc.chart_decision = pc.chart_decision || 'auto-selected'
+    }
+    return slide
+  })
 
-  // Log summary
-  const vtBreakdown = {}
-  allSlides.forEach(s => { vtBreakdown[s.visual_type] = (vtBreakdown[s.visual_type] || 0) + 1 })
+  // Log
+  const mixedCount = allSlides.filter(s => s.is_mixed).length
+  const chartTypes = {}
+  allSlides.forEach(s => {
+    const pc = s.primary_content
+    if (pc && pc.type === 'chart') chartTypes[pc.chart_type] = (chartTypes[pc.chart_type] || 0) + 1
+  })
+
   console.log('Agent 4 complete')
   console.log('  Total slides:', allSlides.length)
-  console.log('  Visual types:', JSON.stringify(vtBreakdown))
-  console.log('  Placeholder slides remaining:', finalFailed.length)
+  console.log('  Mixed slides:', mixedCount)
+  console.log('  Chart types used:', JSON.stringify(chartTypes))
 
   return allSlides
 }
