@@ -33,6 +33,25 @@ Add this field to each layout object:
 
 Return ONLY valid JSON. No explanation. No markdown fences.`
 
+const AGENT2_GLOBAL_ENRICH_SYSTEM = `You are a senior brand designer reviewing extracted PowerPoint brand metadata.
+Use the slide masters and layout summary to infer deck-level design guidance.
+Return ONLY a valid JSON object with exactly these fields:
+{
+  "visual_style": "string",
+  "spacing_notes": "string",
+  "logo_position": "string"
+}
+No markdown. No explanation.`
+
+const AGENT2_LAYOUT_ENRICH_SYSTEM = `You are a senior brand designer reviewing PowerPoint slide layouts.
+You will receive a small batch of layouts plus a summary of the relevant slide masters.
+Return ONLY a valid JSON array. For each input layout return:
+{
+  "name": "original layout name",
+  "usage_guidance": "one sentence on when to use this layout"
+}
+Keep layout names exactly unchanged. No markdown. No explanation.`
+
 function cachePrimaryLogoLocally(primaryLogo) {
   if (!primaryLogo || !primaryLogo.base64) return null
   const localRef = 'brand-logo-' + Date.now()
@@ -74,6 +93,149 @@ function buildMasterBlueprints(masters) {
     layout_names: m.layout_names || [],
     media_refs: m.media_refs || []
   }))
+}
+
+function summarizeForClaudeEnrichment(extracted) {
+  const d = extracted || {}
+  return {
+    color_scheme_name: d.color_scheme_name || '',
+    font_scheme_name: d.font_scheme_name || '',
+    slide_width_inches: d.slide_width_inches || 0,
+    slide_height_inches: d.slide_height_inches || 0,
+    primary_colors: (d.primary_colors || []).slice(0, 3),
+    secondary_colors: (d.secondary_colors || []).slice(0, 3),
+    background_colors: (d.background_colors || []).slice(0, 3),
+    text_colors: (d.text_colors || []).slice(0, 3),
+    accent_colors: (d.accent_colors || []).slice(0, 6),
+    chart_colors: (d.chart_colors || []).slice(0, 6),
+    title_font: d.title_font || {},
+    body_font: d.body_font || {},
+    caption_font: d.caption_font || {},
+    logo_candidates: (d.logos || []).slice(0, 3).map(l => ({
+      name: l.name || '',
+      width_px: l.width_px || 0,
+      height_px: l.height_px || 0,
+      usage_score: l.usage_score || 0,
+      score: l.score || 0
+    })),
+    slide_masters: (d.slide_masters || []).slice(0, 6).map(m => ({
+      name: m.name || '',
+      background_color: m.background_color || null,
+      placeholder_count: m.placeholder_count || 0,
+      grid_summary: m.grid_summary || { rows: 0, columns: 0, content_blocks: 0 },
+      text_style_summary: m.text_style_summary || {},
+      regions: m.regions || {},
+      layout_names: (m.layout_names || []).slice(0, 12),
+      media_refs: (m.media_refs || []).slice(0, 6).map(r => ({ name: r.name || '', target: r.target || '' }))
+    })),
+    slide_layouts: (d.slide_layouts || []).slice(0, 18).map(l => ({
+      name: l.name || '',
+      type: l.type || 'custom',
+      structure: l.structure || '',
+      ph_count: l.ph_count || 0,
+      grid_summary: l.grid_summary || { rows: 0, columns: 0, content_blocks: 0 },
+      master_name: l.master_name || '',
+      title_placeholder: l.title_placeholder ? {
+        x_in: l.title_placeholder.x_in,
+        y_in: l.title_placeholder.y_in,
+        w_in: l.title_placeholder.w_in,
+        h_in: l.title_placeholder.h_in
+      } : null,
+      body_placeholder: l.body_placeholder ? {
+        x_in: l.body_placeholder.x_in,
+        y_in: l.body_placeholder.y_in,
+        w_in: l.body_placeholder.w_in,
+        h_in: l.body_placeholder.h_in
+      } : null
+    }))
+  }
+}
+
+function chunkArray(arr, size) {
+  const out = []
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
+  return out
+}
+
+async function enrichAgent2InBatches(extracted) {
+  const summary = summarizeForClaudeEnrichment(extracted)
+
+  let globalEnrichment = null
+  try {
+    const globalInput = {
+      color_scheme_name: summary.color_scheme_name,
+      font_scheme_name: summary.font_scheme_name,
+      slide_width_inches: summary.slide_width_inches,
+      slide_height_inches: summary.slide_height_inches,
+      primary_colors: summary.primary_colors,
+      secondary_colors: summary.secondary_colors,
+      background_colors: summary.background_colors,
+      text_colors: summary.text_colors,
+      accent_colors: summary.accent_colors,
+      chart_colors: summary.chart_colors,
+      title_font: summary.title_font,
+      body_font: summary.body_font,
+      caption_font: summary.caption_font,
+      logo_candidates: summary.logo_candidates,
+      slide_masters: summary.slide_masters.map(m => ({
+        name: m.name,
+        background_color: m.background_color,
+        grid_summary: m.grid_summary,
+        text_style_summary: m.text_style_summary,
+        regions: m.regions,
+        layout_names: m.layout_names
+      })),
+      layout_overview: summary.slide_layouts.map(l => ({
+        name: l.name,
+        type: l.type,
+        structure: l.structure,
+        master_name: l.master_name,
+        grid_summary: l.grid_summary
+      }))
+    }
+
+    const raw = await callClaude(AGENT2_GLOBAL_ENRICH_SYSTEM, [{
+      role: 'user',
+      content: 'Infer deck-level brand guidance from this extracted metadata:\n' +
+        JSON.stringify(globalInput, null, 2)
+    }], 300)
+    globalEnrichment = safeParseJSON(raw, null)
+  } catch (e) {
+    console.warn('Agent 2 Step B — global enrichment failed:', e.message)
+  }
+
+  const layoutBatches = chunkArray(summary.slide_layouts || [], 6)
+  const usageByName = {}
+
+  for (let i = 0; i < layoutBatches.length; i++) {
+    const batch = layoutBatches[i]
+    try {
+      const masterNames = [...new Set(batch.map(l => l.master_name).filter(Boolean))]
+      const relevantMasters = (summary.slide_masters || []).filter(m => masterNames.includes(m.name))
+      const batchInput = { slide_masters: relevantMasters, slide_layouts: batch }
+      console.log('Agent 2 Step B — layout batch', i + 1, 'of', layoutBatches.length, '| layouts:', batch.length)
+      const raw = await callClaude(AGENT2_LAYOUT_ENRICH_SYSTEM, [{
+        role: 'user',
+        content: 'Add usage guidance for this layout batch:\n' + JSON.stringify(batchInput, null, 2)
+      }], 450)
+      const parsed = safeParseJSON(raw, null)
+      if (Array.isArray(parsed)) {
+        parsed.forEach(item => {
+          if (item && item.name && item.usage_guidance) usageByName[item.name] = item.usage_guidance
+        })
+      }
+    } catch (e) {
+      console.warn('Agent 2 Step B — layout batch', i + 1, 'failed:', e.message)
+    }
+  }
+
+  return {
+    ...(globalEnrichment || {}),
+    slide_layouts: (extracted.slide_layouts || []).map(l => ({
+      ...l,
+      usage_guidance: usageByName[l.name] || l.usage_guidance || ''
+    }))
+  }
 }
 
 const AGENT2_VISION_SYSTEM = `You are an expert brand designer analyzing a brand guideline document.
@@ -142,20 +304,7 @@ async function runAgent2(state, brandContent) {
   if (extracted) {
     try {
       console.log('Agent 2 Step B — enriching with Claude...')
-
-      const messages = [{
-        role: 'user',
-        content: `Here is brand data extracted directly from a PowerPoint brand template.
-Enrich it with visual_style, spacing_notes, logo_position, and usage_guidance for each layout.
-
-EXTRACTED DATA:
-${JSON.stringify(extracted, null, 2)}
-
-Return the complete enriched JSON.`
-      }]
-
-      const raw     = await callClaude(AGENT2_CLAUDE_SYSTEM, messages, 2000)
-      const enriched = safeParseJSON(raw, null)
+      const enriched = await enrichAgent2InBatches(extracted)
 
       if (enriched && (enriched.primary_colors || enriched.slide_layouts)) {
         console.log('Agent 2 Step B — enrichment successful')
