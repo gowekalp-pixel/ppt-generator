@@ -300,7 +300,7 @@ function safeParseJSON(raw, fallback) {
           (t === 'cards'        && (a.cards || []).length > 0) ||
           (t === 'workflow'     && (a.nodes || []).some(n => n.label && n.label !== n.id)) ||
           (t === 'table'        && (a.headers || []).length > 0)
-        if (hasContent) counts.ok++ else counts.empty++
+        hasContent ? counts.ok++ : counts.empty++
       })
     })
     const total = counts.ok + counts.empty
