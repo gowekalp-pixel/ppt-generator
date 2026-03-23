@@ -3,156 +3,227 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Agent 5 Tester — Design Director</title>
+  <title>Agent 5 Tester — Layout Design Engine</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: Arial, sans-serif; background: #f0f2f5; padding: 2rem; color: #111; }
-    .container { max-width: 1100px; margin: 0 auto; }
+    .container { max-width: 1200px; margin: 0 auto; }
+
     .badge { display: inline-block; background: #fdf4ff; color: #6b21a8; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; margin-bottom: 10px; }
     h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
-    .subhead { font-size: 13px; color: #666; margin-bottom: 1.5rem; line-height: 1.5; }
+    .subhead { font-size: 13px; color: #666; margin-bottom: 1.5rem; line-height: 1.5; max-width: 760px; }
+
     .card { background: white; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.25rem; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
     .card-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #888; margin-bottom: 1rem; }
-    .two-up { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-    .hint { font-size: 12px; color: #888; margin-bottom: 6px; }
-    textarea { width: 100%; height: 130px; font-family: monospace; font-size: 11px; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; resize: vertical; background: #fafafa; color: #333; }
+
+    .three-up { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
+    .two-up   { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .hint { font-size: 12px; color: #888; margin-bottom: 6px; line-height: 1.4; }
+
+    textarea { width: 100%; font-family: monospace; font-size: 11px; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; resize: vertical; background: #fafafa; color: #333; height: 140px; }
     textarea:focus { outline: none; border-color: #7c3aed; }
-    .upload-zone { border: 2px dashed #d1d5db; border-radius: 8px; padding: 8px 12px; cursor: pointer; position: relative; background: #fafafa; margin-top: 6px; transition: background 0.15s; }
+    textarea.short { height: 70px; }
+
+    .upload-zone { border: 2px dashed #d1d5db; border-radius: 8px; padding: 7px 12px; cursor: pointer; position: relative; background: #fafafa; margin-top: 6px; transition: background 0.15s; }
     .upload-zone:hover { background: #f3f4f6; }
     .upload-zone.ready { border-color: #22c55e; border-style: solid; background: #f0fdf4; }
     .upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
     .uz { font-size: 12px; color: #888; pointer-events: none; }
     .uz span { color: #7c3aed; font-weight: 600; }
+
     .btn-row { display: flex; gap: 10px; margin-top: 1rem; }
     .btn { flex: 1; padding: 12px; font-size: 14px; font-weight: 700; border: none; border-radius: 10px; cursor: pointer; }
     .btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .btn-purple { background: #7c3aed; color: white; }
     .btn-purple:hover:not(:disabled) { background: #6d28d9; }
-    .btn-gray { background: #e5e7eb; color: #374151; }
+    .btn-gray   { background: #e5e7eb; color: #374151; }
     .btn-gray:hover:not(:disabled) { background: #d1d5db; }
+
     .progress-wrap { display: none; margin-top: 12px; }
     .progress-wrap.show { display: block; }
     .progress { height: 4px; background: #e5e7eb; border-radius: 99px; overflow: hidden; }
     .progress-fill { height: 100%; background: #7c3aed; border-radius: 99px; width: 0%; transition: width 0.5s ease; }
     .progress-msg { font-size: 12px; color: #666; margin-top: 5px; }
-    .error-box { display: none; background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #dc2626; margin-top: 10px; }
+
+    .error-box { display: none; background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #dc2626; margin-top: 10px; line-height: 1.5; }
     .error-box.show { display: block; }
+
     .results { display: none; }
     .results.show { display: block; }
 
-    /* Stats */
+    /* Stats bar */
     .stats-bar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 1.25rem; }
-    .stat-pill { background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 16px; text-align: center; }
+    .stat-pill { background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 16px; text-align: center; min-width: 80px; }
     .sp-val { font-size: 20px; font-weight: 700; color: #111; }
     .sp-lbl { font-size: 11px; color: #888; text-transform: uppercase; margin-top: 2px; }
 
-    /* Slide selector */
+    /* Validation warnings */
+    .warn-strip { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #92400e; margin-bottom: 1rem; display: none; }
+    .warn-strip.show { display: block; }
+
+    /* Slide navigator */
     .slide-nav { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 1rem; }
-    .slide-btn { padding: 5px 12px; font-size: 12px; font-weight: 600; border: 1px solid #e5e7eb; border-radius: 6px; cursor: pointer; background: white; }
+    .slide-btn { padding: 5px 12px; font-size: 12px; font-weight: 600; border: 1px solid #e5e7eb; border-radius: 6px; cursor: pointer; background: white; transition: all 0.12s; }
     .slide-btn:hover { background: #f3f4f6; }
-    .slide-btn.active { background: #7c3aed; color: white; border-color: #7c3aed; }
+    .slide-btn.active   { background: #7c3aed; color: white; border-color: #7c3aed; }
     .slide-btn.type-title   { border-left: 3px solid #6366f1; }
     .slide-btn.type-divider { border-left: 3px solid #6b7280; }
     .slide-btn.type-content { border-left: 3px solid #16a34a; }
+    .slide-btn.has-issues   { border-bottom: 2px solid #f59e0b; }
 
-    /* Canvas preview */
-    .canvas-wrap { position: relative; width: 100%; margin-bottom: 1rem; }
-    .slide-canvas { width: 100%; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.15); display: block; }
+    /* Main slide view: canvas left, inspector right */
+    .slide-view { display: grid; grid-template-columns: 1fr 380px; gap: 1rem; align-items: start; }
 
-    /* Element list */
-    .element-list { display: flex; flex-direction: column; gap: 4px; }
-    .el-row { display: flex; align-items: flex-start; gap: 8px; padding: 6px 10px; border-radius: 6px; background: #f9fafb; font-size: 12px; }
-    .el-type { font-weight: 700; min-width: 70px; color: #7c3aed; }
-    .el-id   { color: #888; min-width: 120px; font-family: monospace; font-size: 11px; }
-    .el-pos  { color: #555; min-width: 180px; font-family: monospace; font-size: 11px; }
-    .el-content { color: #333; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* Canvas */
+    .canvas-wrap { position: relative; }
+    .slide-canvas { width: 100%; border-radius: 6px; box-shadow: 0 2px 14px rgba(0,0,0,0.15); display: block; }
 
-    .type-badge { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 20px; }
-    .tb-shape { background: #fef3c7; color: #92400e; }
-    .tb-text  { background: #dbeafe; color: #1d4ed8; }
-    .tb-chart { background: #dcfce7; color: #166534; }
-    .tb-table { background: #fdf4ff; color: #6b21a8; }
+    /* Inspector panel */
+    .inspector { background: #f9fafb; border-radius: 8px; padding: 1rem; font-size: 12px; }
+    .insp-section { margin-bottom: 1rem; }
+    .insp-section:last-child { margin-bottom: 0; }
+    .insp-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #888; margin-bottom: 6px; }
+
+    .meta-row { display: flex; gap: 8px; margin-bottom: 3px; }
+    .meta-lbl { color: #999; min-width: 100px; }
+    .meta-val { color: #111; font-weight: 600; }
+
+    /* Color swatches */
+    .swatch-row { display: flex; gap: 5px; flex-wrap: wrap; }
+    .swatch { width: 22px; height: 22px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.08); flex-shrink: 0; cursor: default; }
+
+    /* Zone list */
+    .zone-list { display: flex; flex-direction: column; gap: 6px; }
+    .zone-card { background: white; border-radius: 6px; padding: 8px 10px; border-left: 3px solid #e5e7eb; }
+    .zone-card.weight-primary   { border-left-color: #7c3aed; }
+    .zone-card.weight-secondary { border-left-color: #2563eb; }
+    .zone-card.weight-supporting{ border-left-color: #9ca3af; }
+    .zone-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+    .zone-id { font-weight: 700; color: #111; font-size: 11px; }
+    .zone-weight { font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 20px; }
+    .wt-primary   { background: #ede9fe; color: #6d28d9; }
+    .wt-secondary { background: #dbeafe; color: #1d4ed8; }
+    .wt-supporting{ background: #f3f4f6; color: #6b7280; }
+    .zone-obj  { color: #555; margin-bottom: 4px; line-height: 1.4; }
+    .zone-frame{ font-family: monospace; color: #888; font-size: 10px; }
+
+    /* Artifact pills */
+    .artifact-pills { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+    .art-pill { font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 20px; }
+    .ap-insight_text { background: #dbeafe; color: #1d4ed8; }
+    .ap-chart        { background: #dcfce7; color: #166534; }
+    .ap-cards        { background: #fef3c7; color: #92400e; }
+    .ap-workflow     { background: #fdf4ff; color: #6b21a8; }
+    .ap-table        { background: #f0fdf4; color: #15803d; }
+
+    /* Validation issues */
+    .issue-list { display: flex; flex-direction: column; gap: 3px; }
+    .issue-row { font-size: 11px; color: #b45309; background: #fffbeb; border-radius: 4px; padding: 3px 7px; }
 
     /* JSON */
-    .json-box { background: #1e1e1e; border-radius: 8px; padding: 14px; overflow-x: auto; max-height: 360px; overflow-y: auto; }
+    .json-box { background: #1e1e1e; border-radius: 8px; padding: 14px; overflow-x: auto; max-height: 400px; overflow-y: auto; }
     .json-box pre { font-family: monospace; font-size: 11px; color: #d4d4d4; white-space: pre-wrap; line-height: 1.6; }
     .btn-copy { width: 100%; padding: 10px; font-size: 13px; font-weight: 600; background: #374151; color: white; border: none; border-radius: 8px; cursor: pointer; margin-top: 10px; }
     .btn-copy:hover { background: #1f2937; }
 
-    /* Slide info panel */
-    .slide-info { background: #f9fafb; border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; font-size: 12px; }
-    .si-row { display: flex; gap: 8px; margin-bottom: 4px; flex-wrap: wrap; }
-    .si-label { color: #888; min-width: 100px; }
-    .si-value { color: #111; font-weight: 600; }
+    /* Slide info strip */
+    .slide-info-strip { background: white; border-radius: 8px; padding: 10px 14px; margin-bottom: 10px; font-size: 12px; display: flex; gap: 20px; flex-wrap: wrap; align-items: center; border: 1px solid #e5e7eb; }
+    .si-item { display: flex; flex-direction: column; gap: 2px; }
+    .si-lbl  { font-size: 10px; color: #999; text-transform: uppercase; }
+    .si-val  { font-weight: 700; color: #111; }
+    .si-msg  { color: #2563eb; }
+
+    @media (max-width: 900px) {
+      .three-up { grid-template-columns: 1fr 1fr; }
+      .slide-view { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 600px) {
+      .three-up, .two-up { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
 <div class="container">
 
   <div class="badge">Isolated Test — Agent 5 Only</div>
-  <h1>Design Director Tester</h1>
-  <p class="subhead">Paste the Brand Rulebook (Agent 2) and Slide Manifest (Agent 4). Agent 5 builds a precise element-level spec for every slide — coordinates, dimensions, fonts, colors, and chart data — ready for Agent 6 to render.</p>
+  <h1>Layout Design Engine Tester</h1>
+  <p class="subhead">Paste the Brand Rulebook (Agent 2 output), Slide Manifest (Agent 4 output), and optionally the brief (Agent 3). Agent 5 calls Claude to produce render-ready layout specs: canvas dimensions, brand tokens, positioned title blocks, zones with fully specified artifacts.</p>
 
+  <!-- INPUTS -->
   <div class="card">
     <div class="card-title">Inputs</div>
-    <div class="two-up">
+    <div class="three-up">
       <div>
         <div class="hint">Agent 2 — Brand Rulebook JSON</div>
-        <textarea id="brand-input" placeholder='{ "primary_colors": ["#0F2FB5"], "slide_layouts": [...] }'></textarea>
+        <textarea id="brand-input" placeholder='{ "primary_colors": ["#0F2FB5"], "slide_width_inches": 13.33, "title_font": { "family": "Calibri" }, ... }'></textarea>
         <div class="upload-zone" id="zone-brand">
           <input type="file" accept=".json" onchange="loadJSON('brand', this)">
           <div class="uz">Or upload <span>brand.json</span></div>
         </div>
       </div>
       <div>
-        <div class="hint">Agent 4 — Slide Manifest JSON (also paste Agent 3 brief if available)</div>
-        <textarea id="manifest-input" placeholder='[ { "slide_number": 1, "slide_type": "title", ... } ]'></textarea>
+        <div class="hint">Agent 4 — Slide Manifest JSON (full array)</div>
+        <textarea id="manifest-input" placeholder='[ { "slide_number": 1, "slide_type": "title", "slide_archetype": "summary", "title": "...", "zones": [...] } ]'></textarea>
         <div class="upload-zone" id="zone-manifest">
           <input type="file" accept=".json" onchange="loadJSON('manifest', this)">
           <div class="uz">Or upload <span>manifest.json</span></div>
         </div>
-        <div class="hint" style="margin-top:8px;">Agent 3 brief (optional — for presentation type detection)</div>
-        <textarea id="brief-input" style="height:60px;" placeholder='{ "document_type": "financial", "governing_thought": "..." }'></textarea>
+      </div>
+      <div>
+        <div class="hint">Agent 3 — Presentation Brief (optional)</div>
+        <textarea id="brief-input" class="short" placeholder='{ "document_type": "financial report", "governing_thought": "...", "narrative_flow": "...", "tone": "confident", "data_heavy": true }'></textarea>
+        <div class="hint" style="margin-top:8px;">Slide range (optional — leave blank for all)</div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:4px;">
+          <input type="number" id="range-from" placeholder="From" min="1" style="width:80px;padding:6px 8px;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;">
+          <span style="font-size:12px;color:#888;">to</span>
+          <input type="number" id="range-to"   placeholder="To"   min="1" style="width:80px;padding:6px 8px;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;">
+        </div>
       </div>
     </div>
 
     <div class="btn-row">
-      <button class="btn btn-purple" id="run-btn" onclick="runTest()">▶ Run Agent 5 — Build Slide Specs</button>
+      <button class="btn btn-purple" id="run-btn" onclick="runTest()">▶ Run Agent 5 — Design Slides</button>
       <button class="btn btn-gray" onclick="resetAll()">↺ Reset</button>
     </div>
 
     <div class="progress-wrap" id="prog-wrap">
       <div class="progress"><div class="progress-fill" id="prog-fill"></div></div>
-      <div class="progress-msg" id="prog-msg"></div>
+      <div class="progress-msg" id="prog-msg">Starting...</div>
     </div>
     <div class="error-box" id="error-box"></div>
   </div>
 
+  <!-- RESULTS -->
   <div class="results" id="results">
 
+    <!-- Stats bar -->
     <div class="stats-bar" id="stats-bar"></div>
 
-    <!-- Slide navigator -->
+    <!-- Validation warnings summary -->
+    <div class="warn-strip" id="warn-strip"></div>
+
+    <!-- Slide viewer -->
     <div class="card">
       <div class="card-title">Slides — click to inspect</div>
       <div class="slide-nav" id="slide-nav"></div>
 
-      <!-- Slide info -->
-      <div class="slide-info" id="slide-info" style="display:none;"></div>
+      <!-- Slide info strip -->
+      <div class="slide-info-strip" id="slide-info" style="display:none;"></div>
 
-      <!-- Canvas preview -->
-      <div class="canvas-wrap">
-        <canvas id="slide-canvas" class="slide-canvas"></canvas>
+      <!-- Canvas + Inspector -->
+      <div class="slide-view">
+        <div class="canvas-wrap">
+          <canvas id="slide-canvas" class="slide-canvas"></canvas>
+        </div>
+        <div class="inspector" id="inspector">
+          <!-- Filled by showSlide() -->
+        </div>
       </div>
-
-      <!-- Element list -->
-      <div class="card-title" style="margin-top:1rem;">Elements on this slide</div>
-      <div class="element-list" id="element-list"></div>
     </div>
 
     <!-- Raw JSON -->
     <div class="card">
-      <div class="card-title">Raw Final Spec JSON — Passed to Agent 6</div>
+      <div class="card-title">Full Designed Spec JSON — Pass to Agent 5.1 and Agent 6</div>
       <div class="json-box"><pre id="raw-json"></pre></div>
       <button class="btn-copy" onclick="copyJSON()">Copy JSON to Clipboard</button>
     </div>
@@ -160,14 +231,17 @@
   </div>
 </div>
 
+<!-- Load agents -->
 <script src="agent5.js"></script>
 <script src="app.js"></script>
+
 <script>
   let resultSpec  = null
   let activeSlide = 0
 
+  // ─── JSON HELPERS ──────────────────────────────────────────────────────────
   function safeJSON(raw, fallback) {
-    try { return JSON.parse((raw||'').replace(/```json\s*/g,'').replace(/```\s*/g,'').trim()) }
+    try { return JSON.parse((raw || '').replace(/```json\s*/g,'').replace(/```\s*/g,'').trim()) }
     catch(e) { return fallback }
   }
 
@@ -184,246 +258,508 @@
 
   function setProgress(pct, msg) {
     document.getElementById('prog-fill').style.width = pct + '%'
-    document.getElementById('prog-msg').textContent  = msg
+    document.getElementById('prog-msg').textContent  = msg || ''
   }
 
+  // ─── MAIN TEST RUNNER ─────────────────────────────────────────────────────
   async function runTest() {
     const brand    = safeJSON(document.getElementById('brand-input').value,    null)
     const manifest = safeJSON(document.getElementById('manifest-input').value, null)
     const brief    = safeJSON(document.getElementById('brief-input').value,    {})
+    const fromSlide= parseInt(document.getElementById('range-from').value) || 1
+    const toSlide  = parseInt(document.getElementById('range-to').value)   || 9999
 
-    const err = document.getElementById('error-box')
-    if (!brand)    { err.textContent = 'Brand JSON missing'; err.classList.add('show'); return }
-    if (!manifest) { err.textContent = 'Manifest JSON missing'; err.classList.add('show'); return }
-    err.classList.remove('show')
+    const errEl = document.getElementById('error-box')
+    errEl.classList.remove('show')
+
+    if (!brand)    { errEl.textContent = 'Brand Rulebook JSON is missing or invalid.'; errEl.classList.add('show'); return }
+    if (!manifest) { errEl.textContent = 'Slide Manifest JSON is missing or invalid.'; errEl.classList.add('show'); return }
+
+    const manifestArr   = Array.isArray(manifest) ? manifest : [manifest]
+    const filteredSlides = manifestArr.filter(s => s.slide_number >= fromSlide && s.slide_number <= toSlide)
+
+    if (!filteredSlides.length) {
+      errEl.textContent = 'No slides match the range ' + fromSlide + '–' + toSlide + '.'
+      errEl.classList.add('show')
+      return
+    }
 
     document.getElementById('run-btn').disabled = true
     document.getElementById('results').classList.remove('show')
     document.getElementById('prog-wrap').classList.add('show')
-    setProgress(10, 'Detecting presentation type...')
+    setProgress(5, 'Preparing ' + filteredSlides.length + ' slides for Agent 5...')
 
     try {
-      setProgress(30, 'Building element specs...')
+      setProgress(15, 'Calling Claude — batch 1...')
+
       const spec = await runAgent5({
-        slideManifest: Array.isArray(manifest) ? manifest : [manifest],
+        slideManifest: filteredSlides,
         brandRulebook: brand,
         outline:       brief
       })
+
       resultSpec  = spec
       activeSlide = 0
-      setProgress(90, 'Rendering preview...')
+
+      setProgress(95, 'Rendering preview...')
       renderResults(spec)
-      setProgress(100, '✅ ' + spec.length + ' slides fully specified.')
+      setProgress(100, '✅ ' + spec.length + ' slides designed.')
+
     } catch(e) {
-      err.textContent = 'Error: ' + e.message
-      err.classList.add('show')
+      errEl.textContent = 'Error: ' + e.message
+      errEl.classList.add('show')
       console.error(e)
     }
 
     document.getElementById('run-btn').disabled = false
   }
 
+  // ─── RENDER RESULTS ───────────────────────────────────────────────────────
   function renderResults(spec) {
     document.getElementById('results').classList.add('show')
 
-    const vtMap = {}
-    spec.forEach(s => { vtMap[s.visual_type] = (vtMap[s.visual_type]||0)+1 })
-    const totalEls = spec.reduce((s,sl) => s + (sl.elements||[]).length, 0)
+    // Stats
+    const totalZones     = spec.reduce((n, s) => n + (s.zones || []).length, 0)
+    const totalArtifacts = spec.reduce((n, s) => n + (s.zones || []).reduce((m, z) => m + (z.artifacts || []).length, 0), 0)
+    const withIssues     = spec.filter(s => s._validation_issues?.length > 0)
+
+    const artCounts = {}
+    spec.forEach(s => (s.zones || []).forEach(z =>
+      (z.artifacts || []).forEach(a => { artCounts[a.type] = (artCounts[a.type] || 0) + 1 })
+    ))
 
     document.getElementById('stats-bar').innerHTML = [
       { val: spec.length, lbl: 'Slides' },
-      { val: spec.filter(s=>s.slide_type==='title').length, lbl: 'Title' },
-      { val: spec.filter(s=>s.slide_type==='divider').length, lbl: 'Dividers' },
-      { val: spec.filter(s=>s.slide_type==='content').length, lbl: 'Content' },
-      { val: Object.keys(vtMap).length, lbl: 'Visual Types' },
-      { val: totalEls, lbl: 'Total Elements' }
-    ].map(s=>`<div class="stat-pill"><div class="sp-val">${s.val}</div><div class="sp-lbl">${s.lbl}</div></div>`).join('')
+      { val: spec.filter(s => s.slide_type === 'title').length,   lbl: 'Title' },
+      { val: spec.filter(s => s.slide_type === 'divider').length, lbl: 'Dividers' },
+      { val: spec.filter(s => s.slide_type === 'content').length, lbl: 'Content' },
+      { val: totalZones,     lbl: 'Zones' },
+      { val: totalArtifacts, lbl: 'Artifacts' },
+      { val: withIssues.length, lbl: '⚠ Issues' }
+    ].map(s => `<div class="stat-pill"><div class="sp-val">${s.val}</div><div class="sp-lbl">${s.lbl}</div></div>`).join('')
 
-    // Slide nav buttons
-    document.getElementById('slide-nav').innerHTML = spec.map((s,i) =>
-      `<button class="slide-btn type-${s.slide_type} ${i===0?'active':''}" onclick="showSlide(${i})">
-        S${s.slide_number} ${s.slide_type==='divider'?'|':''} ${s.visual_type.replace(/_/g,' ')}
+    // Validation warnings strip
+    const warnEl = document.getElementById('warn-strip')
+    if (withIssues.length > 0) {
+      warnEl.innerHTML = '<strong>⚠ ' + withIssues.length + ' slide(s) have validation issues (fallback applied):</strong><br>' +
+        withIssues.map(s => 'S' + s.slide_number + ': ' + s._validation_issues.join('; ')).join('<br>')
+      warnEl.classList.add('show')
+    } else {
+      warnEl.classList.remove('show')
+    }
+
+    // Slide nav
+    document.getElementById('slide-nav').innerHTML = spec.map((s, i) => {
+      const hasIssues = s._validation_issues?.length > 0
+      return `<button class="slide-btn type-${s.slide_type} ${i === 0 ? 'active' : ''} ${hasIssues ? 'has-issues' : ''}"
+        onclick="showSlide(${i})" title="${s.title || ''}">
+        S${s.slide_number} · ${s.slide_archetype || s.slide_type}
       </button>`
-    ).join('')
+    }).join('')
 
     document.getElementById('raw-json').textContent = JSON.stringify(spec, null, 2)
     showSlide(0)
   }
 
+  // ─── SHOW SLIDE ────────────────────────────────────────────────────────────
   function showSlide(idx) {
     if (!resultSpec) return
     activeSlide = idx
     const slide = resultSpec[idx]
 
-    // Update nav active state
-    document.querySelectorAll('.slide-btn').forEach((b,i) => b.classList.toggle('active', i===idx))
+    // Nav active state
+    document.querySelectorAll('.slide-btn').forEach((b, i) => b.classList.toggle('active', i === idx))
 
-    // Slide info
-    const info = document.getElementById('slide-info')
-    info.style.display = 'block'
-    info.innerHTML = `
-      <div class="si-row">
-        <span class="si-label">Slide</span><span class="si-value">${slide.slide_number} — ${slide.slide_type}</span>
-        <span class="si-label">Layout</span><span class="si-value">${slide.layout_name || '—'}</span>
-        <span class="si-label">Visual type</span><span class="si-value">${(slide.visual_type||'').replace(/_/g,' ')}</span>
-      </div>
-      <div class="si-row">
-        <span class="si-label">Size</span><span class="si-value">${slide.slide_width}" × ${slide.slide_height}"</span>
-        <span class="si-label">Elements</span><span class="si-value">${(slide.elements||[]).length}</span>
-        <span class="si-label">Pres. type</span><span class="si-value">${slide.presentation_type||'—'}</span>
-      </div>
-      <div class="si-row">
-        <span class="si-label">Title</span><span class="si-value" style="flex:1;">${slide.title||'—'}</span>
-      </div>
-      <div class="si-row">
-        <span class="si-label">Key message</span><span class="si-value" style="flex:1;color:#0f2fb5;">${slide.key_message||'—'}</span>
-      </div>`
+    // Info strip
+    const infoEl = document.getElementById('slide-info')
+    infoEl.style.display = 'flex'
+    const cvs = slide.canvas || {}
+    infoEl.innerHTML = [
+      { lbl: 'Slide',     val: slide.slide_number + ' — ' + slide.slide_type },
+      { lbl: 'Archetype', val: slide.slide_archetype || '—' },
+      { lbl: 'Layout',    val: slide.layout_name || '—' },
+      { lbl: 'Canvas',    val: (cvs.width_in || '—') + '" × ' + (cvs.height_in || '—') + '"' },
+      { lbl: 'Zones',     val: (slide.zones || []).length },
+    ].map(it => `<div class="si-item"><div class="si-lbl">${it.lbl}</div><div class="si-val">${it.val}</div></div>`).join('') +
+    `<div class="si-item" style="flex:1;"><div class="si-lbl">Key Message</div><div class="si-val si-msg" style="font-size:11px;">${slide.key_message || '—'}</div></div>`
 
-    // Draw canvas preview
+    // Canvas
     drawCanvas(slide)
 
-    // Element list
-    const els = slide.elements || []
-    document.getElementById('element-list').innerHTML = els.map(el => {
-      const typeClass = 'tb-' + (el.type || 'shape')
-      let content = ''
-      if (el.type === 'text_box') content = (el.text || '').slice(0, 80)
-      if (el.type === 'chart')    content = el.chart_type + ' — ' + (el.categories||[]).slice(0,4).join(', ')
-      if (el.type === 'table')    content = (el.headers||[]).join(' | ') + ' (' + (el.rows||[]).length + ' rows)'
-      if (el.type === 'shape')    content = 'fill: ' + (el.fill_color||'—')
-
-      return `<div class="el-row">
-        <span class="type-badge ${typeClass}">${el.type||'?'}</span>
-        <span class="el-id">${el.id||'—'}</span>
-        <span class="el-pos">${el.x}"×${el.y}" w=${el.w}" h=${el.h}"</span>
-        <span class="el-content">${content}</span>
-      </div>`
-    }).join('')
+    // Inspector
+    buildInspector(slide)
   }
 
-  // ─── CANVAS RENDERER ───────────────────────────────────────────────────────
-  function drawCanvas(slide) {
-    const canvas  = document.getElementById('slide-canvas')
-    const ctx     = canvas.getContext('2d')
-    const SCALE   = 72   // pixels per inch
-    const SW      = (slide.slide_width  || 11.02) * SCALE
-    const SH      = (slide.slide_height || 8.29)  * SCALE
+  // ─── INSPECTOR ─────────────────────────────────────────────────────────────
+  function buildInspector(slide) {
+    const bt  = slide.brand_tokens || {}
+    const ins = document.getElementById('inspector')
 
-    canvas.width  = SW
-    canvas.height = SH
+    let html = ''
+
+    // Brand tokens
+    html += `<div class="insp-section">
+      <div class="insp-title">Brand Tokens</div>
+      <div class="meta-row"><span class="meta-lbl">Title font</span><span class="meta-val">${bt.title_font_family || '—'}</span></div>
+      <div class="meta-row"><span class="meta-lbl">Body font</span><span class="meta-val">${bt.body_font_family || '—'}</span></div>
+      <div class="meta-row" style="margin-top:4px;"><span class="meta-lbl">Colors</span></div>
+      <div class="swatch-row" style="margin-top:3px;">`
+    ;[bt.primary_color, bt.secondary_color, ...(bt.accent_colors || []), ...(bt.chart_palette || [])].filter(Boolean).slice(0, 10).forEach(c => {
+      html += `<div class="swatch" style="background:${c};" title="${c}"></div>`
+    })
+    html += `</div></div>`
+
+    // Title block
+    if (slide.title_block) {
+      const tb = slide.title_block
+      html += `<div class="insp-section">
+        <div class="insp-title">Title Block</div>
+        <div class="meta-row"><span class="meta-lbl">Text</span><span class="meta-val" style="font-size:11px;">${(tb.text || '').slice(0,60)}${tb.text?.length > 60 ? '…' : ''}</span></div>
+        <div class="meta-row"><span class="meta-lbl">Position</span><span class="meta-val" style="font-family:monospace;">${tb.x}"  ${tb.y}"  ${tb.w}"×${tb.h}"</span></div>
+        <div class="meta-row"><span class="meta-lbl">Font</span><span class="meta-val">${tb.font_family} ${tb.font_size}pt ${tb.font_weight}</span></div>
+      </div>`
+    }
+
+    // Zones
+    if ((slide.zones || []).length > 0) {
+      html += `<div class="insp-section"><div class="insp-title">Zones (${slide.zones.length})</div><div class="zone-list">`
+      slide.zones.forEach(z => {
+        const f = z.frame || {}
+        html += `<div class="zone-card weight-${z.narrative_weight || 'supporting'}">
+          <div class="zone-header">
+            <span class="zone-id">${z.zone_id || '—'} · ${z.zone_role || '—'}</span>
+            <span class="zone-weight wt-${z.narrative_weight || 'supporting'}">${z.narrative_weight || '—'}</span>
+          </div>
+          <div class="zone-obj">${(z.message_objective || '').slice(0, 80)}</div>
+          <div class="zone-frame">${f.x}"  ${f.y}"  ${f.w}"×${f.h}"</div>
+          <div class="artifact-pills">`
+        ;(z.artifacts || []).forEach(a => {
+          html += `<span class="art-pill ap-${a.type || 'unknown'}">${a.type || '?'}</span>`
+        })
+        html += `</div></div>`
+      })
+      html += `</div></div>`
+    }
+
+    // Validation issues
+    if (slide._validation_issues?.length > 0) {
+      html += `<div class="insp-section">
+        <div class="insp-title" style="color:#b45309;">⚠ Validation Issues</div>
+        <div class="issue-list">`
+      slide._validation_issues.forEach(issue => {
+        html += `<div class="issue-row">${issue}</div>`
+      })
+      html += `</div></div>`
+    }
+
+    ins.innerHTML = html
+  }
+
+  // ─── CANVAS RENDERER ─────────────────────────────────────────────────────
+  // Renders the new schema: canvas → background, title_block, subtitle_block,
+  // zones (frame + artifacts), global_elements
+
+  function drawCanvas(slide) {
+    const canvas = document.getElementById('slide-canvas')
+    const ctx    = canvas.getContext('2d')
+    const SCALE  = 72   // 72px per inch → good screen resolution
+
+    const cvs = slide.canvas || {}
+    const W   = (cvs.width_in  || 13.33) * SCALE
+    const H   = (cvs.height_in || 7.50)  * SCALE
+
+    canvas.width  = W
+    canvas.height = H
     canvas.style.width  = '100%'
     canvas.style.height = 'auto'
 
-    // Background
-    ctx.fillStyle = slide.background_color || '#FFFFFF'
-    ctx.fillRect(0, 0, SW, SH)
+    const bt = slide.brand_tokens || {}
 
-    const els = slide.elements || []
+    // ── Background ──────────────────────────────────────────────────────────
+    ctx.fillStyle = (cvs.background || {}).color || '#FFFFFF'
+    ctx.fillRect(0, 0, W, H)
 
-    els.forEach(el => {
-      const x = el.x * SCALE
-      const y = el.y * SCALE
-      const w = el.w * SCALE
-      const h = el.h * SCALE
+    // ── Zone frames (draw before content so labels sit on top) ────────────
+    ;(slide.zones || []).forEach((zone, zi) => {
+      const f = zone.frame || {}
+      if (!f.x && !f.y && !f.w && !f.h) return
 
-      if (el.type === 'shape') {
-        ctx.fillStyle = el.fill_color || '#CCCCCC'
-        ctx.fillRect(x, y, w, h)
-        if (el.border_color && el.border_pt > 0) {
-          ctx.strokeStyle = el.border_color
-          ctx.lineWidth   = el.border_pt
-          ctx.strokeRect(x, y, w, h)
-        }
-      }
+      const zx = f.x * SCALE, zy = f.y * SCALE
+      const zw = f.w * SCALE, zh = f.h * SCALE
 
-      else if (el.type === 'text_box') {
-        const fontSize = Math.max(8, (el.size || 14) * SCALE / 72)
-        ctx.font      = (el.bold ? 'bold ' : '') + (el.italic ? 'italic ' : '') + fontSize + 'px ' + (el.font || 'Arial')
-        ctx.fillStyle = el.color || '#000000'
-        ctx.textAlign = el.align === 'right' ? 'right' : el.align === 'center' ? 'center' : 'left'
+      // Zone tint by weight
+      const tints = { primary: '18', secondary: '0F', supporting: '08' }
+      const tint  = tints[zone.narrative_weight] || '08'
+      const zoneColor = bt.primary_color || '#1A3C8F'
 
-        const textX  = el.align === 'right' ? x + w : el.align === 'center' ? x + w/2 : x
-        const textY  = y + (el.valign === 'middle' ? h/2 + fontSize/3 : fontSize)
-        const maxW   = w
+      ctx.fillStyle = zoneColor + tint
+      roundRect(ctx, zx, zy, zw, zh, 4)
+      ctx.fill()
 
-        // Word wrap
-        const words  = (el.text || '').split(' ')
-        let line     = ''
-        let lineY    = textY
+      // Zone border
+      ctx.strokeStyle = zoneColor + '33'
+      ctx.lineWidth   = 1
+      roundRect(ctx, zx, zy, zw, zh, 4)
+      ctx.stroke()
 
-        for (const word of words) {
-          const test = line + word + ' '
-          if (ctx.measureText(test).width > maxW && line !== '') {
-            ctx.fillText(line.trim(), textX, lineY)
-            line  = word + ' '
-            lineY += fontSize * 1.3
-            if (lineY > y + h) break
-          } else {
-            line = test
-          }
-        }
-        if (lineY <= y + h) ctx.fillText(line.trim(), textX, lineY)
-      }
+      // Zone label top-left
+      ctx.fillStyle  = zoneColor
+      ctx.font       = 'bold 9px Arial'
+      ctx.textAlign  = 'left'
+      ctx.fillText(zone.zone_id + ' · ' + (zone.zone_role || '').replace(/_/g,' '), zx + 6, zy + 13)
 
-      else if (el.type === 'chart') {
-        // Draw chart placeholder
-        ctx.fillStyle = '#F0F9FF'
-        ctx.fillRect(x, y, w, h)
-        ctx.strokeStyle = '#BFDBFE'
-        ctx.lineWidth   = 1
-        ctx.strokeRect(x, y, w, h)
+      // Narrative weight pill
+      const wpColors = { primary: '#7c3aed', secondary: '#2563eb', supporting: '#6b7280' }
+      const wc = wpColors[zone.narrative_weight] || '#888'
+      ctx.fillStyle = wc
+      ctx.font = '8px Arial'
+      ctx.textAlign = 'right'
+      ctx.fillText(zone.narrative_weight || '', zx + zw - 5, zy + 13)
 
-        // Chart type label
-        ctx.fillStyle = '#1D4ED8'
-        ctx.font      = 'bold 14px Arial'
-        ctx.textAlign = 'center'
-        ctx.fillText((el.chart_type || 'chart').toUpperCase() + ' CHART', x + w/2, y + 24)
-
-        // Chart title
-        if (el.chart_title) {
-          ctx.fillStyle = '#374151'
-          ctx.font      = '12px Arial'
-          ctx.fillText(el.chart_title, x + w/2, y + 42)
-        }
-
-        // Simple bar preview
-        if (el.chart_type === 'bar' && el.categories && el.series && el.series[0]) {
-          const values = el.series[0].values || []
-          const cats   = el.categories || []
-          const max    = Math.max(...values, 1)
-          const barW   = Math.min(40, (w - 40) / Math.max(cats.length, 1) - 8)
-          const barH   = h - 80
-          const colors = ['#0F2FB5','#FF8E00','#2D962D','#D60202','#2E046C','#0092D0']
-
-          values.forEach((val, i) => {
-            const bh   = (val / max) * barH
-            const bx   = x + 20 + i * (barW + 8)
-            const by   = y + h - 40 - bh
-            ctx.fillStyle = colors[i % colors.length]
-            ctx.fillRect(bx, by, barW, bh)
-          })
-        }
-      }
-
-      else if (el.type === 'table') {
-        ctx.fillStyle = '#F5F3FF'
-        ctx.fillRect(x, y, w, h)
-        ctx.strokeStyle = '#DDD6FE'
-        ctx.lineWidth   = 1
-        ctx.strokeRect(x, y, w, h)
-        ctx.fillStyle = '#6B21A8'
-        ctx.font      = 'bold 12px Arial'
-        ctx.textAlign = 'center'
-        ctx.fillText('TABLE — ' + (el.headers||[]).length + ' cols × ' + (el.rows||[]).length + ' rows', x + w/2, y + h/2)
-      }
+      // Artifacts inside this zone
+      ;(zone.artifacts || []).forEach((art, ai) => {
+        drawArtifact(ctx, art, SCALE, zoneColor, bt, ai)
+      })
     })
+
+    // ── Title block ─────────────────────────────────────────────────────────
+    if (slide.title_block) {
+      const tb = slide.title_block
+      drawTextBlock(ctx, tb, SCALE, bt)
+    }
+
+    // ── Subtitle block ───────────────────────────────────────────────────────
+    if (slide.subtitle_block) {
+      drawTextBlock(ctx, slide.subtitle_block, SCALE, bt)
+    }
+
+    // ── Global elements ──────────────────────────────────────────────────────
+    const ge = slide.global_elements || {}
+    if (ge.footer?.show) {
+      const f = ge.footer
+      ctx.fillStyle  = f.color || '#AAAAAA'
+      ctx.font       = `${f.font_size || 8}px ${f.font_family || 'Arial'}`
+      ctx.textAlign  = 'left'
+      ctx.fillText('Confidential', f.x * SCALE, (f.y + f.h * 0.7) * SCALE)
+    }
+    if (ge.page_number?.show) {
+      const pn = ge.page_number
+      ctx.fillStyle  = pn.color || '#AAAAAA'
+      ctx.font       = `${pn.font_size || 8}px ${pn.font_family || 'Arial'}`
+      ctx.textAlign  = 'right'
+      ctx.fillText(String(slide.slide_number || ''), (pn.x + pn.w) * SCALE, (pn.y + pn.h * 0.7) * SCALE)
+    }
+  }
+
+  function drawTextBlock(ctx, block, SCALE, bt) {
+    const tx   = block.x * SCALE
+    const ty   = block.y * SCALE
+    const tw   = block.w * SCALE
+    const th   = block.h * SCALE
+    const fs   = Math.max(8, (block.font_size || 14) * SCALE / 72)
+    const bold = block.font_weight === 'bold' || block.font_weight === 'semibold'
+
+    ctx.fillStyle = block.color || bt.title_color || '#111111'
+    ctx.font      = (bold ? 'bold ' : '') + fs + 'px ' + (block.font_family || 'Arial')
+    ctx.textAlign = block.align === 'center' ? 'center' : 'left'
+
+    const textX = block.align === 'center' ? tx + tw / 2 : tx
+    let   textY = block.valign === 'middle' ? ty + th / 2 + fs / 3 : ty + fs
+
+    // Simple word wrap
+    const words  = (block.text || '').split(' ')
+    let   line   = ''
+    for (const word of words) {
+      const test = line + word + ' '
+      if (ctx.measureText(test).width > tw && line !== '') {
+        ctx.fillText(line.trim(), textX, textY)
+        line   = word + ' '
+        textY += fs * 1.3
+        if (textY > ty + th) break
+      } else {
+        line = test
+      }
+    }
+    if (textY <= ty + th) ctx.fillText(line.trim(), textX, textY)
+  }
+
+  function drawArtifact(ctx, art, SCALE, zoneColor, bt, idx) {
+    const t = art.type || ''
+
+    // insight_text — colored block
+    if (t === 'insight_text') {
+      const ax = art.x * SCALE, ay = art.y * SCALE
+      const aw = art.w * SCALE, ah = art.h * SCALE
+      const fill = (art.style || {}).fill_color
+      if (fill) { ctx.fillStyle = fill; ctx.fillRect(ax, ay, aw, ah) }
+      // Heading
+      const hs   = art.heading_style || {}
+      const hfs  = Math.max(8, (hs.font_size || 11) * SCALE / 72)
+      ctx.fillStyle = hs.color || zoneColor
+      ctx.font      = 'bold ' + hfs + 'px ' + (hs.font_family || 'Arial')
+      ctx.textAlign = 'left'
+      ctx.fillText('Key Insight', ax + 6, ay + hfs + 4)
+      // Body lines preview
+      ctx.fillStyle = (art.body_style || {}).color || '#333'
+      ctx.font      = '9px Arial'
+      ctx.fillText('▸ Point 1 from Agent 4 data', ax + 6, ay + hfs + 18)
+      ctx.fillText('▸ Point 2 from Agent 4 data', ax + 6, ay + hfs + 30)
+    }
+
+    // chart — styled placeholder
+    else if (t === 'chart') {
+      const ax = art.x * SCALE, ay = art.y * SCALE
+      const aw = art.w * SCALE, ah = art.h * SCALE
+      const bg = (art.chart_style || {}).background_color || '#F8FAFF'
+      ctx.fillStyle = bg; ctx.fillRect(ax, ay, aw, ah)
+      ctx.strokeStyle = '#C7D2FE'; ctx.lineWidth = 1; ctx.strokeRect(ax, ay, aw, ah)
+
+      // Chart type label
+      const ss = (art.series_style || [{}])[0] || {}
+      ctx.fillStyle = ss.fill_color || zoneColor
+      ctx.font = 'bold 11px Arial'; ctx.textAlign = 'center'
+      ctx.fillText('CHART', ax + aw/2, ay + 18)
+
+      // Mini bar preview using series_style colors
+      const barCount = 5
+      const bw       = Math.min(30, (aw - 30) / barCount - 4)
+      const barArea  = ah - 40
+      ;(art.series_style || []).slice(0, 1).forEach(() => {
+        for (let i = 0; i < barCount; i++) {
+          const bh = barArea * (0.4 + Math.random() * 0.5)
+          const bx = ax + 15 + i * (bw + 4)
+          const by = ay + ah - 20 - bh
+          ctx.fillStyle = ss.fill_color || zoneColor
+          ctx.fillRect(bx, by, bw, bh)
+        }
+      })
+      ctx.fillStyle = '#666'; ctx.font = '8px Arial'; ctx.textAlign = 'center'
+      ctx.fillText('categories ↑ series colors from brand', ax + aw/2, ay + ah - 5)
+    }
+
+    // cards
+    else if (t === 'cards') {
+      const ctr = art.container || {}
+      const cx  = (ctr.x || art.x || 0) * SCALE
+      const cy  = (ctr.y || art.y || 0) * SCALE
+      const cw  = (ctr.w || art.w || 2) * SCALE
+      const ch  = (ctr.h || art.h || 1) * SCALE
+      const cs  = art.card_style || {}
+      const frames = art.card_frames || []
+
+      frames.forEach((cf, fi) => {
+        const fx = cf.x * SCALE, fy = cf.y * SCALE
+        const fw = cf.w * SCALE, fh = cf.h * SCALE
+        ctx.fillStyle   = cs.fill_color || '#F8FAFF'
+        ctx.strokeStyle = cs.border_color || '#C7D2FE'
+        ctx.lineWidth   = cs.border_width || 1
+        roundRect(ctx, fx, fy, fw, fh, (cs.corner_radius || 4) * (SCALE/72))
+        ctx.fill(); ctx.stroke()
+
+        ctx.fillStyle = (art.title_style || {}).color || zoneColor
+        ctx.font      = 'bold 9px Arial'; ctx.textAlign = 'center'
+        ctx.fillText('Card ' + (fi + 1), fx + fw/2, fy + 16)
+      })
+
+      if (!frames.length) {
+        // Fallback if card_frames missing
+        ctx.fillStyle = '#F8FAFF'; ctx.fillRect(cx, cy, cw, ch)
+        ctx.strokeStyle = '#C7D2FE'; ctx.lineWidth = 1; ctx.strokeRect(cx, cy, cw, ch)
+        ctx.fillStyle = '#888'; ctx.font = '10px Arial'; ctx.textAlign = 'center'
+        ctx.fillText('CARDS', cx + cw/2, cy + ch/2)
+      }
+    }
+
+    // workflow
+    else if (t === 'workflow') {
+      const ctr = art.container || {}
+      const wx  = (ctr.x || 0) * SCALE
+      const wy  = (ctr.y || 0) * SCALE
+      const ww  = (ctr.w || 4) * SCALE
+      const wh  = (ctr.h || 2) * SCALE
+      const ws  = art.workflow_style || {}
+
+      ctx.fillStyle = '#F5F3FF'; ctx.fillRect(wx, wy, ww, wh)
+
+      const nodes = art.nodes || []
+      nodes.forEach(node => {
+        const nx = node.x * SCALE, ny = node.y * SCALE
+        const nw = node.w * SCALE, nh = node.h * SCALE
+        ctx.fillStyle   = ws.node_fill_color || zoneColor
+        ctx.strokeStyle = ws.node_border_color || '#FFFFFF'
+        ctx.lineWidth   = ws.node_border_width || 1
+        roundRect(ctx, nx, ny, nw, nh, (ws.node_corner_radius || 4) * (SCALE/72))
+        ctx.fill(); ctx.stroke()
+
+        ctx.fillStyle = ws.node_title_color || '#FFFFFF'
+        ctx.font      = '8px Arial'; ctx.textAlign = 'center'
+        ctx.fillText(node.id || '', nx + nw/2, ny + nh/2 + 3)
+      })
+
+      // Connections
+      ctx.strokeStyle = ws.connector_color || '#888'
+      ctx.lineWidth   = ws.connector_width || 1
+      ;(art.connections || []).forEach(conn => {
+        const path = conn.path || []
+        if (path.length >= 2) {
+          ctx.beginPath()
+          ctx.moveTo(path[0].x * SCALE, path[0].y * SCALE)
+          for (let i = 1; i < path.length; i++) ctx.lineTo(path[i].x * SCALE, path[i].y * SCALE)
+          ctx.stroke()
+        }
+      })
+    }
+
+    // table
+    else if (t === 'table') {
+      const tx = art.x * SCALE, ty = art.y * SCALE
+      const tw = art.w * SCALE, th = art.h * SCALE
+      const ts = art.table_style || {}
+
+      ctx.fillStyle = ts.header_fill_color || zoneColor
+      ctx.fillRect(tx, ty, tw, Math.min(24, th * 0.2))
+      ctx.fillStyle = ts.body_fill_color || '#FFFFFF'
+      ctx.fillRect(tx, ty + Math.min(24, th*0.2), tw, th - Math.min(24, th*0.2))
+      ctx.strokeStyle = ts.grid_color || '#E5E7EB'; ctx.lineWidth = 1
+      ctx.strokeRect(tx, ty, tw, th)
+
+      ctx.fillStyle = ts.header_text_color || '#FFFFFF'
+      ctx.font = 'bold 9px Arial'; ctx.textAlign = 'center'
+      ctx.fillText('TABLE', tx + tw/2, ty + 14)
+
+      // Column lines
+      const cols   = art.column_widths || []
+      let   cumX   = tx
+      cols.forEach(colW => {
+        cumX += colW * SCALE
+        if (cumX < tx + tw) {
+          ctx.beginPath(); ctx.moveTo(cumX, ty); ctx.lineTo(cumX, ty + th); ctx.stroke()
+        }
+      })
+    }
+  }
+
+  // Helper: rounded rectangle path
+  function roundRect(ctx, x, y, w, h, r) {
+    r = Math.min(r, w/2, h/2)
+    ctx.beginPath()
+    ctx.moveTo(x + r, y)
+    ctx.lineTo(x + w - r, y)
+    ctx.arcTo(x + w, y, x + w, y + r, r)
+    ctx.lineTo(x + w, y + h - r)
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r)
+    ctx.lineTo(x + r, y + h)
+    ctx.arcTo(x, y + h, x, y + h - r, r)
+    ctx.lineTo(x, y + r)
+    ctx.arcTo(x, y, x + r, y, r)
+    ctx.closePath()
   }
 
   function copyJSON() {
     if (!resultSpec) return
     navigator.clipboard.writeText(JSON.stringify(resultSpec, null, 2))
-      .then(() => alert('Copied!'))
-      .catch(() => alert('Select manually.'))
+      .then(() => alert('Copied to clipboard!'))
+      .catch(() => alert('Copy failed — select and copy manually.'))
   }
 
   function resetAll() {
@@ -432,7 +768,9 @@
       document.getElementById(t + '-input').value = ''
       document.getElementById('zone-' + t).classList.remove('ready')
     })
-    document.getElementById('brief-input').value = ''
+    document.getElementById('brief-input').value    = ''
+    document.getElementById('range-from').value     = ''
+    document.getElementById('range-to').value       = ''
     document.getElementById('results').classList.remove('show')
     document.getElementById('error-box').classList.remove('show')
     document.getElementById('prog-wrap').classList.remove('show')
