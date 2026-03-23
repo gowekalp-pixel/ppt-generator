@@ -1,216 +1,587 @@
 // ─── AGENT 5 — DESIGN DIRECTOR ────────────────────────────────────────────────
 // Input:  state.slideManifest  — slide content from Agent 4
-//         state.brandRulebook  — colors, fonts, layouts from Agent 2
+//         state.brandRulebook  — colors, fonts, layouts, dimensions from Agent 2
 //         state.outline        — presentationBrief from Agent 3
-//                                (document_type, narrative_flow, tone)
 //
 // Output: finalSpec — flat JSON array, one fully specified slide object per slide
+//         Each slide contains an elements[] array with precise coordinates,
+//         dimensions, content, and styling for every element on the slide.
+//         Agent 6 reads this and builds the PPTX mechanically — no guessing.
 //
-// Agent 5 thinks like a seasoned management consultant designer:
-// - Numbers always get a visual (chart, stat, table)
-// - Layout selection driven by presentation type AND content type
-// - Brand rules applied precisely
-// - Visual type can be overridden if Agent 4's choice doesn't fit the layout
-// - Every slide passes the "10-second test" — message clear at a glance
+// Coordinate system: inches from top-left (0,0)
+// Slide dimensions: from brandRulebook (e.g. 11.02" × 8.29" for A4 landscape)
 
-// ─── PRESENTATION TYPE PROFILES ──────────────────────────────────────────────
-// These drive default layout and visual preferences per document type
-
-const PRESENTATION_PROFILES = {
-  financial: {
-    description: 'Financial report, P&L, balance sheet, cash flow, performance review',
-    keywords: ['financial', 'finance', 'revenue', 'profit', 'loss', 'balance', 'cash', 'ebitda', 'margin', 'cost', 'budget', 'forecast'],
-    layout_preferences: {
-      data_table:      'data-dense layout with full content area — use for financial statements',
-      stat_callout:    'headline layout — large numbers dominate, minimal text',
-      chart_bar:       'content layout with chart area — comparisons across periods or segments',
-      chart_line:      'content layout — trend over time, growth trajectory',
-      chart_waterfall: 'content layout — P&L bridge, variance analysis, cost buildup',
-      bullet_list:     'text layout — qualitative commentary, management discussion',
-      three_column:    'three-column layout — three key drivers, three risks, three actions'
-    },
-    title_style: 'insight-led — title states the financial conclusion not the topic',
-    default_visual: 'chart_bar',
-    table_threshold: 'use table when 4+ line items need to be shown with multiple attributes',
-    number_rule: 'ALL numbers must be visualised — no numbers sitting in bullet points'
-  },
-
-  strategic: {
-    description: 'Strategy, market entry, growth plan, competitive positioning, transformation',
-    keywords: ['strategy', 'strategic', 'growth', 'market', 'competitive', 'position', 'vision', 'transformation', 'initiative', 'roadmap'],
-    layout_preferences: {
-      three_column:  'three-column layout — three pillars, three options, three priorities',
-      two_column:    'two-column layout — current vs future, problem vs solution',
-      process_flow:  'full-width layout — roadmap, phased approach, implementation steps',
-      quote_callout: 'full-width layout — governing thought, key strategic insight',
-      icon_cards:    'card layout — strategic initiatives, capability areas',
-      bullet_list:   'text layout — strategic rationale, implications, risks',
-      stat_callout:  'headline layout — market size, opportunity, key metrics'
-    },
-    title_style: 'hypothesis-led — title states the strategic argument',
-    default_visual: 'three_column',
-    table_threshold: 'use table only for option comparison matrices or capability assessments',
-    number_rule: 'Key metrics visualised as stat callouts — market size, growth rate, share'
-  },
-
-  market_research: {
-    description: 'Market analysis, competitive landscape, customer research, industry trends',
-    keywords: ['market', 'research', 'competition', 'competitor', 'customer', 'industry', 'trend', 'survey', 'segment', 'analysis'],
-    layout_preferences: {
-      chart_bar:    'content layout — market share, competitive comparison',
-      chart_line:   'content layout — market growth trends',
-      stat_callout: 'headline layout — market size, CAGR, penetration rate',
-      two_column:   'two-column layout — competitive positioning, strengths vs weaknesses',
-      bullet_list:  'text layout — market dynamics, customer insights, implications',
-      data_table:   'content layout — competitive feature matrix, market sizing table'
-    },
-    title_style: 'finding-led — title states what the research found',
-    default_visual: 'chart_bar',
-    table_threshold: 'use table for competitive feature matrices or market sizing',
-    number_rule: 'Market metrics always visualised — charts for trends, stats for headlines'
-  },
-
-  operational: {
-    description: 'Operations review, process improvement, performance management, KPI tracking',
-    keywords: ['operational', 'operations', 'process', 'efficiency', 'kpi', 'performance', 'metric', 'production', 'supply', 'quality'],
-    layout_preferences: {
-      data_table:   'content layout — KPI tracking table, operational metrics',
-      chart_bar:    'content layout — performance vs target, departmental comparison',
-      chart_line:   'content layout — trend monitoring, process metrics over time',
-      process_flow: 'full-width layout — process maps, improvement steps',
-      stat_callout: 'headline layout — key operational metrics, achievement vs target',
-      two_column:   'two-column layout — issues vs actions, current vs improved state',
-      bullet_list:  'text layout — root cause analysis, recommendations'
-    },
-    title_style: 'fact-led — title states the operational finding or status',
-    default_visual: 'data_table',
-    table_threshold: 'tables widely used — operational data is naturally tabular',
-    number_rule: 'All KPIs and metrics visualised — charts for trends, tables for dashboards'
-  },
-
-  general: {
-    description: 'General business presentation, mixed content',
-    keywords: [],
-    layout_preferences: {},
-    title_style: 'insight-led',
-    default_visual: 'bullet_list',
-    table_threshold: 'use table when structure is genuinely needed',
-    number_rule: 'Numbers should be visualised where possible'
-  }
+// ─── PRESENTATION TYPE DETECTION ────────────────────────────────────────────
+const PRES_TYPE_KEYWORDS = {
+  financial:       ['financial','finance','revenue','profit','loss','balance','cash','ebitda','margin','cost','budget','forecast','portfolio','disburs','outstanding','npa','provision'],
+  strategic:       ['strategy','strategic','growth','market entry','competitive','position','vision','transformation','initiative','roadmap','merger','acquisition'],
+  market_research: ['market','research','competition','competitor','customer','industry','trend','survey','segment','cagr','share'],
+  operational:     ['operational','operations','process','efficiency','kpi','performance','metric','production','supply','quality','throughput']
 }
 
-
-// ─── DETECT PRESENTATION TYPE ─────────────────────────────────────────────────
 function detectPresentationType(brief) {
-  if (!brief) return 'general'
+  if (!brief) return 'financial'
+  const text = ((brief.document_type || '') + ' ' + (brief.narrative_flow || '') + ' ' + (brief.governing_thought || '')).toLowerCase()
+  for (const [type, keywords] of Object.entries(PRES_TYPE_KEYWORDS)) {
+    if (keywords.some(k => text.includes(k))) return type
+  }
+  return 'financial'
+}
 
-  const docType = (brief.document_type || '').toLowerCase()
-  const flow    = (brief.narrative_flow || '').toLowerCase()
-  const combined = docType + ' ' + flow
+// ─── SLIDE DIMENSIONS ────────────────────────────────────────────────────────
+function getSlideDimensions(brand) {
+  return {
+    w: brand.slide_width_inches  || 11.02,
+    h: brand.slide_height_inches || 8.29
+  }
+}
 
-  for (const [type, profile] of Object.entries(PRESENTATION_PROFILES)) {
-    if (type === 'general') continue
-    for (const keyword of profile.keywords) {
-      if (combined.includes(keyword)) {
-        console.log('Agent 5 — detected presentation type:', type, '(matched keyword:', keyword + ')')
-        return type
-      }
+// ─── BRAND COLOR SHORTCUTS ───────────────────────────────────────────────────
+function getBrandColors(brand) {
+  return {
+    primary:    (brand.primary_colors    || ['#0F2FB5'])[0],
+    secondary:  (brand.secondary_colors  || ['#FF8E00'])[0],
+    bg:         (brand.background_colors || ['#FFFFFF'])[0],
+    text:       (brand.text_colors       || ['#000000'])[0],
+    accent3:    (brand.accent_colors     || ['#2D962D'])[0],
+    accent4:    (brand.all_colors        || {}).accent4 || '#D60202',
+    chart:      brand.chart_colors       || ['#0F2FB5','#FF8E00','#2D962D','#D60202','#2E046C','#0092D0'],
+    titleFont:  (brand.title_font        || {}).family || 'Arial',
+    bodyFont:   (brand.body_font         || {}).family || 'Arial'
+  }
+}
+
+// ─── ELEMENT BUILDERS ────────────────────────────────────────────────────────
+// Each function returns one element object with full positioning and styling
+
+function el_shape(id, x, y, w, h, fill, border_color, border_pt) {
+  return { id, type: 'shape', x, y, w, h, fill_color: fill, border_color: border_color || null, border_pt: border_pt || 0 }
+}
+
+function el_text(id, x, y, w, h, text, font, size, bold, color, align, valign, italic, wrap) {
+  return { id, type: 'text_box', x, y, w, h, text: String(text || ''), font: font || 'Arial', size: size || 14, bold: !!bold, italic: !!italic, color: color || '#000000', align: align || 'left', valign: valign || 'top', wrap: wrap !== false }
+}
+
+function el_chart(id, x, y, w, h, chart_type, chart_title, categories, series_list, colors, show_labels, show_legend, x_label, y_label) {
+  return {
+    id, type: 'chart', chart_type, x, y, w, h,
+    chart_title:      chart_title || '',
+    x_label:          x_label    || '',
+    y_label:          y_label    || '',
+    categories:       categories  || [],
+    series:           series_list || [],
+    colors:           colors      || [],
+    show_data_labels: show_labels !== false,
+    show_legend:      show_legend || false
+  }
+}
+
+function el_table(id, x, y, w, h, headers, rows, header_bg, header_text, row_bg_alt, font, font_size, header_size) {
+  return {
+    id, type: 'table', x, y, w, h,
+    headers:        headers     || [],
+    rows:           rows        || [],
+    header_bg:      header_bg   || '#0F2FB5',
+    header_text:    header_text || '#FFFFFF',
+    row_bg_alt:     row_bg_alt  || '#F5F5F5',
+    font:           font        || 'Arial',
+    font_size:      font_size   || 11,
+    header_font_size: header_size || 12
+  }
+}
+
+// ─── STANDARD SLIDE FRAME ────────────────────────────────────────────────────
+// Every content slide gets a top accent bar, title, and slide number
+function standardFrame(slide, dim, colors, brand) {
+  const elements = []
+
+  // Top accent bar
+  elements.push(el_shape('top_bar', 0, 0, dim.w, 0.08, colors.primary))
+
+  // Slide title
+  elements.push(el_text(
+    'title',
+    0.4, 0.15, dim.w - 0.8, 0.75,
+    slide.title || '',
+    colors.titleFont, 22, true, colors.primary,
+    'left', 'middle'
+  ))
+
+  // Thin underline below title
+  elements.push(el_shape('title_underline', 0.4, 0.95, dim.w - 0.8, 0.02, '#E5E7EB'))
+
+  // Slide number bottom right
+  elements.push(el_text(
+    'slide_number',
+    dim.w - 0.8, dim.h - 0.3, 0.6, 0.25,
+    String(slide.slide_number || ''),
+    colors.bodyFont, 9, false, '#AAAAAA', 'right', 'middle'
+  ))
+
+  return elements
+}
+
+// ─── CONTENT AREA BOUNDS ─────────────────────────────────────────────────────
+function contentArea(dim) {
+  return {
+    x: 0.4,
+    y: 1.05,
+    w: dim.w - 0.8,
+    h: dim.h - 1.45   // leaves space for title + footer
+  }
+}
+
+// ─── LAYOUT BUILDERS BY VISUAL TYPE ─────────────────────────────────────────
+
+function buildTitleSlide(slide, dim, colors, brand) {
+  const elements = []
+  const content  = slide.content || {}
+
+  // Full background
+  elements.push(el_shape('bg', 0, 0, dim.w, dim.h, colors.primary))
+
+  // Accent bar (secondary color) at 58% height
+  elements.push(el_shape('accent_bar', 0, dim.h * 0.58, dim.w, 0.07, colors.secondary))
+
+  // Main title — large, white, left aligned, upper half
+  elements.push(el_text(
+    'title', 0.7, dim.h * 0.2, dim.w - 1.4, dim.h * 0.32,
+    content.title || slide.title || 'Presentation',
+    colors.titleFont, 36, true, '#FFFFFF', 'left', 'middle'
+  ))
+
+  // Subtitle
+  if (content.subtitle || slide.subtitle) {
+    elements.push(el_text(
+      'subtitle', 0.7, dim.h * 0.53, dim.w - 1.4, 0.5,
+      content.subtitle || slide.subtitle || '',
+      colors.bodyFont, 16, false, '#DDDDDD', 'left', 'top'
+    ))
+  }
+
+  // Date bottom right
+  const dateStr = content.date || new Date().toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
+  elements.push(el_text(
+    'date', dim.w - 3.5, dim.h * 0.63, 3.2, 0.35,
+    dateStr,
+    colors.bodyFont, 11, false, '#AAAAAA', 'right', 'middle'
+  ))
+
+  return elements
+}
+
+function buildDividerSlide(slide, dim, colors, brand) {
+  const elements = []
+  const content  = slide.content || {}
+
+  // Full background
+  elements.push(el_shape('bg', 0, 0, dim.w, dim.h, colors.primary))
+
+  // Left accent bar
+  elements.push(el_shape('left_bar', 0, 0, 0.12, dim.h, colors.secondary))
+
+  // Section label (small caps above title)
+  elements.push(el_text(
+    'section_label', 0.4, dim.h * 0.32, dim.w - 0.8, 0.4,
+    'SECTION',
+    colors.titleFont, 12, true, colors.secondary, 'left', 'middle'
+  ))
+
+  // Section name — large white
+  elements.push(el_text(
+    'section_name', 0.4, dim.h * 0.4, dim.w - 0.8, 1.4,
+    content.section_name || slide.title || '',
+    colors.titleFont, 32, true, '#FFFFFF', 'left', 'top'
+  ))
+
+  // Descriptor
+  if (content.section_descriptor) {
+    elements.push(el_text(
+      'descriptor', 0.4, dim.h * 0.67, dim.w - 0.8, 0.6,
+      content.section_descriptor,
+      colors.bodyFont, 14, false, '#CCCCCC', 'left', 'top'
+    ))
+  }
+
+  return elements
+}
+
+function buildStatCallout(slide, dim, colors, brand) {
+  const elements = standardFrame(slide, dim, colors, brand)
+  const ca       = contentArea(dim)
+  const stats    = (slide.content || {}).stats || []
+
+  const count    = Math.min(stats.length, 4)
+  const cols     = count <= 2 ? count : (count === 3 ? 3 : 2)
+  const rows     = Math.ceil(count / cols)
+  const padX     = 0.2
+  const padY     = 0.2
+  const cellW    = (ca.w - padX * (cols + 1)) / cols
+  const cellH    = (ca.h - padY * (rows + 1)) / rows
+
+  stats.slice(0, 4).forEach((stat, i) => {
+    const col  = i % cols
+    const row  = Math.floor(i / cols)
+    const x    = ca.x + padX + col * (cellW + padX)
+    const y    = ca.y + padY + row * (cellH + padY)
+
+    // Card background
+    elements.push(el_shape('stat_card_' + i, x, y, cellW, cellH, '#F9FAFB', '#E5E7EB', 0.5))
+
+    // Top accent line on card
+    elements.push(el_shape('stat_accent_' + i, x, y, cellW, 0.06, colors.primary))
+
+    // Value — large
+    elements.push(el_text(
+      'stat_value_' + i, x + 0.2, y + 0.2, cellW - 0.4, cellH * 0.45,
+      stat.value || '—',
+      colors.titleFont, 28, true, colors.primary, 'left', 'middle'
+    ))
+
+    // Label
+    elements.push(el_text(
+      'stat_label_' + i, x + 0.2, y + cellH * 0.55, cellW - 0.4, cellH * 0.22,
+      stat.label || '',
+      colors.bodyFont, 12, false, '#555555', 'left', 'top'
+    ))
+
+    // Change/sub-label
+    if (stat.change) {
+      elements.push(el_text(
+        'stat_change_' + i, x + 0.2, y + cellH * 0.76, cellW - 0.4, cellH * 0.18,
+        stat.change,
+        colors.bodyFont, 10, false, colors.secondary, 'left', 'top'
+      ))
     }
-  }
+  })
 
-  return 'general'
+  return elements
 }
 
+function buildBulletList(slide, dim, colors, brand) {
+  const elements = standardFrame(slide, dim, colors, brand)
+  const ca       = contentArea(dim)
+  const bullets  = (slide.content || {}).bullets || []
 
-// ─── SELECT BEST LAYOUT ───────────────────────────────────────────────────────
-function selectLayout(slide, availableLayouts, presentationType, profile) {
-  if (!availableLayouts || availableLayouts.length === 0) return null
+  const rowH     = Math.min(0.85, ca.h / Math.max(bullets.length, 1))
 
-  const vt        = (slide.visual_type || '').toLowerCase()
-  const slideType = (slide.slide_type  || '').toLowerCase()
-  const sType     = (slide.section_type|| '').toLowerCase()
+  bullets.forEach((bullet, i) => {
+    const y = ca.y + i * rowH
 
-  // Title slides — always use "Title slide" layout
-  if (slideType === 'title') {
-    return availableLayouts.find(l =>
-      l.name.toLowerCase().includes('title slide') ||
-      l.type === 'title'
-    ) || availableLayouts[0]
-  }
+    // Bullet dot (accent color square)
+    elements.push(el_shape('dot_' + i, ca.x, y + rowH * 0.35, 0.1, 0.1, colors.secondary))
 
-  // Divider slides — always use "Section divider" layout
-  if (slideType === 'divider') {
-    return availableLayouts.find(l =>
-      l.name.toLowerCase().includes('section') ||
-      l.name.toLowerCase().includes('divider') ||
-      l.type === 'obj'
-    ) || availableLayouts[1]
-  }
+    // Bullet text
+    elements.push(el_text(
+      'bullet_' + i, ca.x + 0.22, y, ca.w - 0.22, rowH,
+      bullet,
+      colors.bodyFont, 14, false, colors.text, 'left', 'middle'
+    ))
+  })
 
-  // Content slides — match visual type to layout structure
-  // Three-column visuals need a 3-column layout
-  if (['three_column', 'icon_cards'].includes(vt)) {
-    const found = availableLayouts.find(l =>
-      l.name.toLowerCase().includes('3 across') ||
-      l.name.toLowerCase().includes('three') ||
-      (l.structure || '').toLowerCase().includes('3-column')
-    )
-    if (found) return found
-  }
-
-  // Two-column visuals
-  if (['two_column', 'chart_bar', 'chart_line', 'chart_waterfall'].includes(vt)) {
-    const found = availableLayouts.find(l =>
-      l.name.toLowerCase().includes('2 across') ||
-      l.name.toLowerCase().includes('1 across') ||
-      (l.structure || '').toLowerCase().includes('column')
-    )
-    if (found) return found
-  }
-
-  // Data tables need full-width layout
-  if (vt === 'data_table') {
-    const found = availableLayouts.find(l =>
-      l.name.toLowerCase().includes('body text') ||
-      l.name.toLowerCase().includes('1 across') ||
-      (l.ph_count || 0) >= 2
-    )
-    if (found) return found
-  }
-
-  // Stat callout, quote — use single wide layout
-  if (['stat_callout', 'quote_callout'].includes(vt)) {
-    const found = availableLayouts.find(l =>
-      l.name.toLowerCase().includes('1 across') ||
-      l.name.toLowerCase().includes('body text') ||
-      l.name.toLowerCase().includes('title only')
-    )
-    if (found) return found
-  }
-
-  // Process flow — needs full-width
-  if (vt === 'process_flow') {
-    const found = availableLayouts.find(l =>
-      l.name.toLowerCase().includes('1 across') ||
-      l.name.toLowerCase().includes('body text')
-    )
-    if (found) return found
-  }
-
-  // Default — body text layout
-  return availableLayouts.find(l =>
-    l.name.toLowerCase().includes('body text') ||
-    l.name.toLowerCase().includes('1 across') ||
-    l.type === 'obj'
-  ) || availableLayouts.find(l => !['title slide', 'section divider', 'blank'].some(x => l.name.toLowerCase().includes(x)))
-  || availableLayouts[0]
+  return elements
 }
 
+function buildChartBar(slide, dim, colors, brand) {
+  const elements = standardFrame(slide, dim, colors, brand)
+  const ca       = contentArea(dim)
+  const content  = slide.content || {}
+  const series   = content.series || []
 
-// ─── REVIEW AND OVERRIDE VISUAL TYPE ─────────────────────────────────────────
-// Agent 5 acts as senior reviewer — can override Agent 4's visual choice
+  // Extract categories and series values
+  let categories = []
+  let seriesList = []
 
-function reviewVisualType(slide, profile, presentationType) {
+  if (series.length > 0) {
+    categories = (series[0].data || []).map(d => d.label || '')
+    seriesList = series.map(s => ({
+      name:   s.name || '',
+      values: (s.data || []).map(d => typeof d.value === 'number' ? d.value : parseFloat(d.value) || 0)
+    }))
+  }
+
+  elements.push(el_chart(
+    'chart', ca.x, ca.y, ca.w, ca.h,
+    'bar',
+    content.chart_title || '',
+    categories,
+    seriesList,
+    colors.chart,
+    true, series.length > 1,
+    content.x_label || '', content.y_label || ''
+  ))
+
+  return elements
+}
+
+function buildChartLine(slide, dim, colors, brand) {
+  const elements = standardFrame(slide, dim, colors, brand)
+  const ca       = contentArea(dim)
+  const content  = slide.content || {}
+  const series   = content.series || []
+
+  let categories = []
+  let seriesList = []
+
+  if (series.length > 0) {
+    categories = (series[0].data || []).map(d => d.label || '')
+    seriesList = series.map(s => ({
+      name:   s.name || '',
+      values: (s.data || []).map(d => typeof d.value === 'number' ? d.value : parseFloat(d.value) || 0)
+    }))
+  }
+
+  elements.push(el_chart(
+    'chart', ca.x, ca.y, ca.w, ca.h,
+    'line',
+    content.chart_title || '',
+    categories,
+    seriesList,
+    colors.chart,
+    false, series.length > 1,
+    content.x_label || '', content.y_label || ''
+  ))
+
+  return elements
+}
+
+function buildChartWaterfall(slide, dim, colors, brand) {
+  const elements = standardFrame(slide, dim, colors, brand)
+  const ca       = contentArea(dim)
+  const content  = slide.content || {}
+  const items    = content.items || []
+
+  const categories = items.map(i => i.label || '')
+  const values     = items.map(i => typeof i.value === 'number' ? i.value : parseFloat(i.value) || 0)
+  const types      = items.map(i => i.type || 'positive')
+
+  // Encode type in series name for python-pptx builder
+  elements.push({
+    id: 'chart', type: 'chart', chart_type: 'waterfall',
+    x: ca.x, y: ca.y, w: ca.w, h: ca.h,
+    chart_title: content.chart_title || '',
+    categories,
+    series: [{ name: 'Value', values, types }],
+    colors: [colors.primary, colors.accent4, colors.secondary],
+    show_data_labels: true,
+    show_legend: false
+  })
+
+  return elements
+}
+
+function buildDataTable(slide, dim, colors, brand) {
+  const elements = standardFrame(slide, dim, colors, brand)
+  const ca       = contentArea(dim)
+  const content  = slide.content || {}
+
+  elements.push(el_table(
+    'table', ca.x, ca.y, ca.w, ca.h,
+    content.headers || [],
+    content.rows    || [],
+    colors.primary, '#FFFFFF', '#F5F5F5',
+    colors.bodyFont, 11, 12
+  ))
+
+  return elements
+}
+
+function buildThreeColumn(slide, dim, colors, brand) {
+  const elements = standardFrame(slide, dim, colors, brand)
+  const ca       = contentArea(dim)
+  const columns  = (slide.content || {}).columns || []
+
+  const padX  = 0.2
+  const colW  = (ca.w - padX * 4) / 3
+
+  columns.slice(0, 3).forEach((col, i) => {
+    const x = ca.x + padX + i * (colW + padX)
+
+    // Card background
+    elements.push(el_shape('col_bg_' + i, x, ca.y, colW, ca.h, '#F9FAFB', '#E5E7EB', 0.5))
+
+    // Top accent
+    elements.push(el_shape('col_accent_' + i, x, ca.y, colW, 0.07, colors.secondary))
+
+    // Number
+    elements.push(el_text(
+      'col_num_' + i, x + 0.15, ca.y + 0.12, 0.5, 0.5,
+      String(i + 1).padStart(2, '0'),
+      colors.titleFont, 20, true, colors.primary, 'left', 'top'
+    ))
+
+    // Header
+    elements.push(el_text(
+      'col_header_' + i, x + 0.15, ca.y + 0.65, colW - 0.3, 0.5,
+      col.header || '',
+      colors.titleFont, 14, true, colors.primary, 'left', 'top'
+    ))
+
+    // Body
+    elements.push(el_text(
+      'col_body_' + i, x + 0.15, ca.y + 1.2, colW - 0.3, ca.h - 1.4,
+      col.body || '',
+      colors.bodyFont, 12, false, colors.text, 'left', 'top'
+    ))
+  })
+
+  return elements
+}
+
+function buildTwoColumn(slide, dim, colors, brand) {
+  const elements = standardFrame(slide, dim, colors, brand)
+  const ca       = contentArea(dim)
+  const content  = slide.content || {}
+  const colW     = (ca.w - 0.3) / 2
+
+  // Left column
+  elements.push(el_text(
+    'left_header', ca.x, ca.y, colW, 0.4,
+    content.left_header || '',
+    colors.titleFont, 14, true, colors.primary, 'left', 'top'
+  ))
+  elements.push(el_shape('left_divider', ca.x, ca.y + 0.45, colW, 0.03, colors.primary))
+  ;(content.left_points || []).forEach((pt, i) => {
+    elements.push(el_shape('ldot_' + i, ca.x, ca.y + 0.6 + i * 0.7, 0.1, 0.1, colors.secondary))
+    elements.push(el_text('lpt_' + i, ca.x + 0.2, ca.y + 0.55 + i * 0.7, colW - 0.2, 0.65, pt, colors.bodyFont, 12, false, colors.text, 'left', 'middle'))
+  })
+
+  // Vertical divider
+  elements.push(el_shape('col_divider', ca.x + colW + 0.1, ca.y, 0.02, ca.h, '#E5E7EB'))
+
+  // Right column
+  const rx = ca.x + colW + 0.3
+  elements.push(el_text(
+    'right_header', rx, ca.y, colW, 0.4,
+    content.right_header || '',
+    colors.titleFont, 14, true, colors.primary, 'left', 'top'
+  ))
+  elements.push(el_shape('right_divider', rx, ca.y + 0.45, colW, 0.03, colors.primary))
+  ;(content.right_points || []).forEach((pt, i) => {
+    elements.push(el_shape('rdot_' + i, rx, ca.y + 0.6 + i * 0.7, 0.1, 0.1, colors.secondary))
+    elements.push(el_text('rpt_' + i, rx + 0.2, ca.y + 0.55 + i * 0.7, colW - 0.2, 0.65, pt, colors.bodyFont, 12, false, colors.text, 'left', 'middle'))
+  })
+
+  return elements
+}
+
+function buildQuoteCallout(slide, dim, colors, brand) {
+  const elements = standardFrame(slide, dim, colors, brand)
+  const ca       = contentArea(dim)
+  const content  = slide.content || {}
+
+  // Opening quote mark
+  elements.push(el_text('quote_mark', ca.x, ca.y, 0.8, 1.2, '\u201C', colors.titleFont, 72, true, colors.secondary, 'left', 'top'))
+
+  // Quote text
+  elements.push(el_text(
+    'quote_text', ca.x + 0.7, ca.y + 0.3, ca.w - 0.7, ca.h * 0.55,
+    content.quote || '',
+    colors.titleFont, 20, false, colors.text, 'left', 'top'
+  ))
+
+  // Accent line
+  elements.push(el_shape('quote_line', ca.x + 0.7, ca.y + ca.h * 0.62, 3.5, 0.06, colors.secondary))
+
+  // Attribution
+  if (content.attribution) {
+    elements.push(el_text(
+      'attribution', ca.x + 0.7, ca.y + ca.h * 0.68, ca.w - 0.7, 0.4,
+      content.attribution,
+      colors.bodyFont, 12, false, '#666666', 'left', 'top'
+    ))
+  }
+
+  return elements
+}
+
+function buildIconCards(slide, dim, colors, brand) {
+  const elements = standardFrame(slide, dim, colors, brand)
+  const ca       = contentArea(dim)
+  const cards    = (slide.content || {}).cards || []
+
+  const count    = Math.min(cards.length, 4)
+  const padX     = 0.2
+  const cardW    = (ca.w - padX * (count + 1)) / count
+
+  cards.slice(0, 4).forEach((card, i) => {
+    const x = ca.x + padX + i * (cardW + padX)
+
+    elements.push(el_shape('card_bg_' + i, x, ca.y, cardW, ca.h, '#F9FAFB', '#E5E7EB', 0.5))
+    elements.push(el_shape('card_top_' + i, x, ca.y, cardW, 0.06, colors.primary))
+
+    // Icon placeholder (circle)
+    const cx = x + cardW / 2 - 0.35
+    elements.push(el_shape('icon_bg_' + i, cx, ca.y + 0.2, 0.7, 0.7, colors.primary + '22', colors.primary, 0.5))
+    elements.push(el_text('icon_lbl_' + i, cx, ca.y + 0.2, 0.7, 0.7, (i+1).toString(), colors.titleFont, 16, true, colors.primary, 'center', 'middle'))
+
+    elements.push(el_text('card_header_' + i, x + 0.15, ca.y + 1.1, cardW - 0.3, 0.5, card.header || '', colors.titleFont, 13, true, colors.primary, 'center', 'top'))
+    elements.push(el_text('card_desc_' + i, x + 0.15, ca.y + 1.65, cardW - 0.3, ca.h - 1.85, card.description || '', colors.bodyFont, 11, false, colors.text, 'left', 'top'))
+  })
+
+  return elements
+}
+
+function buildProcessFlow(slide, dim, colors, brand) {
+  const elements = standardFrame(slide, dim, colors, brand)
+  const ca       = contentArea(dim)
+  const steps    = (slide.content || {}).steps || []
+
+  const count    = Math.min(steps.length, 5)
+  const padX     = 0.15
+  const stepW    = (ca.w - padX * (count + 1)) / count
+
+  steps.slice(0, 5).forEach((step, i) => {
+    const x = ca.x + padX + i * (stepW + padX)
+
+    // Step box
+    elements.push(el_shape('step_bg_' + i, x, ca.y + 0.5, stepW, ca.h - 0.5, colors.primary + (i === 0 ? 'FF' : '22'), colors.primary, 0.5))
+
+    // Step number circle
+    elements.push(el_shape('step_num_bg_' + i, x + stepW/2 - 0.3, ca.y, 0.6, 0.6, colors.primary))
+    elements.push(el_text('step_num_' + i, x + stepW/2 - 0.3, ca.y, 0.6, 0.6, String(step.step_number || i+1), colors.titleFont, 14, true, '#FFFFFF', 'center', 'middle'))
+
+    // Arrow between steps
+    if (i < count - 1) {
+      const arrowX = x + stepW + padX/2
+      elements.push(el_text('arrow_' + i, arrowX - 0.15, ca.y + ca.h/2 - 0.15, 0.3, 0.3, '▶', colors.bodyFont, 12, false, colors.secondary, 'center', 'middle'))
+    }
+
+    // Step title
+    elements.push(el_text('step_title_' + i, x + 0.1, ca.y + 0.65, stepW - 0.2, 0.5, step.title || '', colors.titleFont, 12, true, i === 0 ? '#FFFFFF' : colors.primary, 'center', 'top'))
+
+    // Step description
+    elements.push(el_text('step_desc_' + i, x + 0.1, ca.y + 1.2, stepW - 0.2, ca.h - 1.4, step.description || '', colors.bodyFont, 10, false, i === 0 ? '#EEEEEE' : colors.text, 'left', 'top'))
+  })
+
+  return elements
+}
+
+// ─── LAYOUT SELECTOR ─────────────────────────────────────────────────────────
+function selectLayoutName(vt, availableLayouts) {
+  const layouts = availableLayouts || []
+
+  const find = (keywords) => layouts.find(l => keywords.some(k => l.name.toLowerCase().includes(k)))
+
+  if (vt === 'title_slide')    return (find(['title slide']) || layouts[0] || {}).name || 'Title slide'
+  if (vt === 'divider_slide')  return (find(['section', 'divider']) || layouts[1] || {}).name || 'Section divider'
+  if (vt === 'three_column')   return (find(['3 across', 'three']) || find(['2 across']) || {}).name || '3 across KM'
+  if (vt === 'two_column')     return (find(['2 across', '1 on 2', '2 on 1']) || {}).name || '2 across KM'
+  if (vt === 'data_table')     return (find(['body text', '1 across']) || {}).name || 'Body text KM'
+  if (vt === 'chart_bar')      return (find(['1 across', 'body text']) || {}).name || '1 across KM'
+  if (vt === 'chart_line')     return (find(['1 across', 'body text']) || {}).name || '1 across KM'
+  if (vt === 'chart_waterfall') return (find(['1 across', 'body text']) || {}).name || '1 across KM'
+  if (vt === 'stat_callout')   return (find(['2 across', '1 across', 'title only']) || {}).name || '2 across KM'
+  if (vt === 'quote_callout')  return (find(['1 across', 'body text']) || {}).name || '1 across KM'
+  if (vt === 'icon_cards')     return (find(['3 across', '2 across']) || {}).name || '3 across KM'
+  if (vt === 'process_flow')   return (find(['1 across', 'body text']) || {}).name || '1 across KM'
+  if (vt === 'bullet_list')    return (find(['body text', '1 across']) || {}).name || 'Body text KM'
+
+  return (find(['body text', '1 across']) || {}).name || 'Body text KM'
+}
+
+// ─── VISUAL TYPE REVIEWER ────────────────────────────────────────────────────
+function reviewVisualType(slide, presentationType) {
   const vt      = (slide.visual_type || '').toLowerCase()
   const content = slide.content || {}
   const st      = (slide.slide_type || '').toLowerCase()
@@ -218,307 +589,113 @@ function reviewVisualType(slide, profile, presentationType) {
   if (st === 'title')   return 'title_slide'
   if (st === 'divider') return 'divider_slide'
 
-  // Table override — only if genuinely needed
+  // Table too small — downgrade
   if (vt === 'data_table') {
     const rows = content.rows || []
-    if (rows.length < 3 && (content.headers || []).length < 3) {
-      console.log('Agent 5 — overriding data_table (too small) →', slide.visual_type, '→ stat_callout')
-      return 'stat_callout'
-    }
+    if (rows.length < 3) return 'stat_callout'
   }
 
-  // Numbers in bullet list — override to stat_callout if financial
-  if (vt === 'bullet_list' && presentationType === 'financial') {
-    const bullets = content.bullets || []
-    const hasNumbers = bullets.some(b => /\d/.test(b))
-    if (hasNumbers && bullets.length <= 3) {
-      console.log('Agent 5 — overriding bullet_list with numbers → stat_callout')
-      return 'stat_callout'
-    }
-  }
-
-  // Three_column with < 3 columns — downgrade
+  // Three column needs exactly 3
   if (vt === 'three_column') {
     const cols = content.columns || []
-    if (cols.length < 3) {
-      console.log('Agent 5 — overriding three_column (only', cols.length, 'columns) → bullet_list')
-      return 'bullet_list'
-    }
+    if (cols.length < 2) return 'bullet_list'
   }
 
-  // Process flow with < 2 steps — downgrade
-  if (vt === 'process_flow') {
-    const steps = content.steps || []
-    if (steps.length < 2) {
-      return 'bullet_list'
+  // Numbers in bullets for financial — upgrade to stat callout
+  if (vt === 'bullet_list' && presentationType === 'financial') {
+    const bullets = content.bullets || []
+    if (bullets.length <= 3 && bullets.some(b => /₹|%|\d+/.test(b))) {
+      // Only upgrade if ALL bullets are short stat-like
+      const avgLen = bullets.reduce((s, b) => s + b.length, 0) / (bullets.length || 1)
+      if (avgLen < 60) return 'stat_callout'
     }
   }
 
   return vt
 }
 
+// ─── MAIN ELEMENT BUILDER ────────────────────────────────────────────────────
+function buildSlideElements(slide, dim, colors, brand) {
+  const vt = slide.visual_type || 'bullet_list'
 
-// ─── BUILD BRAND SPEC FOR A SLIDE ────────────────────────────────────────────
-function buildBrandSpec(slide, brand, presentationType) {
-  const slideType = (slide.slide_type || '').toLowerCase()
-  const isDark    = slideType === 'title' || slideType === 'divider'
-
-  const primary   = (brand.primary_colors    || ['#0F2FB5'])[0]
-  const secondary = (brand.secondary_colors  || ['#FF8E00'])[0]
-  const bgColor   = (brand.background_colors || ['#FFFFFF'])[0]
-  const textColor = (brand.text_colors       || ['#000000'])[0]
-  const titleFont = (brand.title_font || {}).family || 'Arial'
-  const bodyFont  = (brand.body_font  || {}).family || 'Arial'
-
-  // Financial presentations — slightly tighter font sizes for data density
-  const titleSize = presentationType === 'financial' ? '22pt' : '24pt'
-  const bodySize  = presentationType === 'financial' ? '12pt' : '14pt'
-  const dataSize  = '11pt'
-
-  return {
-    background_color: isDark ? primary  : bgColor,
-    title_color:      isDark ? '#FFFFFF': primary,
-    title_font:       titleFont,
-    title_size:       titleSize,
-    body_font:        bodyFont,
-    body_size:        bodySize,
-    body_color:       isDark ? '#FFFFFF': textColor,
-    accent_color:     secondary,
-    data_font_size:   dataSize,
-    chart_colors:     brand.chart_colors || [primary, secondary],
-    all_colors:       brand.all_colors   || {}
+  switch (vt) {
+    case 'title_slide':     return buildTitleSlide(slide, dim, colors, brand)
+    case 'divider_slide':   return buildDividerSlide(slide, dim, colors, brand)
+    case 'stat_callout':    return buildStatCallout(slide, dim, colors, brand)
+    case 'bullet_list':     return buildBulletList(slide, dim, colors, brand)
+    case 'chart_bar':       return buildChartBar(slide, dim, colors, brand)
+    case 'chart_line':      return buildChartLine(slide, dim, colors, brand)
+    case 'chart_waterfall': return buildChartWaterfall(slide, dim, colors, brand)
+    case 'data_table':      return buildDataTable(slide, dim, colors, brand)
+    case 'three_column':    return buildThreeColumn(slide, dim, colors, brand)
+    case 'two_column':      return buildTwoColumn(slide, dim, colors, brand)
+    case 'quote_callout':   return buildQuoteCallout(slide, dim, colors, brand)
+    case 'icon_cards':      return buildIconCards(slide, dim, colors, brand)
+    case 'process_flow':    return buildProcessFlow(slide, dim, colors, brand)
+    default:                return buildBulletList(slide, dim, colors, brand)
   }
 }
-
-
-// ─── MAIN AGENT 5 SYSTEM PROMPT ──────────────────────────────────────────────
-const AGENT5_SYSTEM = `You are a Design Director at a top-tier management consulting firm.
-You have built hundreds of board-level presentations across financial, strategic, market research and operational contexts.
-
-You will receive:
-1. A slide manifest (from the content writer) — what each slide says
-2. A brand rulebook — colors, fonts, available slide layouts
-3. A presentation brief — document type, narrative flow, governing thought
-
-Your job is to finalize the design specification for every slide.
-
-You must return a flat JSON array — one object per slide — with EXACTLY these fields per slide:
-
-{
-  "slide_number": number,
-  "slide_type": "title" | "divider" | "content",
-  "section_name": "string",
-  "section_type": "string",
-  "layout_name": "string — exact name of the layout from available layouts",
-  "title": "string — insight-led title, not topic title",
-  "subtitle": "string — for title slides only",
-  "key_message": "string — the single takeaway",
-  "visual_type": "string — your final visual type decision",
-  "content": { ... same structure as input, refined if needed ... },
-  "brand": {
-    "background_color": "#hex",
-    "title_color": "#hex",
-    "title_font": "font name",
-    "title_size": "pt",
-    "body_font": "font name",
-    "body_size": "pt",
-    "body_color": "#hex",
-    "accent_color": "#hex",
-    "data_font_size": "pt",
-    "chart_colors": ["#hex", "#hex"]
-  },
-  "design_notes": "string — brief note on why this visual/layout was chosen",
-  "speaker_note": "string"
-}
-
-DESIGN RULES — follow these strictly:
-
-NUMBERS:
-- ALL numbers must be visualised — charts, stat callouts, or tables
-- Never leave numbers sitting in bullet points
-- Financial data → chart_bar (comparisons), chart_line (trends), chart_waterfall (bridges), stat_callout (headlines), data_table (statements)
-- Market data → chart_bar or stat_callout
-- Operational KPIs → stat_callout or data_table
-
-TABLES:
-- Only use data_table when: (a) 4+ items need comparison across 3+ attributes, OR (b) it is a financial statement
-- For 2-3 items or simple lists → use bullet_list or stat_callout instead
-- Maximum 6 rows for readability on a single slide
-
-LAYOUTS:
-- Match layout to content complexity — use the exact layout names from the available list
-- Title slides → "Title slide" layout only
-- Divider slides → "Section divider" layout only  
-- Three-column content → layout with 3-column structure
-- Full-width text or single chart → single content area layout
-
-TITLES:
-- Every content slide title must state the INSIGHT, not the topic
-- Wrong: "Revenue Analysis" | Right: "Revenue grew 18% driven by Product X"
-- Wrong: "Market Overview" | Right: "Market growing at 22% CAGR with significant headroom"
-
-PRESENTATION TYPE IMPACT:
-- Financial → data-dense, precise, evidence-first. Charts and tables dominate. Tight layout.
-- Strategic → flow-based, persuasive, argument-first. Three-columns, process flows, quote callouts.
-- Market research → finding-led, mixed visual. Charts for data, text for implications.
-- Operational → fact-based, action-oriented. Tables for KPIs, process flows for steps.
-
-BRAND:
-- Title and divider slides: primary brand color background, white text
-- Content slides: white background, primary color for titles only
-- Accent/secondary color: use only for highlights, key numbers, callout borders — sparingly
-- Never use more than 2 colors on a single content slide
-
-Return ONLY a valid JSON array. No explanation. No markdown fences.`
-
 
 // ─── MAIN RUNNER ─────────────────────────────────────────────────────────────
 async function runAgent5(state) {
-  const manifest  = state.slideManifest
-  const brand     = state.brandRulebook
-  const brief     = state.outline
+  const manifest = state.slideManifest
+  const brand    = state.brandRulebook
+  const brief    = state.outline
 
   console.log('Agent 5 starting')
-  console.log('  Slides to design:', manifest.length)
+  console.log('  Slides:', manifest.length)
+  console.log('  Slide size:', (brand.slide_width_inches || 11.02) + '" x ' + (brand.slide_height_inches || 8.29) + '"')
   console.log('  Available layouts:', (brand.slide_layouts || []).length)
 
-  // Detect presentation type
   const presentationType = detectPresentationType(brief)
-  const profile          = PRESENTATION_PROFILES[presentationType] || PRESENTATION_PROFILES.general
+  const dim              = getSlideDimensions(brand)
+  const colors           = getBrandColors(brand)
+
   console.log('  Presentation type:', presentationType)
-  console.log('  Profile:', profile.description)
+  console.log('  Primary color:', colors.primary)
+  console.log('  Title font:', colors.titleFont)
 
-  // Pre-process — review visual types before sending to Claude
-  const reviewedManifest = manifest.map(slide => ({
+  // Step 1 — Review and finalise visual types
+  const reviewed = manifest.map(slide => ({
     ...slide,
-    visual_type: reviewVisualType(slide, profile, presentationType)
+    visual_type: reviewVisualType(slide, presentationType)
   }))
 
-  const overrides = manifest.filter((s,i) => s.visual_type !== reviewedManifest[i].visual_type)
-  if (overrides.length > 0) {
-    console.log('Agent 5 — visual type overrides applied:', overrides.length, 'slides')
-  }
+  // Step 2 — Build element-level spec for every slide
+  const finalSpec = reviewed.map(slide => {
+    const vt         = slide.visual_type
+    const layoutName = selectLayoutName(vt, brand.slide_layouts || [])
+    const elements   = buildSlideElements(slide, dim, colors, brand)
 
-  // Build layout list for Claude — names and structures only (no placeholder coords)
-  const layoutSummary = (brand.slide_layouts || []).map(l => ({
-    name:           l.name,
-    structure:      l.structure,
-    usage_guidance: l.usage_guidance || '',
-    ph_count:       l.ph_count
-  }))
-
-  const messages = [{
-    role: 'user',
-    content: `PRESENTATION TYPE: ${presentationType.toUpperCase()}
-Profile: ${profile.description}
-Number rule: ${profile.number_rule}
-Table rule: ${profile.table_threshold}
-
-PRESENTATION BRIEF SUMMARY:
-- Document type: ${(brief || {}).document_type || '—'}
-- Governing thought: ${(brief || {}).governing_thought || '—'}
-- Narrative flow: ${(brief || {}).narrative_flow || '—'}
-- Tone: ${(brief || {}).tone || 'professional'}
-- Data heavy: ${(brief || {}).data_heavy ? 'yes' : 'no'}
-
-BRAND RULEBOOK:
-- Primary colors: ${(brand.primary_colors || []).join(', ')}
-- Secondary colors: ${(brand.secondary_colors || []).join(', ')}
-- Background: ${(brand.background_colors || ['#FFFFFF'])[0]}
-- Title font: ${(brand.title_font || {}).family || 'Arial'}
-- Body font: ${(brand.body_font || {}).family || 'Arial'}
-- Chart colors: ${(brand.chart_colors || []).join(', ')}
-
-AVAILABLE SLIDE LAYOUTS (use EXACT names):
-${JSON.stringify(layoutSummary, null, 2)}
-
-SLIDE MANIFEST (${reviewedManifest.length} slides — finalize all of them):
-${JSON.stringify(reviewedManifest, null, 2)}
-
-Produce the final design specification for all ${reviewedManifest.length} slides.
-Apply brand rules, select the best layout from the available list, finalize visual types.
-Return ONLY the JSON array.`
-  }]
-
-  console.log('Agent 5 — calling Claude for final design pass...')
-  const raw    = await callClaude(AGENT5_SYSTEM, messages, 4000)
-  console.log('Agent 5 — response length:', raw.length, 'chars')
-
-  let finalSpec = safeParseJSON(raw, null)
-
-  // ── Validate ──────────────────────────────────────────────────────────────
-  if (!Array.isArray(finalSpec) || finalSpec.length === 0) {
-    console.warn('Agent 5 — Claude parse failed, applying brand rules manually')
-    return applyBrandManually(reviewedManifest, brand, brief, presentationType, profile)
-  }
-
-  if (finalSpec.length < manifest.length) {
-    console.warn('Agent 5 — got', finalSpec.length, 'slides, expected', manifest.length, '— using manual fallback')
-    return applyBrandManually(reviewedManifest, brand, brief, presentationType, profile)
-  }
-
-  // ── Enrich — ensure every slide has brand spec ────────────────────────────
-  finalSpec = finalSpec.map((slide, i) => {
-    const source = reviewedManifest[i] || {}
-
-    // If Claude didn't include brand block — build it
-    if (!slide.brand || !slide.brand.background_color) {
-      slide.brand = buildBrandSpec(source, brand, presentationType)
-    }
-
-    // If Claude didn't select a layout — select one
-    if (!slide.layout_name) {
-      const layout = selectLayout(source, brand.slide_layouts || [], presentationType, profile)
-      slide.layout_name = layout ? layout.name : 'Body text KM'
-    }
-
-    // Preserve content from Agent 4 if Claude lost it
-    if (!slide.content || Object.keys(slide.content).length === 0) {
-      slide.content = source.content || {}
-    }
-
-    return slide
-  })
-
-  // ── Log summary ───────────────────────────────────────────────────────────
-  const layoutsUsed = [...new Set(finalSpec.map(s => s.layout_name).filter(Boolean))]
-  const vtUsed      = [...new Set(finalSpec.map(s => s.visual_type).filter(Boolean))]
-
-  console.log('Agent 5 complete')
-  console.log('  Final slides:', finalSpec.length)
-  console.log('  Layouts used:', layoutsUsed.join(', '))
-  console.log('  Visual types:', vtUsed.join(', '))
-  console.log('  Presentation type applied:', presentationType)
-
-  return finalSpec
-}
-
-
-// ─── MANUAL BRAND APPLICATION FALLBACK ───────────────────────────────────────
-// Used when Claude's response cannot be parsed
-
-function applyBrandManually(manifest, brand, brief, presentationType, profile) {
-  console.log('Agent 5 — applying brand manually to', manifest.length, 'slides')
-
-  return manifest.map(slide => {
-    const finalVT  = reviewVisualType(slide, profile, presentationType)
-    const layout   = selectLayout(slide, brand.slide_layouts || [], presentationType, profile)
-    const brandSpec = buildBrandSpec(slide, brand, presentationType)
+    console.log('  Slide', slide.slide_number, '—', vt, '→', layoutName, '→', elements.length, 'elements')
 
     return {
-      slide_number:  slide.slide_number,
-      slide_type:    slide.slide_type,
-      section_name:  slide.section_name,
-      section_type:  slide.section_type,
-      layout_name:   layout ? layout.name : 'Body text KM',
-      title:         slide.title,
-      subtitle:      slide.subtitle || '',
-      key_message:   slide.key_message || '',
-      visual_type:   finalVT,
-      content:       slide.content || {},
-      brand:         brandSpec,
-      design_notes:  'Brand applied manually — ' + presentationType + ' presentation type, ' + finalVT + ' visual',
-      speaker_note:  slide.speaker_note || ''
+      slide_number:     slide.slide_number,
+      slide_type:       slide.slide_type,
+      section_name:     slide.section_name  || '',
+      section_type:     slide.section_type  || '',
+      layout_name:      layoutName,
+      slide_width:      dim.w,
+      slide_height:     dim.h,
+      background_color: (slide.slide_type === 'title' || slide.slide_type === 'divider')
+                          ? colors.primary
+                          : colors.bg,
+      title:            slide.title         || '',
+      subtitle:         slide.subtitle      || '',
+      key_message:      slide.key_message   || '',
+      visual_type:      vt,
+      elements:         elements,
+      speaker_note:     slide.speaker_note  || '',
+      presentation_type: presentationType
     }
   })
+
+  // Log summary
+  const vtBreakdown = {}
+  finalSpec.forEach(s => { vtBreakdown[s.visual_type] = (vtBreakdown[s.visual_type] || 0) + 1 })
+  console.log('Agent 5 complete')
+  console.log('  Visual types:', JSON.stringify(vtBreakdown))
+  console.log('  Total elements:', finalSpec.reduce((s, sl) => s + sl.elements.length, 0))
+
+  return finalSpec
 }
