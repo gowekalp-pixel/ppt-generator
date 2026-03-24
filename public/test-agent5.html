@@ -405,19 +405,24 @@ function safeParseJSON(raw, fallback) {
       .map(([t, n]) => `<span style="font-size:11px;background:#e0e7ff;color:#3730a3;padding:2px 7px;border-radius:20px;font-weight:600;">${t}: ${n}</span>`)
       .join(' ')
 
+    const layoutModeSlides = spec.filter(s => s.layout_mode === true)
+    const scratchSlides    = spec.filter(s => s.slide_type === 'content' && !s.layout_mode)
     document.getElementById('stats-bar').innerHTML = [
       { val: spec.length,                                           lbl: 'Slides' },
       { val: spec.filter(s => s.slide_type === 'title').length,    lbl: 'Title' },
       { val: spec.filter(s => s.slide_type === 'divider').length,  lbl: 'Dividers' },
       { val: spec.filter(s => s.slide_type === 'content').length,  lbl: 'Content' },
+      { val: layoutModeSlides.length, lbl: 'Layout Mode' },
+      { val: scratchSlides.length,    lbl: 'Scratch Mode' },
       { val: totalZones,                                            lbl: 'Zones' },
       { val: totalArtifacts,                                        lbl: 'Artifacts' },
       { val: withFallback.length, lbl: 'Fallback' },
       { val: withIssues.length,   lbl: 'Issues' }
     ].map(s => {
-      const isWarn = s.lbl === 'Fallback' && s.val > 0
-      const isErr  = s.lbl === 'Issues'   && s.val > 0
-      const color  = isWarn ? '#d97706' : isErr ? '#dc2626' : '#111'
+      const isWarn  = s.lbl === 'Fallback'     && s.val > 0
+      const isErr   = s.lbl === 'Issues'       && s.val > 0
+      const isGreen = s.lbl === 'Layout Mode'  && s.val > 0
+      const color   = isWarn ? '#d97706' : isErr ? '#dc2626' : isGreen ? '#16a34a' : '#111'
       return `<div class="stat-pill"><div class="sp-val" style="color:${color}">${s.val}</div><div class="sp-lbl">${s.lbl}</div></div>`
     }).join('') + (artPills ? `<div class="stat-pill" style="flex:1;text-align:left;"><div class="sp-lbl" style="margin-bottom:4px;">Artifact types</div><div>${artPills}</div></div>` : '')
 
@@ -439,11 +444,16 @@ function safeParseJSON(raw, fallback) {
 
     // Slide nav — fallback slides get red right border, issue slides get amber bottom border
     document.getElementById('slide-nav').innerHTML = spec.map((s, i) => {
-      const hasIssues  = s._validation_issues?.length > 0
-      const isFallback = s._fallback === true
+      const hasIssues    = s._validation_issues?.length > 0
+      const isFallback   = s._fallback === true
+      const isLayoutMode = s.layout_mode === true
       const extra = (hasIssues ? ' has-issues' : '') + (isFallback ? ' is-fallback' : '')
-      const label = isFallback ? 'S' + s.slide_number + ' ⚠ fallback' : 'S' + s.slide_number + ' · ' + (s.slide_archetype || s.slide_type)
-      return '<button class="slide-btn type-' + s.slide_type + (i === 0 ? ' active' : '') + extra + '" onclick="showSlide(' + i + ')" title="' + (s.title || '') + '">' + label + '</button>'
+      const modeTag = isLayoutMode ? ' 📐' : ''
+      const label = isFallback
+        ? 'S' + s.slide_number + ' ⚠ fallback'
+        : 'S' + s.slide_number + ' · ' + (s.slide_archetype || s.slide_type) + modeTag
+      const title = (s.title || '') + (isLayoutMode ? ' [layout: ' + (s.selected_layout_name || '') + ']' : '')
+      return '<button class="slide-btn type-' + s.slide_type + (i === 0 ? ' active' : '') + extra + '" onclick="showSlide(' + i + ')" title="' + title + '">' + label + '</button>'
     }).join('')
 
     document.getElementById('raw-json').textContent = JSON.stringify(spec, null, 2)
@@ -463,12 +473,20 @@ function safeParseJSON(raw, fallback) {
     const infoEl = document.getElementById('slide-info')
     infoEl.style.display = 'flex'
     const cvs = slide.canvas || {}
+    const isLayoutMode = slide.layout_mode === true
+    const layoutModeVal = isLayoutMode
+      ? '<span style="color:#16a34a;font-weight:700;">layout</span>'
+      : '<span style="color:#888;">scratch</span>'
+    const selectedLayout = slide.selected_layout_name
+      ? `<span style="color:#1d4ed8;font-weight:700;">${slide.selected_layout_name}</span>`
+      : '—'
     infoEl.innerHTML = [
-      { lbl: 'Slide',     val: slide.slide_number + ' — ' + slide.slide_type },
-      { lbl: 'Archetype', val: slide.slide_archetype || '—' },
-      { lbl: 'Layout',    val: slide.layout_name || '—' },
-      { lbl: 'Canvas',    val: (cvs.width_in || '—') + '" × ' + (cvs.height_in || '—') + '"' },
-      { lbl: 'Zones',     val: (slide.zones || []).length },
+      { lbl: 'Slide',           val: slide.slide_number + ' — ' + slide.slide_type },
+      { lbl: 'Archetype',       val: slide.slide_archetype || '—' },
+      { lbl: 'Render Mode',     val: layoutModeVal },
+      { lbl: 'Selected Layout', val: selectedLayout },
+      { lbl: 'Canvas',          val: (cvs.width_in || '—') + '" × ' + (cvs.height_in || '—') + '"' },
+      { lbl: 'Zones',           val: (slide.zones || []).length },
     ].map(it => `<div class="si-item"><div class="si-lbl">${it.lbl}</div><div class="si-val">${it.val}</div></div>`).join('') +
 `<div class="si-item"><div class="si-lbl">Content</div><div class="si-val" style="font-size:11px;">` + contentMergeSummary(slide) + `</div></div>` +
     `<div class="si-item" style="flex:1;"><div class="si-lbl">Key Message</div><div class="si-val si-msg" style="font-size:11px;">${slide.key_message || '—'}</div></div>`
@@ -499,14 +517,25 @@ function safeParseJSON(raw, fallback) {
     })
     html += `</div></div>`
 
+    // Layout mode section
+    if (slide.slide_type === 'content' || slide.layout_mode) {
+      const isLM = slide.layout_mode === true
+      html += `<div class="insp-section" style="background:${isLM ? '#f0fdf4' : '#fafafa'};border-radius:6px;padding:8px 10px;">
+        <div class="insp-title">Render Mode</div>
+        <div class="meta-row"><span class="meta-lbl">Mode</span><span class="meta-val" style="color:${isLM ? '#16a34a' : '#888'};">${isLM ? 'layout_mode — uses named layout placeholders' : 'scratch_mode — full coordinate rendering'}</span></div>
+        ${slide.selected_layout_name ? `<div class="meta-row"><span class="meta-lbl">Layout</span><span class="meta-val" style="color:#1d4ed8;">${slide.selected_layout_name}</span></div>` : ''}
+      </div>`
+    }
+
     // Title block
     if (slide.title_block) {
       const tb = slide.title_block
+      const hasCoords = tb.x != null && tb.y != null
       html += `<div class="insp-section">
         <div class="insp-title">Title Block</div>
         <div class="meta-row"><span class="meta-lbl">Text</span><span class="meta-val" style="font-size:11px;">${(tb.text || '').slice(0,60)}${tb.text?.length > 60 ? '…' : ''}</span></div>
-        <div class="meta-row"><span class="meta-lbl">Position</span><span class="meta-val" style="font-family:monospace;">${d(tb.x)}"  ${d(tb.y)}"  ${d(tb.w)}"×${d(tb.h)}"</span></div>
-        <div class="meta-row"><span class="meta-lbl">Font</span><span class="meta-val">${tb.font_family} ${tb.font_size}pt ${tb.font_weight}</span></div>
+        ${hasCoords ? `<div class="meta-row"><span class="meta-lbl">Position</span><span class="meta-val" style="font-family:monospace;">${d(tb.x)}"  ${d(tb.y)}"  ${d(tb.w)}"×${d(tb.h)}"</span></div>` : '<div class="meta-row"><span class="meta-lbl">Position</span><span class="meta-val" style="color:#888;">from master placeholder</span></div>'}
+        <div class="meta-row"><span class="meta-lbl">Font</span><span class="meta-val">${tb.font_family || '—'} ${tb.font_size || '—'}pt ${tb.font_weight || ''}</span></div>
       </div>`
     }
 
@@ -575,10 +604,17 @@ function safeParseJSON(raw, fallback) {
             ? '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#16a34a;margin-right:3px;vertical-align:middle;" title="Content merged"></span>'
             : '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#ef4444;margin-right:3px;vertical-align:middle;" title="No content"></span>'
 
+          const phTag = a.placeholder_idx != null
+            ? '<span style="font-size:9px;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:10px;font-weight:700;">ph:' + a.placeholder_idx + '</span>'
+            : ''
+          const headerTag = a.header_block
+            ? '<span style="font-size:9px;background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:10px;font-weight:700;">header</span>'
+            : ''
           html += '<div style="margin-top:5px;">' +
-            '<div style="display:flex;align-items:center;gap:5px;margin-bottom:2px;">' +
+            '<div style="display:flex;align-items:center;gap:5px;margin-bottom:2px;flex-wrap:wrap;">' +
             contentDot +
             '<span class="art-pill ap-' + t + '">' + t + '</span>' +
+            phTag + headerTag +
             '</div>' +
             '<div style="font-size:10px;color:#555;padding-left:11px;line-height:1.4;">' + preview + '</div>' +
             '</div>'

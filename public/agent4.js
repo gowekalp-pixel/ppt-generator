@@ -18,14 +18,11 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const AGENT4_SYSTEM = `You are a senior management consultant acting as the slide content architect for a board-level presentation.
-
 You will receive:
 1. A structured presentation brief
 2. A batch of slide plans
 3. A source document for reference
-
 Your role is to define the HIGH-LEVEL CONTENT STRUCTURE for each slide.
-
 You do NOT design the final slide.
 You do NOT decide coordinates, colors, fonts, or exact visual styling.
 You DO decide:
@@ -36,7 +33,6 @@ You DO decide:
 - how a workflow should be structured when needed
 
 Return ONLY a valid JSON array with one object per slide.
-
 ═══════════════════════════
 OUTPUT OBJECT — REQUIRED FIELDS
 ═══════════════════════════
@@ -49,6 +45,7 @@ Each slide object must contain EXACTLY these top-level fields:
   "section_type": "string",
   "slide_type": "title" | "divider" | "content",
   "slide_archetype": "summary" | "trend" | "comparison" | "breakdown" | "driver_analysis" | "process" | "recommendation" | "dashboard" | "proof" | "roadmap",
+  "selected_layout_name": "string — name of the brand slide layout chosen for this slide (see SLIDE LAYOUT SELECTION below)",
   "title": "string",
   "subtitle": "string",
   "key_message": "string",
@@ -87,7 +84,6 @@ SLIDE ARCHETYPE RULES
 ═══════════════════════════
 
 Choose ONE slide_archetype per content slide:
-
 summary       — executive summaries, headline synthesis, recap. Often metrics + implications.
 trend         — time-based movement. Often line/bar + implication.
 comparison    — compare categories, products, geographies, cohorts. Often bar / clustered_bar / cards / table.
@@ -106,13 +102,8 @@ ZONE DEFINITION
 A zone is a self-contained messaging arc within a slide.
 It is a structured unit of meaning that communicates one distinct part of the slide argument.
 A zone is NOT merely a visual box or layout area.
-
-Each slide may contain a maximum of 4 zones.
 Title and subtitle are OUTSIDE zones.
-Each zone may contain a maximum of 2 artifacts.
-
 Each zone object must contain:
-
 {
   "zone_id": "z1",
   "zone_role": "primary_proof" | "supporting_evidence" | "implication" | "summary" | "comparison" | "breakdown" | "process" | "recommendation",
@@ -135,9 +126,10 @@ Zone rules:
 - no more than 2 primary zones per slide
 - every zone must support the slide key_message
 - every zone must communicate one coherent message objective
-
-ALLOWED SPLIT COMBINATIONS:
-1 zone:  full
+- layout_hint.split is used ONLY when fewer than 5 content brand layouts are available. When 5 or more content layouts are available, Agent 4 selects the brand layout via selected_layout_name and sets layout_hint.split = "full" for all zones (Agent 5 uses selected_layout_name for positioning, not the split).
+- NEVER assign title-slide, section-header, divider, blank, or thank-you layouts to content slides. The available layouts list in the prompt already contains only content-appropriate layouts.
+ALLOWED SPLIT COMBINATIONS, only when fewer than 5 content brand layouts are available:
+1 zone:  full – applicable only when a very stark contrasting message is to be communicated e.g. takeaways or summary 
 2 zones side by side: left_50+right_50 | left_60+right_40 | left_40+right_60
 2 zones stacked:      top_30+bottom_70 | top_40+bottom_60 | top_50+bottom_50
 3 zones:              top_left_50+top_right_50+bottom_full | left_full_50+top_right_50_h+bottom_right_50_h
@@ -149,7 +141,6 @@ ARTIFACT TYPES
 ═══════════════════════════
 
 Allowed artifact types: insight_text | chart | cards | workflow | table
-
 Good artifact combinations inside one zone:
 - chart + insight_text
 - workflow + insight_text
@@ -168,27 +159,25 @@ ARTIFACT 1: insight_text
 
 {
   "type": "insight_text",
-  "heading": "Key Insight" | "So What" | "Risk Alert" | "Action Required",
+  "insight_header": "Key Insight" | "So What" | "Risk Alert" | "Action Required",
   "points": ["specific insight with data", "..."],
   "sentiment": "positive" | "warning" | "neutral"
 }
 
 Rules:
-- max 4 points
 - each point must be SPECIFIC — include actual numbers, names, percentages
 - final point should ideally state implication or action
 - ZERO placeholder or generic text
-
+- highlight the positive or negative for each point
 ═══════════════════════════
 ARTIFACT 2: chart
 ═══════════════════════════
-
 {
   "type": "chart",
   "chart_type": "bar" | "line" | "pie" | "waterfall" | "clustered_bar",
   "chart_decision": "one line: why this chart type was chosen",
   "chart_title": "descriptive title",
-  "chart_insight": "the one-line insight the chart proves",
+  "chart_header": "the one-line insight the chart proves",
   "x_label": "string",
   "y_label": "string",
   "categories": ["string", "string", "string"],
@@ -243,7 +232,7 @@ ARTIFACT 4: workflow
   "type": "workflow",
   "workflow_type": "process_flow" | "hierarchy" | "decomposition" | "information_flow" | "timeline",
   "flow_direction": "left_to_right" | "top_to_bottom" | "top_down_branching" | "bottom_up",
-  "workflow_title": "string",
+  "workflow_header": "string",
   "workflow_insight": "string",
   "nodes": [
     {
@@ -261,7 +250,7 @@ ARTIFACT 4: workflow
 
 Workflow type rules:
 - process_flow:       linear sequence of steps, max 5 nodes
-- hierarchy:          parent-child structure across levels, max 6 nodes
+- hierarchy:          parent-child structure across levels, max 8 nodes
 - decomposition:      top number split into lower-level components, max 6 nodes
 - information_flow:   movement across systems/teams/stages, max 5 nodes
 - timeline:           phased progression, max 5 nodes
@@ -299,6 +288,7 @@ ARTIFACT 5: table
 
 {
   "type": "table",
+  "table_header": "string — one-line insight this table proves",
   "title": "string",
   "headers": ["string"],
   "rows": [["string"]],
@@ -335,6 +325,30 @@ STORYTELLING RULES
    build the slide around that answer
 
 ═══════════════════════════
+SLIDE LAYOUT SELECTION
+═══════════════════════════
+
+You will be given a list of AVAILABLE BRAND LAYOUTS in the prompt.
+
+CONDITION: Only select a layout when 5 or more CONTENT layouts are provided.
+- If 5+ content layouts available: set selected_layout_name to the best matching layout name; set layout_hint.split = "full" for all zones
+- If fewer than 5 content layouts: set selected_layout_name to "" and use layout_hint splits for zone geometry
+
+The available layouts list passed to you already excludes title, section header, divider, blank, and thank-you layouts.
+Never assign those layout types to content slides even if you recognise their names.
+
+Selection rules (applies only when 5+ content layouts are available):
+- Title and divider slides: set selected_layout_name to "" — the pipeline assigns their layouts automatically
+- For content slides, match on zone count and archetype:
+  - 1 zone (full, narrative heavy)    → "1 Across" or "Body Text" style layout
+  - 2 zones side-by-side              → "2 Across" or "Two Content" style layout
+  - 3 zones                           → "3 Across" or "Three Content" style layout
+  - 4 zones (dashboard/grid)          → "4 Across" or "Dashboard" style layout
+  - recommendation / cards            → "3 Across" or most card-friendly layout
+  - process / workflow / roadmap      → widest single-column layout
+- Choose by layout name — pick the closest match from the list provided
+
+═══════════════════════════
 QUALITY GATES
 ═══════════════════════════
 
@@ -343,6 +357,7 @@ QUALITY GATES
 - No vague wording
 - Max 4 zones per slide
 - Max 2 artifacts per zone
+- for each artifact (except cards) headers have to be defined 
 - Insight-led titles on every content slide
 - Workflows must be structurally coherent — nodes and connections must match
 - Content must be board-ready and decision-oriented
@@ -378,7 +393,7 @@ function defaultZonesForArchetype(archetype) {
         { zone_id: 'z2', zone_role: 'implication', narrative_weight: 'secondary',
           message_objective: 'Interpret the trend',
           layout_hint: { split: 'right_40' },
-          artifacts: [{ type: 'insight_text', heading: 'So What', points: [], sentiment: 'neutral' }] }
+          artifacts: [{ type: 'insight_text', insight_header: 'So What', points: [], sentiment: 'neutral' }] }
       ]
 
     case 'comparison':
@@ -390,7 +405,7 @@ function defaultZonesForArchetype(archetype) {
         { zone_id: 'z2', zone_role: 'implication', narrative_weight: 'secondary',
           message_objective: 'What the comparison means',
           layout_hint: { split: 'right_40' },
-          artifacts: [{ type: 'insight_text', heading: 'Key Insight', points: [], sentiment: 'neutral' }] }
+          artifacts: [{ type: 'insight_text', insight_header: 'Key Insight', points: [], sentiment: 'neutral' }] }
       ]
 
     case 'breakdown':
@@ -402,7 +417,7 @@ function defaultZonesForArchetype(archetype) {
         { zone_id: 'z2', zone_role: 'supporting_evidence', narrative_weight: 'secondary',
           message_objective: 'Detail behind the segments',
           layout_hint: { split: 'right_50' },
-          artifacts: [{ type: 'insight_text', heading: 'Key Insight', points: [], sentiment: 'neutral' }] }
+          artifacts: [{ type: 'insight_text', insight_header: 'Key Insight', points: [], sentiment: 'neutral' }] }
       ]
 
     case 'driver_analysis':
@@ -414,7 +429,7 @@ function defaultZonesForArchetype(archetype) {
         { zone_id: 'z2', zone_role: 'implication', narrative_weight: 'secondary',
           message_objective: 'Interpret the key drivers',
           layout_hint: { split: 'right_40' },
-          artifacts: [{ type: 'insight_text', heading: 'Key Insight', points: [], sentiment: 'neutral' }] }
+          artifacts: [{ type: 'insight_text', insight_header: 'Key Insight', points: [], sentiment: 'neutral' }] }
       ]
 
     case 'process':
@@ -427,7 +442,7 @@ function defaultZonesForArchetype(archetype) {
         { zone_id: 'z2', zone_role: 'implication', narrative_weight: 'secondary',
           message_objective: 'Key insight or action from the process',
           layout_hint: { split: 'bottom_40' },
-          artifacts: [{ type: 'insight_text', heading: 'So What', points: [], sentiment: 'neutral' }] }
+          artifacts: [{ type: 'insight_text', insight_header: 'So What', points: [], sentiment: 'neutral' }] }
       ]
 
     case 'recommendation':
@@ -447,7 +462,7 @@ function defaultZonesForArchetype(archetype) {
         { zone_id: 'z2', zone_role: 'implication', narrative_weight: 'secondary',
           message_objective: 'Interpretation and implication of the evidence',
           layout_hint: { split: 'right_40' },
-          artifacts: [{ type: 'insight_text', heading: 'So What', points: [], sentiment: 'neutral' }] }
+          artifacts: [{ type: 'insight_text', insight_header: 'So What', points: [], sentiment: 'neutral' }] }
       ]
 
     default: // summary
@@ -455,7 +470,7 @@ function defaultZonesForArchetype(archetype) {
         { zone_id: 'z1', zone_role: 'summary', narrative_weight: 'primary',
           message_objective: 'Key summary of the section',
           layout_hint: { split: 'full' },
-          artifacts: [{ type: 'insight_text', heading: 'Key Insight', points: [], sentiment: 'neutral' }] }
+          artifacts: [{ type: 'insight_text', insight_header: 'Key Insight', points: [], sentiment: 'neutral' }] }
       ]
   }
 }
@@ -587,6 +602,7 @@ function normaliseArtifact(a) {
     if (!a.series) a.series = []
     if (!a.chart_type) a.chart_type = 'bar'
     if (!a.chart_title) a.chart_title = ''
+    if (!a.chart_header) a.chart_header = ''
     if (!a.chart_insight) a.chart_insight = ''
     if (a.show_data_labels === undefined) a.show_data_labels = true
 
@@ -612,7 +628,9 @@ function normaliseArtifact(a) {
 
   if (t === 'insight_text') {
     if (!a.points) a.points = []
-    if (!a.heading) a.heading = 'Key Insight'
+    // Map insight_header → heading for backward compatibility with Agent 5/6
+    if (!a.heading) a.heading = a.insight_header || 'Key Insight'
+    if (!a.insight_header) a.insight_header = a.heading
     if (!a.sentiment) a.sentiment = 'neutral'
     // Normalise points — flatten if they're objects
     a.points = a.points.map(p => typeof p === 'string' ? p : (p.text || p.point || JSON.stringify(p)))
@@ -633,6 +651,7 @@ function normaliseArtifact(a) {
     if (!a.connections) a.connections = []
     if (!a.workflow_type) a.workflow_type = 'process_flow'
     if (!a.flow_direction) a.flow_direction = 'left_to_right'
+    if (!a.workflow_header) a.workflow_header = ''
     if (!a.workflow_title) a.workflow_title = ''
     if (!a.workflow_insight) a.workflow_insight = ''
   }
@@ -641,6 +660,7 @@ function normaliseArtifact(a) {
     if (!a.headers) a.headers = []
     if (!a.rows) a.rows = []
     if (!a.title) a.title = ''
+    if (!a.table_header) a.table_header = ''
   }
 
   return a
@@ -680,6 +700,7 @@ function normaliseSlide(slide, plan) {
     section_type:                 slide.section_type                 || plan.section_type   || '',
     slide_type:                   slideType,
     slide_archetype:              slide.slide_archetype              || inferArchetype(plan.section_type, 0),
+    selected_layout_name:         slide.selected_layout_name         || '',
     title:                        slide.title                        || plan.section_name   || ('Slide ' + plan.slide_number),
     subtitle:                     slide.subtitle                     || '',
     key_message:                  slide.key_message                  || plan.so_what        || '',
@@ -736,9 +757,10 @@ function buildSlidePlan(brief, slideCount) {
 // BATCH WRITER
 // ═══════════════════════════════════════════════════════════════════════════════
 
-async function writeSlideBatch(batchPlan, brief, contentB64, batchNum) {
+async function writeSlideBatch(batchPlan, brief, contentB64, batchNum, layoutNames) {
   console.log('Agent 4 — batch', batchNum, ': slides', batchPlan[0].slide_number, '–', batchPlan[batchPlan.length-1].slide_number)
 
+  const hasLayouts = layoutNames.length >= 5
   const briefSummary = buildBriefSummaryForAgent4(brief)
   const prompt = `PRESENTATION BRIEF:
 Document type:     ${briefSummary.document_type || '—'}
@@ -749,6 +771,12 @@ Key messages:      ${briefSummary.key_messages || '—'}
 Key data points:   ${briefSummary.key_data_points || '—'}
 Recommendations:   ${briefSummary.recommendations || '—'}
 
+AVAILABLE BRAND LAYOUTS (${layoutNames.length}): ${hasLayouts
+  ? layoutNames.join(' | ')
+  : layoutNames.length > 0 ? layoutNames.join(' | ') + ' — too few layouts; use layout_hint splits for zone geometry'
+  : 'none — use layout_hint splits for zone geometry'}
+${hasLayouts ? 'Select the best layout name per slide. Set layout_hint.split = "full" for all zones (Agent 5 uses selected_layout_name for positioning).' : ''}
+
 SLIDES TO WRITE — batch ${batchNum} (${batchPlan.length} slides):
 ${JSON.stringify(batchPlan, null, 2)}
 
@@ -758,10 +786,11 @@ INSTRUCTIONS:
 - Title slides: zones = []
 - Divider slides: zones = []
 - Content slides: 1–4 zones, each with 1–2 artifacts
-- Every chart: MUST have 3+ categories, matching values, no all-zeros
+- Every chart: MUST have 3+ categories, matching values, no all-zeros; set chart_header to the one-line insight the chart proves
 - clustered_bar: MUST have exactly 2 series
-- Every insight_text: MUST have specific, data-driven points
-- Workflows: fully populate nodes and connections
+- Every insight_text: MUST have specific, data-driven points; set insight_header to one of: Key Insight | So What | Risk Alert | Action Required
+- Workflows: fully populate nodes and connections; set workflow_header to the one-line insight
+- Tables: set table_header to the one-line insight the table proves
 - Return ONLY a valid JSON array for these ${batchPlan.length} slides`
 
   const messages = [{
@@ -789,7 +818,7 @@ INSTRUCTIONS:
 // REPAIR
 // ═══════════════════════════════════════════════════════════════════════════════
 
-async function repairSlide(slide, brief, contentB64) {
+async function repairSlide(slide, brief, contentB64, layoutNames) {
   console.log('Agent 4 — repairing slide', slide.slide_number, ':', slide.title)
 
   const briefSummary = buildBriefSummaryForAgent4(brief)
@@ -807,9 +836,12 @@ Fix rules:
 - Replace all placeholder or empty content with real, specific data
 - Keep the same zones[] and artifact types — only fill in the content
 - All numbers from the source document
-- Charts: 3+ categories, matching values, no all-zeros
-- insight_text: specific points with data
-- workflows: fully populated nodes and connections
+- Charts: 3+ categories, matching values, no all-zeros; ensure chart_header is set
+- insight_text: specific points with data; ensure insight_header is set
+- Workflows: fully populated nodes and connections; ensure workflow_header is set
+- Tables: ensure table_header is set
+- selected_layout_name: choose from available layouts; set to "" if none available
+- layout_hint.split: ${layoutNames && layoutNames.length >= 5 ? 'set to "full" (Agent 5 uses selected_layout_name for positioning)' : 'keep existing split values'}
 - Return ONLY a single JSON object for this one slide`
 
   const messages = [{
@@ -839,11 +871,33 @@ Fix rules:
 // ═══════════════════════════════════════════════════════════════════════════════
 
 async function runAgent4(state) {
-  const brief      = state.outline
-  const contentB64 = state.contentB64
-  const slideCount = (brief && brief.total_slides) || state.slideCount
+  const brief       = state.outline
+  const contentB64  = state.contentB64
+  const slideCount  = (brief && brief.total_slides) || state.slideCount
+  const brand       = state.brandRulebook || {}
+  // Use pre-filtered content_layout_names from Agent 2 when available.
+  // This excludes title, section-header, divider, blank, and thank-you layouts
+  // so the "5+ layouts → use layout mode" threshold counts only usable content layouts.
+  const _NON_CONTENT_TYPES = new Set(['title', 'sechead', 'blank'])
+  const _isNonContent = (l) => {
+    const t = (l.type || '').toLowerCase()
+    const n = (l.name || l.layout_name || '').toLowerCase()
+    return _NON_CONTENT_TYPES.has(t) ||
+      /^blank$/i.test(n) ||
+      /thank[\s_-]*you|end[\s_-]*slide|closing[\s_-]*slide|section[\s_-]*header|^section$|divider/i.test(n)
+  }
+
+  const layoutNames = brand.content_layout_names && brand.content_layout_names.length > 0
+    ? brand.content_layout_names
+    : (brand.layout_blueprints || brand.slide_layouts || [])
+        .filter(l => !_isNonContent(l))
+        .map(l => l.name || l.layout_name || '').filter(Boolean)
+
+  const totalLayouts = (brand.layout_blueprints || brand.slide_layouts || []).length
 
   console.log('Agent 4 starting — target slides:', slideCount, '| doc type:', (brief && brief.document_type) || '—')
+  console.log('  Brand layouts total:', totalLayouts, '| content layouts:', layoutNames.length,
+    layoutNames.length >= 5 ? '→ layout mode (Agent 4 selects per slide)' : '→ zone-split mode')
 
   const slidePlan = buildSlidePlan(brief, slideCount)
   console.log('  Slide plan:', slidePlan.length, 'slides')
@@ -862,7 +916,7 @@ async function runAgent4(state) {
       await new Promise(r => setTimeout(r, 65000))
     }
     const batch  = batches[b]
-    const result = await writeSlideBatch(batch, brief, contentB64, b + 1)
+    const result = await writeSlideBatch(batch, brief, contentB64, b + 1, layoutNames)
 
     if (!result) {
       batch.forEach(plan => allSlides.push(normaliseSlide({}, plan)))
@@ -879,7 +933,7 @@ async function runAgent4(state) {
   console.log('  Slides needing repair:', failed.length)
 
   for (const slide of failed.slice(0, 2)) {
-    const repaired = await repairSlide(slide, brief, contentB64)
+    const repaired = await repairSlide(slide, brief, contentB64, layoutNames)
     if (repaired) {
       const idx = allSlides.findIndex(s => s.slide_number === slide.slide_number)
       if (idx >= 0) {

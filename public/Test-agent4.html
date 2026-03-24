@@ -209,7 +209,7 @@
 
   <div class="badge">Agent 4 — Messaging Arc Model</div>
   <h1>Slide Content Architect Tester</h1>
-  <p class="subhead">Each slide has zones (messaging arcs), each zone has up to 2 artifacts (chart, table, cards, workflow, insight text). Title and subtitle are outside zones.</p>
+  <p class="subhead">Each slide has zones (messaging arcs), each zone has up to 2 artifacts (chart, table, cards, workflow, insight text). Title and subtitle are outside zones. Brand guidelines are required so Agent 4 can select the best named layout when 5+ layouts are available.</p>
 
   <div class="card">
     <div class="card-title">Inputs</div>
@@ -220,6 +220,12 @@
         <div class="upload-zone" id="zone-brief">
           <input type="file" accept=".json" onchange="loadFile('brief', this)">
           <div class="uz">Or upload <span>brief.json</span></div>
+        </div>
+        <div class="hint" style="margin-top:10px;">Agent 2 Brand Rulebook JSON <span style="color:#888;">(required for layout selection)</span></div>
+        <textarea id="brand-input" style="height:100px;" placeholder='{ "primary_colors": ["#0F2FB5"], "slide_layouts": [...], "uses_template": true, ... }'></textarea>
+        <div class="upload-zone" id="zone-brand">
+          <input type="file" accept=".json" onchange="loadFile('brand', this)">
+          <div class="uz">Or upload <span>brand.json</span></div>
         </div>
       </div>
       <div>
@@ -290,7 +296,12 @@
   function loadFile(type, input) {
     const file = input.files[0]; if (!file) return
     const reader = new FileReader()
-    reader.onload = e => { if (type==='brief') document.getElementById('brief-input').value = e.target.result; document.getElementById('zone-'+type).classList.add('ready'); checkReady() }
+    reader.onload = e => {
+      if (type === 'brief') document.getElementById('brief-input').value = e.target.result
+      if (type === 'brand') document.getElementById('brand-input').value = e.target.result
+      document.getElementById('zone-'+type).classList.add('ready')
+      checkReady()
+    }
     reader.readAsText(file)
   }
 
@@ -302,16 +313,18 @@
 
   async function runTest() {
     const brief = safeParseJSON(document.getElementById('brief-input').value, null)
+    const brand = safeParseJSON(document.getElementById('brand-input').value, {})
     const err   = document.getElementById('error-box')
     if (!brief) { err.textContent='Cannot parse Brief JSON'; err.classList.add('show'); return }
     err.classList.remove('show')
     document.getElementById('run-btn').disabled = true
     document.getElementById('results').classList.remove('show')
     document.getElementById('prog-wrap').classList.add('show')
-    setProgress(10, 'Building slide plan...')
+    const layoutNames = ((brand.layout_blueprints || brand.slide_layouts || []).map(l => l.name || l.layout_name || '').filter(Boolean))
+    setProgress(10, 'Building slide plan...' + (layoutNames.length ? ' (' + layoutNames.length + ' layouts found in brand)' : ' (no brand layouts — using zone splits)'))
     try {
       setProgress(30, 'Writing slides in batches...')
-      const manifest = await runAgent4({ outline: brief, contentB64: pdfB64, slideCount: brief.total_slides || slideCount })
+      const manifest = await runAgent4({ outline: brief, contentB64: pdfB64, slideCount: brief.total_slides || slideCount, brandRulebook: brand })
       resultManifest = manifest
       setProgress(90, 'Rendering...')
       renderResults(manifest)
@@ -335,11 +348,13 @@
       })
     })
 
+    const withLayout = manifest.filter(s => s.selected_layout_name)
     document.getElementById('stats-bar').innerHTML = [
       { val: manifest.length, lbl: 'Slides' },
       { val: manifest.filter(s=>s.slide_type==='content').length, lbl: 'Content' },
       { val: totalZones, lbl: 'Zones' },
       { val: totalArtifacts, lbl: 'Artifacts' },
+      { val: withLayout.length, lbl: 'Layout Mode' },
       { val: manifest.filter(s=>hasPlaceholderContent(s)).length, lbl: '⚠ Need Repair' }
     ].map(s=>`<div class="stat-pill"><div class="sp-val">${s.val}</div><div class="sp-lbl">${s.lbl}</div></div>`).join('')
 
@@ -357,6 +372,7 @@
           <span class="sc-badge badge-${s.slide_type}">${s.slide_type}</span>
           <span class="arch-pill arch-${s.slide_archetype||'summary'}" style="font-size:9px;padding:1px 6px;">${s.slide_archetype||'—'}</span>
           <span class="sc-title">${s.title||'—'}</span>
+          ${s.selected_layout_name ? `<span style="font-size:9px;background:#dbeafe;color:#1d4ed8;padding:1px 7px;border-radius:20px;font-weight:700;" title="Layout mode">📐 ${s.selected_layout_name}</span>` : ''}
           ${arcCount > 0 ? `<span class="sc-meta">${arcCount}z · ${artSummary}</span>` : ''}
           <span class="sc-chevron" id="chev-${i}">▶</span>
         </div>
@@ -365,6 +381,7 @@
 
           <div class="slide-meta-row">
             <div class="smr-item"><span class="smr-label">Archetype</span>${s.slide_archetype||'—'}</div>
+            ${s.selected_layout_name ? `<div class="smr-item" style="background:#dbeafe;"><span class="smr-label" style="color:#1d4ed8;">Layout</span><strong style="color:#1d4ed8;">${s.selected_layout_name}</strong></div>` : '<div class="smr-item"><span class="smr-label">Layout</span>zone splits</div>'}
             ${s.visual_flow_hint ? `<div class="smr-item"><span class="smr-label">Flow</span>${s.visual_flow_hint}</div>` : ''}
             ${s.context_from_previous_slide ? `<div class="smr-item"><span class="smr-label">Context</span>${s.context_from_previous_slide}</div>` : ''}
           </div>
@@ -556,8 +573,9 @@
   function resetAll() {
     pdfB64=null; resultManifest=null
     document.getElementById('brief-input').value=''
+    document.getElementById('brand-input').value=''
     document.getElementById('pdf-label').innerHTML='Click to upload <span>.pdf</span>'
-    ;['pdf','brief'].forEach(t=>document.getElementById('zone-'+t).classList.remove('ready'))
+    ;['pdf','brief','brand'].forEach(t=>document.getElementById('zone-'+t).classList.remove('ready'))
     document.getElementById('run-btn').disabled=true
     ;['results','error-box','prog-wrap'].forEach(id=>document.getElementById(id).classList.remove('show','open'))
     document.getElementById('prog-fill').style.width='0%'

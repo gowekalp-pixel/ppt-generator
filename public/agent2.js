@@ -457,6 +457,30 @@ function buildRulebook(data) {
     body_placeholder:  l.body_placeholder  || null,
     placeholders:   l.placeholders   || []
   }))
+
+  // ── Identify special-purpose vs content layouts ────────────────────────────
+  // Priority 1: OOXML type attribute (authoritative)
+  // Priority 2: Name heuristics (fallback for PDF/image-sourced brands)
+  const _isNonContentLayout = (l) => {
+    const t = (l.type || '').toLowerCase()
+    const n = (l.name || '').toLowerCase()
+    return (
+      t === 'title'   || t === 'sechead' || t === 'blank' ||
+      /^blank$/i.test(n) ||
+      /thank[\s_-]*you|end[\s_-]*slide|closing[\s_-]*slide/i.test(n)
+    )
+  }
+
+  const titleLayout = layouts.find(l => l.type === 'title') ||
+    layouts.find(l => /title[\s_-]*slide|^title$/i.test(l.name))
+
+  const dividerLayout = layouts.find(l => l.type === 'secHead' || l.type === 'sechead') ||
+    layouts.find(l => /section[\s_-]*header|^section$|divider/i.test(l.name))
+
+  const thankYouLayout = layouts.find(l =>
+    /thank[\s_-]*you|end[\s_-]*slide|closing[\s_-]*slide/i.test(l.name))
+
+  const contentLayouts = layouts.filter(l => !_isNonContentLayout(l))
   const slideMasters = (d.slide_masters || []).map(m => ({
     name: m.name || 'Master',
     path: m.path || '',
@@ -527,7 +551,17 @@ function buildRulebook(data) {
     extraction_source:    d.source            || 'agent2',
     // True when the brand was extracted from a real PPTX master.
     // Agent 5 uses this to skip background/logo/footer (the master handles them).
-    uses_template:        slideMasters.length > 0 && layouts.length > 0
+    uses_template:        slideMasters.length > 0 && layouts.length > 0,
+
+    // ── Layout classification (used by Agent 4, 5, and 6) ──────────────────
+    // Identifies which named layouts serve which structural role.
+    // content_layout_names excludes title, section header, blank, and thank-you
+    // layouts so Agent 4's "5+ layouts → use layout mode" threshold only counts
+    // layouts that are actually valid for content slides.
+    title_layout_name:     titleLayout    ? titleLayout.name    : null,
+    divider_layout_name:   dividerLayout  ? dividerLayout.name  : null,
+    thank_you_layout_name: thankYouLayout ? thankYouLayout.name : null,
+    content_layout_names:  contentLayouts.map(l => l.name)
   }
 
   console.log('Agent 2 — rulebook complete:')

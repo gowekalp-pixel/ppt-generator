@@ -243,6 +243,107 @@ def rgb_tuple(hex_color):
         return (0, 0, 0)
 
 
+def is_dark_color(hex_color):
+    """Return True if perceived luminance is < 0.5 (i.e. color is dark)."""
+    r, g, b = rgb_tuple(hex_color)
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255 < 0.5
+
+
+def find_layout_by_name(prs, name):
+    """Find a slide layout by exact name, then partial match."""
+    if not name:
+        return None
+    name_lower = name.lower().strip()
+    for layout in prs.slide_layouts:
+        if (layout.name or '').lower().strip() == name_lower:
+            return layout
+    for layout in prs.slide_layouts:
+        if name_lower in (layout.name or '').lower():
+            return layout
+    return None
+
+
+def place_in_placeholder(slide, ph_idx, text, style_spec, bt):
+    """
+    Write text into the placeholder at ph_idx on the slide.
+    Falls back to a free-form text box if the placeholder is not found.
+    """
+    if not text:
+        return
+    style_spec = style_spec or {}
+    bt         = bt or {}
+
+    try:
+        for ph in slide.placeholders:
+            if ph.placeholder_format.idx == ph_idx:
+                tf = ph.text_frame
+                tf.clear()
+                p   = tf.paragraphs[0]
+                run = p.add_run()
+                run.text = str(text)
+                font_family = style_spec.get('font_family') or bt.get('title_font_family', 'Arial')
+                font_size   = style_spec.get('font_size', 18 if ph_idx == 0 else 14)
+                bold        = style_spec.get('font_weight', '') in ('bold', 'semibold')
+                color_hex   = style_spec.get('color') or bt.get('title_color', '#111111')
+                align       = style_spec.get('align', 'left')
+                set_font(run, font_family, font_size, bold, False, color_hex)
+                align_map = {'left': PP_ALIGN.LEFT, 'center': PP_ALIGN.CENTER, 'right': PP_ALIGN.RIGHT}
+                p.alignment = align_map.get(align, PP_ALIGN.LEFT)
+                return
+    except Exception as e:
+        print(f'place_in_placeholder({ph_idx}) lookup error:', e)
+
+    # Fallback: free-form text box using default positions
+    if ph_idx == 0:
+        add_text_box(slide, 0.4, 0.15, 9.0, 0.8, text,
+                     style_spec.get('font_family', bt.get('title_font_family', 'Arial')),
+                     style_spec.get('font_size', 20),
+                     style_spec.get('font_weight', 'bold') in ('bold', 'semibold'),
+                     style_spec.get('color', bt.get('title_color', '#1A3C8F')),
+                     style_spec.get('align', 'left'), 'middle')
+    else:
+        add_text_box(slide, 0.4, 1.0, 9.0, 0.5, text,
+                     style_spec.get('font_family', bt.get('body_font_family', 'Arial')),
+                     style_spec.get('font_size', 14),
+                     False,
+                     style_spec.get('color', bt.get('body_color', '#333333')),
+                     style_spec.get('align', 'left'), 'middle')
+
+
+def render_header_block(slide, header_block, bt):
+    """
+    Render an artifact header label.
+    style='underline' — text + thin brand-colour rule below.
+    style='brand_fill' — filled rectangle with contrasting text.
+    """
+    if not header_block:
+        return
+    x     = header_block.get('x', 0)
+    y     = header_block.get('y', 0)
+    w     = header_block.get('w', 4)
+    h     = header_block.get('h', 0.3)
+    text  = header_block.get('text', '')
+    style = header_block.get('style', 'underline')
+
+    if not text:
+        return
+
+    primary   = bt.get('primary_color', '#1A3C8F')
+    font_fam  = bt.get('title_font_family', 'Arial')
+    font_size = header_block.get('font_size', 11)
+
+    if style == 'brand_fill':
+        add_filled_rect(slide, x, y, w, h, fill_hex=primary)
+        text_color = '#FFFFFF' if is_dark_color(primary) else '#111111'
+        add_text_box(slide, x + 0.08, y, w - 0.16, h,
+                     text, font_fam, font_size, True, text_color, 'left', 'middle')
+    else:
+        # Underline style
+        add_text_box(slide, x, y, w, max(0.01, h - 0.05),
+                     text, font_fam, font_size, True, primary, 'left', 'bottom')
+        add_filled_rect(slide, x, y + h - 0.04, w, 0.03, fill_hex=primary)
+
+
 # ─── SLIDE RENDERERS ──────────────────────────────────────────────────────────
 
 def render_insight_text(slide, artifact, bt):
@@ -255,7 +356,7 @@ def render_insight_text(slide, artifact, bt):
     style   = artifact.get('style', {})
     hs      = artifact.get('heading_style', {})
     bs      = artifact.get('body_style', {})
-    heading = artifact.get('heading', 'Key Insight')
+    heading = artifact.get('heading', '')
     points  = artifact.get('points', [])
 
     # Background fill + border
@@ -268,45 +369,81 @@ def render_insight_text(slide, artifact, bt):
         add_filled_rect(slide, x, y, w, h, fill_hex=fill,
                         border_hex=border, border_pt=bw, corner_radius=cr)
 
-    # Left accent bar (3px wide)
-    accent_color = hs.get('color') or bt.get('primary_color', '#1A3C8F')
-    add_filled_rect(slide, x, y, 0.06, h, fill_hex=accent_color)
-
-    # Heading
-    h_font  = hs.get('font_family', bt.get('title_font_family', 'Arial'))
-    h_size  = hs.get('font_size', 12)
-    h_color = hs.get('color', accent_color)
-    h_bold  = hs.get('font_weight', 'bold') in ('bold', 'semibold')
-    add_text_box(slide, x + 0.12, y + 0.06, w - 0.18, 0.32,
-                 str(heading), h_font, h_size, h_bold, h_color, 'left', 'middle')
+    # Heading row (only when heading text is present and no header_block handles it)
+    content_y = y
+    if heading:
+        h_font  = hs.get('font_family', bt.get('title_font_family', 'Arial'))
+        h_size  = hs.get('font_size', 12)
+        h_color = hs.get('color', bt.get('primary_color', '#1A3C8F'))
+        h_bold  = hs.get('font_weight', 'bold') in ('bold', 'semibold')
+        add_text_box(slide, x, y, w, 0.32,
+                     str(heading), h_font, h_size, h_bold, h_color, 'left', 'middle')
+        content_y = y + 0.36
 
     # Body points
     if points:
-        b_font        = bs.get('font_family', bt.get('body_font_family', 'Arial'))
-        b_size        = bs.get('font_size', 10)
-        b_color       = bs.get('color', '#111111')
-        bullet_char   = bs.get('bullet_char', '•')
-        space_bef_pt  = max(1, int(bs.get('space_before_pt', 4)))
+        b_font       = bs.get('font_family', bt.get('body_font_family', 'Arial'))
+        b_size       = bs.get('font_size', 10)
+        b_color      = bs.get('color', '#111111')
+        list_style   = bs.get('list_style', 'bullet')   # tick_cross | numbered | bullet
+        indent_in    = float(bs.get('indent_inches', 0.12))
+        vert_dist    = bs.get('vertical_distribution', '')
+        space_bef_pt = max(1, int(bs.get('space_before_pt', 4)))
 
-        pt_y  = y + 0.42
-        pt_h  = h - 0.48
-        txBox = slide.shapes.add_textbox(
-            inches(x + 0.12), inches(pt_y), inches(w - 0.18), inches(pt_h)
-        )
-        tf = txBox.text_frame
-        enable_text_fit(tf)
+        body_h = h - (content_y - y)
 
-        first = True
-        for point in points:
-            if first:
-                p_obj = tf.paragraphs[0]
-                first = False
-            else:
-                p_obj = tf.add_paragraph()
-            p_obj.space_before = pt(space_bef_pt)
-            run = p_obj.add_run()
-            run.text = bullet_char + ' ' + str(point)
-            set_font(run, b_font, b_size, False, False, b_color)
+        # Build per-point markers
+        if list_style == 'tick_cross':
+            markers = []
+            for raw in points:
+                s = str(raw)
+                if s[:1] in ('✓', '✗', '→'):
+                    markers.append('')        # already marked
+                elif any(neg in s.lower() for neg in
+                         ['not ', 'no ', 'declin', 'risk', 'fail', 'loss', 'below', 'miss']):
+                    markers.append('✗ ')
+                else:
+                    markers.append('✓ ')
+        elif list_style == 'numbered':
+            markers = [str(i + 1) + '. ' for i in range(len(points))]
+        else:
+            markers = ['• ' for _ in points]
+
+        def _strip_leading_marker(text):
+            s = str(text)
+            if s[:1] in ('✓', '✗', '→', '•'):
+                return s[1:].lstrip()
+            return s
+
+        if vert_dist == 'spread' and len(points) > 0:
+            # One text box per point, evenly distributed vertically
+            slot_h = body_h / len(points)
+            for i, point in enumerate(points):
+                line = markers[i] + _strip_leading_marker(point)
+                add_text_box(slide,
+                             x + indent_in, content_y + i * slot_h,
+                             w - indent_in, slot_h * 0.92,
+                             line, b_font, b_size, False, b_color, 'left', 'top')
+        else:
+            # All points in a single text box
+            txBox = slide.shapes.add_textbox(
+                inches(x + indent_in), inches(content_y),
+                inches(w - indent_in), inches(body_h)
+            )
+            tf = txBox.text_frame
+            enable_text_fit(tf)
+
+            first = True
+            for i, point in enumerate(points):
+                if first:
+                    p_obj = tf.paragraphs[0]
+                    first = False
+                else:
+                    p_obj = tf.add_paragraph()
+                p_obj.space_before = pt(space_bef_pt)
+                run = p_obj.add_run()
+                run.text = markers[i] + _strip_leading_marker(point)
+                set_font(run, b_font, b_size, False, False, b_color)
 
 
 def render_chart(slide, artifact, bt):
@@ -698,9 +835,35 @@ def render_table(slide, artifact, bt):
         add_text_box(slide, x, y, w, h, all_text, 'Arial', 9, False, '#111111')
 
 
-def render_artifact(slide, artifact, bt):
-    """Dispatch to the correct renderer based on artifact type."""
+def render_artifact(slide, artifact, bt, ph_idx=None):
+    """
+    Dispatch to the correct renderer based on artifact type.
+
+    ph_idx — when set (layout mode), find that placeholder's bounding box and
+             override the artifact's x/y/w/h so content sits inside the layout area.
+    """
     t = (artifact.get('type') or '').lower()
+
+    # In layout mode: override artifact coordinates with the placeholder's bounds
+    if ph_idx is not None:
+        try:
+            for ph in slide.placeholders:
+                if ph.placeholder_format.idx == ph_idx:
+                    artifact = dict(artifact)   # shallow copy — don't mutate the spec
+                    artifact['x'] = ph.left   / 914400
+                    artifact['y'] = ph.top    / 914400
+                    artifact['w'] = ph.width  / 914400
+                    artifact['h'] = ph.height / 914400
+                    break
+        except Exception as e:
+            print(f'render_artifact: placeholder bounds lookup failed (idx={ph_idx}):', e)
+
+    # Render header_block for all non-cards artifacts
+    if t != 'cards':
+        hb = artifact.get('header_block')
+        if hb and not hb.get('placeholder_ref'):
+            render_header_block(slide, hb, bt)
+
     try:
         if   t == 'insight_text': render_insight_text(slide, artifact, bt)
         elif t == 'chart':        render_chart(slide, artifact, bt)
@@ -714,119 +877,200 @@ def render_artifact(slide, artifact, bt):
 
 # ─── SLIDE BUILDER ─────────────────────────────────────────────────────────────
 
-def build_slide(prs, slide_spec, blank_layout, use_template=False):
-    """Build one slide from its spec object."""
-    slide = prs.slides.add_slide(blank_layout)
+def _write_speaker_note(slide, note_text):
+    if note_text:
+        try:
+            slide.notes_slide.notes_text_frame.text = str(note_text)
+        except Exception:
+            pass
 
-    cvs = slide_spec.get('canvas', {})
-    bt  = slide_spec.get('brand_tokens', {})
 
-    # ── Background ──────────────────────────────────────────────────────────
-    # When a brand template is in use the slide master already provides the
-    # background (colour, image, decorative shapes). Setting it here would
-    # paint over those master elements, so we skip it in template mode.
+def build_slide(prs, slide_spec, blank_layout, use_template=False,
+                title_layout_name=None, divider_layout_name=None):
+    """
+    Build one slide from its spec object.
+
+    Three rendering paths:
+    1. Title / divider  — template mode: text into placeholders only.
+    2. Content          — template mode: title/subtitle into placeholders (idx 0/1);
+                          artifacts rendered at coordinates OR at placeholder bounds
+                          when layout_mode=True and placeholder_idx is set.
+    3. Any type         — scratch mode (use_template=False): full coordinates for
+                          everything including title, subtitle, logo, footer, page num.
+    """
+    slide_type           = slide_spec.get('slide_type', 'content')
+    layout_mode          = slide_spec.get('layout_mode', False)
+    selected_layout_name = slide_spec.get('selected_layout_name', '')
+    bt                   = slide_spec.get('brand_tokens', {})
+    cvs                  = slide_spec.get('canvas', {})
+    tb                   = slide_spec.get('title_block') or {}
+    sb                   = slide_spec.get('subtitle_block') or {}
+
+    # ── Choose layout ────────────────────────────────────────────────────────
+    layout = blank_layout
+    if use_template:
+        if selected_layout_name:
+            # Content slide with a named layout chosen by Agent 4
+            named = find_layout_by_name(prs, selected_layout_name)
+            if named:
+                layout = named
+                print(f'  Slide {slide_spec.get("slide_number","?")}: layout="{named.name}"')
+
+        elif slide_type == 'title':
+            # Use the explicit name from Agent 2's rulebook first (most reliable),
+            # then fall back to OOXML type="title" matching, then name heuristics.
+            if title_layout_name:
+                layout = find_layout_by_name(prs, title_layout_name) or blank_layout
+            else:
+                for lyt in prs.slide_layouts:
+                    # python-pptx exposes the OOXML type via the internal XML
+                    try:
+                        import pptx.oxml.ns as _ns
+                        lyt_type = lyt._element.get('type', '')
+                    except Exception:
+                        lyt_type = ''
+                    if lyt_type == 'title':
+                        layout = lyt; break
+                else:
+                    for lyt in prs.slide_layouts:
+                        lname = (lyt.name or '').lower()
+                        if 'title' in lname and 'section' not in lname and 'content' not in lname:
+                            layout = lyt; break
+
+        elif slide_type == 'divider':
+            # Same priority: explicit rulebook name → OOXML secHead → name heuristics.
+            if divider_layout_name:
+                layout = find_layout_by_name(prs, divider_layout_name) or blank_layout
+            else:
+                for lyt in prs.slide_layouts:
+                    try:
+                        import pptx.oxml.ns as _ns
+                        lyt_type = lyt._element.get('type', '')
+                    except Exception:
+                        lyt_type = ''
+                    if lyt_type == 'secHead':
+                        layout = lyt; break
+                else:
+                    for lyt in prs.slide_layouts:
+                        lname = (lyt.name or '').lower()
+                        if 'section' in lname or 'divider' in lname:
+                            layout = lyt; break
+
+    slide = prs.slides.add_slide(layout)
+
+    # ── Background (scratch only — master handles it in template mode) ────────
     if not use_template:
         bg_color = (cvs.get('background') or {}).get('color', '#FFFFFF')
-        background = slide.background
-        fill = background.fill
-        fill.solid()
-        fill.fore_color.rgb = hex_to_rgb(bg_color)
+        slide.background.fill.solid()
+        slide.background.fill.fore_color.rgb = hex_to_rgb(bg_color)
 
-    # ── Title block ──────────────────────────────────────────────────────────
-    tb = slide_spec.get('title_block')
-    if tb and tb.get('text'):
-        add_text_box(
-            slide,
-            tb.get('x', 0.4), tb.get('y', 0.15),
-            tb.get('w', 9), tb.get('h', 0.8),
-            tb.get('text', ''),
-            tb.get('font_family', bt.get('title_font_family', 'Arial')),
-            tb.get('font_size', 20),
-            tb.get('font_weight', 'bold') in ('bold', 'semibold'),
-            tb.get('color', bt.get('title_color', '#1A3C8F')),
-            tb.get('align', 'left'),
-            tb.get('valign', 'middle'),
-            True
-        )
+    # ════════════════════════════════════════════════════════════════════════
+    # PATH 1 — TITLE & DIVIDER
+    # Only write text content; the layout provides all visual decoration.
+    # ════════════════════════════════════════════════════════════════════════
+    if slide_type in ('title', 'divider'):
+        if use_template:
+            if tb.get('text'):
+                place_in_placeholder(slide, 0, tb['text'], tb, bt)
+            if sb.get('text'):
+                place_in_placeholder(slide, 1, sb['text'], sb, bt)
+        else:
+            # Scratch mode — free-form text boxes
+            if tb.get('text'):
+                add_text_box(slide,
+                    tb.get('x', 0.4), tb.get('y', 0.15),
+                    tb.get('w', 9.0), tb.get('h', 0.8),
+                    tb['text'],
+                    tb.get('font_family', bt.get('title_font_family', 'Arial')),
+                    tb.get('font_size', 28),
+                    tb.get('font_weight', 'bold') in ('bold', 'semibold'),
+                    tb.get('color', bt.get('title_color', '#1A3C8F')),
+                    tb.get('align', 'center'), 'middle')
+            if sb.get('text'):
+                add_text_box(slide,
+                    sb.get('x', 0.4), sb.get('y', 1.2),
+                    sb.get('w', 9.0), sb.get('h', 0.6),
+                    sb['text'],
+                    sb.get('font_family', bt.get('body_font_family', 'Arial')),
+                    sb.get('font_size', 16),
+                    False,
+                    sb.get('color', bt.get('body_color', '#333333')),
+                    sb.get('align', 'center'), 'middle')
+        _write_speaker_note(slide, slide_spec.get('speaker_note', ''))
+        return slide
 
-    # ── Subtitle block ────────────────────────────────────────────────────────
-    sb = slide_spec.get('subtitle_block')
-    if sb and sb.get('text'):
-        add_text_box(
-            slide,
-            sb.get('x', 0.4), sb.get('y', 1.0),
-            sb.get('w', 9), sb.get('h', 0.5),
-            sb.get('text', ''),
-            sb.get('font_family', bt.get('body_font_family', 'Arial')),
-            sb.get('font_size', 14),
-            sb.get('font_weight', 'semibold') in ('bold', 'semibold'),
-            sb.get('color', bt.get('body_color', '#333333')),
-            sb.get('align', 'left'),
-            sb.get('valign', 'middle'),
-            True
-        )
+    # ════════════════════════════════════════════════════════════════════════
+    # PATH 2 & 3 — CONTENT SLIDES
+    # ════════════════════════════════════════════════════════════════════════
 
-    # ── Zones → Artifacts ─────────────────────────────────────────────────────
+    # Title & subtitle: placeholders in template mode, text boxes in scratch
+    if use_template:
+        if tb.get('text'):
+            place_in_placeholder(slide, 0, tb['text'], tb, bt)
+        if sb.get('text'):
+            place_in_placeholder(slide, 1, sb['text'], sb, bt)
+    else:
+        if tb.get('text'):
+            add_text_box(slide,
+                tb.get('x', 0.4), tb.get('y', 0.15),
+                tb.get('w', 9.0), tb.get('h', 0.8),
+                tb['text'],
+                tb.get('font_family', bt.get('title_font_family', 'Arial')),
+                tb.get('font_size', 20),
+                tb.get('font_weight', 'bold') in ('bold', 'semibold'),
+                tb.get('color', bt.get('title_color', '#1A3C8F')),
+                tb.get('align', 'left'), 'middle')
+        if sb.get('text'):
+            add_text_box(slide,
+                sb.get('x', 0.4), sb.get('y', 1.0),
+                sb.get('w', 9.0), sb.get('h', 0.5),
+                sb['text'],
+                sb.get('font_family', bt.get('body_font_family', 'Arial')),
+                sb.get('font_size', 14),
+                sb.get('font_weight', 'semibold') in ('bold', 'semibold'),
+                sb.get('color', bt.get('body_color', '#333333')),
+                sb.get('align', 'left'), 'middle')
+
+    # Zones → Artifacts
     for zone in slide_spec.get('zones', []):
         for artifact in zone.get('artifacts', []):
-            render_artifact(slide, artifact, bt)
+            # In layout mode pass placeholder_idx so renderer uses layout bounds
+            ph_idx = artifact.get('placeholder_idx') if layout_mode else None
+            render_artifact(slide, artifact, bt, ph_idx=ph_idx)
 
-    # ── Global elements ───────────────────────────────────────────────────────
-    # In template mode the slide master already renders logo, footer, and page
-    # number via master shapes — adding them again here would duplicate them.
-    ge = slide_spec.get('global_elements', {})
-
+    # ── Global elements (scratch only) ────────────────────────────────────────
     if not use_template:
+        ge = slide_spec.get('global_elements', {})
+
         logo = ge.get('logo', {})
         if logo.get('show') and logo.get('image_base64'):
-            add_image_box(
-                slide,
-                logo.get('image_base64'),
+            add_image_box(slide, logo['image_base64'],
                 logo.get('x', 0.0), logo.get('y', 0.0),
-                logo.get('w', 1.2), logo.get('h', 0.4)
-            )
+                logo.get('w', 1.2), logo.get('h', 0.4))
 
         footer = ge.get('footer', {})
         if footer.get('show'):
-            add_text_box(
-                slide,
+            add_text_box(slide,
                 footer.get('x', 0.4), footer.get('y', 7.5),
                 footer.get('w', 5),   footer.get('h', 0.25),
                 'Confidential',
                 footer.get('font_family', 'Arial'),
                 footer.get('font_size', 8),
-                False,
-                footer.get('color', '#AAAAAA'),
-                footer.get('align', 'left'),
-                'middle'
-            )
+                False, footer.get('color', '#AAAAAA'),
+                footer.get('align', 'left'), 'middle')
 
         pn = ge.get('page_number', {})
         if pn.get('show'):
-            slide_num = slide_spec.get('slide_number', '')
-            add_text_box(
-                slide,
-                pn.get('x', 9.5),  pn.get('y', 7.5),
-                pn.get('w', 0.8),  pn.get('h', 0.25),
-                str(slide_num),
+            add_text_box(slide,
+                pn.get('x', 9.5), pn.get('y', 7.5),
+                pn.get('w', 0.8), pn.get('h', 0.25),
+                str(slide_spec.get('slide_number', '')),
                 pn.get('font_family', 'Arial'),
                 pn.get('font_size', 8),
-                False,
-                pn.get('color', '#AAAAAA'),
-                'right',
-                'middle'
-            )
+                False, pn.get('color', '#AAAAAA'),
+                'right', 'middle')
 
-    # ── Speaker notes ─────────────────────────────────────────────────────────
-    note_text = slide_spec.get('speaker_note', '')
-    if note_text:
-        try:
-            notes_slide = slide.notes_slide
-            tf = notes_slide.notes_text_frame
-            tf.text = str(note_text)
-        except Exception:
-            pass
-
+    _write_speaker_note(slide, slide_spec.get('speaker_note', ''))
     return slide
 
 
@@ -872,11 +1116,22 @@ def build_presentation(final_spec, brand_rulebook, template_b64=None):
         prs.slide_height = Inches(h_in)
 
     blank_layout = find_blank_layout(prs)
-    print(f'  Using layout: "{blank_layout.name}" (use_template={use_template})')
+    print(f'  Using fallback layout: "{blank_layout.name}" (use_template={use_template})')
+
+    # Extract explicit layout names from Agent 2 rulebook so build_slide can
+    # select title / divider layouts reliably without keyword heuristics.
+    title_layout_name   = brand_rulebook.get('title_layout_name')
+    divider_layout_name = brand_rulebook.get('divider_layout_name')
+    if title_layout_name:
+        print(f'  Title layout:   "{title_layout_name}"')
+    if divider_layout_name:
+        print(f'  Divider layout: "{divider_layout_name}"')
 
     for slide_spec in final_spec:
         try:
-            build_slide(prs, slide_spec, blank_layout, use_template)
+            build_slide(prs, slide_spec, blank_layout, use_template,
+                        title_layout_name=title_layout_name,
+                        divider_layout_name=divider_layout_name)
         except Exception as e:
             print(f"Error building slide {slide_spec.get('slide_number', '?')}:", e)
             traceback.print_exc()

@@ -105,30 +105,69 @@ Only if the brand guideline is missing or incomplete:
 - avoid decorative styling
 
 ═══════════════════════════
-TEMPLATE MODE
+TITLE & DIVIDER SLIDES (template mode)
 ═══════════════════════════
 
-When brand_tokens.uses_template is true, the output PPTX is built on top
-of the brand's own PPTX master slide. The master ALREADY provides:
-  - slide background (colour, image, branded shapes, lines)
-  - logo placement
-  - footer and page-number fields
-  - decorative borders or accent elements
+When slide_type is "title" or "divider" AND uses_template is true:
+The master provides ALL visual elements — background, logo, decorations, footer.
+Agent 6 places text directly into the master's title/subtitle placeholders.
 
-In this mode you MUST:
-1. Set global_elements to {} — do NOT include logo, footer, or page_number blocks.
-   Emitting them causes duplicates (the master also renders them).
-2. Omit canvas.background — set it to null or omit the key entirely.
-   Setting a solid fill here would paint over the master background.
-3. Do NOT place shapes intended to replicate master decorations
-   (horizontal rules, corner accents, header bands, etc.).
-4. Trust that the master's registered font names are available — use
-   title_font.family and body_font.family exactly as given.
-5. Focus all output precision on content zones, artifact coordinates,
-   and correct brand colour application inside charts and cards.
+Output ONLY:
+- title_block: { text, font_family, font_size, font_weight, color } — NO x/y/w/h
+- subtitle_block: same, or null
+- zones: []
+- global_elements: {}
+- canvas.background: null
+- layout_mode: true
 
-When uses_template is false (no PPTX master), apply all elements manually
-as before — background, footer, logo, decorative lines.
+═══════════════════════════
+ALL CONTENT SLIDES — FIXED ELEMENTS (template mode)
+═══════════════════════════
+
+When slide_type is "content" AND uses_template is true, regardless of layout selection:
+The master template positions slide title, subtitle, footer, and page number.
+
+ALWAYS apply these rules for ALL content slides in template mode:
+- title_block: text, font_family, font_size, font_weight, color ONLY — omit x/y/w/h
+- subtitle_block: same — omit x/y/w/h
+- global_elements: {} — master handles footer and page number automatically
+- canvas.background: null
+
+═══════════════════════════
+CONTENT SLIDES — LAYOUT MODE (selected_layout_name is non-empty)
+═══════════════════════════
+
+When uses_template is true AND selected_layout_name is non-empty:
+Agent 6 uses the named layout — it already knows where content areas sit.
+Your job is to define WHAT goes in each placeholder, not WHERE it goes.
+
+Rules:
+1. Set layout_mode: true
+2. For each zone: set frame to null (Agent 6 maps zones to layout placeholders)
+3. For each artifact: set placeholder_idx
+   - Primary zone artifact  → placeholder_idx: 1
+   - Secondary zone artifact → placeholder_idx: 2 (if layout ph_count allows)
+   - Use layout_map[selected_layout_name].body_placeholder for reference coordinates
+     when computing artifact sizing and header_block positioning
+4. For each artifact (except cards): add header_block (see ARTIFACT HEADER below)
+   - Check layout_map[selected_layout_name].ph_count:
+     if ph_count > 2: layout likely has a dedicated sub-header placeholder
+       → set header_block.placeholder_ref: true (Agent 6 will map it to that placeholder)
+     if ph_count ≤ 2: compute header_block coordinates at top of body_placeholder area
+5. Adjust artifact y and h to account for header_block height
+
+═══════════════════════════
+CONTENT SLIDES — SCRATCH MODE (selected_layout_name is empty)
+═══════════════════════════
+
+When uses_template is false OR selected_layout_name is empty:
+Compute all coordinates from layout_hint splits.
+- Set layout_mode: false
+- zones: compute full frame coordinates from layout_hint splits
+- Artifacts: compute x/y/w/h within zone bounds
+- Artifact headers: compute header_block at top of zone inner bounds; shrink artifact area
+- global_elements: include footer and page_number when uses_template is false
+- canvas.background: set when uses_template is false
 
 ═══════════════════════════
 OUTPUT STRUCTURE
@@ -140,6 +179,8 @@ Each slide must return EXACTLY:
   "slide_number": number,
   "slide_type": "title" | "divider" | "content",
   "slide_archetype": "summary" | "trend" | "comparison" | "breakdown" | "driver_analysis" | "process" | "recommendation" | "dashboard" | "proof" | "roadmap",
+  "layout_mode": true | false,
+  "selected_layout_name": "string — brand layout name chosen by Agent 4, or empty string",
   "canvas": {
     "width_in": number,
     "height_in": number,
@@ -272,20 +313,33 @@ Allowed types: insight_text | chart | cards | workflow | table
     "font_weight": "regular",
     "color": "hex",
     "line_spacing": number,
-    "bullet_indent": number,
-    "bullet_char": "•" | "–" | "▪",
-    "space_before_pt": number
+    "indent_inches": number,
+    "list_style": "tick_cross" | "numbered" | "bullet",
+    "space_before_pt": number,
+    "vertical_distribution": "spread"
+  },
+  "header_block": null or {
+    "text": "string — the insight_header value from Agent 4",
+    "x": number, "y": number, "w": number, "h": number,
+    "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
+    "style": "underline" | "brand_fill",
+    "accent_color": "hex",
+    "placeholder_ref": true or false
   }
 }
 
-insight_text box styling rules:
-- The renderer ALWAYS draws a left accent bar automatically — do NOT add a separate border or box
-- style.fill_color: use null (transparent) or a very light brand background tint — NEVER cream, yellow, or warm off-white unless that is explicitly in the brand palette
-- style.border_color: null — do NOT add a full-perimeter border; it clashes with the accent bar
-- style.border_width: 0
-- heading_style.color: use the brand primary color or an accent color — red only for "Risk Alert" headings when red is in the brand palette
-- body_style.bullet_char: use "•" as default; match brand spec if available
-- body_style.space_before_pt: 4–6pt for comfortable reading, never less than 3
+insight_text styling rules:
+- style.fill_color: use null (transparent) or a very light brand background tint
+- style.border_color: use brand accent color for a subtle border, or null — do NOT use a heavy full-border box
+- heading_style.color: brand primary color; use a risk/alert accent only for "Risk Alert" headings
+- list_style: choose based on content:
+    "tick_cross" — use ✓ for positive points, ✗ for negative/risk points, → for neutral
+    "numbered"   — use when points are sequential steps or ranked priorities
+    "bullet"     — use for parallel, non-sequential observations
+- indent_inches: 0.12–0.18 for comfortable list indentation
+- space_before_pt: 4–8pt between points for comfortable reading
+- vertical_distribution "spread": points must be distributed evenly across the full artifact height
+  — do NOT cluster points at the top; use line_spacing and space_before_pt to fill the area
 
 ═══════════════════════════
 2. CHART
@@ -321,7 +375,14 @@ insight_text box styling rules:
       "marker": "none" | "circle" | "square",
       "data_label_color": "hex"
     }
-  ]
+  ],
+  "header_block": null or {
+    "text": "string — the chart_header value from Agent 4",
+    "x": number, "y": number, "w": number, "h": number,
+    "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
+    "style": "underline" | "brand_fill",
+    "accent_color": "hex"
+  }
 }
 
 Chart rules:
@@ -420,7 +481,14 @@ Card rules: max 4 cards, equal gutters. card_frames must have exact x,y,w,h per 
       "path": [ { "x": number, "y": number }, { "x": number, "y": number } ],
       "type": "arrow"
     }
-  ]
+  ],
+  "header_block": null or {
+    "text": "string — the workflow_header value from Agent 4",
+    "x": number, "y": number, "w": number, "h": number,
+    "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
+    "style": "underline" | "brand_fill",
+    "accent_color": "hex"
+  }
 }
 
 Workflow rules:
@@ -459,10 +527,55 @@ Workflow rules:
     "cell_padding": number
   },
   "column_widths": [number],
-  "row_heights": [number]
+  "row_heights": [number],
+  "header_block": null or {
+    "text": "string — the table_header value from Agent 4",
+    "x": number, "y": number, "w": number, "h": number,
+    "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
+    "style": "underline" | "brand_fill",
+    "accent_color": "hex"
+  }
 }
 
 Table rules: column_widths must sum to table width. body font min 9pt.
+
+═══════════════════════════
+ARTIFACT HEADER
+═══════════════════════════
+
+Every artifact except cards gets a header_block — a one-line label above the artifact
+that names the insight it proves.
+
+Source text from Agent 4:
+  insight_text → insight_header   chart → chart_header
+  workflow     → workflow_header  table → table_header
+
+If header text is empty or null: set header_block to null.
+
+LAYOUT MODE — detecting if the layout has a header area:
+  Check layout_map[selected_layout_name].ph_count:
+  - ph_count > 2: layout has extra placeholders beyond title+body
+    → set header_block.placeholder_ref: true
+    → Agent 6 will place header text into the dedicated placeholder
+    → x/y/w/h in header_block can be approximate (derived from body_placeholder top)
+  - ph_count ≤ 2: layout has only title + body placeholders, no dedicated header
+    → set header_block.placeholder_ref: false
+    → compute header_block coordinates at the TOP of body_placeholder:
+        x = body_placeholder.x_in
+        y = body_placeholder.y_in
+        w = body_placeholder.w_in
+        h = 0.30
+    → adjust artifact y = body_placeholder.y_in + 0.30
+    → adjust artifact h = body_placeholder.h_in - 0.30
+    → choose style:
+        "underline"  — thin line under the header text using brand accent color
+        "brand_fill" — fill header area with brand primary/secondary, white text
+      Default: "underline"
+
+SCRATCH MODE:
+  - Position header_block at the top of zone inner bounds
+  - artifact y += header_block.h; artifact h -= header_block.h
+  - Choose style same as above
 
 ═══════════════════════════
 INTERNAL ZONE LAYOUT (2 artifacts)
@@ -558,7 +671,20 @@ function extractBrandTokens(brand) {
     logo_local_ref:       brand.primary_logo_local_ref || '',
     logo_position:        brand.logo_position        || 'top-right',
     spacing_notes:        brand.spacing_notes        || '',
-    uses_template:        brand.uses_template        || false
+    uses_template:        brand.uses_template        || false,
+    // Compact layout map: name → { title_placeholder, body_placeholder, ph_count, usage_guidance }
+    // Used in LAYOUT MODE to derive artifact coordinates and placeholder indices
+    layout_map:           (brand.slide_layouts || []).reduce((acc, l) => {
+      if (l.name) {
+        acc[l.name] = {
+          ph_count:          l.ph_count          || 0,
+          usage_guidance:    l.usage_guidance    || '',
+          title_placeholder: l.title_placeholder || null,
+          body_placeholder:  l.body_placeholder  || null
+        }
+      }
+      return acc
+    }, {})
     // slide_masters, layout_blueprints, master_blueprints intentionally excluded — too large for API
   }
 }
@@ -578,8 +704,11 @@ function buildBrandBrief(brand, brief) {
     '\n- Bullet spacing: bullet_style.space_before_pt — pass directly into body_style.space_before_pt' +
     '\n- Insight boxes: insight_box_style.fill_color and border_color — a left accent bar is always rendered; do NOT add a full perimeter border' +
     (tokens.uses_template
-      ? '\n- TEMPLATE MODE ACTIVE: master provides background/logo/footer — set global_elements:{}, omit canvas.background'
-      : '\n- SCRATCH MODE: manually specify background, footer, logo in global_elements') +
+      ? '\n- TEMPLATE MODE ACTIVE: master provides background/logo/footer — set global_elements:{}, canvas.background:null' +
+        '\n- Title/divider slides: text only on title_block/subtitle_block — omit x/y/w/h, set layout_mode:true' +
+        '\n- Content slides with selected_layout_name: LAYOUT MODE — omit x/y/w/h on title/subtitle, set zone.frame:null, add placeholder_idx to artifacts' +
+        '\n- Content slides without selected_layout_name: SCRATCH MODE — compute all coordinates from layout_hint'
+      : '\n- SCRATCH MODE: compute all coordinates; specify background, footer, logo in global_elements') +
     '\n\nPRESENTATION BRIEF:' +
     '\nDocument type:     ' + (b.document_type     || 'Business document') +
     '\nGoverning thought: ' + (b.governing_thought || 'Key insights from the document') +
@@ -599,10 +728,20 @@ async function designSlideBatch(batchManifest, brand, brief, batchNum) {
   const slideNums = batchManifest.map(s => s.slide_number)
   console.log('Agent 5 batch', batchNum, ':', slideNums.join(', '))
 
+  // Annotate each slide with its mode so Claude doesn't have to infer it
+  const annotatedManifest = batchManifest.map(s => ({
+    ...s,
+    _mode: (brand.uses_template && s.selected_layout_name)
+      ? 'layout_mode'
+      : (brand.uses_template && (s.slide_type === 'title' || s.slide_type === 'divider'))
+        ? 'template_title_divider'
+        : 'scratch_mode'
+  }))
+
   const prompt =
     buildBrandBrief(brand, brief) +
-    '\n\nSLIDE BATCH ' + batchNum + ' (' + batchManifest.length + ' slides):\n' +
-    JSON.stringify(batchManifest, null, 2) +
+    '\n\nSLIDE BATCH ' + batchNum + ' (' + annotatedManifest.length + ' slides):\n' +
+    JSON.stringify(annotatedManifest, null, 2) +
     '\n\nINSTRUCTIONS:' +
     '\n- Process ONLY these ' + batchManifest.length + ' slides' +
     '\n- Apply brand design tokens exactly' +
@@ -833,6 +972,23 @@ function applyBrandGuidelineOverrides(slide, manifestSlide, brand) {
   const normalized = JSON.parse(JSON.stringify(slide))
   normalized.global_elements = normalized.global_elements || {}
 
+  // In layout mode or template title/divider, coordinates are driven by the template.
+  // Skip bounds enforcement — enforcing would corrupt placeholder-derived positions.
+  const isLayoutMode = normalized.layout_mode === true ||
+    (brand.uses_template && (normalized.slide_type === 'title' || normalized.slide_type === 'divider'))
+
+  if (isLayoutMode) {
+    // Just ensure text content is preserved from manifest
+    if (manifestSlide?.title && normalized.title_block) {
+      normalized.title_block.text = normalized.title_block.text || manifestSlide.title
+    }
+    if (manifestSlide?.subtitle && normalized.subtitle_block) {
+      normalized.subtitle_block.text = normalized.subtitle_block.text || manifestSlide.subtitle
+    }
+    return normalized
+  }
+
+  // Scratch mode: apply full bounds enforcement
   const logo = buildLogoElement(normalized, brand)
   if (logo) {
     normalized.global_elements.logo = logo
@@ -1078,9 +1234,10 @@ function mergeContentIntoZones(designedZones, manifestZones) {
       if (t === 'insight_text') {
         return {
           ...dArt,
-          heading:   mArt.heading   || dArt.heading   || 'Key Insight',
-          points:    mArt.points    || dArt.points     || [],
-          sentiment: mArt.sentiment || dArt.sentiment  || 'neutral'
+          heading:        mArt.heading        || mArt.insight_header || dArt.heading   || 'Key Insight',
+          insight_header: mArt.insight_header || mArt.heading        || dArt.insight_header || 'Key Insight',
+          points:         mArt.points         || dArt.points         || [],
+          sentiment:      mArt.sentiment      || dArt.sentiment      || 'neutral'
         }
       }
 
@@ -1088,6 +1245,7 @@ function mergeContentIntoZones(designedZones, manifestZones) {
         return {
           ...dArt,
           chart_type:       mArt.chart_type       || dArt.chart_type       || 'bar',
+          chart_header:     mArt.chart_header     || dArt.chart_header     || '',
           chart_title:      mArt.chart_title      || dArt.chart_title      || '',
           chart_insight:    mArt.chart_insight    || dArt.chart_insight    || '',
           x_label:          mArt.x_label          || dArt.x_label          || '',
@@ -1144,6 +1302,7 @@ function mergeContentIntoZones(designedZones, manifestZones) {
         return {
           ...dArt,
           workflow_type:    mArt.workflow_type    || dArt.workflow_type    || 'process_flow',
+          workflow_header:  mArt.workflow_header  || dArt.workflow_header  || '',
           flow_direction:   mArt.flow_direction   || dArt.flow_direction   || 'left_to_right',
           workflow_title:   mArt.workflow_title   || dArt.workflow_title   || '',
           workflow_insight: mArt.workflow_insight || dArt.workflow_insight || '',
@@ -1155,6 +1314,7 @@ function mergeContentIntoZones(designedZones, manifestZones) {
       if (t === 'table') {
         return {
           ...dArt,
+          table_header:   mArt.table_header   || dArt.table_header   || '',
           title:          mArt.title          || dArt.title          || '',
           headers:        mArt.headers        || dArt.headers        || [],
           rows:           mArt.rows           || dArt.rows           || [],
@@ -1205,11 +1365,14 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
     ...branded,
     zones: mergedZones,
     // Always override with manifest ground truth (Claude may drift on slide_number etc.)
-    slide_number:     manifestSlide.slide_number,
-    slide_type:       manifestSlide.slide_type      || designed.slide_type,
-    slide_archetype:  manifestSlide.slide_archetype || designed.slide_archetype || 'summary',
-    section_name:     manifestSlide.section_name    || '',
-    section_type:     manifestSlide.section_type    || '',
+    slide_number:          manifestSlide.slide_number,
+    slide_type:            manifestSlide.slide_type            || designed.slide_type,
+    slide_archetype:       manifestSlide.slide_archetype       || designed.slide_archetype || 'summary',
+    // Layout mode fields — ground truth from Agent 4 manifest
+    layout_mode:           designed.layout_mode                || false,
+    selected_layout_name:  manifestSlide.selected_layout_name  || designed.selected_layout_name || '',
+    section_name:          manifestSlide.section_name          || '',
+    section_type:          manifestSlide.section_type          || '',
     // Slide-level content metadata
     title:            (designed.title_block || {}).text || manifestSlide.title    || '',
     subtitle:         (designed.subtitle_block || {}).text || manifestSlide.subtitle || '',

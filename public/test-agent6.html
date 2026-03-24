@@ -47,7 +47,7 @@
     /* Spec summary */
     .spec-summary { display: none; background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 12px 16px; margin-top: 10px; font-size: 12px; }
     .spec-summary.show { display: block; }
-    .sum-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 8px; }
+    .sum-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-bottom: 8px; }
     .sum-item { text-align: center; background: white; border-radius: 6px; padding: 8px; }
     .sum-val { font-size: 20px; font-weight: 700; color: #059669; }
     .sum-lbl { font-size: 10px; color: #888; text-transform: uppercase; margin-top: 2px; }
@@ -221,18 +221,22 @@
 
   // ─── SPEC SUMMARY ────────────────────────────────────────────────────────────
   function showSummary(spec) {
-    const totalZones = spec.reduce((n, s) => n + (s.zones || []).length, 0)
-    const artCounts  = {}
+    const totalZones   = spec.reduce((n, s) => n + (s.zones || []).length, 0)
+    const layoutSlides = spec.filter(s => s.layout_mode === true).length
+    const scratchSlides= spec.filter(s => s.slide_type === 'content' && !s.layout_mode).length
+    const artCounts    = {}
     spec.forEach(s => (s.zones || []).forEach(z =>
       (z.artifacts || []).forEach(a => { artCounts[a.type] = (artCounts[a.type] || 0) + 1 })
     ))
 
     document.getElementById('sum-grid').innerHTML = [
-      { val: spec.length,                                       lbl: 'Slides' },
-      { val: spec.filter(s => s.slide_type === 'content').length, lbl: 'Content' },
-      { val: totalZones,                                        lbl: 'Zones' },
-      { val: Object.values(artCounts).reduce((a,b)=>a+b, 0),  lbl: 'Artifacts' }
-    ].map(i => `<div class="sum-item"><div class="sum-val">${i.val}</div><div class="sum-lbl">${i.lbl}</div></div>`).join('')
+      { val: spec.length,                                         lbl: 'Slides',       color: '' },
+      { val: spec.filter(s => s.slide_type === 'content').length, lbl: 'Content',      color: '' },
+      { val: layoutSlides,                                        lbl: 'Layout Mode',  color: layoutSlides > 0 ? '#059669' : '' },
+      { val: scratchSlides,                                       lbl: 'Scratch Mode', color: '' },
+      { val: totalZones,                                          lbl: 'Zones',        color: '' },
+      { val: Object.values(artCounts).reduce((a,b)=>a+b, 0),     lbl: 'Artifacts',    color: '' }
+    ].map(i => `<div class="sum-item"><div class="sum-val" ${i.color ? 'style="color:'+i.color+'"' : ''}>${i.val}</div><div class="sum-lbl">${i.lbl}</div></div>`).join('')
 
     // Art type breakdown
     const artBar = Object.entries(artCounts)
@@ -244,10 +248,15 @@
     document.getElementById('slide-list').innerHTML = spec.map(s => {
       const arts = (s.zones || []).flatMap(z => (z.artifacts || []).map(a => a.type))
       const uniqueArts = [...new Set(arts)]
+      const isLayoutMode = s.layout_mode === true
+      const layoutBadge = isLayoutMode
+        ? `<span style="font-size:9px;background:#dcfce7;color:#166534;padding:1px 5px;border-radius:10px;font-weight:700;flex-shrink:0;" title="${s.selected_layout_name || 'layout mode'}">📐${s.selected_layout_name ? ' ' + s.selected_layout_name : ''}</span>`
+        : ''
       return `<div class="slide-row">
         <span class="sn">S${s.slide_number}</span>
         <span class="st-badge st-${s.slide_type}">${s.slide_type}</span>
-        <span class="slide-title-text">${(s.title || s.title_block?.text || '—').slice(0, 70)}</span>
+        <span class="slide-title-text">${(s.title || (s.title_block || {}).text || '—').slice(0, 60)}</span>
+        ${layoutBadge}
         <div class="art-pills">${uniqueArts.map(t => `<span class="ap ap-${t}">${t}</span>`).join('')}</div>
       </div>`
     }).join('')
