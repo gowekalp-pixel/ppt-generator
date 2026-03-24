@@ -396,6 +396,15 @@ def render_insight_text(slide, artifact, bt, suppress_heading=False):
 
         body_h = h - (content_y - y)
 
+        # Auto-fit font size to fill the available body area
+        if points:
+            line_h_in   = (b_size / 72.0) * 1.25          # font height + leading
+            space_h_in  = space_bef_pt / 72.0              # space_before per paragraph
+            total_h_est = len(points) * line_h_in + len(points) * space_h_in
+            if total_h_est > 0:
+                scale       = (body_h * 0.88) / total_h_est
+                b_size      = max(8, min(28, round(b_size * scale)))
+
         # Build per-point markers
         if list_style == 'tick_cross':
             markers = []
