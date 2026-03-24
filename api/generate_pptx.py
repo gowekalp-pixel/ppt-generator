@@ -936,6 +936,30 @@ def _write_speaker_note(slide, note_text):
             pass
 
 
+def _remove_empty_placeholders(slide):
+    """
+    Remove placeholder shapes that carry no content.
+    After rendering, any layout placeholder that was not explicitly written to
+    would appear as a 'Click to add text' ghost box overlaid on the slide.
+    This is safe because we render all content as free shapes or via
+    place_in_placeholder — so a placeholder is only needed when it has text.
+    """
+    sp_tree = slide.shapes._spTree
+    to_remove = []
+    for ph in list(slide.placeholders):
+        try:
+            if not ph.text_frame.text.strip():
+                to_remove.append(ph._element)
+        except Exception:
+            # Non-text placeholder (picture / object type) — treat as unfilled
+            to_remove.append(ph._element)
+    for elem in to_remove:
+        try:
+            sp_tree.remove(elem)
+        except Exception:
+            pass
+
+
 def _sanitise_system_placeholders(slide, slide_number):
     """
     After add_slide(), fix placeholders that carry stale template text:
@@ -1086,6 +1110,8 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
                     False,
                     sb.get('color', bt.get('body_color', '#333333')),
                     sb.get('align', 'center'), 'middle')
+        if use_template:
+            _remove_empty_placeholders(slide)
         _write_speaker_note(slide, slide_spec.get('speaker_note', ''))
         return slide
 
@@ -1162,6 +1188,8 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
                 False, pn.get('color', '#AAAAAA'),
                 'right', 'middle')
 
+    if use_template:
+        _remove_empty_placeholders(slide)
     _write_speaker_note(slide, slide_spec.get('speaker_note', ''))
     return slide
 
