@@ -708,7 +708,7 @@ def render_chart(slide, artifact, bt, suppress_heading=False):
         except Exception:
             pass
 
-    # Axis font sizes
+    # Axis font sizes + category label rotation for many categories
     try:
         ax_font_size = cs.get('axis_font_size', 9)
         ax_color     = cs.get('axis_color', '#000000')
@@ -716,6 +716,32 @@ def render_chart(slide, artifact, bt, suppress_heading=False):
             try:
                 ax.tick_labels.font.size      = Pt(ax_font_size)
                 ax.tick_labels.font.color.rgb = hex_to_rgb(ax_color)
+            except Exception:
+                pass
+
+        # Rotate category labels when many categories to prevent overlap
+        n_cats = len(categories)
+        if chart_type_str in ('bar', 'line', 'clustered_bar') and n_cats > 6:
+            try:
+                # -2700000 EMU = -270 degrees = 45° slanted (OOXML uses 1/60000 degree units * -1)
+                # rotation: -45 degrees = -2700000 in OOXML tickLblSkip/txPr
+                cat_ax = chart.category_axis
+                txPr = cat_ax.tick_labels._txPr
+                if txPr is None:
+                    # Create txPr if not present
+                    txPr_elem = etree.SubElement(
+                        cat_ax.tick_labels._element,
+                        nsmap.qn('c:txPr')
+                    )
+                    etree.SubElement(txPr_elem, nsmap.qn('a:bodyPr')).set('rot', '-2700000')
+                    etree.SubElement(txPr_elem, nsmap.qn('a:lstStyle'))
+                    p = etree.SubElement(txPr_elem, nsmap.qn('a:p'))
+                    pr = etree.SubElement(p, nsmap.qn('a:pPr'))
+                    etree.SubElement(pr, nsmap.qn('a:defRPr'))
+                else:
+                    bodyPr = txPr.find(nsmap.qn('a:bodyPr'))
+                    if bodyPr is not None:
+                        bodyPr.set('rot', '-2700000')
             except Exception:
                 pass
     except Exception:
@@ -750,6 +776,13 @@ def render_cards(slide, artifact, bt):
     b_size  = bs.get('font_size', 10)
     b_color = bs.get('color', '#111111')
 
+    # Sentinel fill colors for sentiment (override card_style.fill_color per card)
+    _SENTIMENT_FILL = {
+        'positive': '#EEF7F0',   # very light green
+        'negative': '#FDF3F1',   # very light red
+        'neutral':  None,        # use card_style fill as-is
+    }
+
     for fi, frame in enumerate(frames):
         fx = frame.get('x', 0)
         fy = frame.get('y', 0)
@@ -758,15 +791,24 @@ def render_cards(slide, artifact, bt):
 
         card = cards[fi] if fi < len(cards) else {}
 
+        # Derive per-card fill based on sentiment (if fill not explicitly set in card_style)
+        sentiment  = card.get('sentiment', 'neutral')
+        card_fill  = _SENTIMENT_FILL.get(sentiment) or fill_hex
+
         # Card background
         add_filled_rect(slide, fx, fy, fw, fh,
-                        fill_hex=fill_hex,
+                        fill_hex=card_fill,
                         border_hex=border_hex,
                         border_pt=border_w,
                         corner_radius=corner_r)
 
-        # Top accent strip (4px)
-        accent = ts.get('color', bt.get('primary_color', '#1A3C8F'))
+        # Top accent strip (4px) — color matches sentiment
+        _SENTIMENT_ACCENT = {
+            'positive': '#2D8A4E',   # green
+            'negative': '#C0392B',   # red
+            'neutral':  None,
+        }
+        accent = _SENTIMENT_ACCENT.get(sentiment) or ts.get('color', bt.get('primary_color', '#1A3C8F'))
         add_filled_rect(slide, fx, fy, fw, 0.055, fill_hex=accent)
 
         # Title
@@ -918,12 +960,39 @@ def render_table(slide, artifact, bt):
         grid_c  = ts.get('grid_color', '#CCCCCC')
         cell_p  = ts.get('cell_padding', 0.08)
 
+        # Detect which columns are numeric (right-align) vs text (left-align)
+        # A column is "numeric" if > 50% of its body values look like numbers/currency
+        def _is_numeric_col(col_idx):
+            import re
+            _num_pat = re.compile(r'^[\s₹$€£¥\-\+]?[\d,\.]+[%KMBCr\s]*$')
+            hits = sum(1 for r in data_rows
+                       if col_idx < len(r) and _num_pat.match(str(r[col_idx]).strip()))
+            return (hits / max(len(data_rows), 1)) > 0.5
+
+        col_is_numeric = [_is_numeric_col(ci) for ci in range(n_cols)]
+        # First column is always text (entity/label column)
+        if n_cols > 0:
+            col_is_numeric[0] = False
+
+        cell_pad_emu = int(Emu(cell_p * 914400))  # cell_p in inches → EMU
+
+        def _apply_cell_margin(cell, pad_emu):
+            """Apply uniform cell margin via OOXML tcPr."""
+            try:
+                tc = cell._tc
+                tcPr = tc.get_or_add_tcPr()
+                for attr in ('marL', 'marR', 'marT', 'marB'):
+                    tcPr.set(attr, str(pad_emu))
+            except Exception:
+                pass
+
         for ci, hdr in enumerate(headers):
             cell = table.cell(0, ci)
             cell.text = str(hdr)
             enable_text_fit(cell.text_frame)
             cell.fill.solid()
             cell.fill.fore_color.rgb = hex_to_rgb(h_fill)
+            _apply_cell_margin(cell, cell_pad_emu)
             try:
                 run = cell.text_frame.paragraphs[0].runs[0]
                 fit_size = estimate_fit_font_size(
@@ -934,7 +1003,8 @@ def render_table(slide, artifact, bt):
                     8
                 )
                 set_font(run, h_font, fit_size, True, False, h_text)
-                cell.text_frame.paragraphs[0].alignment = PP_ALIGN.LEFT
+                # Header row: center-align all columns
+                cell.text_frame.paragraphs[0].alignment = PP_ALIGN.CENTER
             except Exception:
                 pass
 
@@ -952,6 +1022,7 @@ def render_table(slide, artifact, bt):
                 enable_text_fit(cell.text_frame)
                 cell.fill.solid()
                 cell.fill.fore_color.rgb = hex_to_rgb(row_fill or b_fill)
+                _apply_cell_margin(cell, cell_pad_emu)
                 try:
                     run = cell.text_frame.paragraphs[0].runs[0]
                     fit_size = estimate_fit_font_size(
@@ -962,6 +1033,9 @@ def render_table(slide, artifact, bt):
                         7
                     )
                     set_font(run, b_font, fit_size, False, False, b_text)
+                    # Numeric columns → right-align; text columns → left-align
+                    align = PP_ALIGN.RIGHT if col_is_numeric[ci] else PP_ALIGN.LEFT
+                    cell.text_frame.paragraphs[0].alignment = align
                 except Exception:
                     pass
 

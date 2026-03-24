@@ -338,6 +338,12 @@ insight_text styling rules:
 - vertical_distribution "spread": points must be distributed evenly across the full artifact height
   — do NOT cluster points at the top; use line_spacing and space_before_pt to fill the area
 
+Visual balance rules:
+- font_size in body_style must be proportional to the artifact height:
+    zone h < 2.0": body font 9–11pt; zone h 2.0–3.5": 11–14pt; zone h > 3.5": 14–18pt
+- Do NOT pre-shrink font_size to avoid overflow — the renderer auto-fits; set font_size to the upper end of the range
+- heading_style.font_size should be body_style.font_size + 2 to 4pt (heading slightly larger, not double)
+
 ═══════════════════════════
 2. CHART
 ═══════════════════════════
@@ -479,7 +485,18 @@ PIE CHART CRITICAL: a pie has ONE series but MULTIPLE segments (one per category
   ]
 }
 
-Card rules: max 4 cards, equal gutters. card_frames must have exact x,y,w,h per card.
+Card styling rules:
+- card_frames: all cards must be EQUAL size — same w and h; divide container evenly with 0.12" gutters
+- card_style.fill_color: derive from card sentiment (from Agent 4 cards[i].sentiment):
+    positive → very light green tint (e.g., "#EEF7F0") or brand secondary light
+    negative → very light red/amber tint (e.g., "#FDF3F1") or brand warning light
+    neutral  → brand fill (light grey or brand secondary light, e.g., "#F5F5F5")
+  If brand_tokens defines sentiment colors, use those instead
+- title_style.font_size: SAME across all cards on the slide (pick one size, apply to all)
+- subtitle_style.font_size: SAME across all cards (this is the headline metric — make it the largest element, 18–26pt)
+- body_style.font_size: SAME across all cards (9–11pt)
+- card_style.internal_padding: 0.12–0.18" — consistent across all cards
+- cards_layout: "row" when 3–4 cards side by side; "column" when 2 cards stacked; "grid" for 4-card 2×2
 
 ═══════════════════════════
 4. WORKFLOW
@@ -539,6 +556,18 @@ Workflow rules:
 - all node x,y,w,h must be computed within container bounds
 - connection path waypoints: straight or single-elbow only
 
+Workflow coordinate rules:
+- Node sizing:
+    process_flow / timeline (left_to_right): node w = (container.w − (n−1)×0.20) / n; node h = 0.70–1.00"
+    hierarchy / decomposition (top_down_branching): root node centered; children evenly spaced across width
+    top_to_bottom: node w = 60–70% of container.w, centered; node h = 0.60–0.80"
+- Node spacing: min 0.20" gap between adjacent nodes; evenly distribute remaining space
+- Level assignment: all nodes at the same level must share the SAME y (horizontal) or x (vertical) coordinate
+- Balance: for branching layouts, distribute child nodes symmetrically around parent x-center
+- All node x,y must be within container.x/y and container.x+container.w / container.y+container.h
+- Connection paths: start at center-right of "from" node, end at center-left of "to" node (left_to_right)
+  For top_to_bottom: start at bottom-center, end at top-center
+
 ═══════════════════════════
 5. TABLE
 ═══════════════════════════
@@ -575,7 +604,21 @@ Workflow rules:
   }
 }
 
-Table rules: column_widths must sum to table width. body font min 9pt.
+Table styling rules:
+- column_widths must sum exactly to table width (w field)
+- body font min 9pt; header font min 10pt
+- Column width heuristics (distribute table.w proportionally):
+    Numeric columns (values, %, ₹): narrower — typically 0.80–1.20" each
+    Label/name columns (first column, entity names): wider — typically 1.50–2.50"
+    Short categorical columns: 0.80–1.10"
+- Column text alignment (enforce in table_style or column_align list if available):
+    First / label column: left-align
+    Numeric / currency / percent columns: right-align
+    Header row: center-align all columns
+- row_heights: all data rows equal height (0.30–0.40"); header row slightly taller (0.35–0.45")
+- Zebra striping: set body_alt_fill_color to a very light tint of brand secondary (e.g., "#F7F8FA") for alternating rows
+- highlight_rows: apply highlight_fill_color from brand accent to the highlight_rows indices from Agent 4
+- table_style.cell_padding: 0.05–0.08" (enforced by renderer; set as a hint here)
 
 ═══════════════════════════
 ARTIFACT HEADER

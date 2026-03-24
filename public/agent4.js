@@ -119,6 +119,16 @@ Each zone object must contain:
   }
 }
 
+ARTIFACT-FIRST DESIGN ORDER:
+Design each zone in this strict sequence — never reverse it:
+1. WHAT: identify the message_objective for the zone (one sentence)
+2. ARTIFACT: decide which artifact type best proves that objective (chart / table / workflow / insight_text / cards)
+3. DATA CHECK: for charts — enumerate series names, units, and category count BEFORE choosing chart_type
+   - different units between series → dual_axis required; chart_type stays "bar" but renderer splits axes
+   - > 6 categories → wide zone required; > 6 rows with long labels → horizontal_bar
+4. LAYOUT: ONLY THEN choose layout_hint.split (scratch) or selected_layout_name (layout mode) based on what the artifact needs
+The artifact drives the layout — NEVER pick a layout first and then fit content into it.
+
 Zone rules:
 - max 4 zones per slide
 - max 2 artifacts per zone
@@ -169,12 +179,19 @@ Rules:
 - final point should ideally state implication or action
 - ZERO placeholder or generic text
 - highlight the positive or negative for each point
+
+Content compression rules (do NOT cut facts to save space — Agent 5 scales font):
+- Include ALL relevant insight points from the source — never drop a point to reduce length
+- Preserve all numbers, names, and percentages EXACTLY as in the source document
+- Only shorten WORDING, never facts: "The company achieved revenue of ₹120Cr in FY24" → "Revenue: ₹120Cr in FY24"
+- Max 6 points per artifact — if more are needed, split across two zones or two insight artifacts
+
 ═══════════════════════════
 ARTIFACT 2: chart
 ═══════════════════════════
 {
   "type": "chart",
-  "chart_type": "bar" | "line" | "pie" | "waterfall" | "clustered_bar",
+  "chart_type": "bar" | "line" | "pie" | "waterfall" | "clustered_bar" | "horizontal_bar",
   "chart_decision": "one line: why this chart type was chosen",
   "chart_title": "descriptive title",
   "chart_header": "the one-line insight the chart proves",
@@ -182,26 +199,61 @@ ARTIFACT 2: chart
   "y_label": "string",
   "categories": ["string", "string", "string"],
   "series": [
-    { "name": "string", "values": [number, number, number], "types": ["positive"|"negative"|"total"] }
+    { "name": "string", "values": [number, number, number], "unit": "count|currency|percent|other", "types": ["positive"|"negative"|"total"] }
   ],
+  "dual_axis": false,
+  "secondary_series": [],
   "show_data_labels": true,
   "show_legend": true | false
 }
 
 Chart type selection:
-- bar:           compare 3+ categories, one series, no time
-- line:          trend over time (months, quarters, years in categories)
-- pie:           composition — values sum to ~100%, max 5 segments
-- waterfall:     bridge or variance — series items have types: positive/negative/total
-- clustered_bar: EXACTLY 2 series compared across the same 3+ categories
+- bar:            compare 3+ categories, one series, no time (vertical columns)
+- horizontal_bar: same as bar but rotated — prefer when category labels are long or > 6 items
+- line:           trend over time (months, quarters, years in categories)
+- pie:            composition — values sum to ~100%, max 5 segments
+- waterfall:      bridge or variance — series items have types: positive/negative/total
+- clustered_bar:  EXACTLY 2 series compared across the same 3+ categories
 
 CRITICAL chart rules:
-- bar, line, clustered_bar: MINIMUM 3 categories
+- bar, line, clustered_bar, horizontal_bar: MINIMUM 3 categories
 - categories and values must match in count
 - NO zeros-only series
 - NO placeholder values
 - clustered_bar: MUST have exactly 2 series — if only 1 series exists, use bar
+- clustered_bar: BOTH series must have the SAME unit — if units differ, use bar chart with dual_axis: true instead of clustered_bar
+- pie: MAXIMUM 5 segments — if source has more, group the smallest into "Other"
 - All numbers must be sourced from the document
+
+DUAL AXIS — MANDATORY:
+- Inspect each series' unit field. If two or more series have DIFFERENT units
+  (e.g. one is count/number of accounts, another is ₹ currency amount, or one is % and another is a count),
+  you MUST set dual_axis: true and list the secondary-axis series names in secondary_series[].
+  NEVER plot different units on the same Y axis — it produces a misleading chart.
+  Example: series=[{name:"Loan Accounts", unit:"count"}, {name:"Outstanding (₹Cr)", unit:"currency"}]
+  → dual_axis: true, secondary_series: ["Outstanding (₹Cr)"]
+
+LAYOUT STRETCH RULES based on category count:
+These apply in both layout mode (selected_layout_name) and scratch mode (layout_hint.split).
+
+- bar/line/clustered_bar chart with > 6 categories:
+    SCRATCH MODE: use a wide zone — prefer layout_hint.split = "full" or a wide horizontal split.
+                  The zone must span at least 70% of slide width.
+    LAYOUT MODE:  prefer a layout whose primary content area is wide (single-column full-width layout).
+                  Override selected_layout_name to the widest available layout.
+
+- horizontal_bar chart with > 6 categories:
+    SCRATCH MODE: use a tall zone — prefer layout_hint.split = "full" or a vertically dominant split.
+                  The zone must span at least 65% of slide height.
+    LAYOUT MODE:  prefer a layout whose primary content area is tall.
+                  Override selected_layout_name to the tallest available layout.
+
+HEADER RULE:
+- chart_title and chart_header serve different purposes:
+    chart_title  → rendered INSIDE the chart plot area as a sub-label
+    chart_header → the insight headline shown ABOVE the chart (in zone header or layout header placeholder)
+- In layout mode or when a zone has a header placeholder, use ONLY chart_header for the heading.
+  Set chart_title: "" — never render the same text in both places.
 
 ═══════════════════════════
 ARTIFACT 3: cards
@@ -223,6 +275,14 @@ Rules:
 - max 4 cards in full-width zones
 - max 2 cards in side zones (left_X, right_X, tl, tr, bl, br)
 - use for metrics, parallel messages, recommendations, priorities
+
+Card content rules (CXO 3-second scan — every field must pass the test):
+- title: the metric or category label — max 4 words, no verbs
+- subtitle: the PRIMARY number or percentage — max 8 characters (e.g., "₹2,340Cr", "22.4%", "#3 Rank")
+  If there is no single headline metric, leave subtitle as ""
+- body: max 15 words — one crisp implication or the single most important supporting data point
+- sentiment: set based on whether this metric is favourable (positive), unfavourable (negative), or ambiguous (neutral) in context
+- All 4 cards in a zone must be PARALLEL in structure — same fields filled, same depth of detail
 
 ═══════════════════════════
 ARTIFACT 4: workflow
@@ -301,6 +361,13 @@ Rules:
 - use when precise row/column comparison is necessary
 - table must support the message objective — not dump raw data
 - numbers must be specific and sourced
+
+Table content rules:
+- Only include columns that DIRECTLY support the message_objective — omit all others even if present in source
+- Preserve the original data ORDER from the source — do NOT re-sort rows unless sorting is the point
+- If source has more than 6 rows: include the most relevant rows + one aggregated "Total / Other" row
+- table_header must state the INSIGHT the table proves (e.g., "Top 4 products drive 78% of revenue"), not a topic label
+- highlight_rows: use [index] to mark the single most important row — the one the audience should focus on first
 
 ═══════════════════════════
 STORYTELLING RULES
