@@ -552,17 +552,14 @@ function extractBrandTokens(brand) {
       name:        primaryLogo.name || 'logo',
       mime_type:   primaryLogo.mime_type || 'image/png',
       width_px:    primaryLogo.width_px || 0,
-      height_px:   primaryLogo.height_px || 0,
-      base64:      primaryLogo.base64 || ''
+      height_px:   primaryLogo.height_px || 0
+      // base64 intentionally excluded — large; logo rendering uses brand.primary_logo directly
     } : null,
     logo_local_ref:       brand.primary_logo_local_ref || '',
     logo_position:        brand.logo_position        || 'top-right',
     spacing_notes:        brand.spacing_notes        || '',
-    uses_template:        brand.uses_template        || false,
-    layout_blueprints:    (brand.layout_blueprints || []).slice(0, 12),
-    master_blueprints:    (brand.master_blueprints || brand.slide_masters || []).slice(0, 6),
-    slide_masters:        (brand.slide_masters || []).slice(0, 4)
-    // slide_layouts intentionally excluded
+    uses_template:        brand.uses_template        || false
+    // slide_masters, layout_blueprints, master_blueprints intentionally excluded — too large for API
   }
 }
 
@@ -1280,6 +1277,10 @@ async function runAgent5(state) {
   const allDesigned = []
 
   for (let b = 0; b < batches.length; b++) {
+    if (b > 0) {
+      console.log('Agent 5 -- rate limit pause: waiting 65s before batch', b + 1, '...')
+      await new Promise(r => setTimeout(r, 65000))
+    }
     const batch  = batches[b]
     const result = await designSlideBatch(batch, brand, brief, b + 1)
 
