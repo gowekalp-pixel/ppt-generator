@@ -94,13 +94,33 @@ async function callClaude(system, messages, max_tokens = 2000) {
 }
 
 // ─── SHARED: SAFE JSON PARSER ─────────────────────────────────────────────────
+// Attempts three strategies in order:
+//   1. Strip markdown fences and parse directly
+//   2. Extract the outermost { } or [ ] block and parse that
+//      (handles preamble text like "Here is the analysis: {...}")
+//   3. Return fallback
 function safeParseJSON(raw, fallback) {
+  if (!raw) { console.warn('safeParseJSON: empty response'); return fallback }
+
+  // Strategy 1 — strip fences and parse
   try {
     const cleaned = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
     return JSON.parse(cleaned)
-  } catch (e) {
-    console.warn('JSON parse failed:', e.message)
-    console.warn('Raw response was:', raw.slice(0, 500))
+  } catch (e1) {
+    // Strategy 2 — find first { or [ and last matching closer
+    try {
+      const isArr   = raw.indexOf('[') !== -1 && (raw.indexOf('[') < (raw.indexOf('{') === -1 ? Infinity : raw.indexOf('{')))
+      const opener  = isArr ? '[' : '{'
+      const closer  = isArr ? ']' : '}'
+      const start   = raw.indexOf(opener)
+      const end     = raw.lastIndexOf(closer)
+      if (start !== -1 && end > start) {
+        return JSON.parse(raw.slice(start, end + 1))
+      }
+    } catch (e2) {}
+
+    console.warn('safeParseJSON failed:', e1.message)
+    console.warn('Raw response (first 600):', raw.slice(0, 600))
     return fallback
   }
 }

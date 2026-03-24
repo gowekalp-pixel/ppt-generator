@@ -354,7 +354,7 @@ Return ONLY a valid JSON array. No explanation. No markdown. No text outside the
 // SLIDE ARCHETYPE → DEFAULT ZONE STRUCTURE
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function defaultZonesForArchetype(archetype, sectionType) {
+function defaultZonesForArchetype(archetype) {
   switch (archetype) {
 
     case 'dashboard':
@@ -668,7 +668,7 @@ function normaliseSlide(slide, plan) {
   } else {
     // Build default zones from archetype
     const archetype = slide.slide_archetype || inferArchetype(plan.section_type, plan.slide_index_in_section || 0)
-    zones = defaultZonesForArchetype(archetype, plan.section_type).map(normaliseZone).filter(Boolean)
+    zones = defaultZonesForArchetype(archetype).map(normaliseZone).filter(Boolean)
   }
 
   // Cap at 4 zones
@@ -841,7 +841,7 @@ Fix rules:
 async function runAgent4(state) {
   const brief      = state.outline
   const contentB64 = state.contentB64
-  const slideCount = (brief && brief.total_slides) || state.slideCount || 12
+  const slideCount = (brief && brief.total_slides) || state.slideCount
 
   console.log('Agent 4 starting — target slides:', slideCount, '| doc type:', (brief && brief.document_type) || '—')
 

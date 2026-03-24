@@ -76,14 +76,16 @@ Return a single valid JSON object with this exact structure:
   "tone": "string — recommended tone (e.g. confident, cautious, urgent, balanced)"
 }
 
-IMPORTANT RULES:
-- total_slides must equal exactly the number requested
-- The sum of suggested_slide_count across all sections must equal total_slides
-- Always include a title slide (1 slide) and conclusion/next steps (1 slide)
-- Include 2-3 section divider slides for a clean structure
-- key_messages must be specific and data-driven where possible — not generic
-- governing_thought must be a single sentence that a CEO would find immediately useful
-- Return ONLY valid JSON. No explanation. No markdown fences.`
+CRITICAL OUTPUT RULES:
+- Return ONLY the raw JSON object. No explanation. No preamble. No markdown fences.
+- Your response must start with { and end with }. Nothing before or after.
+- total_slides must equal exactly the number requested.
+- The sum of suggested_slide_count across all sections must equal total_slides.
+- Always include a title slide (1 slide) and conclusion/next steps (1 slide).
+- Include 2-3 section divider slides for a clean structure.
+- key_messages must be specific and data-driven — no generic placeholders.
+- governing_thought must be a single punchy sentence a CEO finds immediately useful.
+- Every key_content item must reference actual content from the document, not generic filler.`
 
 
 async function runAgent3(state) {
@@ -116,9 +118,10 @@ Remember:
     ]
   }]
 
-  const raw = await callClaude(AGENT3_SYSTEM, messages, 3000)
+  const raw = await callClaude(AGENT3_SYSTEM, messages, 4500)
 
   console.log('Agent 3 — raw response length:', raw.length)
+  if (raw.length < 200) console.warn('Agent 3 — suspiciously short response:', raw)
 
   const fallback = buildFallbackBrief(state.slideCount)
   const brief    = safeParseJSON(raw, fallback)

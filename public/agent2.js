@@ -227,7 +227,7 @@ async function enrichAgent2InBatches(extracted) {
       role: 'user',
       content: 'Infer deck-level brand guidance from this extracted metadata:\n' +
         JSON.stringify(globalInput, null, 2)
-    }], 300)
+    }], 900)
     globalEnrichment = safeParseJSON(raw, null)
   } catch (e) {
     console.warn('Agent 2 Step B — global enrichment failed:', e.message)
