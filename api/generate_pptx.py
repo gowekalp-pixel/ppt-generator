@@ -896,6 +896,95 @@ def render_workflow(slide, artifact, bt):
     nodes = artifact.get('nodes', [])
     conns = artifact.get('connections', [])
 
+    def _num(v, default=0.0):
+        try:
+            return float(v)
+        except Exception:
+            return default
+
+    def _has_rect(rect):
+        return isinstance(rect, dict) and all(rect.get(k) is not None for k in ('x', 'y', 'w', 'h'))
+
+    def _workflow_bounds(nodes_, conns_):
+        xs, ys, xe, ye = [], [], [], []
+        for node in nodes_:
+            nx = _num(node.get('x'))
+            ny = _num(node.get('y'))
+            nw = max(0.01, _num(node.get('w'), 2.0))
+            nh = max(0.01, _num(node.get('h'), 0.8))
+            xs.append(nx); ys.append(ny); xe.append(nx + nw); ye.append(ny + nh)
+        for conn in conns_:
+            for pt in conn.get('path', []):
+                px = _num(pt.get('x'))
+                py = _num(pt.get('y'))
+                xs.append(px); ys.append(py); xe.append(px); ye.append(py)
+        if not xs:
+            return None
+        return {
+            'x': min(xs), 'y': min(ys),
+            'w': max(0.01, max(xe) - min(xs)),
+            'h': max(0.01, max(ye) - min(ys))
+        }
+
+    def _normalize_workflow_to_rect(nodes_, conns_, target_rect):
+        source_rect = _workflow_bounds(nodes_, conns_)
+        if not source_rect or not _has_rect(target_rect):
+            return nodes_, conns_
+
+        pad_x = min(0.12, max(0.03, target_rect['w'] * 0.04))
+        pad_y = min(0.12, max(0.03, target_rect['h'] * 0.06))
+        usable_w = max(0.05, target_rect['w'] - 2 * pad_x)
+        usable_h = max(0.05, target_rect['h'] - 2 * pad_y)
+        sx = usable_w / max(source_rect['w'], 0.01)
+        sy = usable_h / max(source_rect['h'], 0.01)
+
+        def _map_x(v):
+            return target_rect['x'] + pad_x + (_num(v) - source_rect['x']) * sx
+
+        def _map_y(v):
+            return target_rect['y'] + pad_y + (_num(v) - source_rect['y']) * sy
+
+        mapped_nodes = []
+        for node in nodes_:
+            mapped_nodes.append({
+                **node,
+                'x': _map_x(node.get('x')),
+                'y': _map_y(node.get('y')),
+                'w': max(0.20, _num(node.get('w'), 2.0) * sx),
+                'h': max(0.20, _num(node.get('h'), 0.8) * sy),
+            })
+
+        mapped_conns = []
+        for conn in conns_:
+            mapped_conns.append({
+                **conn,
+                'path': [
+                    {'x': _map_x(pt.get('x')), 'y': _map_y(pt.get('y'))}
+                    for pt in conn.get('path', [])
+                ]
+            })
+
+        return mapped_nodes, mapped_conns
+
+    target_rect = None
+    container = artifact.get('container')
+    if _has_rect(container):
+        target_rect = {
+            'x': _num(container.get('x')),
+            'y': _num(container.get('y')),
+            'w': max(0.05, _num(container.get('w'))),
+            'h': max(0.05, _num(container.get('h')))
+        }
+    elif all(artifact.get(k) is not None for k in ('x', 'y', 'w', 'h')):
+        target_rect = {
+            'x': _num(artifact.get('x')),
+            'y': _num(artifact.get('y')),
+            'w': max(0.05, _num(artifact.get('w'))),
+            'h': max(0.05, _num(artifact.get('h')))
+        }
+    if target_rect:
+        nodes, conns = _normalize_workflow_to_rect(nodes, conns, target_rect)
+
     node_fill   = ws.get('node_fill_color', bt.get('primary_color', '#1A3C8F'))
     node_border = ws.get('node_border_color', '#FFFFFF')
     node_bw     = ws.get('node_border_width', 1.5)
@@ -1368,22 +1457,39 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
 
     slide = prs.slides.add_slide(layout)
     if use_template:
+        from pptx.enum.shapes import PP_PLACEHOLDER as _PH
         _sanitise_system_placeholders(slide, slide_spec.get('slide_number', ''))
         # ── Snapshot placeholder bounds BEFORE any removal ───────────────────
         # render_artifact needs the bounds of content placeholders (12, 13, …) for
         # positioning, but those placeholders must be removed to prevent ghost text.
         # We read all bounds now, then remove, then pass the snapshot to renderers.
         _ph_bounds = {}   # idx → {'x','y','w','h'} in inches
+        _content_ph_frames = []  # ordered fallback slots for layout_mode when placeholder_idx is missing
+        _SYSTEM_TYPES = {_PH.TITLE, _PH.CENTER_TITLE, _PH.SUBTITLE,
+                         _PH.DATE, _PH.FOOTER, _PH.SLIDE_NUMBER}
         for _ph in slide.placeholders:
             try:
-                _ph_bounds[_ph.placeholder_format.idx] = {
+                _ph_idx = _ph.placeholder_format.idx
+                _ph_type = _ph.placeholder_format.type
+                _bounds = {
                     'x': _ph.left   / 914400,
                     'y': _ph.top    / 914400,
                     'w': _ph.width  / 914400,
                     'h': _ph.height / 914400,
                 }
+                _ph_bounds[_ph_idx] = _bounds
+                # Some Agent 5 / 5.1 outputs reach Agent 6 without placeholder_idx.
+                # Keep an ordered list of likely content slots so layout-mode content
+                # can still render into the correct body area instead of disappearing.
+                if (_ph_type not in _SYSTEM_TYPES and
+                    _bounds['w'] >= 1.0 and _bounds['h'] >= 0.5):
+                    _content_ph_frames.append({
+                        'idx': _ph_idx,
+                        **_bounds
+                    })
             except Exception:
                 pass
+        _content_ph_frames.sort(key=lambda p: (round(p['y'] * 2), p['x'], p['idx']))
 
         # Collect header placeholder indices we will explicitly write heading text to.
         # These must survive removal so _write_heading_to_header_ph can use them.
@@ -1471,11 +1577,11 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
 
     # Zones → Artifacts
     _layout_ph_bounds = _ph_bounds if (layout_mode and use_template) else {}
-    for zone in slide_spec.get('zones', []):
+    for zone_idx, zone in enumerate(slide_spec.get('zones', [])):
         # In layout mode, each zone may have a paired header placeholder
         hdr_ph_idx = zone.get('header_ph_idx') if layout_mode else None
         zone_artifacts = zone.get('artifacts', [])
-        for artifact in zone_artifacts:
+        for art_idx, artifact in enumerate(zone_artifacts):
             ph_frame = None
             if layout_mode:
                 ph_idx_spec = artifact.get('placeholder_idx')
@@ -1491,6 +1597,13 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
                 )
                 if needs_bounds and ph_idx_spec in _layout_ph_bounds:
                     ph_frame = _layout_ph_bounds[ph_idx_spec]
+                elif artifact.get('x') is None and _content_ph_frames:
+                    # Fallback for specs that lost placeholder_idx but still rely on
+                    # layout_mode with null coordinates. Prefer zone order for 1:1
+                    # layouts; for multi-artifact zones, step through slots by artifact.
+                    fallback_slot = zone_idx if len(zone_artifacts) == 1 else (zone_idx + art_idx)
+                    fallback_slot = min(fallback_slot, len(_content_ph_frames) - 1)
+                    ph_frame = _content_ph_frames[fallback_slot]
             render_artifact(slide, artifact, bt, ph_frame=ph_frame, header_ph_idx=hdr_ph_idx)
 
     # ── Global elements (scratch only) ────────────────────────────────────────
