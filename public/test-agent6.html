@@ -95,23 +95,23 @@
 
   <div class="badge">Isolated Test — Agent 6 Only</div>
   <h1>PPTX Generator Tester</h1>
-  <p class="subhead">Upload the Agent 5 JSON spec and (optionally) the brand PPTX template. When a template is provided the backend loads its slide master — preserving brand background, fonts, logo, and decorative shapes — then populates slides from the spec.</p>
+  <p class="subhead">Upload the brand PPTX template and the Agent 5 JSON spec. The backend loads the template's slide master — preserving brand background, fonts, logo, and decorative shapes — then builds every slide from the spec on top of it.</p>
 
-  <!-- TEMPLATE UPLOAD -->
+  <!-- TEMPLATE UPLOAD — REQUIRED -->
   <div class="card">
-    <div class="card-title">Brand Template (optional — PPTX only)</div>
-    <div class="hint">Upload the same PPTX brand master used in Agent 2. When present, python-pptx loads it and builds on top of its slide master instead of a blank presentation. Brand identity (background, logo, fonts, decorative shapes) is preserved automatically.</div>
+    <div class="card-title">Brand Template — Step 1 (Required)</div>
+    <div class="hint">Upload the same PPTX brand master used in Agent 2. python-pptx loads it, strips the existing slides, and builds the new deck on its master. Without this the brand identity (background, logo, fonts, decorations) cannot be preserved.</div>
 
     <div class="upload-zone" id="zone-template">
       <input type="file" accept=".pptx,.ppt" onchange="loadTemplateFile(this)">
-      <div class="uz" id="template-label">Upload <span>brand-template.pptx</span> — optional but recommended</div>
+      <div class="uz" id="template-label">Upload <span>brand-template.pptx</span></div>
     </div>
     <div class="template-status" id="template-status"></div>
   </div>
 
   <!-- SPEC INPUT -->
   <div class="card">
-    <div class="card-title">Agent 5 Designed Spec JSON</div>
+    <div class="card-title">Agent 5 Designed Spec JSON — Step 2</div>
 
     <div class="hint">Paste the full JSON array from Agent 5 output (the array of slide objects with canvas, zones, artifacts)</div>
     <textarea id="spec-input" placeholder='[ { "slide_number": 1, "slide_type": "title", "canvas": { "width_in": 11.02, ... }, "zones": [], ... }, ... ]'></textarea>
@@ -263,6 +263,12 @@
     // Parse on demand if not already done
     if (!parsedSpec) {
       tryParseSpec(document.getElementById('spec-input').value)
+    }
+
+    if (!templateB64) {
+      errEl.textContent = 'Brand template required. Upload the brand PPTX master first (Step 1 above).'
+      errEl.classList.add('show')
+      return
     }
 
     if (!parsedSpec || parsedSpec.length === 0) {
