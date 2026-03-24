@@ -79,6 +79,11 @@
     .dl-card a:hover { background: #15803d; }
     .dl-note { font-size: 11px; color: #666; margin-top: 7px; text-align: center; }
 
+    /* Template status */
+    .template-status { font-size: 12px; margin-top: 8px; min-height: 16px; }
+    .template-status.ok  { color: #16a34a; font-weight: 600; }
+    .template-status.off { color: #888; }
+
     /* Progress bar (reused as Agent 6 status bar) */
     .a6-bar { height: 4px; background: #e5e7eb; border-radius: 99px; margin-top: 6px; }
     .a6-fill { height: 100%; background: #059669; border-radius: 99px; width: 0%; transition: width 0.4s ease; }
@@ -90,11 +95,23 @@
 
   <div class="badge">Isolated Test — Agent 6 Only</div>
   <h1>PPTX Generator Tester</h1>
-  <p class="subhead">Paste or upload the Agent 5 output JSON (the full designed spec array). Agent 6 sends it to the python-pptx backend and downloads the finished PowerPoint file.</p>
+  <p class="subhead">Upload the Agent 5 JSON spec and (optionally) the brand PPTX template. When a template is provided the backend loads its slide master — preserving brand background, fonts, logo, and decorative shapes — then populates slides from the spec.</p>
 
-  <!-- INPUT -->
+  <!-- TEMPLATE UPLOAD -->
   <div class="card">
-    <div class="card-title">Input — Agent 5 Designed Spec JSON</div>
+    <div class="card-title">Brand Template (optional — PPTX only)</div>
+    <div class="hint">Upload the same PPTX brand master used in Agent 2. When present, python-pptx loads it and builds on top of its slide master instead of a blank presentation. Brand identity (background, logo, fonts, decorative shapes) is preserved automatically.</div>
+
+    <div class="upload-zone" id="zone-template">
+      <input type="file" accept=".pptx,.ppt" onchange="loadTemplateFile(this)">
+      <div class="uz" id="template-label">Upload <span>brand-template.pptx</span> — optional but recommended</div>
+    </div>
+    <div class="template-status" id="template-status"></div>
+  </div>
+
+  <!-- SPEC INPUT -->
+  <div class="card">
+    <div class="card-title">Agent 5 Designed Spec JSON</div>
 
     <div class="hint">Paste the full JSON array from Agent 5 output (the array of slide objects with canvas, zones, artifacts)</div>
     <textarea id="spec-input" placeholder='[ { "slide_number": 1, "slide_type": "title", "canvas": { "width_in": 11.02, ... }, "zones": [], ... }, ... ]'></textarea>
@@ -121,8 +138,8 @@
     <div class="a6-bar"><div class="a6-fill" id="a6-fill"></div></div>
 
     <div class="dl-card" id="dl-card">
-      <div class="dl-label">✅ PPTX Ready</div>
-      <a id="dl-link" href="#" download>⬇ Download presentation.pptx</a>
+      <div class="dl-label">PPTX Ready</div>
+      <a id="dl-link" href="#" download>Download presentation.pptx</a>
       <div class="dl-note">Link stays active until you refresh the page</div>
     </div>
   </div>
@@ -130,9 +147,40 @@
 </div>
 
 <script>
-  let parsedSpec = null
+  let parsedSpec     = null
+  let templateB64    = null   // base64 of uploaded brand PPTX template
 
-  // ─── FILE LOAD ──────────────────────────────────────────────────────────────
+  // ─── TEMPLATE FILE LOAD ─────────────────────────────────────────────────────
+  function loadTemplateFile(input) {
+    const file = input.files[0]
+    if (!file) return
+    const statusEl = document.getElementById('template-status')
+    statusEl.textContent = 'Reading...'
+    statusEl.className = 'template-status off'
+
+    const reader = new FileReader()
+    reader.onload = e => {
+      // FileReader returns ArrayBuffer for readAsArrayBuffer — convert to base64
+      const bytes  = new Uint8Array(e.target.result)
+      let binary   = ''
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+      templateB64  = btoa(binary)
+
+      document.getElementById('zone-template').classList.add('ready')
+      document.getElementById('template-label').innerHTML =
+        'Template loaded: <span>' + file.name + '</span> (' + Math.round(file.size / 1024) + ' KB)'
+      statusEl.textContent = 'Brand template ready — python-pptx will build on this master'
+      statusEl.className = 'template-status ok'
+    }
+    reader.onerror = () => {
+      statusEl.textContent = 'Failed to read template file'
+      statusEl.className = 'template-status off'
+      templateB64 = null
+    }
+    reader.readAsArrayBuffer(file)
+  }
+
+  // ─── SPEC FILE LOAD ──────────────────────────────────────────────────────────
   function loadSpecFile(input) {
     const file = input.files[0]
     if (!file) return
@@ -242,14 +290,18 @@
     setProgress(10, 'Sending ' + parsedSpec.length + ' slides to python-pptx...')
 
     try {
-      setProgress(30, 'python-pptx building slides on server...')
+      const usingTemplate = !!templateB64
+      setProgress(30, usingTemplate
+        ? 'python-pptx building slides on brand master template...'
+        : 'python-pptx building slides on server...')
 
       const res = await fetch('/api/generate-pptx', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
           finalSpec:     parsedSpec,
-          brandRulebook: extractBrandRulebook(parsedSpec)
+          brandRulebook: extractBrandRulebook(parsedSpec),
+          templateB64:   templateB64 || null
         })
       })
 
@@ -340,9 +392,14 @@
   }
 
   function resetAll() {
-    parsedSpec = null
+    parsedSpec  = null
+    templateB64 = null
     document.getElementById('spec-input').value = ''
     document.getElementById('zone-spec').classList.remove('ready')
+    document.getElementById('zone-template').classList.remove('ready')
+    document.getElementById('template-label').innerHTML = 'Upload <span>brand-template.pptx</span> — optional but recommended'
+    document.getElementById('template-status').textContent = ''
+    document.getElementById('template-status').className = 'template-status'
     document.getElementById('spec-summary').classList.remove('show')
     document.getElementById('error-box').classList.remove('show')
     document.getElementById('dl-card').classList.remove('show')

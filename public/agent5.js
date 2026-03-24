@@ -105,6 +105,32 @@ Only if the brand guideline is missing or incomplete:
 - avoid decorative styling
 
 ═══════════════════════════
+TEMPLATE MODE
+═══════════════════════════
+
+When brand_tokens.uses_template is true, the output PPTX is built on top
+of the brand's own PPTX master slide. The master ALREADY provides:
+  - slide background (colour, image, branded shapes, lines)
+  - logo placement
+  - footer and page-number fields
+  - decorative borders or accent elements
+
+In this mode you MUST:
+1. Set global_elements to {} — do NOT include logo, footer, or page_number blocks.
+   Emitting them causes duplicates (the master also renders them).
+2. Omit canvas.background — set it to null or omit the key entirely.
+   Setting a solid fill here would paint over the master background.
+3. Do NOT place shapes intended to replicate master decorations
+   (horizontal rules, corner accents, header bands, etc.).
+4. Trust that the master's registered font names are available — use
+   title_font.family and body_font.family exactly as given.
+5. Focus all output precision on content zones, artifact coordinates,
+   and correct brand colour application inside charts and cards.
+
+When uses_template is false (no PPTX master), apply all elements manually
+as before — background, footer, logo, decorative lines.
+
+═══════════════════════════
 OUTPUT STRUCTURE
 ═══════════════════════════
 
@@ -532,6 +558,7 @@ function extractBrandTokens(brand) {
     logo_local_ref:       brand.primary_logo_local_ref || '',
     logo_position:        brand.logo_position        || 'top-right',
     spacing_notes:        brand.spacing_notes        || '',
+    uses_template:        brand.uses_template        || false,
     layout_blueprints:    (brand.layout_blueprints || []).slice(0, 12),
     master_blueprints:    (brand.master_blueprints || brand.slide_masters || []).slice(0, 6),
     slide_masters:        (brand.slide_masters || []).slice(0, 4)
@@ -553,6 +580,9 @@ function buildBrandBrief(brand, brief) {
     '\n- Bullet char: bullet_style.char — use exactly this character, not substitutes' +
     '\n- Bullet spacing: bullet_style.space_before_pt — pass directly into body_style.space_before_pt' +
     '\n- Insight boxes: insight_box_style.fill_color and border_color — a left accent bar is always rendered; do NOT add a full perimeter border' +
+    (tokens.uses_template
+      ? '\n- TEMPLATE MODE ACTIVE: master provides background/logo/footer — set global_elements:{}, omit canvas.background'
+      : '\n- SCRATCH MODE: manually specify background, footer, logo in global_elements') +
     '\n\nPRESENTATION BRIEF:' +
     '\nDocument type:     ' + (b.document_type     || 'Business document') +
     '\nGoverning thought: ' + (b.governing_thought || 'Key insights from the document') +

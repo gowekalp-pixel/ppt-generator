@@ -37,6 +37,45 @@ import pptx.oxml.ns as nsmap
 from lxml import etree
 
 
+# ─── TEMPLATE HELPERS ─────────────────────────────────────────────────────────
+
+def clear_slides(prs):
+    """Remove all content slides, preserving slide masters and layouts."""
+    sldIdLst = prs.slides._sldIdLst
+    for sldId in list(sldIdLst):
+        rId = sldId.get(nsmap.qn('r:id'))
+        prs.part.drop_rel(rId)
+        sldIdLst.remove(sldId)
+
+
+def find_blank_layout(prs):
+    """Return the most minimal slide layout — prefers 'Blank', falls back by placeholder count."""
+    for layout in prs.slide_layouts:
+        if (layout.name or '').lower().strip() == 'blank':
+            return layout
+    for layout in prs.slide_layouts:
+        if 'blank' in (layout.name or '').lower():
+            return layout
+    # Last resort: layout with fewest placeholders
+    try:
+        return min(prs.slide_layouts, key=lambda l: len(list(l.placeholders)))
+    except Exception:
+        return prs.slide_layouts[0]
+
+
+def load_template_prs(template_b64):
+    """
+    Decode a base64 PPTX template, strip all content slides, and return the
+    Presentation object. Slide masters and layouts are preserved so the brand
+    master (background, fonts, logo, decorative shapes) carries through to
+    every new slide.
+    """
+    template_bytes = base64.b64decode(template_b64)
+    prs = Presentation(io.BytesIO(template_bytes))
+    clear_slides(prs)
+    return prs
+
+
 # ─── HELPERS ──────────────────────────────────────────────────────────────────
 
 def hex_to_rgb(hex_color):
@@ -675,21 +714,23 @@ def render_artifact(slide, artifact, bt):
 
 # ─── SLIDE BUILDER ─────────────────────────────────────────────────────────────
 
-def build_slide(prs, slide_spec):
+def build_slide(prs, slide_spec, blank_layout, use_template=False):
     """Build one slide from its spec object."""
-    # Use blank layout
-    blank_layout = prs.slide_layouts[6]  # blank
     slide = prs.slides.add_slide(blank_layout)
 
     cvs = slide_spec.get('canvas', {})
     bt  = slide_spec.get('brand_tokens', {})
 
     # ── Background ──────────────────────────────────────────────────────────
-    bg_color = (cvs.get('background') or {}).get('color', '#FFFFFF')
-    background = slide.background
-    fill = background.fill
-    fill.solid()
-    fill.fore_color.rgb = hex_to_rgb(bg_color)
+    # When a brand template is in use the slide master already provides the
+    # background (colour, image, decorative shapes). Setting it here would
+    # paint over those master elements, so we skip it in template mode.
+    if not use_template:
+        bg_color = (cvs.get('background') or {}).get('color', '#FFFFFF')
+        background = slide.background
+        fill = background.fill
+        fill.solid()
+        fill.fore_color.rgb = hex_to_rgb(bg_color)
 
     # ── Title block ──────────────────────────────────────────────────────────
     tb = slide_spec.get('title_block')
@@ -731,47 +772,50 @@ def build_slide(prs, slide_spec):
             render_artifact(slide, artifact, bt)
 
     # ── Global elements ───────────────────────────────────────────────────────
+    # In template mode the slide master already renders logo, footer, and page
+    # number via master shapes — adding them again here would duplicate them.
     ge = slide_spec.get('global_elements', {})
 
-    logo = ge.get('logo', {})
-    if logo.get('show') and logo.get('image_base64'):
-        add_image_box(
-            slide,
-            logo.get('image_base64'),
-            logo.get('x', 0.0), logo.get('y', 0.0),
-            logo.get('w', 1.2), logo.get('h', 0.4)
-        )
+    if not use_template:
+        logo = ge.get('logo', {})
+        if logo.get('show') and logo.get('image_base64'):
+            add_image_box(
+                slide,
+                logo.get('image_base64'),
+                logo.get('x', 0.0), logo.get('y', 0.0),
+                logo.get('w', 1.2), logo.get('h', 0.4)
+            )
 
-    footer = ge.get('footer', {})
-    if footer.get('show'):
-        add_text_box(
-            slide,
-            footer.get('x', 0.4), footer.get('y', 7.5),
-            footer.get('w', 5),   footer.get('h', 0.25),
-            'Confidential',
-            footer.get('font_family', 'Arial'),
-            footer.get('font_size', 8),
-            False,
-            footer.get('color', '#AAAAAA'),
-            footer.get('align', 'left'),
-            'middle'
-        )
+        footer = ge.get('footer', {})
+        if footer.get('show'):
+            add_text_box(
+                slide,
+                footer.get('x', 0.4), footer.get('y', 7.5),
+                footer.get('w', 5),   footer.get('h', 0.25),
+                'Confidential',
+                footer.get('font_family', 'Arial'),
+                footer.get('font_size', 8),
+                False,
+                footer.get('color', '#AAAAAA'),
+                footer.get('align', 'left'),
+                'middle'
+            )
 
-    pn = ge.get('page_number', {})
-    if pn.get('show'):
-        slide_num = slide_spec.get('slide_number', '')
-        add_text_box(
-            slide,
-            pn.get('x', 9.5),  pn.get('y', 7.5),
-            pn.get('w', 0.8),  pn.get('h', 0.25),
-            str(slide_num),
-            pn.get('font_family', 'Arial'),
-            pn.get('font_size', 8),
-            False,
-            pn.get('color', '#AAAAAA'),
-            'right',
-            'middle'
-        )
+        pn = ge.get('page_number', {})
+        if pn.get('show'):
+            slide_num = slide_spec.get('slide_number', '')
+            add_text_box(
+                slide,
+                pn.get('x', 9.5),  pn.get('y', 7.5),
+                pn.get('w', 0.8),  pn.get('h', 0.25),
+                str(slide_num),
+                pn.get('font_family', 'Arial'),
+                pn.get('font_size', 8),
+                False,
+                pn.get('color', '#AAAAAA'),
+                'right',
+                'middle'
+            )
 
     # ── Speaker notes ─────────────────────────────────────────────────────────
     note_text = slide_spec.get('speaker_note', '')
@@ -788,28 +832,55 @@ def build_slide(prs, slide_spec):
 
 # ─── MAIN BUILDER ─────────────────────────────────────────────────────────────
 
-def build_presentation(final_spec, brand_rulebook):
-    """Build a complete Presentation from the Agent 5 final spec."""
-    prs = Presentation()
+def build_presentation(final_spec, brand_rulebook, template_b64=None):
+    """
+    Build a complete Presentation from the Agent 5 final spec.
 
+    When template_b64 is provided the function:
+      1. Loads the brand PPTX template (preserving slide masters)
+      2. Strips all existing content slides from it
+      3. Adds new slides backed by the template's blank layout
+
+    This keeps the full brand identity (master background, decorative shapes,
+    registered fonts, theme colours) without the need for Agent 5 to manually
+    specify every design token.
+    """
     if not final_spec:
         raise ValueError('finalSpec is empty')
 
-    # Set slide dimensions from first slide's canvas
-    first_canvas = (final_spec[0].get('canvas') or {})
-    w_in = float(first_canvas.get('width_in')  or 11.02)
-    h_in = float(first_canvas.get('height_in') or 8.29)
-    prs.slide_width  = Inches(w_in)
-    prs.slide_height = Inches(h_in)
+    use_template = bool(template_b64)
+
+    if use_template:
+        print('build_presentation: loading brand template…')
+        try:
+            prs = load_template_prs(template_b64)
+            print(f'  Template loaded — {len(prs.slide_masters)} master(s), {len(prs.slide_layouts)} layout(s)')
+        except Exception as e:
+            print('  Template load failed, falling back to blank presentation:', e)
+            prs = Presentation()
+            use_template = False
+    else:
+        prs = Presentation()
+
+    # Slide dimensions — use template's native size if template is loaded,
+    # otherwise take from the first slide's canvas spec
+    if not use_template:
+        first_canvas = (final_spec[0].get('canvas') or {})
+        w_in = float(first_canvas.get('width_in')  or 11.02)
+        h_in = float(first_canvas.get('height_in') or 8.29)
+        prs.slide_width  = Inches(w_in)
+        prs.slide_height = Inches(h_in)
+
+    blank_layout = find_blank_layout(prs)
+    print(f'  Using layout: "{blank_layout.name}" (use_template={use_template})')
 
     for slide_spec in final_spec:
         try:
-            build_slide(prs, slide_spec)
+            build_slide(prs, slide_spec, blank_layout, use_template)
         except Exception as e:
             print(f"Error building slide {slide_spec.get('slide_number', '?')}:", e)
             traceback.print_exc()
-            # Add blank slide rather than aborting
-            prs.slides.add_slide(prs.slide_layouts[6])
+            prs.slides.add_slide(blank_layout)
 
     return prs
 
@@ -826,13 +897,14 @@ class handler(BaseHTTPRequestHandler):
 
             final_spec     = data.get('finalSpec', [])
             brand_rulebook = data.get('brandRulebook', {})
+            template_b64   = data.get('templateB64') or None
 
             if not final_spec:
                 self._json(400, {'success': False, 'error': 'finalSpec is missing or empty'})
                 return
 
-            # Build the presentation
-            prs = build_presentation(final_spec, brand_rulebook)
+            # Build the presentation (optionally from a brand template)
+            prs = build_presentation(final_spec, brand_rulebook, template_b64)
 
             # Serialize to bytes
             buf = io.BytesIO()

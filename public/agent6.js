@@ -31,16 +31,20 @@ async function generatePPTX() {
     return
   }
 
-  const slideCount = state.finalSpec.length
+  const slideCount    = state.finalSpec.length
+  const useTemplate   = (state.brandExt === 'pptx' || state.brandExt === 'ppt') && !!state.brandB64
   console.log('Agent 6 starting —', slideCount, 'slides')
   console.log('  Brand primary:', (state.brandRulebook.primary_colors || [])[0] || 'none')
   console.log('  Slide size:', (firstSlide.canvas.width_in || '?') + '" x ' + (firstSlide.canvas.height_in || '?') + '"')
+  console.log('  Template mode:', useTemplate ? 'YES — brand PPTX master will be used' : 'NO — building from blank')
 
   // ── UI: reset ─────────────────────────────────────────────────────────────
   btn.disabled           = true
   btn.textContent        = '⏳ Generating...'
   cardEl.style.display   = 'none'
-  statusEl.textContent   = '⏳ Sending ' + slideCount + ' slides to python-pptx...'
+  statusEl.textContent   = useTemplate
+    ? '⏳ Sending ' + slideCount + ' slides to python-pptx (template mode — brand master preserved)...'
+    : '⏳ Sending ' + slideCount + ' slides to python-pptx...'
   progressEl.style.width = '10%'
 
   try {
@@ -49,7 +53,8 @@ async function generatePPTX() {
 
     const payload = {
       finalSpec:     state.finalSpec,
-      brandRulebook: state.brandRulebook
+      brandRulebook: state.brandRulebook,
+      templateB64:   useTemplate ? state.brandB64 : null
     }
 
     const res = await fetch('/api/generate-pptx', {

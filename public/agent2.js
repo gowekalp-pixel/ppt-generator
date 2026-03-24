@@ -524,7 +524,10 @@ function buildRulebook(data) {
     primary_logo_local_ref: localLogoRef,
     logo_position:        d.logo_position     || 'top-right',
     spacing_notes:        d.spacing_notes     || '0.5 inch margins',
-    extraction_source:    d.source            || 'agent2'
+    extraction_source:    d.source            || 'agent2',
+    // True when the brand was extracted from a real PPTX master.
+    // Agent 5 uses this to skip background/logo/footer (the master handles them).
+    uses_template:        slideMasters.length > 0 && layouts.length > 0
   }
 
   console.log('Agent 2 — rulebook complete:')
