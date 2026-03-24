@@ -1132,29 +1132,26 @@ def _write_heading_to_header_ph(slide, heading_text, header_ph_idx, bt):
     return False
 
 
-def render_artifact(slide, artifact, bt, ph_idx=None, header_ph_idx=None):
+def render_artifact(slide, artifact, bt, ph_frame=None, header_ph_idx=None):
     """
     Dispatch to the correct renderer based on artifact type.
 
-    ph_idx       — layout mode: override artifact coords with layout placeholder bounds.
+    ph_frame      — dict with x/y/w/h keys (inches) pre-read from the layout placeholder
+                    BEFORE that placeholder was removed from the slide.  When set, these
+                    bounds override the artifact's own x/y/w/h (e.g. when Agent 5 left
+                    them null in layout mode, trusting the placeholder for positioning).
     header_ph_idx — layout mode: write artifact heading into the paired header placeholder
-                    instead of rendering it manually (suppresses the accent bar + inline heading).
+                    that was preserved in the slide (not removed).
     """
     t = (artifact.get('type') or '').lower()
 
-    # In layout mode: override artifact coordinates with the placeholder's bounds
-    if ph_idx is not None:
-        try:
-            for ph in slide.placeholders:
-                if ph.placeholder_format.idx == ph_idx:
-                    artifact = dict(artifact)   # shallow copy — don't mutate the spec
-                    artifact['x'] = ph.left   / 914400
-                    artifact['y'] = ph.top    / 914400
-                    artifact['w'] = ph.width  / 914400
-                    artifact['h'] = ph.height / 914400
-                    break
-        except Exception as e:
-            print(f'render_artifact: placeholder bounds lookup failed (idx={ph_idx}):', e)
+    # Apply pre-saved placeholder bounds when the artifact's own coords are null/missing
+    if ph_frame is not None:
+        artifact = dict(artifact)   # shallow copy — don't mutate the spec
+        artifact['x'] = ph_frame['x']
+        artifact['y'] = ph_frame['y']
+        artifact['w'] = ph_frame['w']
+        artifact['h'] = ph_frame['h']
 
     # Route artifact heading into the layout's paired header placeholder when available
     heading_handled = False
@@ -1372,9 +1369,24 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
     slide = prs.slides.add_slide(layout)
     if use_template:
         _sanitise_system_placeholders(slide, slide_spec.get('slide_number', ''))
+        # ── Snapshot placeholder bounds BEFORE any removal ───────────────────
+        # render_artifact needs the bounds of content placeholders (12, 13, …) for
+        # positioning, but those placeholders must be removed to prevent ghost text.
+        # We read all bounds now, then remove, then pass the snapshot to renderers.
+        _ph_bounds = {}   # idx → {'x','y','w','h'} in inches
+        for _ph in slide.placeholders:
+            try:
+                _ph_bounds[_ph.placeholder_format.idx] = {
+                    'x': _ph.left   / 914400,
+                    'y': _ph.top    / 914400,
+                    'w': _ph.width  / 914400,
+                    'h': _ph.height / 914400,
+                }
+            except Exception:
+                pass
+
         # Collect header placeholder indices we will explicitly write heading text to.
-        # These must survive; all other non-system content placeholders are removed
-        # upfront so their layout-inherited text cannot ghost over the slide.
+        # These must survive removal so _write_heading_to_header_ph can use them.
         _header_ph_keep = set()
         for _z in slide_spec.get('zones', []):
             _hpi = _z.get('header_ph_idx')
@@ -1458,21 +1470,28 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
                 sb.get('align', 'left'), 'middle')
 
     # Zones → Artifacts
+    _layout_ph_bounds = _ph_bounds if (layout_mode and use_template) else {}
     for zone in slide_spec.get('zones', []):
         # In layout mode, each zone may have a paired header placeholder
         hdr_ph_idx = zone.get('header_ph_idx') if layout_mode else None
         zone_artifacts = zone.get('artifacts', [])
         for artifact in zone_artifacts:
+            ph_frame = None
             if layout_mode:
-                # Only use placeholder bounds to override coordinates when the zone has
-                # exactly ONE artifact — that artifact maps 1:1 to its placeholder slot.
-                # For multi-artifact zones, Agent 5's explicit x/y/w/h are authoritative
-                # (multiple artifacts cannot all share one placeholder's bounds).
-                use_ph_bounds = len(zone_artifacts) == 1
-                ph_idx = artifact.get('placeholder_idx') if use_ph_bounds else None
-            else:
-                ph_idx = None
-            render_artifact(slide, artifact, bt, ph_idx=ph_idx, header_ph_idx=hdr_ph_idx)
+                ph_idx_spec = artifact.get('placeholder_idx')
+                # Only apply placeholder bounds when:
+                # 1. The artifact has a placeholder_idx set
+                # 2. AND the artifact's own x/y/w/h are null/missing (Agent 5 deferred to layout)
+                # 3. AND the zone has exactly 1 artifact (1:1 mapping to placeholder slot)
+                # For multi-artifact zones, Agent 5's explicit coordinates are authoritative.
+                needs_bounds = (
+                    ph_idx_spec is not None
+                    and len(zone_artifacts) == 1
+                    and artifact.get('x') is None
+                )
+                if needs_bounds and ph_idx_spec in _layout_ph_bounds:
+                    ph_frame = _layout_ph_bounds[ph_idx_spec]
+            render_artifact(slide, artifact, bt, ph_frame=ph_frame, header_ph_idx=hdr_ph_idx)
 
     # ── Global elements (scratch only) ────────────────────────────────────────
     if not use_template:

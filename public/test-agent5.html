@@ -711,8 +711,15 @@ function safeParseJSON(raw, fallback) {
       ctx.fillText(zone.narrative_weight || '', zx + zw - 5, zy + 13)
 
       // Artifacts inside this zone
+      // In layout mode artifacts may have null x/y/w/h — fall back to zone frame
       ;(zone.artifacts || []).forEach((art, ai) => {
-        drawArtifact(ctx, art, SCALE, zoneColor, bt, ai)
+        const artWithFrame = (art.x == null || art.y == null) ? Object.assign({}, art, {
+          x: f.x + (f.padding?.left || 0),
+          y: f.y + (f.padding?.top  || 0),
+          w: f.w - (f.padding?.left || 0) - (f.padding?.right  || 0),
+          h: f.h - (f.padding?.top  || 0) - (f.padding?.bottom || 0)
+        }) : art
+        drawArtifact(ctx, artWithFrame, SCALE, zoneColor, bt, ai)
       })
     })
 
