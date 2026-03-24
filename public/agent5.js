@@ -345,6 +345,8 @@ insight_text styling rules:
 {
   "type": "chart",
   "x": number, "y": number, "w": number, "h": number,
+  "dual_axis": false,
+  "secondary_series": [],
   "chart_style": {
     "title_font_family": "string",
     "title_font_size": number,
@@ -387,7 +389,46 @@ Chart rules:
 - primary series uses primary brand color
 - minimum axis font size: 8pt
 - if chart + table in zone: chart takes 60–75% of zone width
-- PIE CHART CRITICAL: a pie has ONE series but MULTIPLE segments (one per category).
+
+DUAL AXIS — MANDATORY:
+- If two or more series have DIFFERENT units (e.g. one is a count/number, another is ₹/currency/%, etc.)
+  you MUST set dual_axis: true and list the secondary-axis series names in secondary_series[].
+  NEVER plot metrics with different units on the same Y axis.
+  The renderer will automatically display primary series as bars and secondary series as a line on the right Y axis.
+
+LAYOUT SIZE HINTS based on category count:
+These rules apply in BOTH scratch mode (free positioning) AND layout mode (template layouts).
+
+SCRATCH MODE — set zone dimensions directly:
+- Column/vertical bar chart with > 6 categories: set zone w ≥ 7" (wide/horizontal stretch)
+- Horizontal bar chart with > 6 categories: set zone h ≥ 5" (tall/vertical stretch)
+
+LAYOUT MODE — select the right layout from layout_map:
+- layout_map[name].content_areas is an array of placeholders sorted left→right, top→bottom.
+  Each entry has w_in and h_in — the actual rendered size of that placeholder in the template.
+  content_areas[0] is always the primary (largest/first) content slot.
+- Column/vertical bar chart with > 6 categories: scan layout_map for the layout whose
+  content_areas[0].w_in is largest (≥ 7" preferred). Set selected_layout_name to that layout.
+- Horizontal bar chart with > 6 categories: scan layout_map for the layout whose
+  content_areas[0].h_in is largest (≥ 5" preferred). Set selected_layout_name to that layout.
+- This overrides Agent 4's selected_layout_name when a better-fitting layout exists —
+  chart readability takes priority over the default layout choice.
+- If no template layout meets the threshold, fall back to the widest/tallest available and
+  note the constraint; do NOT invent coordinates that exceed the placeholder bounds.
+
+HEADER DEDUPLICATION:
+- If the zone has a header_ph_idx (layout mode), the artifact heading is written to the layout's
+  header placeholder automatically. In that case set chart_title: "" — do NOT repeat the same
+  text as both an internal chart title and a header_block / layout header.
+- Only use chart_title for a subtitle-style annotation inside the chart plot area when it adds
+  information beyond what the zone header already says.
+
+LEGEND POSITION (auto-computed by renderer from frame size, but follow these intent rules):
+- Chart w > 6" (horizontally stretched) → legend on right
+- Chart h > 4.5" AND w ≤ 6" (vertically stretched) → legend on top
+- All other cases → legend on right
+
+PIE CHART CRITICAL: a pie has ONE series but MULTIPLE segments (one per category).
   The renderer colors each segment from series_style[i]. You MUST output one series_style
   entry PER DATA POINT, each with a UNIQUE fill_color drawn from chart_palette in order.
   Example for 3 categories: series_style = [

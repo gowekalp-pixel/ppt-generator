@@ -385,79 +385,100 @@ def render_insight_text(slide, artifact, bt, suppress_heading=False):
             add_filled_rect(slide, x, y, w, h, fill_hex=fill,
                             border_hex=border, border_pt=bw, corner_radius=cr)
 
-    # Heading row (only when heading text is present and not already in a layout placeholder)
-    TOP_PAD = 0.12   # breathing room between box top / slide header and first bullet
+    # ── Heading & body layout ────────────────────────────────────────────────
+    TOP_PAD   = 0.20   # gap between box top / layout header placeholder and first bullet
     content_y = y + TOP_PAD
-    if heading:
-        h_font  = hs.get('font_family', bt.get('title_font_family', 'Arial'))
-        h_size  = hs.get('font_size', 12)
-        h_color = hs.get('color', bt.get('primary_color', '#1A3C8F'))
-        h_bold  = hs.get('font_weight', 'bold') in ('bold', 'semibold')
-        add_text_box(slide, x, y, w, 0.32,
-                     str(heading), h_font, h_size, h_bold, h_color, 'left', 'middle')
-        content_y = y + 0.36
 
-    # Body points
+    # Collect heading params; rendering is deferred until after b_size is known
+    _h_params = None
+    if heading:
+        _h_params = {
+            'font':  hs.get('font_family', bt.get('title_font_family', 'Arial')),
+            'size':  hs.get('font_size', 12),
+            'color': hs.get('color', bt.get('primary_color', '#1A3C8F')),
+            'bold':  hs.get('font_weight', 'bold') in ('bold', 'semibold'),
+        }
+        content_y = y + 0.40   # heading row + gap
+
+    # Body points — compute sizes first so heading can scale to match
     if points:
         b_font       = bs.get('font_family', bt.get('body_font_family', 'Arial'))
         b_size       = bs.get('font_size', 10)
         b_color      = bs.get('color', '#111111')
-        list_style   = bs.get('list_style', 'bullet')   # tick_cross | numbered | bullet
+        list_style   = bs.get('list_style', 'bullet')
         indent_in    = float(bs.get('indent_inches', 0.12))
         vert_dist    = bs.get('vertical_distribution', '')
         space_bef_pt = max(1, int(bs.get('space_before_pt', 4)))
 
         body_h = h - (content_y - y)
 
-        # Auto-fit font size to fill the available body area
-        if points:
-            line_h_in   = (b_size / 72.0) * 1.25          # font height + leading
-            space_h_in  = space_bef_pt / 72.0              # space_before per paragraph
-            total_h_est = len(points) * line_h_in + len(points) * space_h_in
-            if total_h_est > 0:
-                scale  = (body_h * 0.88) / total_h_est
-                b_size = max(8, min(28, round(b_size * scale)))
+        # Auto-fit: scale b_size so text fills body_h
+        line_h_in   = (b_size / 72.0) * 1.25
+        space_h_in  = space_bef_pt / 72.0
+        total_h_est = len(points) * (line_h_in + space_h_in)
+        if total_h_est > 0:
+            b_size = max(8, min(28, round(b_size * (body_h * 0.88 / total_h_est))))
 
-        # Scale inter-bullet spacing proportionally to available height per slot
-        if points and len(points) > 0:
-            slot_h_in    = body_h / len(points)
-            dynamic_gap  = max(2, min(14, int(slot_h_in * 72 * 0.18)))
-            space_bef_pt = max(space_bef_pt, dynamic_gap)
+        # Scale inter-bullet gap to available height per slot
+        slot_h_in    = body_h / len(points)
+        dynamic_gap  = max(2, min(14, int(slot_h_in * 72 * 0.18)))
+        space_bef_pt = max(space_bef_pt, dynamic_gap)
 
-        # Build per-point markers
+        # Scale heading font proportionally to body size
+        if _h_params:
+            spec_body          = bs.get('font_size', 10)
+            _h_params['size']  = max(10, round(_h_params['size'] * (b_size / max(spec_body, 1))))
+
+    # Render heading now (font size finalised)
+    if _h_params:
+        add_text_box(slide, x, y + TOP_PAD * 0.25, w, 0.34,
+                     str(heading), _h_params['font'], _h_params['size'],
+                     _h_params['bold'], _h_params['color'], 'left', 'middle')
+
+    # ── Native OOXML bullet helpers ──────────────────────────────────────────
+    def _strip_marker(s):
+        s = str(s)
+        return s[1:].lstrip() if s[:1] in ('✓', '✗', '→', '•') else s
+
+    def _bullet_char(point, idx):
+        s = str(point)
         if list_style == 'tick_cross':
-            markers = []
-            for raw in points:
-                s = str(raw)
-                if s[:1] in ('✓', '✗', '→'):
-                    markers.append('')        # already marked
-                elif any(neg in s.lower() for neg in
-                         ['not ', 'no ', 'declin', 'risk', 'fail', 'loss', 'below', 'miss']):
-                    markers.append('✗ ')
-                else:
-                    markers.append('✓ ')
-        elif list_style == 'numbered':
-            markers = [str(i + 1) + '. ' for i in range(len(points))]
-        else:
-            markers = ['• ' for _ in points]
+            if s[:1] in ('✓', '✗', '→'):
+                return s[:1]
+            return '✗' if any(neg in s.lower() for neg in
+                ['not ', 'no ', 'declin', 'risk', 'fail', 'loss', 'below', 'miss']) else '✓'
+        if list_style == 'numbered':
+            return str(idx + 1) + '.'
+        return '•'
 
-        def _strip_leading_marker(text):
-            s = str(text)
-            if s[:1] in ('✓', '✗', '→', '•'):
-                return s[1:].lstrip()
-            return s
+    def _set_bullet(pPr, bchar, hang_emu):
+        """Apply native OOXML hanging-indent bullet to an <a:pPr> element."""
+        for tag in [nsmap.qn('a:buNone'), nsmap.qn('a:buChar'),
+                    nsmap.qn('a:buAutoNum'), nsmap.qn('a:buFont')]:
+            for el in pPr.findall(tag):
+                pPr.remove(el)
+        pPr.set('marL',   str(hang_emu))
+        pPr.set('indent', str(-hang_emu))
+        buFont = etree.SubElement(pPr, nsmap.qn('a:buFont'))
+        buFont.set('typeface', b_font)
+        buChar = etree.SubElement(pPr, nsmap.qn('a:buChar'))
+        buChar.set('char', bchar)
 
-        BULLET_HANG = 0.16   # inches — wrapped lines align with text after marker
-        if vert_dist == 'spread' and len(points) > 0:
+    if points:
+        BULLET_HANG = 0.22   # inches — bullet hangs left; text wraps at this indent
+        _hang_emu   = int(Emu(inches(BULLET_HANG)))
+
+        if vert_dist == 'spread':
             # One text box per point, evenly distributed vertically
             slot_h = body_h / len(points)
             for i, point in enumerate(points):
-                line = markers[i] + _strip_leading_marker(point)
-                add_text_box(slide,
-                             x + indent_in, content_y + i * slot_h,
-                             w - indent_in, slot_h * 0.92,
-                             line, b_font, b_size, False, b_color, 'left', 'top',
-                             hanging_in=BULLET_HANG)
+                tb  = add_text_box(slide,
+                                   x + indent_in, content_y + i * slot_h,
+                                   w - indent_in, slot_h * 0.92,
+                                   _strip_marker(point), b_font, b_size,
+                                   False, b_color, 'left', 'top')
+                pPr = tb.text_frame.paragraphs[0]._p.get_or_add_pPr()
+                _set_bullet(pPr, _bullet_char(point, i), _hang_emu)
         else:
             # All points in a single text box
             txBox = slide.shapes.add_textbox(
@@ -467,7 +488,6 @@ def render_insight_text(slide, artifact, bt, suppress_heading=False):
             tf = txBox.text_frame
             enable_text_fit(tf)
 
-            _hang_emu = int(Emu(inches(BULLET_HANG)))
             first = True
             for i, point in enumerate(points):
                 if first:
@@ -476,48 +496,121 @@ def render_insight_text(slide, artifact, bt, suppress_heading=False):
                 else:
                     p_obj = tf.add_paragraph()
                 p_obj.space_before = pt(space_bef_pt)
-                # Hanging indent: continuation lines align with text after bullet marker
                 pPr = p_obj._p.get_or_add_pPr()
-                pPr.set('marL',   str(_hang_emu))
-                pPr.set('indent', str(-_hang_emu))
+                _set_bullet(pPr, _bullet_char(point, i), _hang_emu)
                 run = p_obj.add_run()
-                run.text = markers[i] + _strip_leading_marker(point)
+                run.text = _strip_marker(point)
                 set_font(run, b_font, b_size, False, False, b_color)
 
 
-def render_chart(slide, artifact, bt):
-    """Render a chart artifact using python-pptx native charts."""
+def _apply_dual_axis(chart, secondary_series_names):
+    """Post-process a clustered column chart XML to move named series onto a secondary
+    line-chart plot with its own right-hand Y axis.
+
+    python-pptx does not natively support combo charts, so we manipulate the XML directly.
+    After this call the chart has two plot elements: barChart (primary) + lineChart (secondary).
+    """
+    plot_area = chart._element.find(nsmap.qn('c:plotArea'))
+    if plot_area is None:
+        return
+
+    bar_chart = plot_area.find(nsmap.qn('c:barChart'))
+    if bar_chart is None:
+        return
+
+    # Grab existing axId values (catAx id, primary valAx id)
+    ax_id_els = bar_chart.findall(nsmap.qn('c:axId'))
+    if len(ax_id_els) < 2:
+        return
+    cat_ax_id     = ax_id_els[0].get('val')
+    prim_val_ax_id = ax_id_els[1].get('val')
+    sec_val_ax_id  = str(int(prim_val_ax_id) + 1)   # unique secondary ID
+
+    # Pull matching series elements out of barChart
+    sec_ser_els = []
+    for ser_el in list(bar_chart.findall(nsmap.qn('c:ser'))):
+        tx = ser_el.find('.//' + nsmap.qn('c:v'))
+        if tx is not None and tx.text in secondary_series_names:
+            bar_chart.remove(ser_el)
+            sec_ser_els.append(ser_el)
+
+    if not sec_ser_els:
+        return   # nothing matched — leave chart unchanged
+
+    # Re-index remaining bar series
+    for idx, ser_el in enumerate(bar_chart.findall(nsmap.qn('c:ser'))):
+        for tag in (nsmap.qn('c:idx'), nsmap.qn('c:order')):
+            el = ser_el.find(tag)
+            if el is not None:
+                el.set('val', str(idx))
+
+    # Build lineChart element for secondary series
+    line_chart = etree.SubElement(plot_area, nsmap.qn('c:lineChart'))
+    etree.SubElement(line_chart, nsmap.qn('c:grouping')).set('val', 'standard')
+    etree.SubElement(line_chart, nsmap.qn('c:varyColors')).set('val', '0')
+
+    prim_bar_count = len(bar_chart.findall(nsmap.qn('c:ser')))
+    for idx, ser_el in enumerate(sec_ser_els):
+        for tag in (nsmap.qn('c:idx'), nsmap.qn('c:order')):
+            el = ser_el.find(tag)
+            if el is not None:
+                el.set('val', str(prim_bar_count + idx))
+        line_chart.append(ser_el)
+
+    etree.SubElement(line_chart, nsmap.qn('c:marker')).set('val', '1')
+    etree.SubElement(line_chart, nsmap.qn('c:smooth')).set('val', '0')
+    etree.SubElement(line_chart, nsmap.qn('c:axId')).set('val', cat_ax_id)
+    etree.SubElement(line_chart, nsmap.qn('c:axId')).set('val', sec_val_ax_id)
+
+    # Add secondary valAx after existing valAx
+    sec_val_ax = etree.SubElement(plot_area, nsmap.qn('c:valAx'))
+    etree.SubElement(sec_val_ax, nsmap.qn('c:axId')).set('val', sec_val_ax_id)
+    scaling = etree.SubElement(sec_val_ax, nsmap.qn('c:scaling'))
+    etree.SubElement(scaling, nsmap.qn('c:orientation')).set('val', 'minMax')
+    etree.SubElement(sec_val_ax, nsmap.qn('c:delete')).set('val', '0')
+    etree.SubElement(sec_val_ax, nsmap.qn('c:axPos')).set('val', 'r')
+    etree.SubElement(sec_val_ax, nsmap.qn('c:crossAx')).set('val', cat_ax_id)
+    etree.SubElement(sec_val_ax, nsmap.qn('c:crosses')).set('val', 'max')
+    etree.SubElement(sec_val_ax, nsmap.qn('c:crossBetween')).set('val', 'between')
+
+
+def render_chart(slide, artifact, bt, suppress_heading=False):
+    """Render a chart artifact using python-pptx native charts.
+
+    suppress_heading — when True the artifact heading was already written to a layout
+                       placeholder; the internal chart title is suppressed.
+    """
     x  = artifact.get('x', 0)
     y  = artifact.get('y', 0)
     w  = artifact.get('w', 5)
     h  = artifact.get('h', 3)
 
-    chart_type_str = artifact.get('chart_type', 'bar')
-    categories     = artifact.get('categories', [])
-    series_data    = artifact.get('series', [])
-    chart_title    = artifact.get('chart_title', '')
-    x_label        = artifact.get('x_label', '')
-    y_label        = artifact.get('y_label', '')
-    show_labels    = artifact.get('show_data_labels', True)
-    show_legend    = artifact.get('show_legend', False)
-    series_styles  = artifact.get('series_style', [])
-    cs             = artifact.get('chart_style', {})
-    chart_palette  = bt.get('chart_palette', ['#0F2FB5', '#FF8E00', '#2D962D', '#D60202'])
+    chart_type_str  = artifact.get('chart_type', 'bar')
+    categories      = artifact.get('categories', [])
+    series_data     = artifact.get('series', [])
+    chart_title     = artifact.get('chart_title', '')
+    show_labels     = artifact.get('show_data_labels', True)
+    show_legend     = artifact.get('show_legend', False)
+    series_styles   = artifact.get('series_style', [])
+    cs              = artifact.get('chart_style', {})
+    dual_axis       = artifact.get('dual_axis', False)
+    secondary_names = set(artifact.get('secondary_series', []))
+    chart_palette   = bt.get('chart_palette', ['#0F2FB5', '#FF8E00', '#2D962D', '#D60202'])
 
     # Map chart type string to XL_CHART_TYPE
     chart_type_map = {
-        'bar':          XL_CHART_TYPE.COLUMN_CLUSTERED,
-        'clustered_bar':XL_CHART_TYPE.COLUMN_CLUSTERED,
-        'line':         XL_CHART_TYPE.LINE,
-        'pie':          XL_CHART_TYPE.PIE,
-        'waterfall':    XL_CHART_TYPE.COLUMN_CLUSTERED,  # approximate
+        'bar':           XL_CHART_TYPE.COLUMN_CLUSTERED,
+        'clustered_bar': XL_CHART_TYPE.COLUMN_CLUSTERED,
+        'horizontal_bar':XL_CHART_TYPE.BAR_CLUSTERED,
+        'line':          XL_CHART_TYPE.LINE,
+        'pie':           XL_CHART_TYPE.PIE,
+        'waterfall':     XL_CHART_TYPE.COLUMN_CLUSTERED,
     }
     xl_type = chart_type_map.get(chart_type_str, XL_CHART_TYPE.COLUMN_CLUSTERED)
 
     if not categories or not series_data:
-        # No data — draw placeholder
         add_filled_rect(slide, x, y, w, h, fill_hex='#F0F4FF', border_hex='#C0C8E0', border_pt=1)
-        add_text_box(slide, x + 0.1, y + h/2 - 0.2, w - 0.2, 0.4,
+        add_text_box(slide, x + 0.1, y + h / 2 - 0.2, w - 0.2, 0.4,
                      'Chart: ' + chart_type_str + ' (no data)', 'Arial', 10,
                      False, '#888888', 'center', 'middle')
         return
@@ -525,25 +618,28 @@ def render_chart(slide, artifact, bt):
     # Build ChartData
     cd = ChartData()
     cd.categories = [str(c) for c in categories]
-
     for si, ser in enumerate(series_data):
         ser_name   = ser.get('name', 'Series ' + str(si + 1))
         ser_values = [float(v) if v is not None else 0 for v in (ser.get('values') or [])]
-        # Pad/trim to match category count
         while len(ser_values) < len(categories): ser_values.append(0)
-        ser_values = ser_values[:len(categories)]
-        cd.add_series(ser_name, ser_values)
+        cd.add_series(ser_name, ser_values[:len(categories)])
 
     # Add chart
     chart = slide.shapes.add_chart(
-        xl_type,
-        inches(x), inches(y), inches(w), inches(h),
-        cd
+        xl_type, inches(x), inches(y), inches(w), inches(h), cd
     ).chart
 
-    # Title
-    chart.has_title = bool(chart_title)
-    if chart_title:
+    # Apply dual-axis layout (barChart primary + lineChart secondary with right Y axis)
+    if dual_axis and secondary_names and chart_type_str not in ('pie', 'line'):
+        try:
+            _apply_dual_axis(chart, secondary_names)
+        except Exception as e:
+            print('dual axis error:', e)
+
+    # Title — suppress when the zone header placeholder already carries the label
+    show_title = bool(chart_title) and not suppress_heading
+    chart.has_title = show_title
+    if show_title:
         chart.chart_title.text_frame.text = str(chart_title)
         try:
             tf_run = chart.chart_title.text_frame.paragraphs[0].runs[0]
@@ -555,59 +651,60 @@ def render_chart(slide, artifact, bt):
         except Exception:
             pass
 
-    # Legend
+    # Legend — position based on frame dimensions
+    # Vertically stretched (tall, narrow): legend on top; everything else: right
+    SLIDE_W, SLIDE_H = 10.0, 7.5
+    legend_pos = 4   # right (XL_LEGEND_POSITION.RIGHT = 4)
+    if h > SLIDE_H * 0.6 and w <= SLIDE_W * 0.6:
+        legend_pos = 1   # top (XL_LEGEND_POSITION.TOP = 1)
+
     chart.has_legend = show_legend
     if show_legend and chart.has_legend:
         try:
-            chart.legend.position = 2  # bottom
+            chart.legend.position = legend_pos
             chart.legend.include_in_layout = False
         except Exception:
             pass
 
-    # Series colors
+    # Series colors + data labels
     try:
         for si, ser_obj in enumerate(chart.series):
             color_hex = None
             if si < len(series_styles):
                 color_hex = series_styles[si].get('fill_color')
-            if not color_hex and si < len(chart_palette):
-                color_hex = chart_palette[si]
-            if color_hex:
-                pt_obj = ser_obj.format.fill
-                pt_obj.solid()
-                pt_obj.fore_color.rgb = hex_to_rgb(color_hex)
-            # Data labels
+            if not color_hex:
+                color_hex = chart_palette[si % len(chart_palette)]
+            try:
+                ser_obj.format.fill.solid()
+                ser_obj.format.fill.fore_color.rgb = hex_to_rgb(color_hex)
+            except Exception:
+                pass
             if show_labels:
                 try:
                     ser_obj.data_labels.show_value = True
-                    if si < len(series_styles):
-                        lbl_color = series_styles[si].get('data_label_color', '#000000')
-                        for lbl in ser_obj.data_labels:
-                            try:
-                                lbl.font.color.rgb = hex_to_rgb(lbl_color)
-                                lbl.font.size = Pt(8)
-                            except Exception:
-                                pass
+                    lbl_color = (series_styles[si].get('data_label_color', '#000000')
+                                 if si < len(series_styles) else '#000000')
+                    for lbl in ser_obj.data_labels:
+                        try:
+                            lbl.font.color.rgb = hex_to_rgb(lbl_color)
+                            lbl.font.size = Pt(8)
+                        except Exception:
+                            pass
                 except Exception:
                     pass
     except Exception:
         pass
 
-    # Pie charts: color each slice (data point) individually from the palette
-    # A pie chart has one series but N data points — the series-level loop above
-    # gives the whole pie one color; this block overrides each point separately.
+    # Pie: color each slice individually
     if chart_type_str == 'pie':
         try:
             for ser_obj in chart.series:
                 for pi, point_obj in enumerate(ser_obj.points):
-                    color_hex = None
-                    if pi < len(series_styles):
-                        color_hex = series_styles[pi].get('fill_color')
-                    if not color_hex and pi < len(chart_palette):
-                        color_hex = chart_palette[pi]
-                    if color_hex:
-                        point_obj.format.fill.solid()
-                        point_obj.format.fill.fore_color.rgb = hex_to_rgb(color_hex)
+                    c_hex = (series_styles[pi].get('fill_color')
+                             if pi < len(series_styles) else None) or \
+                            chart_palette[pi % len(chart_palette)]
+                    point_obj.format.fill.solid()
+                    point_obj.format.fill.fore_color.rgb = hex_to_rgb(c_hex)
         except Exception:
             pass
 
@@ -617,7 +714,7 @@ def render_chart(slide, artifact, bt):
         ax_color     = cs.get('axis_color', '#000000')
         for ax in (chart.category_axis, chart.value_axis):
             try:
-                ax.tick_labels.font.size  = Pt(ax_font_size)
+                ax.tick_labels.font.size      = Pt(ax_font_size)
                 ax.tick_labels.font.color.rgb = hex_to_rgb(ax_color)
             except Exception:
                 pass
@@ -952,7 +1049,8 @@ def render_artifact(slide, artifact, bt, ph_idx=None, header_ph_idx=None):
     try:
         if   t == 'insight_text': render_insight_text(slide, artifact, bt,
                                                        suppress_heading=heading_handled)
-        elif t == 'chart':        render_chart(slide, artifact, bt)
+        elif t == 'chart':        render_chart(slide, artifact, bt,
+                                               suppress_heading=heading_handled)
         elif t == 'cards':        render_cards(slide, artifact, bt)
         elif t == 'workflow':     render_workflow(slide, artifact, bt)
         elif t == 'table':        render_table(slide, artifact, bt)
