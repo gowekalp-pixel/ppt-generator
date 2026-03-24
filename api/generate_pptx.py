@@ -839,27 +839,55 @@ def render_cards(slide, artifact, bt):
             'neutral':  None,
         }
         accent = _SENTIMENT_ACCENT.get(sentiment) or ts.get('color', bt.get('primary_color', '#1A3C8F'))
-        add_filled_rect(slide, fx, fy, fw, 0.055, fill_hex=accent)
+        accent_h = 0.055
+        add_filled_rect(slide, fx, fy, fw, accent_h, fill_hex=accent)
 
-        # Title
+        # Proportional inner layout — works for any card height
+        inner_top = fy + accent_h + padding
+        inner_h   = fh - accent_h - 2 * padding
+
         card_title = card.get('title', '')
-        if card_title:
-            add_text_box(slide, fx + padding, fy + 0.08, fw - padding*2, 0.45,
-                         str(card_title), t_font, t_size, t_bold, t_color, 'left', 'top')
+        card_sub   = card.get('subtitle', '')
+        card_body  = card.get('body', '')
 
-        # Subtitle
-        card_sub = card.get('subtitle', '')
-        if card_sub:
-            add_text_box(slide, fx + padding, fy + 0.52, fw - padding*2, 0.30,
-                         str(card_sub), su_font, su_size, False, su_color, 'left', 'top')
+        has_sub  = bool(card_sub)
+        has_body = bool(card_body)
 
-        # Body
-        card_body = card.get('body', '')
-        body_y = fy + (0.85 if card_sub else 0.56)
-        body_h = fh - (body_y - fy) - padding
-        if card_body and body_h > 0.1:
-            add_text_box(slide, fx + padding, body_y, fw - padding*2, body_h,
-                         str(card_body), b_font, b_size, False, b_color, 'left', 'top')
+        if inner_h > 0.05:
+            if has_sub and has_body:
+                title_h = inner_h * 0.28
+                sub_h   = inner_h * 0.38
+                body_h  = inner_h - title_h - sub_h
+            elif has_sub:
+                title_h = inner_h * 0.40
+                sub_h   = inner_h * 0.60
+                body_h  = 0
+            elif has_body:
+                title_h = inner_h * 0.35
+                sub_h   = 0
+                body_h  = inner_h - title_h
+            else:
+                title_h = inner_h
+                sub_h   = 0
+                body_h  = 0
+
+            # Scale subtitle font so it fits within its allocated slot
+            actual_su_size = min(su_size, max(8, int(sub_h * 72 * 0.82))) if sub_h > 0 else su_size
+
+            cur_y = inner_top
+            if card_title:
+                add_text_box(slide, fx + padding, cur_y, fw - padding*2, title_h,
+                             str(card_title), t_font, t_size, t_bold, t_color, 'left', 'top')
+            cur_y += title_h
+
+            if card_sub and sub_h > 0:
+                add_text_box(slide, fx + padding, cur_y, fw - padding*2, sub_h,
+                             str(card_sub), su_font, actual_su_size, False, su_color, 'left', 'top')
+            cur_y += sub_h
+
+            if card_body and body_h > 0.05:
+                add_text_box(slide, fx + padding, cur_y, fw - padding*2, body_h,
+                             str(card_body), b_font, b_size, False, b_color, 'left', 'top')
 
 
 def render_workflow(slide, artifact, bt):
@@ -1173,6 +1201,28 @@ def _write_speaker_note(slide, note_text):
             pass
 
 
+def _blank_content_placeholders(slide):
+    """
+    Before rendering artifacts: blank all non-system placeholder text.
+
+    Layout templates often have descriptive default text in their content/body
+    placeholders (e.g. "z1 · summary", "primary zone label") baked in for design
+    reference.  We blank these upfront so any that aren't explicitly written to
+    during artifact rendering will be removed by _remove_empty_placeholders later.
+    Placeholders that ARE written to (e.g. heading slots via _write_heading_to_header_ph)
+    will have non-empty text and will be kept.
+    """
+    from pptx.enum.shapes import PP_PLACEHOLDER as _PH
+    _SYSTEM_TYPES = {_PH.TITLE, _PH.CENTER_TITLE, _PH.SUBTITLE,
+                     _PH.DATE, _PH.FOOTER, _PH.SLIDE_NUMBER}
+    for ph in list(slide.placeholders):
+        try:
+            if ph.placeholder_format.type not in _SYSTEM_TYPES:
+                ph.text_frame.text = ''
+        except Exception:
+            pass
+
+
 def _remove_empty_placeholders(slide):
     """
     Remove placeholder shapes that carry no content.
@@ -1308,6 +1358,9 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
     slide = prs.slides.add_slide(layout)
     if use_template:
         _sanitise_system_placeholders(slide, slide_spec.get('slide_number', ''))
+        # Blank all non-system placeholders upfront so any that aren't explicitly
+        # written to during rendering will be removed by _remove_empty_placeholders.
+        _blank_content_placeholders(slide)
 
     # ── Background (scratch only — master handles it in template mode) ────────
     if not use_template:
