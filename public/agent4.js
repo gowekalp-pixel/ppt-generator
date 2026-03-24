@@ -683,16 +683,20 @@ function normaliseSlide(slide, plan) {
 
   let zones = []
 
-  if (slide.zones && Array.isArray(slide.zones) && slide.zones.length > 0) {
-    zones = slide.zones.map(normaliseZone).filter(Boolean)
-  } else {
-    // Build default zones from archetype
-    const archetype = slide.slide_archetype || inferArchetype(plan.section_type, plan.slide_index_in_section || 0)
-    zones = defaultZonesForArchetype(archetype).map(normaliseZone).filter(Boolean)
-  }
+  // Title and Divider slides must never have zones — enforce unconditionally
+  // regardless of what Claude returned.
+  if (slideType !== 'title' && slideType !== 'divider') {
+    if (slide.zones && Array.isArray(slide.zones) && slide.zones.length > 0) {
+      zones = slide.zones.map(normaliseZone).filter(Boolean)
+    } else {
+      // Build default zones from archetype
+      const archetype = slide.slide_archetype || inferArchetype(plan.section_type, plan.slide_index_in_section || 0)
+      zones = defaultZonesForArchetype(archetype).map(normaliseZone).filter(Boolean)
+    }
 
-  // Cap at 4 zones
-  zones = zones.slice(0, 4)
+    // Cap at 4 zones
+    zones = zones.slice(0, 4)
+  }
 
   return {
     slide_number:                 slide.slide_number                 || plan.slide_number,
@@ -775,7 +779,15 @@ AVAILABLE BRAND LAYOUTS (${layoutNames.length}): ${hasLayouts
   ? layoutNames.join(' | ')
   : layoutNames.length > 0 ? layoutNames.join(' | ') + ' — too few layouts; use layout_hint splits for zone geometry'
   : 'none — use layout_hint splits for zone geometry'}
-${hasLayouts ? 'Select the best layout name per slide. Set layout_hint.split = "full" for all zones (Agent 5 uses selected_layout_name for positioning).' : ''}
+
+${hasLayouts
+  ? `*** LAYOUT MODE ACTIVE — ${layoutNames.length} content layouts provided ***
+For EVERY content slide you write:
+  1. Set selected_layout_name to the best-matching layout name from the list above.
+  2. Set layout_hint.split = "full" for ALL zones on that slide.
+  3. Do NOT use split values like left_50, right_50, etc. — those are only for scratch mode.
+Title and divider slides: set selected_layout_name = "" (pipeline assigns their layouts).`
+  : '*** SCRATCH MODE — fewer than 5 content layouts; use layout_hint splits for zone geometry ***'}
 
 SLIDES TO WRITE — batch ${batchNum} (${batchPlan.length} slides):
 ${JSON.stringify(batchPlan, null, 2)}
@@ -801,18 +813,46 @@ INSTRUCTIONS:
     ]
   }]
 
-  const raw    = await callClaude(AGENT4_SYSTEM, messages, 2600)
+  const raw    = await callClaude(AGENT4_SYSTEM, messages, 5000)
   const parsed = safeParseJSON(raw, null)
 
   if (!Array.isArray(parsed)) {
-    console.warn('Agent 4 batch', batchNum, '— parse failed, raw length:', raw.length)
+    console.warn('Agent 4 batch', batchNum, '— parse failed, raw length:', raw.length,
+      '| first 300:', raw.slice(0, 300))
     return null
+  }
+
+  // Warn if Claude returned fewer slides than requested (token truncation sign)
+  if (parsed.length < batchPlan.length) {
+    console.warn('Agent 4 batch', batchNum, '— expected', batchPlan.length,
+      'slides but got', parsed.length, '— some may be missing')
   }
 
   console.log('Agent 4 batch', batchNum, '— got', parsed.length, 'slides')
   return parsed
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LAYOUT PICKER — maps zone count to a best-effort layout name
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function pickBestLayout(slide, layoutNames) {
+  const zoneCount = (slide.zones || []).length || 1
+  // Ordered preference patterns per zone count (matched against layout names)
+  const byCount = {
+    1: [/1\s*across|body.?text|single|1\s*col/i],
+    2: [/2\s*across|1.?on.?1|left.?right|2.?col/i],
+    3: [/3\s*across|1.?on.?2|2.?on.?1/i],
+    4: [/2.?on.?2|3.?on.?3|four/i]
+  }
+  const patterns = byCount[Math.min(zoneCount, 4)] || byCount[1]
+  for (const pat of patterns) {
+    const hit = layoutNames.find(n => pat.test(n))
+    if (hit) return hit
+  }
+  return layoutNames[0] || ''
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // REPAIR
@@ -852,7 +892,7 @@ Fix rules:
     ]
   }]
 
-  const raw     = await callClaude(AGENT4_SYSTEM, messages, 900)
+  const raw     = await callClaude(AGENT4_SYSTEM, messages, 2000)
   const cleaned = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
 
   try {
@@ -928,19 +968,55 @@ async function runAgent4(state) {
     }
   }
 
+  // Layout-mode enforcement: when 5+ content layouts exist every content slide must
+  // have selected_layout_name set.  Claude sometimes misses this — fill gaps here.
+  const hasLayouts = layoutNames.length >= 5
+  if (hasLayouts) {
+    allSlides = allSlides.map(s => {
+      if (s.slide_type === 'content' && !s.selected_layout_name) {
+        const assigned = pickBestLayout(s, layoutNames)
+        console.log('  Auto-assigned layout for slide', s.slide_number, '→', assigned)
+        return { ...s, selected_layout_name: assigned }
+      }
+      return s
+    })
+  }
+
   // Validate and repair
   const failed = allSlides.filter(s => hasPlaceholderContent(s))
   console.log('  Slides needing repair:', failed.length)
 
-  for (const slide of failed.slice(0, 2)) {
-    const repaired = await repairSlide(slide, brief, contentB64, layoutNames)
-    if (repaired) {
-      const idx = allSlides.findIndex(s => s.slide_number === slide.slide_number)
-      if (idx >= 0) {
-        allSlides[idx] = normaliseSlide(repaired, slidePlan.find(p => p.slide_number === slide.slide_number) || {})
-        console.log('  Repaired slide', slide.slide_number)
+  // Repair in groups of 2 — each repair re-sends the PDF so we observe the same
+  // 30k TPM rate limit as the main batches.  Pause 65 s between groups.
+  const REPAIR_GROUP = 2
+  for (let ri = 0; ri < failed.length; ri += REPAIR_GROUP) {
+    if (ri > 0) {
+      console.log('Agent 4 — rate-limit pause 65 s before repair group', Math.floor(ri / REPAIR_GROUP) + 1)
+      await new Promise(r => setTimeout(r, 65000))
+    }
+    const group = failed.slice(ri, ri + REPAIR_GROUP)
+    for (const slide of group) {
+      const repaired = await repairSlide(slide, brief, contentB64, layoutNames)
+      if (repaired) {
+        const idx = allSlides.findIndex(s => s.slide_number === slide.slide_number)
+        if (idx >= 0) {
+          allSlides[idx] = normaliseSlide(repaired, slidePlan.find(p => p.slide_number === slide.slide_number) || {})
+          console.log('  Repaired slide', slide.slide_number)
+        }
       }
     }
+  }
+
+  // Second enforcement pass: repaired slides may still be missing selected_layout_name
+  if (hasLayouts) {
+    allSlides = allSlides.map(s => {
+      if (s.slide_type === 'content' && !s.selected_layout_name) {
+        const assigned = pickBestLayout(s, layoutNames)
+        console.log('  Post-repair layout assignment for slide', s.slide_number, '→', assigned)
+        return { ...s, selected_layout_name: assigned }
+      }
+      return s
+    })
   }
 
   // Summary log
