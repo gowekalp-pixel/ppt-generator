@@ -1201,24 +1201,38 @@ def _write_speaker_note(slide, note_text):
             pass
 
 
-def _blank_content_placeholders(slide):
+def _remove_content_placeholders(slide, keep_indices=None):
     """
-    Before rendering artifacts: blank all non-system placeholder text.
+    Upfront removal of non-system content/body placeholders from the slide XML.
 
-    Layout templates often have descriptive default text in their content/body
-    placeholders (e.g. "z1 · summary", "primary zone label") baked in for design
-    reference.  We blank these upfront so any that aren't explicitly written to
-    during artifact rendering will be removed by _remove_empty_placeholders later.
-    Placeholders that ARE written to (e.g. heading slots via _write_heading_to_header_ph)
-    will have non-empty text and will be kept.
+    Layout templates often have descriptive default text baked into their
+    content placeholders (e.g. "z1 · summary", "primary") for design guidance.
+    Setting text = '' is unreliable because python-pptx may fall through to the
+    layout's inherited txBody.  The only guaranteed fix is to remove the
+    placeholder shape element from the slide's spTree entirely.
+
+    keep_indices — set of placeholder.idx values to PRESERVE (these will be
+                   written to by _write_heading_to_header_ph for heading text).
+                   All other non-system placeholders are removed.
     """
     from pptx.enum.shapes import PP_PLACEHOLDER as _PH
     _SYSTEM_TYPES = {_PH.TITLE, _PH.CENTER_TITLE, _PH.SUBTITLE,
                      _PH.DATE, _PH.FOOTER, _PH.SLIDE_NUMBER}
+    keep_indices = keep_indices or set()
+
+    sp_tree = slide.shapes._spTree
+    to_remove = []
     for ph in list(slide.placeholders):
         try:
-            if ph.placeholder_format.type not in _SYSTEM_TYPES:
-                ph.text_frame.text = ''
+            ph_type = ph.placeholder_format.type
+            ph_idx  = ph.placeholder_format.idx
+            if ph_type not in _SYSTEM_TYPES and ph_idx not in keep_indices:
+                to_remove.append(ph._element)
+        except Exception:
+            pass
+    for elem in to_remove:
+        try:
+            sp_tree.remove(elem)
         except Exception:
             pass
 
@@ -1358,9 +1372,15 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
     slide = prs.slides.add_slide(layout)
     if use_template:
         _sanitise_system_placeholders(slide, slide_spec.get('slide_number', ''))
-        # Blank all non-system placeholders upfront so any that aren't explicitly
-        # written to during rendering will be removed by _remove_empty_placeholders.
-        _blank_content_placeholders(slide)
+        # Collect header placeholder indices we will explicitly write heading text to.
+        # These must survive; all other non-system content placeholders are removed
+        # upfront so their layout-inherited text cannot ghost over the slide.
+        _header_ph_keep = set()
+        for _z in slide_spec.get('zones', []):
+            _hpi = _z.get('header_ph_idx')
+            if _hpi is not None:
+                _header_ph_keep.add(int(_hpi))
+        _remove_content_placeholders(slide, keep_indices=_header_ph_keep)
 
     # ── Background (scratch only — master handles it in template mode) ────────
     if not use_template:
@@ -1441,9 +1461,17 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
     for zone in slide_spec.get('zones', []):
         # In layout mode, each zone may have a paired header placeholder
         hdr_ph_idx = zone.get('header_ph_idx') if layout_mode else None
-        for artifact in zone.get('artifacts', []):
-            # In layout mode pass placeholder_idx so renderer uses layout bounds
-            ph_idx = artifact.get('placeholder_idx') if layout_mode else None
+        zone_artifacts = zone.get('artifacts', [])
+        for artifact in zone_artifacts:
+            if layout_mode:
+                # Only use placeholder bounds to override coordinates when the zone has
+                # exactly ONE artifact — that artifact maps 1:1 to its placeholder slot.
+                # For multi-artifact zones, Agent 5's explicit x/y/w/h are authoritative
+                # (multiple artifacts cannot all share one placeholder's bounds).
+                use_ph_bounds = len(zone_artifacts) == 1
+                ph_idx = artifact.get('placeholder_idx') if use_ph_bounds else None
+            else:
+                ph_idx = None
             render_artifact(slide, artifact, bt, ph_idx=ph_idx, header_ph_idx=hdr_ph_idx)
 
     # ── Global elements (scratch only) ────────────────────────────────────────
