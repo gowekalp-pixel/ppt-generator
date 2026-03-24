@@ -167,8 +167,12 @@ def add_image_box(slide, image_b64, x, y, w, h):
 
 def add_text_box(slide, x, y, w, h, text, font_family='Arial', font_size=12,
                  bold=False, color_hex='#111111', align='left', valign='top',
-                 wrap=True, italic=False):
-    """Add a text box to a slide with full formatting."""
+                 wrap=True, italic=False, hanging_in=0.0):
+    """Add a text box to a slide with full formatting.
+
+    hanging_in — if > 0, applies a hanging indent so that wrapped lines align
+                 with the character after the bullet marker.
+    """
     txBox = slide.shapes.add_textbox(inches(x), inches(y), inches(w), inches(h))
     tf    = txBox.text_frame
     tf.word_wrap = wrap
@@ -188,6 +192,14 @@ def add_text_box(slide, x, y, w, h, text, font_family='Arial', font_size=12,
     p.alignment = align_map.get(align, PP_ALIGN.LEFT)
 
     set_font(run, font_family, font_size, bold, italic, color_hex)
+
+    # Hanging indent: all continuation lines align with text after bullet
+    if hanging_in > 0:
+        _mar = int(Emu(inches(hanging_in)))
+        pPr  = p._p.get_or_add_pPr()
+        pPr.set('marL',   str(_mar))
+        pPr.set('indent', str(-_mar))
+
     return txBox
 
 def add_filled_rect(slide, x, y, w, h, fill_hex=None, border_hex=None,
@@ -374,7 +386,8 @@ def render_insight_text(slide, artifact, bt, suppress_heading=False):
                             border_hex=border, border_pt=bw, corner_radius=cr)
 
     # Heading row (only when heading text is present and not already in a layout placeholder)
-    content_y = y
+    TOP_PAD = 0.12   # breathing room between box top / slide header and first bullet
+    content_y = y + TOP_PAD
     if heading:
         h_font  = hs.get('font_family', bt.get('title_font_family', 'Arial'))
         h_size  = hs.get('font_size', 12)
@@ -402,8 +415,14 @@ def render_insight_text(slide, artifact, bt, suppress_heading=False):
             space_h_in  = space_bef_pt / 72.0              # space_before per paragraph
             total_h_est = len(points) * line_h_in + len(points) * space_h_in
             if total_h_est > 0:
-                scale       = (body_h * 0.88) / total_h_est
-                b_size      = max(8, min(28, round(b_size * scale)))
+                scale  = (body_h * 0.88) / total_h_est
+                b_size = max(8, min(28, round(b_size * scale)))
+
+        # Scale inter-bullet spacing proportionally to available height per slot
+        if points and len(points) > 0:
+            slot_h_in    = body_h / len(points)
+            dynamic_gap  = max(2, min(14, int(slot_h_in * 72 * 0.18)))
+            space_bef_pt = max(space_bef_pt, dynamic_gap)
 
         # Build per-point markers
         if list_style == 'tick_cross':
@@ -428,6 +447,7 @@ def render_insight_text(slide, artifact, bt, suppress_heading=False):
                 return s[1:].lstrip()
             return s
 
+        BULLET_HANG = 0.16   # inches — wrapped lines align with text after marker
         if vert_dist == 'spread' and len(points) > 0:
             # One text box per point, evenly distributed vertically
             slot_h = body_h / len(points)
@@ -436,7 +456,8 @@ def render_insight_text(slide, artifact, bt, suppress_heading=False):
                 add_text_box(slide,
                              x + indent_in, content_y + i * slot_h,
                              w - indent_in, slot_h * 0.92,
-                             line, b_font, b_size, False, b_color, 'left', 'top')
+                             line, b_font, b_size, False, b_color, 'left', 'top',
+                             hanging_in=BULLET_HANG)
         else:
             # All points in a single text box
             txBox = slide.shapes.add_textbox(
@@ -446,6 +467,7 @@ def render_insight_text(slide, artifact, bt, suppress_heading=False):
             tf = txBox.text_frame
             enable_text_fit(tf)
 
+            _hang_emu = int(Emu(inches(BULLET_HANG)))
             first = True
             for i, point in enumerate(points):
                 if first:
@@ -454,6 +476,10 @@ def render_insight_text(slide, artifact, bt, suppress_heading=False):
                 else:
                     p_obj = tf.add_paragraph()
                 p_obj.space_before = pt(space_bef_pt)
+                # Hanging indent: continuation lines align with text after bullet marker
+                pPr = p_obj._p.get_or_add_pPr()
+                pPr.set('marL',   str(_hang_emu))
+                pPr.set('indent', str(-_hang_emu))
                 run = p_obj.add_run()
                 run.text = markers[i] + _strip_leading_marker(point)
                 set_font(run, b_font, b_size, False, False, b_color)
