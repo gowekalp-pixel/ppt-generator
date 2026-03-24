@@ -346,8 +346,12 @@ def render_header_block(slide, header_block, bt):
 
 # ─── SLIDE RENDERERS ──────────────────────────────────────────────────────────
 
-def render_insight_text(slide, artifact, bt):
-    """Render an insight_text artifact."""
+def render_insight_text(slide, artifact, bt, suppress_heading=False):
+    """Render an insight_text artifact.
+
+    suppress_heading — when True, the heading was already written to a layout header
+                       placeholder; skip the inline heading rendering.
+    """
     x = artifact.get('x', 0)
     y = artifact.get('y', 0)
     w = artifact.get('w', 4)
@@ -356,20 +360,20 @@ def render_insight_text(slide, artifact, bt):
     style   = artifact.get('style', {})
     hs      = artifact.get('heading_style', {})
     bs      = artifact.get('body_style', {})
-    heading = artifact.get('heading', '')
+    heading = artifact.get('heading', '') if not suppress_heading else ''
     points  = artifact.get('points', [])
 
-    # Background fill + border
-    fill   = style.get('fill_color')
-    border = style.get('border_color')
-    bw     = style.get('border_width', 0)
-    cr     = style.get('corner_radius', 0)
+    # Background fill + border (skip in layout mode — template provides styling)
+    if not suppress_heading:
+        fill   = style.get('fill_color')
+        border = style.get('border_color')
+        bw     = style.get('border_width', 0)
+        cr     = style.get('corner_radius', 0)
+        if fill or (border and bw):
+            add_filled_rect(slide, x, y, w, h, fill_hex=fill,
+                            border_hex=border, border_pt=bw, corner_radius=cr)
 
-    if fill or (border and bw):
-        add_filled_rect(slide, x, y, w, h, fill_hex=fill,
-                        border_hex=border, border_pt=bw, corner_radius=cr)
-
-    # Heading row (only when heading text is present and no header_block handles it)
+    # Heading row (only when heading text is present and not already in a layout placeholder)
     content_y = y
     if heading:
         h_font  = hs.get('font_family', bt.get('title_font_family', 'Arial'))
@@ -835,12 +839,42 @@ def render_table(slide, artifact, bt):
         add_text_box(slide, x, y, w, h, all_text, 'Arial', 9, False, '#111111')
 
 
-def render_artifact(slide, artifact, bt, ph_idx=None):
+def _write_heading_to_header_ph(slide, heading_text, header_ph_idx, bt):
+    """Write heading text into the layout's paired header placeholder."""
+    if not heading_text or header_ph_idx is None:
+        return False
+    try:
+        for ph in slide.placeholders:
+            if ph.placeholder_format.idx == header_ph_idx:
+                ph.text_frame.text = str(heading_text)
+                try:
+                    run = ph.text_frame.paragraphs[0].runs[0]
+                    from pptx.util import Pt
+                    from pptx.dml.color import RGBColor
+                    run.font.name = bt.get('title_font_family', 'Arial')
+                    run.font.size = Pt(10)
+                    run.font.bold = True
+                    color_hex = bt.get('primary_color', '#1A3C8F').lstrip('#')
+                    run.font.color.rgb = RGBColor(
+                        int(color_hex[0:2], 16),
+                        int(color_hex[2:4], 16),
+                        int(color_hex[4:6], 16)
+                    )
+                except Exception:
+                    pass
+                return True
+    except Exception as e:
+        print(f'_write_heading_to_header_ph error (idx={header_ph_idx}):', e)
+    return False
+
+
+def render_artifact(slide, artifact, bt, ph_idx=None, header_ph_idx=None):
     """
     Dispatch to the correct renderer based on artifact type.
 
-    ph_idx — when set (layout mode), find that placeholder's bounding box and
-             override the artifact's x/y/w/h so content sits inside the layout area.
+    ph_idx       — layout mode: override artifact coords with layout placeholder bounds.
+    header_ph_idx — layout mode: write artifact heading into the paired header placeholder
+                    instead of rendering it manually (suppresses the accent bar + inline heading).
     """
     t = (artifact.get('type') or '').lower()
 
@@ -858,14 +892,31 @@ def render_artifact(slide, artifact, bt, ph_idx=None):
         except Exception as e:
             print(f'render_artifact: placeholder bounds lookup failed (idx={ph_idx}):', e)
 
-    # Render header_block for all non-cards artifacts
-    if t != 'cards':
+    # Route artifact heading into the layout's paired header placeholder when available
+    heading_handled = False
+    if header_ph_idx is not None and t != 'cards':
+        if t == 'insight_text':
+            heading_text = artifact.get('heading') or artifact.get('insight_header', '')
+        elif t == 'chart':
+            heading_text = artifact.get('chart_header', '')
+        elif t == 'table':
+            heading_text = artifact.get('table_header', '')
+        elif t == 'workflow':
+            heading_text = artifact.get('workflow_header', '')
+        else:
+            heading_text = ''
+        if heading_text:
+            heading_handled = _write_heading_to_header_ph(slide, heading_text, header_ph_idx, bt)
+
+    # Render header_block only when the heading wasn't routed to a layout placeholder
+    if t != 'cards' and not heading_handled:
         hb = artifact.get('header_block')
         if hb and not hb.get('placeholder_ref'):
             render_header_block(slide, hb, bt)
 
     try:
-        if   t == 'insight_text': render_insight_text(slide, artifact, bt)
+        if   t == 'insight_text': render_insight_text(slide, artifact, bt,
+                                                       suppress_heading=heading_handled)
         elif t == 'chart':        render_chart(slide, artifact, bt)
         elif t == 'cards':        render_cards(slide, artifact, bt)
         elif t == 'workflow':     render_workflow(slide, artifact, bt)
@@ -883,6 +934,43 @@ def _write_speaker_note(slide, note_text):
             slide.notes_slide.notes_text_frame.text = str(note_text)
         except Exception:
             pass
+
+
+def _sanitise_system_placeholders(slide, slide_number):
+    """
+    After add_slide(), fix placeholders that carry stale template text:
+      - dt  (date/time)   → blank — presentation-level date field or master handles it
+      - ftr (footer)      → blank — confidentiality text is on the master; don't duplicate
+      - sldNum (slide #)  → write actual slide number so it shows correctly in PDF/export
+    """
+    try:
+        from pptx.enum.shapes import PP_PLACEHOLDER as _PH
+        for ph in slide.placeholders:
+            ph_type = ph.placeholder_format.type
+            if ph_type in (_PH.DATE, _PH.FOOTER):
+                try:
+                    tf = ph.text_frame
+                    for para in tf.paragraphs:
+                        for run in para.runs:
+                            run.text = ''
+                    # Also clear via XML to strip any fld elements carrying old date
+                    for txBody in ph._element.iter('{http://schemas.openxmlformats.org/drawingml/2006/main}txBody'):
+                        for p_el in list(txBody):
+                            tag = p_el.tag.split('}')[-1]
+                            if tag == 'p':
+                                for child in list(p_el):
+                                    ctag = child.tag.split('}')[-1]
+                                    if ctag in ('r', 'fld'):
+                                        p_el.remove(child)
+                except Exception:
+                    pass
+            elif ph_type == _PH.SLIDE_NUMBER:
+                try:
+                    ph.text_frame.text = str(slide_number)
+                except Exception:
+                    pass
+    except Exception:
+        pass
 
 
 def build_slide(prs, slide_spec, blank_layout, use_template=False,
@@ -957,6 +1045,8 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
                             layout = lyt; break
 
     slide = prs.slides.add_slide(layout)
+    if use_template:
+        _sanitise_system_placeholders(slide, slide_spec.get('slide_number', ''))
 
     # ── Background (scratch only — master handles it in template mode) ────────
     if not use_template:
@@ -1033,10 +1123,12 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
 
     # Zones → Artifacts
     for zone in slide_spec.get('zones', []):
+        # In layout mode, each zone may have a paired header placeholder
+        hdr_ph_idx = zone.get('header_ph_idx') if layout_mode else None
         for artifact in zone.get('artifacts', []):
             # In layout mode pass placeholder_idx so renderer uses layout bounds
             ph_idx = artifact.get('placeholder_idx') if layout_mode else None
-            render_artifact(slide, artifact, bt, ph_idx=ph_idx)
+            render_artifact(slide, artifact, bt, ph_idx=ph_idx, header_ph_idx=hdr_ph_idx)
 
     # ── Global elements (scratch only) ────────────────────────────────────────
     if not use_template:

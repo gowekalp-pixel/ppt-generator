@@ -138,23 +138,20 @@ CONTENT SLIDES — LAYOUT MODE (selected_layout_name is non-empty)
 ═══════════════════════════
 
 When uses_template is true AND selected_layout_name is non-empty:
-Agent 6 uses the named layout — it already knows where content areas sit.
-Your job is to define WHAT goes in each placeholder, not WHERE it goes.
+The pipeline automatically maps each zone to its content area slot in the named layout.
+Your job is CONTENT QUALITY and VISUAL STYLE — not positioning.
 
 Rules:
 1. Set layout_mode: true
-2. For each zone: set frame to null (Agent 6 maps zones to layout placeholders)
-3. For each artifact: set placeholder_idx
-   - Primary zone artifact  → placeholder_idx: 1
-   - Secondary zone artifact → placeholder_idx: 2 (if layout ph_count allows)
-   - Use layout_map[selected_layout_name].body_placeholder for reference coordinates
-     when computing artifact sizing and header_block positioning
-4. For each artifact (except cards): add header_block (see ARTIFACT HEADER below)
-   - Check layout_map[selected_layout_name].ph_count:
-     if ph_count > 2: layout likely has a dedicated sub-header placeholder
-       → set header_block.placeholder_ref: true (Agent 6 will map it to that placeholder)
-     if ph_count ≤ 2: compute header_block coordinates at top of body_placeholder area
-5. Adjust artifact y and h to account for header_block height
+2. For each zone: set frame to null — the pipeline fills frame from the layout's content_areas
+3. Do NOT set placeholder_idx on artifacts — the pipeline assigns the real PPTX placeholder idx
+4. For each artifact (except cards): add header_block
+   - layout_map[selected_layout_name].ph_count > 2 (multi-slot layout):
+     → set header_block.placeholder_ref: true
+     → x/y/w/h may be null (pipeline positions from placeholder)
+   - ph_count ≤ 2: compute header_block at top of zone area; h = 0.30
+5. Focus on brand-compliant styling: chart colors from chart_color_sequence, correct fonts,
+   card_frames, insight_text body_style, table column_widths, workflow_style
 
 ═══════════════════════════
 CONTENT SLIDES — SCRATCH MODE (selected_layout_name is empty)
@@ -672,15 +669,26 @@ function extractBrandTokens(brand) {
     logo_position:        brand.logo_position        || 'top-right',
     spacing_notes:        brand.spacing_notes        || '',
     uses_template:        brand.uses_template        || false,
-    // Compact layout map: name → { title_placeholder, body_placeholder, ph_count, usage_guidance }
-    // Used in LAYOUT MODE to derive artifact coordinates and placeholder indices
+    // Compact layout map: name → { title_placeholder, body_placeholder, ph_count, content_areas, usage_guidance }
+    // content_areas: large body placeholders (h > 0.5") ordered left→right, top→bottom.
+    // Used in LAYOUT MODE — the pipeline maps zone[i] → content_areas[i] for frame + placeholder_idx.
     layout_map:           (brand.slide_layouts || []).reduce((acc, l) => {
       if (l.name) {
+        const contentAreas = (l.placeholders || [])
+          .filter(p => p.type === 'body' && (p.h_in || 0) > 0.5)
+          .sort((a, b) => {
+            const rowA = Math.round((a.y_in || 0) * 2)  // 0.5" row buckets
+            const rowB = Math.round((b.y_in || 0) * 2)
+            if (rowA !== rowB) return rowA - rowB
+            return (a.x_in || 0) - (b.x_in || 0)       // left before right
+          })
+          .map(p => ({ idx: p.idx, x_in: p.x_in, y_in: p.y_in, w_in: p.w_in, h_in: p.h_in }))
         acc[l.name] = {
           ph_count:          l.ph_count          || 0,
           usage_guidance:    l.usage_guidance    || '',
           title_placeholder: l.title_placeholder || null,
-          body_placeholder:  l.body_placeholder  || null
+          body_placeholder:  l.body_placeholder  || null,
+          content_areas:     contentAreas
         }
       }
       return acc
@@ -706,7 +714,7 @@ function buildBrandBrief(brand, brief) {
     (tokens.uses_template
       ? '\n- TEMPLATE MODE ACTIVE: master provides background/logo/footer — set global_elements:{}, canvas.background:null' +
         '\n- Title/divider slides: text only on title_block/subtitle_block — omit x/y/w/h, set layout_mode:true' +
-        '\n- Content slides with selected_layout_name: LAYOUT MODE — omit x/y/w/h on title/subtitle, set zone.frame:null, add placeholder_idx to artifacts' +
+        '\n- Content slides with selected_layout_name: LAYOUT MODE — set layout_mode:true, zone.frame:null; do NOT set placeholder_idx (pipeline assigns from layout content_areas)' +
         '\n- Content slides without selected_layout_name: SCRATCH MODE — compute all coordinates from layout_hint'
       : '\n- SCRATCH MODE: compute all coordinates; specify background, footer, logo in global_elements') +
     '\n\nPRESENTATION BRIEF:' +
@@ -786,8 +794,9 @@ function validateDesignedSlide(slide) {
   }
 
   ;(slide.zones || []).forEach((z, zi) => {
-    if (!z.frame)             issues.push('z' + zi + ': missing frame')
-    if (!z.artifacts?.length) issues.push('z' + zi + ': no artifacts')
+    // In layout mode, frames are filled post-process from content_areas — skip the check
+    if (!z.frame && !slide.layout_mode) issues.push('z' + zi + ': missing frame')
+    if (!z.artifacts?.length)           issues.push('z' + zi + ': no artifacts')
     ;(z.artifacts || []).forEach((a, ai) => {
       const p = 'z' + zi + '.a' + ai
       if (!a.type)                                     issues.push(p + ': missing type')
@@ -1338,6 +1347,51 @@ function mergeContentIntoZones(designedZones, manifestZones) {
 // 3. Carries all manifest metadata through for Agent 5.1 and Agent 6
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// Fills zone frames and artifact placeholder_idx from the layout's ordered content_areas.
+// Called AFTER mergeContentIntoZones so artifact content comes from Agent 4, not Agent 5.
+function applyLayoutZoneFrames(zones, layoutName, brand) {
+  if (!layoutName) return zones
+  const layouts = brand.slide_layouts || []
+  const layout = layouts.find(l => (l.name || '').toLowerCase() === layoutName.toLowerCase())
+    || layouts.find(l => (l.name || '').toLowerCase().includes(layoutName.toLowerCase()))
+  if (!layout) return zones
+
+  // Build ordered content areas on-the-fly (same logic as extractBrandTokens)
+  const contentAreas = (layout.placeholders || [])
+    .filter(p => p.type === 'body' && (p.h_in || 0) > 0.5)
+    .sort((a, b) => {
+      const rowA = Math.round((a.y_in || 0) * 2)
+      const rowB = Math.round((b.y_in || 0) * 2)
+      if (rowA !== rowB) return rowA - rowB
+      return (a.x_in || 0) - (b.x_in || 0)
+    })
+
+  if (contentAreas.length === 0) return zones
+
+  // Small body placeholders (h ≤ 0.5") are header labels, not content areas
+  const headerPhs = (layout.placeholders || [])
+    .filter(p => p.type === 'body' && (p.h_in || 0) <= 0.5)
+
+  return zones.map((zone, zi) => {
+    const ca = contentAreas[zi] || contentAreas[contentAreas.length - 1]
+    const frame = {
+      x: ca.x_in, y: ca.y_in, w: ca.w_in, h: ca.h_in,
+      padding: { top: 0.08, right: 0.08, bottom: 0.08, left: 0.08 }
+    }
+    // Find paired header placeholder: same x-column as content area, positioned just above it
+    const headerPh = headerPhs.find(p =>
+      Math.abs((p.x_in || 0) - (ca.x_in || 0)) < 0.15 && (p.y_in || 0) < (ca.y_in || 0)
+    )
+    const artifacts = (zone.artifacts || []).map(a => ({ ...a, placeholder_idx: ca.idx }))
+    return {
+      ...zone,
+      frame,
+      header_ph_idx: headerPh ? headerPh.idx : null,
+      artifacts
+    }
+  })
+}
+
 function normaliseDesignedSlide(designed, manifestSlide, brand) {
   if (!designed || typeof designed !== 'object') return null  // caller handles null -> fallback
 
@@ -1353,9 +1407,17 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
     manifestSlide.zones || []
   )
 
+  // Layout mode: fill zone frames + artifact placeholder_idx from the layout's content_areas.
+  // This runs after merge so Agent 4's artifact content is already in place.
+  const layoutName = manifestSlide.selected_layout_name || designed.selected_layout_name || ''
+  const isLayoutMode = !!(designed.layout_mode || layoutName)
+  const finalZones = isLayoutMode && layoutName
+    ? applyLayoutZoneFrames(mergedZones, layoutName, brand)
+    : mergedZones
+
   // Log merge summary
   const contentCounts = { insight_text: 0, chart: 0, cards: 0, workflow: 0, table: 0 }
-  mergedZones.forEach(z => (z.artifacts || []).forEach(a => {
+  finalZones.forEach(z => (z.artifacts || []).forEach(a => {
     if (contentCounts[a.type] !== undefined) contentCounts[a.type]++
   }))
   console.log('  S' + manifestSlide.slide_number + ' merged content:',
@@ -1363,7 +1425,7 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
 
   return {
     ...branded,
-    zones: mergedZones,
+    zones: finalZones,
     // Always override with manifest ground truth (Claude may drift on slide_number etc.)
     slide_number:          manifestSlide.slide_number,
     slide_type:            manifestSlide.slide_type            || designed.slide_type,
