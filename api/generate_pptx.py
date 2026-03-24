@@ -400,6 +400,13 @@ def render_insight_text(slide, artifact, bt, suppress_heading=False):
         }
         content_y = y + 0.40   # heading row + gap
 
+    # ── Native OOXML bullet helpers (defined early — used in sizing estimate too) ──
+    BULLET_HANG = 0.22   # inches — bullet hangs left; text wraps at this indent
+
+    def _strip_marker(s):
+        s = str(s)
+        return s[1:].lstrip() if s[:1] in ('✓', '✗', '→', '•') else s
+
     # Body points — compute sizes first so heading can scale to match
     if points:
         b_font       = bs.get('font_family', bt.get('body_font_family', 'Arial'))
@@ -411,20 +418,58 @@ def render_insight_text(slide, artifact, bt, suppress_heading=False):
         space_bef_pt = max(1, int(bs.get('space_before_pt', 4)))
 
         body_h = h - (content_y - y)
+        text_w = max(0.5, w - indent_in - BULLET_HANG)
 
-        # Auto-fit: scale b_size so text fills body_h
-        line_h_in   = (b_size / 72.0) * 1.25
-        space_h_in  = space_bef_pt / 72.0
-        total_h_est = len(points) * (line_h_in + space_h_in)
-        if total_h_est > 0:
-            b_size = max(8, min(28, round(b_size * (body_h * 0.88 / total_h_est))))
+        # Estimate wrapped line count per point at a given font size
+        def _wrapped_lines(text, font_pt, avail_w_in):
+            # Average character width ≈ 50% of em (conservative)
+            char_w = (font_pt / 72.0) * 0.50
+            chars_per_line = max(1, int(avail_w_in / char_w))
+            stripped = _strip_marker(str(text))
+            words = stripped.split()
+            if not words:
+                return 1
+            lines, line_len = 1, 0
+            for word in words:
+                wlen = len(word)
+                if line_len == 0:
+                    line_len = wlen
+                elif line_len + 1 + wlen <= chars_per_line:
+                    line_len += 1 + wlen
+                else:
+                    lines += 1
+                    line_len = wlen
+            return lines
 
-        # Scale inter-bullet gap to available height per slot
-        slot_h_in    = body_h / len(points)
-        dynamic_gap  = max(2, min(14, int(slot_h_in * 72 * 0.18)))
-        space_bef_pt = max(space_bef_pt, dynamic_gap)
+        # Estimate total rendered height using actual wrap count — ONLY scale DOWN, never up.
+        # If text already fits at the spec font_size, keep it as-is.
+        def _total_h(font_pt, gap_pt):
+            lh = (font_pt / 72.0) * 1.30   # line height with leading
+            gh = gap_pt / 72.0
+            return sum(_wrapped_lines(p, font_pt, text_w) * lh + gh for p in points)
 
-        # Scale heading font proportionally to body size
+        total_h_est = _total_h(b_size, space_bef_pt)
+        if total_h_est > body_h * 0.95:
+            # Binary search for the largest font_pt that still fits
+            lo, hi = 7, b_size
+            while hi - lo > 0.5:
+                mid = (lo + hi) / 2.0
+                if _total_h(mid, space_bef_pt) <= body_h * 0.95:
+                    lo = mid
+                else:
+                    hi = mid
+            b_size = max(7, int(lo))
+        # else: text fits → keep b_size unchanged (no upscaling)
+
+        # Inter-bullet gap: use spec value; only increase if there is clear excess space
+        available_per_slot = body_h / max(len(points), 1)
+        used_per_slot      = _total_h(b_size, space_bef_pt) / max(len(points), 1)
+        slack_pt           = (available_per_slot - used_per_slot) * 72
+        if slack_pt > 4:
+            # Distribute some slack as extra space_before so points spread nicely
+            space_bef_pt = min(space_bef_pt + int(slack_pt * 0.5), 20)
+
+        # Scale heading font proportionally to body size (but never smaller than 10pt)
         if _h_params:
             spec_body          = bs.get('font_size', 10)
             _h_params['size']  = max(10, round(_h_params['size'] * (b_size / max(spec_body, 1))))
@@ -434,11 +479,6 @@ def render_insight_text(slide, artifact, bt, suppress_heading=False):
         add_text_box(slide, x, y + TOP_PAD * 0.25, w, 0.34,
                      str(heading), _h_params['font'], _h_params['size'],
                      _h_params['bold'], _h_params['color'], 'left', 'middle')
-
-    # ── Native OOXML bullet helpers ──────────────────────────────────────────
-    def _strip_marker(s):
-        s = str(s)
-        return s[1:].lstrip() if s[:1] in ('✓', '✗', '→', '•') else s
 
     def _bullet_char(point, idx):
         s = str(point)
@@ -465,42 +505,32 @@ def render_insight_text(slide, artifact, bt, suppress_heading=False):
         buChar.set('char', bchar)
 
     if points:
-        BULLET_HANG = 0.22   # inches — bullet hangs left; text wraps at this indent
-        _hang_emu   = int(Emu(inches(BULLET_HANG)))
+        _hang_emu = int(Emu(inches(BULLET_HANG)))
 
-        if vert_dist == 'spread':
-            # One text box per point, evenly distributed vertically
-            slot_h = body_h / len(points)
-            for i, point in enumerate(points):
-                tb  = add_text_box(slide,
-                                   x + indent_in, content_y + i * slot_h,
-                                   w - indent_in, slot_h * 0.92,
-                                   _strip_marker(point), b_font, b_size,
-                                   False, b_color, 'left', 'top')
-                pPr = tb.text_frame.paragraphs[0]._p.get_or_add_pPr()
-                _set_bullet(pPr, _bullet_char(point, i), _hang_emu)
-        else:
-            # All points in a single text box
-            txBox = slide.shapes.add_textbox(
-                inches(x + indent_in), inches(content_y),
-                inches(w - indent_in), inches(body_h)
-            )
-            tf = txBox.text_frame
-            enable_text_fit(tf)
+        # ALWAYS use a single text box for all points.
+        # For "spread" distribution: use larger space_before on each paragraph so
+        # points fill the available height — this keeps the text in one container
+        # so the renderer can auto-fit the font if needed.
+        txBox = slide.shapes.add_textbox(
+            inches(x + indent_in), inches(content_y),
+            inches(w - indent_in), inches(body_h)
+        )
+        tf = txBox.text_frame
+        enable_text_fit(tf)
 
-            first = True
-            for i, point in enumerate(points):
-                if first:
-                    p_obj = tf.paragraphs[0]
-                    first = False
-                else:
-                    p_obj = tf.add_paragraph()
+        for i, point in enumerate(points):
+            if i == 0:
+                p_obj = tf.paragraphs[0]
+                # First paragraph: no space before (avoid top gap)
+                p_obj.space_before = pt(0)
+            else:
+                p_obj = tf.add_paragraph()
                 p_obj.space_before = pt(space_bef_pt)
-                pPr = p_obj._p.get_or_add_pPr()
-                _set_bullet(pPr, _bullet_char(point, i), _hang_emu)
-                run = p_obj.add_run()
-                run.text = _strip_marker(point)
-                set_font(run, b_font, b_size, False, False, b_color)
+            pPr = p_obj._p.get_or_add_pPr()
+            _set_bullet(pPr, _bullet_char(point, i), _hang_emu)
+            run = p_obj.add_run()
+            run.text = _strip_marker(point)
+            set_font(run, b_font, b_size, False, False, b_color)
 
 
 def _apply_dual_axis(chart, secondary_series_names):
