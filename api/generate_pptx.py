@@ -1089,9 +1089,17 @@ def render_workflow(slide, artifact, bt):
         gap = min(0.12, max(0.05, target_rect['w'] * 0.02))
         usable_w = max(0.3, target_rect['w'] - 2 * pad_x - gap * (count - 1))
         node_w = max(0.75, usable_w / count)
-        node_h = max(0.70, target_rect['h'] - 2 * pad_y)
+        total_h = max(0.70, target_rect['h'] - 2 * pad_y)
+
+        # Split height: colored box at top, description text below the box.
+        # When any node carries description content, reserve ~45% for the box
+        # and ~55% for the description band below it (outside the fill).
+        has_any_desc = any(bool(n.get('description', '')) for n in nodes_)
+        box_ratio = 0.42 if has_any_desc else 1.0
+        box_h = max(0.45, total_h * box_ratio)
+
         start_x = target_rect['x'] + pad_x
-        node_y = target_rect['y'] + max(0.02, (target_rect['h'] - node_h) / 2.0)
+        node_y = target_rect['y'] + max(0.02, (target_rect['h'] - total_h) / 2.0)
 
         laid_out = []
         for i, node in enumerate(nodes_):
@@ -1099,11 +1107,12 @@ def render_workflow(slide, artifact, bt):
                 **node,
                 'x': start_x + i * (node_w + gap),
                 'y': node_y,
+                'box_h': box_h,   # height of colored fill only
                 'w': node_w,
-                'h': node_h
+                'h': total_h
             })
 
-        conn_y = node_y + node_h / 2.0
+        conn_y = node_y + box_h / 2.0
         laid_conns = []
         for i in range(len(laid_out) - 1):
             cur = laid_out[i]
@@ -1180,43 +1189,55 @@ def render_workflow(slide, artifact, bt):
                 pass
 
     # Draw nodes
+    # Layout pattern: colored box at the TOP of each node (label + value inside),
+    # description text rendered BELOW the box in the body color — outside the fill.
+    body_color = bt.get('body_color', '#000000')
     node_map = {n.get('id'): n for n in nodes}
     for node in nodes:
-        nx = node.get('x', 0)
-        ny = node.get('y', 0)
-        nw = node.get('w', 2)
-        nh = node.get('h', 0.8)
+        nx   = node.get('x', 0)
+        ny   = node.get('y', 0)
+        nw   = node.get('w', 2)
+        nh   = node.get('h', 0.8)
+        # box_h is the colored fill portion; falls back to full nh for non-timeline flows
+        bxh  = node.get('box_h', nh)
 
-        add_filled_rect(slide, nx, ny, nw, nh,
+        # ── Colored fill box (label + value only) ────────────────────────────
+        add_filled_rect(slide, nx, ny, nw, bxh,
                         fill_hex=node_fill,
                         border_hex=node_border,
                         border_pt=node_bw,
                         corner_radius=node_cr)
 
-        # Node label (primary text)
+        # Node label (primary text — inside the colored box)
         label = node.get('label', node.get('id', ''))
-        has_desc = bool(node.get('description', ''))
-        title_h = nh * (0.28 if has_desc else 0.34)
-        value_h = nh * (0.22 if has_desc else 0.26)
-        desc_h  = max(0.16, nh - title_h - value_h - 0.12)
+        value = node.get('value', '')
+        has_value = bool(value)
+        label_h = bxh * (0.55 if has_value else 0.70)
+        val_h   = max(0.14, bxh - label_h - 0.10) if has_value else 0
+
         if label:
-            label_size = estimate_fit_font_size(str(label), max(0.3, nw - 0.2), max(0.18, title_h), t_size, 8)
-            add_text_box(slide, nx + 0.1, ny + 0.06, nw - 0.2, title_h,
+            label_size = estimate_fit_font_size(str(label), max(0.3, nw - 0.2), max(0.18, label_h), t_size, 8)
+            add_text_box(slide, nx + 0.1, ny + 0.06, nw - 0.2, label_h,
                          str(label), t_font, label_size, t_bold, t_color, 'center', 'middle')
 
-        # Node value (secondary metric)
-        value = node.get('value', '')
+        # Node value (secondary metric — also inside the colored box, below label)
         if value:
-            value_size = estimate_fit_font_size(str(value), max(0.3, nw - 0.2), max(0.16, value_h), v_size, 7)
-            add_text_box(slide, nx + 0.1, ny + 0.06 + title_h, nw - 0.2, value_h,
+            value_size = estimate_fit_font_size(str(value), max(0.3, nw - 0.2), max(0.14, val_h), v_size, 7)
+            add_text_box(slide, nx + 0.1, ny + 0.06 + label_h, nw - 0.2, val_h,
                          str(value), v_font, value_size, False, v_color, 'center', 'middle')
 
-        # Description (small text below value)
+        # ── Description text BELOW the colored box ───────────────────────────
+        # Rendered outside the fill in body color so it reads as supporting detail,
+        # not as part of the highlighted header block.
         desc = node.get('description', '')
-        if desc and desc_h > 0.14:
-            desc_size = estimate_fit_font_size(str(desc), max(0.28, nw - 0.16), desc_h, max(7, v_size - 2), 6)
-            add_text_box(slide, nx + 0.08, ny + 0.08 + title_h + value_h, nw - 0.16, desc_h,
-                         str(desc), v_font, desc_size, False, v_color, 'center', 'top')
+        desc_gap = 0.06
+        desc_y   = ny + bxh + desc_gap
+        desc_h   = max(0.0, nh - bxh - desc_gap)
+        if desc and desc_h > 0.12:
+            desc_size = estimate_fit_font_size(str(desc), max(0.28, nw - 0.12), desc_h,
+                                               max(7, v_size - 1), 6)
+            add_text_box(slide, nx + 0.06, desc_y, nw - 0.12, desc_h,
+                         str(desc), v_font, desc_size, False, body_color, 'center', 'top')
 
 
 def render_table(slide, artifact, bt):
@@ -1794,6 +1815,10 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
                             layout = lyt; break
 
     slide = prs.slides.add_slide(layout)
+    # Always initialise these so layout_mode references below are safe
+    # even when use_template=False (scratch mode).
+    _ph_bounds         = {}
+    _content_ph_frames = []
     if use_template:
         from pptx.enum.shapes import PP_PLACEHOLDER as _PH
         _sanitise_system_placeholders(slide, slide_spec.get('slide_number', ''))
@@ -2078,7 +2103,9 @@ def build_presentation(final_spec, brand_rulebook, template_b64=None):
         except Exception as e:
             print(f"Error building slide {slide_spec.get('slide_number', '?')}:", e)
             traceback.print_exc()
-            prs.slides.add_slide(blank_layout)
+            # Do NOT add a blank slide here — prs.slides.add_slide already ran
+            # inside build_slide before the exception, so the slide exists.
+            # Adding another blank here is what caused the slide count to balloon.
 
     return prs
 

@@ -84,6 +84,9 @@ PHASE 1.5 — ZONE DERIVATION (MANDATORY)
   - Do NOT think about layout in this phase
   - Every zone must answer a clear question
   - At least one zone MUST be a "proof zone"
+  - If ANY zone will contain a left_to_right or timeline workflow: that zone is ALWAYS
+    full-width. No other zone may be placed beside it. Plan for a stacked companion zone
+    (above or below) or no companion at all. Enforce this BEFORE proceeding to Step 3.
 
   STEP 3 — ZONE REDUNDANCY CHECK (run BEFORE proceeding to Phase 2):
   Review all zones defined in Step 2. For each pair of zones, ask:
@@ -300,6 +303,17 @@ PHASE 4 — ZONE ARCHITECTURE (apply rules R1–R8 in order; stop at first match
         the workflow — NEVER side-by-side. Use top_40+bottom_60 or top_50+bottom_50 splits.
       → In Layout Mode: select the WIDEST available single-column layout.
       → NEVER place any artifact to the left or right of a left_to_right workflow.
+
+      ⛔ VIOLATION SELF-CHECK (mandatory before finalising zones):
+      Look at every zone you have defined so far.
+      If a left_to_right or timeline workflow is assigned to a zone that shares the slide
+      SIDE-BY-SIDE with another zone (e.g., left_50 + right_50, or left_60 + right_40):
+        → THIS IS WRONG. Stop. Discard the zone layout entirely.
+        → Redesign: workflow occupies 1 full-width zone; any companion goes in a SEPARATE
+          stacked zone above or below.
+        → If the workflow is the only artifact, use split = "full".
+        → A workflow with 4+ nodes and/or multi-word descriptions ALWAYS needs full-width.
+      This check must be completed even when the workflow is NOT the primary zone artifact.
 
   R2b. TOP-TO-BOTTOM WORKFLOW RULE
       If primary artifact is a workflow with flow_direction = "top_to_bottom" or "top_down_branching":
@@ -854,6 +868,9 @@ GATE 3 — ARTIFACT VALIDITY
   [ ] COMBINATION PATTERN CHECK: Dominant category (>50%) content uses pie or sorted bar, never cards
   [ ] ALIGNMENT CHECK: Every artifact's type matches its zone message_objective intent (dominance→chart, composition→chart/workflow, comparison→chart, decomposition→workflow/pie+card, explanation→insight_text, process→workflow, single KPI→card)
   [ ] ALIGNMENT CHECK: No artifact was retained from data shape classification if it conflicts with message_objective intent
+  [ ] WORKFLOW ZONE CHECK: Every left_to_right / timeline workflow is in a zone that spans the FULL HORIZONTAL WIDTH — no other zone is placed beside it (left/right)
+  [ ] WORKFLOW ZONE CHECK: Any companion artifact to a left_to_right workflow is in a STACKED zone (above or below), never a side-by-side zone
+  [ ] WORKFLOW ZONE CHECK: Every top_to_bottom / top_down_branching workflow is in a zone that spans the FULL VERTICAL HEIGHT — no other zone is stacked above or below it
 
 GATE 4 — ZONE SPATIAL COVERAGE (Scratch Mode only)
   [ ] All zone splits on each slide sum to 100% of content area
@@ -870,6 +887,7 @@ GATE 5 — LAYOUT CONSISTENCY (Layout Mode only)
   [ ] Wide workflow or wide chart -> Override Rules A/B applied
   [ ] 4-card artifact -> Override Rule C applied
   [ ] Tall horizontal_bar -> Override Rule D applied
+  [ ] WORKFLOW LAYOUT CHECK: Any left_to_right / timeline workflow → Override Rule A applied and widest single-column layout selected — if a multi-column layout was chosen, override it now
 
 GATE 6 — SLIDE COHERENCE
   [ ] Every zone's message_objective directly supports the slide's key_message
