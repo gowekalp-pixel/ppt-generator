@@ -85,6 +85,25 @@ PHASE 1.5 — ZONE DERIVATION (MANDATORY)
   - Every zone must answer a clear question
   - At least one zone MUST be a "proof zone"
 
+  STEP 3 — ZONE REDUNDANCY CHECK (run BEFORE proceeding to Phase 2):
+  Review all zones defined in Step 2. For each pair of zones, ask:
+
+  a. Do two zones represent the SAME data in different formats?
+     (e.g., a bar chart of zone shares AND cards listing the same zone shares)
+     → If yes: remove the weaker zone. Keep whichever proves the message more directly.
+
+  b. Do two zones communicate the SAME interpretation or implication?
+     (e.g., two insight_text zones both saying "NorthZone is overexposed")
+     → If yes: merge into one zone. Combine points into a single insight_text.
+
+  c. Does every zone add GENUINELY NEW information or a NEW perspective?
+     → If a zone only repeats what another zone already shows: delete it.
+
+  REDUNDANCY RESOLUTION:
+  - Merge: combine two zones into one (if both fit the 2-artifact-per-zone limit)
+  - Remove: delete the weaker zone entirely
+  - Reframe: change one zone's message_objective so it covers different ground
+
 PHASE 2 — ARTIFACT SPECIFICATION
   For EACH zone you plan to create:
   2a. State the zone's message_objective (one sentence).
@@ -92,18 +111,149 @@ PHASE 2 — ARTIFACT SPECIFICATION
       - What data is required?
       - What relationships must be shown?
 
-  2c. Choose artifact type BASED ON content needs:
-      - comparison of categories or time periods → chart
-      - composition or part-of-whole → chart
-      - precision / row-column lookup → table
-      - process, sequence, or structure → workflow
-      - headline metrics or parallel messages → cards
-      For charts: enumerate all series names, units, and category count BEFORE selecting chart_type.
+  2c. CLASSIFY THE DATA SHAPE (mandatory before selecting artifact type):
+      If the zone contains numerical data, identify ONE of the following shapes:
+
+      Shape 1 — COMPARISON (across categories)
+        → multiple categories, same metric, goal is to compare values
+        → artifact: bar / horizontal_bar
+
+      Shape 2 — COMPOSITION (part of whole)
+        → categories sum to a total or represent a distribution
+        → artifact: pie (≤5 segments) OR bar/horizontal_bar (>5 categories)
+        → NEVER use cards for part-of-whole data
+
+      Shape 3 — TREND (over time)
+        → sequential time-based categories (months, quarters, years)
+        → artifact: line / bar
+
+      Shape 4 — PORTFOLIO MIX / SEGMENTATION
+        → categories represent mutually exclusive segments of a portfolio or population
+        → artifact: pie (≤5 segments) OR bar (>5 segments)
+        → NEVER use cards — segments are structurally related, not independent metrics
+
+      Shape 5 — PRECISE MULTI-DIMENSION LOOKUP
+        → multiple fields per row, audience needs exact values across dimensions
+        → artifact: table
+
+      Shape 6 — INDEPENDENT KPI SNAPSHOT
+        → metrics do NOT relate to each other structurally, each stands alone
+        → artifact: cards
+        → ONLY valid shape for cards — if categories are mutually exclusive or sum to a total, use a chart instead
+
+      CRITICAL RULES:
+      - If data represents PARTS OF A WHOLE → NEVER cards; use chart or pie
+      - If categories are mutually exclusive and comparable → prefer chart over cards
+      - Cards are ONLY for independent metrics that have no structural relationship
+
+  2d. RECOGNIZE THE ARTIFACT COMBINATION PATTERN (mandatory before selecting chart_type):
+      After classifying data shape, check if the content matches a KNOWN COMBINATION PATTERN.
+      These patterns produce significantly more insightful slides than single-artifact choices.
+      If a pattern matches → USE the recommended combination. Override single-artifact selection.
+
+      ─────────────────────────────────────────────────
+      PATTERN 1 — TOTAL + BREAKDOWN
+      ─────────────────────────────────────────────────
+      Signs:  one aggregate/total value + 2–5 sub-components that sum to it
+      WRONG:  cards (one per component including total) — loses the structural relationship
+      RIGHT:  decomposition workflow (total node → component nodes)
+              OR pie chart (component shares) + card (total value as headline KPI)
+      Example: ₹351Cr portfolio → NorthZone 66%, WestZone 24%, EastZone 10%
+               → Use: pie chart (3 zone shares, right zone) + card (₹351Cr total, left zone)
+               → OR:  decomposition workflow top_down_branching (total → 3 zones)
+
+      ─────────────────────────────────────────────────
+      PATTERN 2 — DOMINANT CATEGORY + CONTEXT
+      ─────────────────────────────────────────────────
+      Signs:  one category holds >50% of a distribution; others are secondary
+      WRONG:  cards listing each category's share
+      RIGHT:  pie chart (if ≤5 segments) + insight_text flagging the dominant share
+              OR horizontal_bar (sorted descending) + insight_text
+      Example: Tailoring 48%, Others 20%, Dairy 16%, Kirana 9%, Textile 7%
+               → Use: horizontal_bar (sorted) + insight_text (concentration risk)
+
+      ─────────────────────────────────────────────────
+      PATTERN 3 — HEADLINE KPI + SUPPORTING BREAKDOWN
+      ─────────────────────────────────────────────────
+      Signs:  1–2 truly independent aggregate metrics PLUS a breakdown of one of them
+      RIGHT:  card(s) for the headline KPI(s) in one zone + chart for the breakdown in another zone
+      Example: Total Outstanding ₹351Cr (independent KPI) + zone-wise % split (breakdown)
+               → Use: card (₹351Cr, z1) + pie/bar (zone breakdown, z2)
+
+      ─────────────────────────────────────────────────
+      PATTERN 4 — TREND WITH THRESHOLD OR MILESTONE
+      ─────────────────────────────────────────────────
+      Signs:  time-series data + a benchmark, target, or notable inflection point
+      WRONG:  cards for each time period
+      RIGHT:  line/bar chart + insight_text (calling out the threshold or milestone)
+
+      ─────────────────────────────────────────────────
+      PATTERN 5 — SEQUENTIAL PROCESS WITH METRIC OUTCOME
+      ─────────────────────────────────────────────────
+      Signs:  steps or phases in a process/pipeline + a result or throughput metric
+      RIGHT:  workflow left_to_right (process steps) + card or insight_text (outcome metric)
+
+      ─────────────────────────────────────────────────
+      PATTERN 6 — MULTI-ENTITY COMPARISON (same dimension)
+      ─────────────────────────────────────────────────
+      Signs:  3+ entities measured on the same metric — even if they look "independent"
+      WRONG:  cards (comparison intent cannot be served by cards)
+      RIGHT:  bar or horizontal_bar chart + insight_text
+
+      ─────────────────────────────────────────────────
+      PATTERN 7 — AGING / MATURITY CURVE
+      ─────────────────────────────────────────────────
+      Signs:  sequential buckets (age, tenure, stage) with a metric that changes across them
+      RIGHT:  bar chart (buckets on x-axis) + insight_text or table (for precise values)
+      Example: loan seasoning buckets (<3M, 3-6M, … >5Y) with outstanding balance
+               → Use: bar chart (seasoning vs outstanding) + insight_text (repayment trend)
+
+      If NO pattern matches → proceed with single artifact from 2c data shape classification.
+
+  2d.5 ZONE MESSAGE → ARTIFACT ALIGNMENT CHECK (mandatory override gate):
+      After selecting artifact(s) from 2c and 2d, validate:
+      Does the selected artifact BEST communicate this zone's message_objective?
+      If NOT → override artifact selection now, before proceeding.
+
+      MESSAGE INTENT → REQUIRED ARTIFACT (STRICT):
+
+      message implies DOMINANCE / CONCENTRATION / SKEW
+        → MUST use pie OR sorted horizontal_bar + insight_text
+        → NEVER cards
+
+      message implies COMPOSITION / MIX / CONTRIBUTION
+        → MUST use pie / bar / decomposition workflow
+        → NEVER cards
+
+      message implies COMPARISON / RANKING across categories
+        → MUST use bar / horizontal_bar / table
+        → NEVER cards
+
+      message implies DECOMPOSITION (total breaking into parts)
+        → MUST use workflow (top_down_branching) OR pie + card combo (Pattern 1)
+        → NEVER cards-only
+
+      message implies EXPLANATION / IMPLICATION / RISK / ACTION
+        → MUST use insight_text (alone or paired with another artifact)
+
+      message implies PROCESS / FLOW / SEQUENCE
+        → MUST use workflow
+
+      message implies KPI ANCHORING (a single independent metric as headline)
+        → card is allowed (but only for this case)
+
+      OVERRIDE RULE:
+      If the currently selected artifact does NOT match the message intent above
+      → RESELECT the artifact even if it passed the data shape check in 2c.
+      The message_objective always takes precedence over data shape alone.
+
+  2e. Choose chart_type from the classified shape (for chart artifacts only):
+      Enumerate all series names, units, and category count BEFORE selecting chart_type.
       - If series have DIFFERENT units → set dual_axis: true.
       - If categories > 6 → artifact needs wide horizontal space (>=70% slide width).
       - If horizontal_bar with rows > 6 → artifact needs tall vertical space (>=65% slide height).
 
-  2d. Specify full artifact structure and content (all fields, all data, no placeholders).
+  2f. Specify full artifact structure and content (all fields, all data, no placeholders).
 
 PHASE 3 — ARTIFACT SIZING MATRIX
   After specifying EACH artifact, look up its minimum space requirement in the table below.
@@ -143,9 +293,23 @@ PHASE 4 — ZONE ARCHITECTURE (apply rules R1–R8 in order; stop at first match
       If the slide has exactly one primary artifact with MIN_WIDTH >= 70% OR MIN_HEIGHT >= 55%:
       → 1 zone, split = "full". No secondary zones unless they fit within remaining 30% margin.
 
-  R2. WIDE WORKFLOW OR WIDE CHART RULE
-      If primary artifact is a workflow with flow_direction = "left_to_right" or "timeline",
-      OR a chart with > 6 categories:
+  R2a. LEFT-TO-RIGHT / TIMELINE WORKFLOW RULE
+      If primary artifact is a workflow with flow_direction = "left_to_right" or "timeline":
+      → Workflow zone MUST span the FULL HORIZONTAL WIDTH of the slide.
+      → A second zone (insight_text or cards) is ALLOWED but MUST be stacked ABOVE or BELOW
+        the workflow — NEVER side-by-side. Use top_40+bottom_60 or top_50+bottom_50 splits.
+      → In Layout Mode: select the WIDEST available single-column layout.
+      → NEVER place any artifact to the left or right of a left_to_right workflow.
+
+  R2b. TOP-TO-BOTTOM WORKFLOW RULE
+      If primary artifact is a workflow with flow_direction = "top_to_bottom" or "top_down_branching":
+      → Workflow zone MUST span the FULL VERTICAL HEIGHT of the slide content area.
+      → A second zone (insight_text or cards) is ALLOWED but MUST be placed to the LEFT or RIGHT
+        of the workflow — NEVER stacked above/below. Use left_60+right_40 or left_50+right_50 splits.
+      → NEVER stack a top_to_bottom workflow above or below another artifact.
+
+  R2c. WIDE CHART RULE
+      If primary artifact is a chart with > 6 categories:
       → Primary zone must span full slide width (split = "full" in scratch mode, or widest available layout).
       → Add insight_text as a second artifact INSIDE the same primary zone (not a separate zone).
       → Do NOT create a second zone for interpretation — embed it.
@@ -182,6 +346,28 @@ PHASE 4 — ZONE ARCHITECTURE (apply rules R1–R8 in order; stop at first match
       If none of R1–R7 apply:
       → 2 zones stacked: top_40+bottom_60. Primary artifact goes in bottom_60.
 
+  VISUAL WEIGHT ALIGNMENT (Scratch Mode only — apply AFTER R1–R8 assign splits):
+  Zone split proportions MUST reflect narrative importance:
+
+    primary zone   → MUST occupy >= 60% of the content area (width or height, depending on split axis)
+    secondary zone → MUST occupy <= 40%
+    supporting zone → MUST occupy <= 25%
+
+  Equal 50/50 splits are ONLY valid when:
+    - Both zones are narrative_weight = "primary" (true comparison, R5 applies), AND
+    - Both artifacts are equal in proof weight
+
+  Split correction table (if current split violates the rule):
+    primary+secondary side-by-side  → use left_60+right_40 (not left_50+right_50)
+    primary+secondary stacked       → use top_40+bottom_60 or top_30+bottom_70
+    primary+supporting stacked      → use top_25+bottom_75 → approximate with top_30+bottom_70
+    3-zone grid with unequal weight → give primary the largest quadrant; supporting the smallest
+
+  After applying corrections, verify:
+    [ ] No secondary zone is larger than the primary zone
+    [ ] No supporting zone exceeds 25% of content area
+    [ ] 50/50 splits are only used for genuine two-primary-zone comparisons
+
 PHASE 5 — LAYOUT SELECTION
 
   5a. Count how many CONTENT brand layouts are provided in the prompt.
@@ -207,9 +393,13 @@ PHASE 5 — LAYOUT SELECTION
     recommendation / roadmap                    → "3 Across" or widest layout
 
     OVERRIDE RULES (check AFTER initial layout selection — apply if triggered):
-    A. WIDE WORKFLOW OVERRIDE: If any artifact is a workflow with flow_direction = "left_to_right" or "timeline"
+    A. LEFT-TO-RIGHT WORKFLOW OVERRIDE: If any artifact is a workflow with flow_direction = "left_to_right" or "timeline"
        → Override selected_layout_name to the WIDEST single-column layout available.
        → The selected layout primary content area must span >= 70% of slide width.
+       → Any companion artifact (insight_text / cards) must occupy a STACKED band (above or below), never a side column.
+    A2. TOP-TO-BOTTOM WORKFLOW OVERRIDE: If any artifact is a workflow with flow_direction = "top_to_bottom" or "top_down_branching"
+       → Select a layout that provides a TALL primary column (>= 65% slide height).
+       → Any companion artifact must occupy a SIDE column (left or right), never a stacked band.
     B. WIDE CHART OVERRIDE: If any chart artifact has > 6 categories
        → Override selected_layout_name to the widest available single-column layout.
     C. FOUR-CARD OVERRIDE: If cards artifact has exactly 4 cards
@@ -454,6 +644,72 @@ Card content rules (CXO 3-second scan — every field must pass the test):
 - All cards in a zone must be PARALLEL in structure — same fields filled, same depth of detail
 
 ═══════════════════════════
+CARDS USAGE RESTRICTION (CRITICAL)
+═══════════════════════════
+
+Cards are ONLY valid when ALL four conditions are met:
+  1. Metrics are independent (no shared denominator, no structural link)
+  2. Metrics do NOT form a distribution or composition
+  3. Metrics do NOT require comparison across categories
+  4. Metrics are headline KPIs or executive summary stats
+
+If ANY of the following is true → DO NOT use cards → use chart instead:
+  - Categories form a whole (sum to 100% or a total)
+  - Categories are mutually exclusive and comparable
+  - The insight depends on relative size or ranking across categories
+
+═══════════════════════════
+CARDS — STRICT USAGE RULES
+═══════════════════════════
+
+1. NO CARD-ONLY SLIDES (CRITICAL)
+   A slide CANNOT contain only cards unless slide_archetype = "summary" OR "dashboard".
+   For all other archetypes, cards MUST be accompanied by at least one of:
+   chart | workflow | table | insight_text
+   If violated → replace cards with chart OR add a supporting artifact.
+
+2. CARD HEADER RULE (MANDATORY)
+   If number of cards > 1, cards MUST have a common artifact header describing the
+   collective meaning of all cards — NOT repeating individual card titles.
+   WRONG: Cards titled "Punjab", "Haryana" with no header
+   RIGHT: Header "State-wise Exposure Distribution" + individual state cards
+
+3. CARD COUNT vs ZONE RULE
+   - 1 card   → header optional
+   - 2–3 cards → MUST have header
+   - 4 cards   → MUST be full-width zone + header
+
+4. CARD CONTENT PARALLELISM (STRICT)
+   All cards MUST follow identical structure: same metric type, same unit or comparable
+   scale, same depth of explanation. If not parallel → split zones OR convert to table/chart.
+
+5. CARD vs CHART DECISION RULE (MOST IMPORTANT)
+   If categories > 2 AND values are comparable AND insight depends on comparison:
+   → ALWAYS use chart instead of cards.
+   Cards are NOT for ranking, distribution, or contribution analysis.
+
+6. CARD ROLE IN SLIDE
+   VALID uses: headline KPIs, executive summary stats, recommendations / priorities.
+   INVALID uses: analytical proof, breakdown analysis, portfolio composition.
+
+7. CARD + SUPPORTING ARTIFACT PATTERN
+   Correct:  cards (top) + chart (bottom) | chart (left) + cards (right) | cards + insight_text
+   Incorrect: cards alone explaining analysis
+
+═══════════════════════════
+AUTO-UPGRADE RULE (CRITICAL)
+═══════════════════════════
+
+Before finalizing cards, run this check:
+  IF number of cards >= 3
+  AND values are numeric
+  AND categories are comparable (mutually exclusive, same unit or same dimension)
+  → AUTOMATICALLY upgrade to bar chart or pie chart
+  → Add insight_text zone for interpretation
+
+This upgrade is MANDATORY — do not retain cards when the data fits a chart.
+
+═══════════════════════════
 ARTIFACT 4: workflow
 ═══════════════════════════
 
@@ -590,12 +846,23 @@ GATE 3 — ARTIFACT VALIDITY
   [ ] Dual_axis set to true wherever series have different units
   [ ] Every workflow: nodes and connections are coherent and non-crossing
   [ ] Every artifact has its header field populated (except cards)
+  [ ] DATA SHAPE CHECK: No cards used for part-of-whole, portfolio mix, or mutually exclusive category data
+  [ ] DATA SHAPE CHECK: No cards used where a pie or bar chart is the correct representation
+  [ ] DATA SHAPE CHECK: Every cards artifact contains only INDEPENDENT metrics with no structural relationship to each other
+  [ ] COMBINATION PATTERN CHECK: Content matching Pattern 1–7 uses the recommended artifact combination, not a single artifact or all-cards layout
+  [ ] COMBINATION PATTERN CHECK: Total + breakdown content uses decomposition workflow OR pie+card, never cards-only
+  [ ] COMBINATION PATTERN CHECK: Dominant category (>50%) content uses pie or sorted bar, never cards
+  [ ] ALIGNMENT CHECK: Every artifact's type matches its zone message_objective intent (dominance→chart, composition→chart/workflow, comparison→chart, decomposition→workflow/pie+card, explanation→insight_text, process→workflow, single KPI→card)
+  [ ] ALIGNMENT CHECK: No artifact was retained from data shape classification if it conflicts with message_objective intent
 
 GATE 4 — ZONE SPATIAL COVERAGE (Scratch Mode only)
   [ ] All zone splits on each slide sum to 100% of content area
   [ ] No gaps, no overlaps
   [ ] Wide artifact (MIN_WIDTH >= 70%) is in a zone covering >= 70% slide width
   [ ] Tall artifact (MIN_HEIGHT >= 65%) is in a zone covering >= 65% slide height
+  [ ] VISUAL WEIGHT: primary zone occupies >= 60% of the content area split axis
+  [ ] VISUAL WEIGHT: secondary zone occupies <= 40% of the content area split axis
+  [ ] VISUAL WEIGHT: 50/50 splits only used where both zones are narrative_weight = "primary"
 
 GATE 5 — LAYOUT CONSISTENCY (Layout Mode only)
   [ ] selected_layout_name is a valid name from the available layouts list
@@ -610,6 +877,9 @@ GATE 6 — SLIDE COHERENCE
   [ ] Workflows are structurally coherent and board-ready
   [ ] Content is decision-oriented and insight-led throughout
   [ ] No text-only slide unless archetype is "summary" or "recommendation" — all other archetypes must contain at least one chart, cards, workflow, or table
+  [ ] REDUNDANCY CHECK: No two zones show the same data in different formats
+  [ ] REDUNDANCY CHECK: No two zones communicate the same interpretation or implication
+  [ ] REDUNDANCY CHECK: Every zone adds genuinely new information or a new perspective not covered by any other zone on the slide
 
 Return ONLY a valid JSON array. No explanation. No markdown. No text outside the JSON.`
 

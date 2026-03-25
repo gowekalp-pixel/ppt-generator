@@ -697,7 +697,27 @@ def render_chart(slide, artifact, bt, suppress_heading=False):
     chart_palette   = bt.get('chart_palette', ['#0F2FB5', '#FF8E00', '#2D962D', '#D60202'])
     header_block    = artifact.get('header_block', {}) or {}
     header_font_size = int(header_block.get('font_size') or cs.get('title_font_size', 11) or 11)
-    max_chart_label_size = max(7, header_font_size - 1)
+
+    # Adaptive data label size — always a proportion of header_font_size.
+    # A density factor (0.0–1.0) scales down the ratio when categories are
+    # tightly packed relative to the chart's available space.
+    _n_cat   = max(1, len(categories))
+    _chart_w = float(w or 5)
+    _chart_h = float(h or 3)
+    if chart_type_str == 'horizontal_bar':
+        # Space per bar in inches; 0.55" is a comfortable single-bar baseline
+        _density = min(1.0, (_chart_h / _n_cat) / 0.55)
+    elif chart_type_str in ('bar', 'clustered_bar', 'line', 'waterfall'):
+        # Space per column in inches; 0.65" is a comfortable single-column baseline
+        _density = min(1.0, (_chart_w / _n_cat) / 0.65)
+    else:
+        _density = 1.0
+    # At full density: labels at 75% of header. Scales down proportionally with density.
+    # Floor: never below 55% of header (keeps labels readable even on dense charts).
+    max_chart_label_size = max(
+        round(header_font_size * 0.55),
+        round(header_font_size * 0.75 * _density)
+    )
 
     # Map chart type string to XL_CHART_TYPE
     chart_type_map = {
@@ -1479,9 +1499,19 @@ def render_artifact(slide, artifact, bt, ph_frame=None, header_ph_idx=None, head
     # Render header_block only when the heading wasn't routed to a layout placeholder
     if t != 'cards' and not heading_handled:
         hb = dict(header_block)
-        if hb and artifact.get('x') is not None and artifact.get('w') is not None:
-            hb['x'] = artifact.get('x')
-            hb['w'] = artifact.get('w')
+        # Align header x/w to the artifact's effective bounds.
+        # For workflow, bounds live in 'container', not top-level x/y/w/h — use container
+        # as the authoritative source so the header never inherits a full-slide ph_frame width.
+        if hb:
+            _eff_x = artifact.get('x')
+            _eff_w = artifact.get('w')
+            if t == 'workflow' and (_eff_x is None or _eff_w is None):
+                _ctr = artifact.get('container') or {}
+                _eff_x = _ctr.get('x', _eff_x)
+                _eff_w = _ctr.get('w', _eff_w)
+            if _eff_x is not None and _eff_w is not None:
+                hb['x'] = _eff_x
+                hb['w'] = _eff_w
         if hb and not hb.get('placeholder_ref'):
             rendered_header_bottom = render_header_block(slide, hb, bt, header_style=artifact_header_style)
             inline_header_rendered = True
@@ -1863,6 +1893,30 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
     _layout_ph_bounds = _ph_bounds if (layout_mode and use_template) else {}
     for zone_idx, zone in enumerate(slide_spec.get('zones', [])):
         zone = normalize_zone_artifact_stack(zone)
+        # ── Fix: multi-artifact zone with null frame in layout mode ───────────
+        # normalize_zone_artifact_stack exits early when frame is null, leaving
+        # all artifact coordinates as None. In layout mode this causes every
+        # artifact to fall back to the same single placeholder slot, so the
+        # second artifact renders directly on top of the first.
+        # Solution: resolve the placeholder frame for this zone, use it as a
+        # synthetic zone frame, then re-run stacking to assign proper sub-bounds.
+        _zone_arts_check = zone.get('artifacts', [])
+        if (layout_mode
+                and len(_zone_arts_check) >= 2
+                and all(a.get('x') is None for a in _zone_arts_check)
+                and _content_ph_frames):
+            _slot = min(zone_idx, len(_content_ph_frames) - 1)
+            _phf  = _content_ph_frames[_slot]
+            _synth_zone = {
+                **zone,
+                'frame': {
+                    'x': _phf['x'], 'y': _phf['y'],
+                    'w': _phf['w'], 'h': _phf['h'],
+                    'padding': {'top': 0.0, 'right': 0.0, 'bottom': 0.0, 'left': 0.0}
+                }
+            }
+            zone = normalize_zone_artifact_stack(_synth_zone)
+        # ─────────────────────────────────────────────────────────────────────
         # In layout mode, each zone may have a paired header placeholder
         hdr_ph_idx = zone.get('header_ph_idx') if layout_mode else None
         zone_artifacts = zone.get('artifacts', [])
@@ -1870,19 +1924,29 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
             ph_frame = None
             if layout_mode:
                 ph_idx_spec = artifact.get('placeholder_idx')
+                # Workflow artifacts store their bounds in 'container', not top-level x/y/w/h.
+                # If a valid container is present, treat it as having explicit bounds so we
+                # never override it with a placeholder frame (which could be full-slide width).
+                _wf_has_container = (
+                    str(artifact.get('type', '')).lower() == 'workflow'
+                    and isinstance(artifact.get('container'), dict)
+                    and all(artifact.get('container', {}).get(k) is not None for k in ('x', 'y', 'w', 'h'))
+                )
                 # Only apply placeholder bounds when:
                 # 1. The artifact has a placeholder_idx set
                 # 2. AND the artifact's own x/y/w/h are null/missing (Agent 5 deferred to layout)
                 # 3. AND the zone has exactly 1 artifact (1:1 mapping to placeholder slot)
+                # 4. AND the artifact is not a workflow with explicit container bounds
                 # For multi-artifact zones, Agent 5's explicit coordinates are authoritative.
                 needs_bounds = (
                     ph_idx_spec is not None
                     and len(zone_artifacts) == 1
                     and artifact.get('x') is None
+                    and not _wf_has_container
                 )
                 if needs_bounds and ph_idx_spec in _layout_ph_bounds:
                     ph_frame = _layout_ph_bounds[ph_idx_spec]
-                elif artifact.get('x') is None and _content_ph_frames:
+                elif artifact.get('x') is None and not _wf_has_container and _content_ph_frames:
                     # Fallback for specs that lost placeholder_idx but still rely on
                     # layout_mode with null coordinates. Prefer zone order for 1:1
                     # layouts; for multi-artifact zones, step through slots by artifact.
