@@ -37,6 +37,28 @@ import pptx.oxml.ns as nsmap
 from lxml import etree
 
 
+# Renderer-side spacing / fit rules. These must not override Agent 5 placement,
+# only how content is laid out inside the frames Agent 5 already chose.
+INTERNAL_PADDING = 0.14
+MIN_TEXT_MARGIN = 0.08
+HEADER_TO_ARTIFACT = 0.12
+ARTIFACT_TO_ARTIFACT = 0.18
+ZONE_TOP_OFFSET = 0.08
+HEADER_HEIGHT = 0.30
+INSIGHT_LEFT_PADDING = 0.15
+INSIGHT_RIGHT_PADDING = 0.12
+INSIGHT_TOP_PADDING = 0.10
+INSIGHT_BOTTOM_PADDING = 0.10
+CARD_GAP = 0.15
+CARD_INNER_PADDING = 0.15
+TITLE_TO_SUBTITLE = 0.08
+SUBTITLE_TO_BODY = 0.10
+TABLE_MIN_ROW_HEIGHT = 0.32
+CELL_PADDING = 0.09
+CHART_HEADER_GAP = 0.11
+OPTICAL_NUDGE = 0.02
+
+
 # ─── TEMPLATE HELPERS ─────────────────────────────────────────────────────────
 
 def clear_slides(prs):
@@ -174,7 +196,18 @@ def estimate_header_block_height(text, width_in, font_size):
     """Estimate rendered height for an artifact header, allowing wrapping."""
     lines = estimate_wrapped_lines(text, width_in, font_size)
     line_h = (font_size / 72.0) * 1.18
-    return max(0.18, lines * line_h + 0.02)
+    return max(HEADER_HEIGHT, lines * line_h + 0.02)
+
+
+def infer_slide_header_style(slide_spec):
+    """Choose one consistent header language per content slide."""
+    zones = slide_spec.get('zones', []) or []
+    for zone in zones:
+        for artifact in zone.get('artifacts', []) or []:
+            sentiment = str(artifact.get('sentiment', '') or '').lower()
+            if sentiment in ('warning', 'negative', 'risk'):
+                return 'brand_fill'
+    return 'underline'
 
 
 def add_image_box(slide, image_b64, x, y, w, h):
@@ -344,7 +377,7 @@ def place_in_placeholder(slide, ph_idx, text, style_spec, bt):
                      style_spec.get('align', 'left'), 'middle')
 
 
-def render_header_block(slide, header_block, bt):
+def render_header_block(slide, header_block, bt, header_style='underline'):
     """
     Render an artifact header label.
     style='underline' — text + thin brand-colour rule below.
@@ -357,9 +390,7 @@ def render_header_block(slide, header_block, bt):
     w     = header_block.get('w', 4)
     h     = header_block.get('h', 0.3)
     text  = header_block.get('text', '')
-    # Keep inline artifact headers visually consistent with template-style headers.
-    # We standardize them to underline rather than mixing filled bars and underlines.
-    style = 'underline'
+    style = header_style or 'underline'
 
     if not text:
         return
@@ -372,8 +403,9 @@ def render_header_block(slide, header_block, bt):
     rule_h = 0.03
 
     if style == 'brand_fill':
-        add_filled_rect(slide, x, y, w, h, fill_hex=primary)
-        text_color = '#FFFFFF' if is_dark_color(primary) else '#111111'
+        fill_color = header_block.get('accent_color') or primary
+        add_filled_rect(slide, x, y, w, h, fill_hex=fill_color)
+        text_color = '#FFFFFF' if is_dark_color(fill_color) else '#111111'
         add_text_box(slide, x + 0.08, y, w - 0.16, h,
                      text, font_fam, font_size, True, text_color, 'left', 'middle')
         return y + h
@@ -416,7 +448,7 @@ def render_insight_text(slide, artifact, bt, suppress_heading=False):
                             border_hex=border, border_pt=bw, corner_radius=cr)
 
     # ── Heading & body layout ────────────────────────────────────────────────
-    TOP_PAD   = 0.20   # gap between box top / layout header placeholder and first bullet
+    TOP_PAD   = INSIGHT_TOP_PADDING
     content_y = y + TOP_PAD
 
     # Collect heading params; rendering is deferred until after b_size is known
@@ -443,12 +475,12 @@ def render_insight_text(slide, artifact, bt, suppress_heading=False):
         b_size       = bs.get('font_size', 10)
         b_color      = bs.get('color', '#111111')
         list_style   = bs.get('list_style', 'bullet')
-        indent_in    = float(bs.get('indent_inches', 0.12))
+        indent_in    = float(bs.get('indent_inches', INSIGHT_LEFT_PADDING))
         vert_dist    = bs.get('vertical_distribution', '')
         space_bef_pt = max(1, int(bs.get('space_before_pt', 4)))
 
-        body_h = h - (content_y - y)
-        text_w = max(0.5, w - indent_in - BULLET_HANG)
+        body_h = max(0.1, h - (content_y - y) - INSIGHT_BOTTOM_PADDING)
+        text_w = max(0.5, w - indent_in - INSIGHT_RIGHT_PADDING - BULLET_HANG)
 
         # Estimate wrapped line count per point at a given font size
         def _wrapped_lines(text, font_pt, avail_w_in):
@@ -492,11 +524,14 @@ def render_insight_text(slide, artifact, bt, suppress_heading=False):
         # else: text fits → keep b_size unchanged (no upscaling)
 
         # Inter-bullet gap: use spec value; only increase if there is clear excess space
+        total_lines = sum(_wrapped_lines(p, b_size, text_w) for p in points)
+        if total_lines > 12:
+            b_size = max(7, b_size - 1)
+            space_bef_pt = max(2, space_bef_pt - 1)
         available_per_slot = body_h / max(len(points), 1)
         used_per_slot      = _total_h(b_size, space_bef_pt) / max(len(points), 1)
         slack_pt           = (available_per_slot - used_per_slot) * 72
-        if slack_pt > 4:
-            # Distribute some slack as extra space_before so points spread nicely
+        if vert_dist == 'spread' and slack_pt > 4:
             space_bef_pt = min(space_bef_pt + int(slack_pt * 0.5), 20)
 
         # Scale heading font proportionally to body size (but never smaller than 10pt)
@@ -543,7 +578,7 @@ def render_insight_text(slide, artifact, bt, suppress_heading=False):
         # so the renderer can auto-fit the font if needed.
         txBox = slide.shapes.add_textbox(
             inches(x + indent_in), inches(content_y),
-            inches(w - indent_in), inches(body_h)
+            inches(w - indent_in - INSIGHT_RIGHT_PADDING), inches(body_h)
         )
         tf = txBox.text_frame
         enable_text_fit(tf)
@@ -818,22 +853,22 @@ def render_cards(slide, artifact, bt):
     cards    = artifact.get('cards', [])
 
     fill_hex   = cs.get('fill_color', '#F5F5F5')
-    border_hex = cs.get('border_color')
-    border_w   = cs.get('border_width', 1)
+    border_hex = cs.get('border_color') or '#E0E0E0'
+    border_w   = cs.get('border_width', 0.75)
     corner_r   = cs.get('corner_radius', 4)
-    padding    = cs.get('internal_padding', 0.15)
+    padding    = cs.get('internal_padding', CARD_INNER_PADDING)
 
     t_font  = ts.get('font_family', bt.get('title_font_family', 'Arial'))
-    t_size  = ts.get('font_size', 14)
+    t_size  = ts.get('font_size', 10)
     t_color = ts.get('color', bt.get('primary_color', '#1A3C8F'))
     t_bold  = ts.get('font_weight', 'bold') in ('bold', 'semibold')
 
     su_font  = sub_s.get('font_family', bt.get('body_font_family', 'Arial'))
-    su_size  = sub_s.get('font_size', 11)
+    su_size  = sub_s.get('font_size', 20)
     su_color = sub_s.get('color', '#000000')
 
     b_font  = bs.get('font_family', bt.get('body_font_family', 'Arial'))
-    b_size  = bs.get('font_size', 10)
+    b_size  = bs.get('font_size', 9)
     b_color = bs.get('color', '#111111')
 
     # Sentinel fill colors for sentiment (override card_style.fill_color per card)
@@ -885,39 +920,40 @@ def render_cards(slide, artifact, bt):
 
         if inner_h > 0.05:
             if has_sub and has_body:
-                title_h = inner_h * 0.28
-                sub_h   = inner_h * 0.38
-                body_h  = inner_h - title_h - sub_h
+                title_h = inner_h * 0.20
+                sub_h   = inner_h * 0.40
+                body_h  = max(0.12, inner_h - title_h - sub_h - TITLE_TO_SUBTITLE - SUBTITLE_TO_BODY)
             elif has_sub:
-                title_h = inner_h * 0.40
-                sub_h   = inner_h * 0.60
+                title_h = inner_h * 0.28
+                sub_h   = inner_h - title_h - TITLE_TO_SUBTITLE
                 body_h  = 0
             elif has_body:
-                title_h = inner_h * 0.35
+                title_h = inner_h * 0.25
                 sub_h   = 0
-                body_h  = inner_h - title_h
+                body_h  = inner_h - title_h - TITLE_TO_SUBTITLE
             else:
                 title_h = inner_h
                 sub_h   = 0
                 body_h  = 0
 
-            # Scale subtitle font so it fits within its allocated slot
-            actual_su_size = min(su_size, max(8, int(sub_h * 72 * 0.82))) if sub_h > 0 else su_size
+            actual_title_size = estimate_fit_font_size(str(card_title), max(0.3, fw - padding*2), max(0.14, title_h), t_size, 8) if card_title else t_size
+            actual_su_size = estimate_fit_font_size(str(card_sub), max(0.3, fw - padding*2), max(0.18, sub_h), su_size, 12) if sub_h > 0 else su_size
+            actual_body_size = estimate_fit_font_size(str(card_body), max(0.3, fw - padding*2), max(0.12, body_h), b_size, 7) if body_h > 0 else b_size
 
             cur_y = inner_top
             if card_title:
                 add_text_box(slide, fx + padding, cur_y, fw - padding*2, title_h,
-                             str(card_title), t_font, t_size, t_bold, t_color, 'left', 'top')
-            cur_y += title_h
+                             str(card_title), t_font, actual_title_size, t_bold, t_color, 'left', 'top')
+            cur_y += title_h + (TITLE_TO_SUBTITLE if has_sub else 0)
 
             if card_sub and sub_h > 0:
                 add_text_box(slide, fx + padding, cur_y, fw - padding*2, sub_h,
                              str(card_sub), su_font, actual_su_size, False, su_color, 'left', 'top')
-            cur_y += sub_h
+            cur_y += sub_h + (SUBTITLE_TO_BODY if has_body else 0)
 
             if card_body and body_h > 0.05:
                 add_text_box(slide, fx + padding, cur_y, fw - padding*2, body_h,
-                             str(card_body), b_font, b_size, False, b_color, 'left', 'top')
+                             str(card_body), b_font, actual_body_size, False, b_color, 'left', 'top')
 
 
 def render_workflow(slide, artifact, bt):
@@ -1174,8 +1210,22 @@ def render_table(slide, artifact, bt):
             return [(v / summed) * total for v in nums]
         return [total / max(count, 1)] * count
 
-    norm_col_ws = _norm_sizes(col_ws, n_cols, w)
-    norm_row_hs = _norm_sizes(row_hs, n_rows, h)
+    def _auto_col_widths():
+        weights = []
+        for ci, hdr in enumerate(headers):
+            max_len = len(str(hdr or ''))
+            for row in data_rows:
+                if ci < len(row):
+                    max_len = max(max_len, len(str(row[ci] or '')))
+            weights.append(max(6, min(max_len, 40)))
+        total_weight = sum(weights) or 1
+        return [w * (wt / total_weight) for wt in weights]
+
+    norm_col_ws = _auto_col_widths()
+    norm_row_hs = [max(TABLE_MIN_ROW_HEIGHT, rh) for rh in _norm_sizes(row_hs, n_rows, h)]
+    row_total = sum(norm_row_hs)
+    if row_total > h:
+        norm_row_hs = [rh * (h / row_total) for rh in norm_row_hs]
 
     try:
         table_shape = slide.shapes.add_table(n_rows, n_cols, inches(x), inches(y), inches(w), inches(h))
@@ -1202,7 +1252,7 @@ def render_table(slide, artifact, bt):
         b_size  = ts.get('body_font_size', 10)
         hl_fill = ts.get('highlight_fill_color')
         grid_c  = ts.get('grid_color', '#CCCCCC')
-        cell_p  = ts.get('cell_padding', 0.08)
+        cell_p  = max(0.08, min(0.10, ts.get('cell_padding', CELL_PADDING) or CELL_PADDING))
 
         # Detect which columns are numeric (right-align) vs text (left-align)
         # A column is "numeric" if > 50% of its body values look like numbers/currency
@@ -1289,7 +1339,7 @@ def render_table(slide, artifact, bt):
         add_text_box(slide, x, y, w, h, all_text, 'Arial', 9, False, '#111111')
 
 
-def _write_heading_to_header_ph(slide, heading_text, header_ph_idx, bt):
+def _write_heading_to_header_ph(slide, heading_text, header_ph_idx, bt, header_style='underline'):
     """Write heading text into the layout's paired header placeholder."""
     if not heading_text or header_ph_idx is None:
         return False
@@ -1316,21 +1366,27 @@ def _write_heading_to_header_ph(slide, heading_text, header_ph_idx, bt):
                     )
                 except Exception:
                     pass
-                # Apply the same artifact-header treatment for layout placeholder
-                # headings: blue underline directly beneath the placeholder row.
                 try:
                     font_size = 10
                     text_h = estimate_header_block_height(heading_text, ph_w, font_size)
-                    rule_gap = 0.02
-                    rule_h = 0.03
-                    add_filled_rect(
-                        slide,
-                        ph_x,
-                        ph_y + text_h + rule_gap,
-                        ph_w,
-                        rule_h,
-                        fill_hex=bt.get('primary_color', '#1A3C8F')
-                    )
+                    if header_style == 'brand_fill':
+                        add_filled_rect(
+                            slide,
+                            ph_x,
+                            ph_y,
+                            ph_w,
+                            HEADER_HEIGHT,
+                            fill_hex=bt.get('primary_color', '#1A3C8F')
+                        )
+                    else:
+                        add_filled_rect(
+                            slide,
+                            ph_x,
+                            ph_y + text_h + 0.02,
+                            ph_w,
+                            0.03,
+                            fill_hex=bt.get('primary_color', '#1A3C8F')
+                        )
                 except Exception:
                     pass
                 return True
@@ -1339,7 +1395,7 @@ def _write_heading_to_header_ph(slide, heading_text, header_ph_idx, bt):
     return False
 
 
-def render_artifact(slide, artifact, bt, ph_frame=None, header_ph_idx=None):
+def render_artifact(slide, artifact, bt, ph_frame=None, header_ph_idx=None, header_style='underline'):
     """
     Dispatch to the correct renderer based on artifact type.
 
@@ -1379,13 +1435,16 @@ def render_artifact(slide, artifact, bt, ph_frame=None, header_ph_idx=None):
         else:
             heading_text = ''
         if heading_text:
-            heading_handled = _write_heading_to_header_ph(slide, heading_text, header_ph_idx, bt)
+            heading_handled = _write_heading_to_header_ph(slide, heading_text, header_ph_idx, bt, header_style=header_style)
 
     # Render header_block only when the heading wasn't routed to a layout placeholder
     if t != 'cards' and not heading_handled:
-        hb = header_block
+        hb = dict(header_block)
+        if hb and artifact.get('x') is not None and artifact.get('w') is not None:
+            hb['x'] = artifact.get('x')
+            hb['w'] = artifact.get('w')
         if hb and not hb.get('placeholder_ref'):
-            rendered_header_bottom = render_header_block(slide, hb, bt)
+            rendered_header_bottom = render_header_block(slide, hb, bt, header_style=header_style)
             inline_header_rendered = True
 
     suppress_internal_heading = heading_handled or inline_header_rendered
@@ -1539,6 +1598,7 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
     cvs                  = slide_spec.get('canvas', {})
     tb                   = slide_spec.get('title_block') or {}
     sb                   = slide_spec.get('subtitle_block') or {}
+    slide_header_style   = infer_slide_header_style(slide_spec)
 
     # ── Choose layout ────────────────────────────────────────────────────────
     layout = blank_layout
@@ -1739,7 +1799,7 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
                     fallback_slot = zone_idx if len(zone_artifacts) == 1 else (zone_idx + art_idx)
                     fallback_slot = min(fallback_slot, len(_content_ph_frames) - 1)
                     ph_frame = _content_ph_frames[fallback_slot]
-            render_artifact(slide, artifact, bt, ph_frame=ph_frame, header_ph_idx=hdr_ph_idx)
+            render_artifact(slide, artifact, bt, ph_frame=ph_frame, header_ph_idx=hdr_ph_idx, header_style=slide_header_style)
 
     # ── Global elements (scratch only) ────────────────────────────────────────
     if not use_template:
