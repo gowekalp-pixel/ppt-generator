@@ -335,7 +335,9 @@ def render_header_block(slide, header_block, bt):
     w     = header_block.get('w', 4)
     h     = header_block.get('h', 0.3)
     text  = header_block.get('text', '')
-    style = header_block.get('style', 'underline')
+    # Keep inline artifact headers visually consistent with template-style headers.
+    # We standardize them to underline rather than mixing filled bars and underlines.
+    style = 'underline'
 
     if not text:
         return
@@ -1311,6 +1313,7 @@ def render_artifact(slide, artifact, bt, ph_frame=None, header_ph_idx=None):
 
     # Route artifact heading into the layout's paired header placeholder when available
     heading_handled = False
+    inline_header_rendered = False
     header_block = artifact.get('header_block') or {}
     use_placeholder_header = bool(header_block.get('placeholder_ref'))
     if header_ph_idx is not None and t != 'cards' and use_placeholder_header:
@@ -1332,12 +1335,15 @@ def render_artifact(slide, artifact, bt, ph_frame=None, header_ph_idx=None):
         hb = header_block
         if hb and not hb.get('placeholder_ref'):
             render_header_block(slide, hb, bt)
+            inline_header_rendered = True
+
+    suppress_internal_heading = heading_handled or inline_header_rendered
 
     try:
         if   t == 'insight_text': render_insight_text(slide, artifact, bt,
-                                                       suppress_heading=heading_handled)
+                                                       suppress_heading=suppress_internal_heading)
         elif t == 'chart':        render_chart(slide, artifact, bt,
-                                               suppress_heading=heading_handled)
+                                               suppress_heading=suppress_internal_heading)
         elif t == 'cards':        render_cards(slide, artifact, bt)
         elif t == 'workflow':     render_workflow(slide, artifact, bt)
         elif t == 'table':        render_table(slide, artifact, bt)
