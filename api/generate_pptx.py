@@ -155,6 +155,28 @@ def estimate_fit_font_size(text, width_in, height_in, max_size=12, min_size=7):
     return max(min_size, size)
 
 
+def estimate_wrapped_lines(text, width_in, font_size):
+    """Cheap line-wrap estimate for short headings and labels."""
+    text = str(text or '').strip()
+    if not text:
+        return 1
+    width_pts = max(1, width_in * 72)
+    char_w = max(1.0, font_size * 0.52)
+    chars_per_line = max(4, int(width_pts / char_w))
+    lines = 0
+    for chunk in text.split('\n'):
+        chunk = chunk.strip()
+        lines += max(1, int(len(chunk) / chars_per_line) + 1)
+    return max(1, lines)
+
+
+def estimate_header_block_height(text, width_in, font_size):
+    """Estimate rendered height for an artifact header, allowing wrapping."""
+    lines = estimate_wrapped_lines(text, width_in, font_size)
+    line_h = (font_size / 72.0) * 1.18
+    return max(0.18, lines * line_h + 0.02)
+
+
 def add_image_box(slide, image_b64, x, y, w, h):
     """Render an image from base64."""
     if not image_b64:
@@ -345,17 +367,23 @@ def render_header_block(slide, header_block, bt):
     primary   = bt.get('primary_color', '#1A3C8F')
     font_fam  = bt.get('title_font_family', 'Arial')
     font_size = header_block.get('font_size', 11)
+    text_h = estimate_header_block_height(text, w, font_size)
+    rule_gap = 0.02
+    rule_h = 0.03
 
     if style == 'brand_fill':
         add_filled_rect(slide, x, y, w, h, fill_hex=primary)
         text_color = '#FFFFFF' if is_dark_color(primary) else '#111111'
         add_text_box(slide, x + 0.08, y, w - 0.16, h,
                      text, font_fam, font_size, True, text_color, 'left', 'middle')
+        return y + h
     else:
         # Underline style
-        add_text_box(slide, x, y, w, max(0.01, h - 0.05),
-                     text, font_fam, font_size, True, primary, 'left', 'bottom')
-        add_filled_rect(slide, x, y + h - 0.04, w, 0.03, fill_hex=primary)
+        add_text_box(slide, x, y, w, text_h,
+                     text, font_fam, font_size, True, primary, 'left', 'top')
+        rule_y = y + text_h + rule_gap
+        add_filled_rect(slide, x, rule_y, w, rule_h, fill_hex=primary)
+        return rule_y + rule_h
 
 
 # ─── SLIDE RENDERERS ──────────────────────────────────────────────────────────
@@ -1291,12 +1319,16 @@ def _write_heading_to_header_ph(slide, heading_text, header_ph_idx, bt):
                 # Apply the same artifact-header treatment for layout placeholder
                 # headings: blue underline directly beneath the placeholder row.
                 try:
+                    font_size = 10
+                    text_h = estimate_header_block_height(heading_text, ph_w, font_size)
+                    rule_gap = 0.02
+                    rule_h = 0.03
                     add_filled_rect(
                         slide,
                         ph_x,
-                        ph_y + max(0.01, ph_h - 0.04),
+                        ph_y + text_h + rule_gap,
                         ph_w,
-                        0.03,
+                        rule_h,
                         fill_hex=bt.get('primary_color', '#1A3C8F')
                     )
                 except Exception:
@@ -1332,6 +1364,7 @@ def render_artifact(slide, artifact, bt, ph_frame=None, header_ph_idx=None):
     # Route artifact heading into the layout's paired header placeholder when available
     heading_handled = False
     inline_header_rendered = False
+    rendered_header_bottom = None
     header_block = artifact.get('header_block') or {}
     use_placeholder_header = bool(header_block.get('placeholder_ref'))
     if header_ph_idx is not None and t != 'cards' and use_placeholder_header:
@@ -1352,13 +1385,13 @@ def render_artifact(slide, artifact, bt, ph_frame=None, header_ph_idx=None):
     if t != 'cards' and not heading_handled:
         hb = header_block
         if hb and not hb.get('placeholder_ref'):
-            render_header_block(slide, hb, bt)
+            rendered_header_bottom = render_header_block(slide, hb, bt)
             inline_header_rendered = True
 
     suppress_internal_heading = heading_handled or inline_header_rendered
     if inline_header_rendered and header_block:
         gap = 0.08
-        header_bottom = float(header_block.get('y', artifact.get('y', 0)) or 0) + float(header_block.get('h', 0.25) or 0) + gap
+        header_bottom = float(rendered_header_bottom or 0) + gap
         art_y = float(artifact.get('y', 0) or 0)
         art_h = float(artifact.get('h', 0) or 0)
         if art_h > 0 and header_bottom > art_y:
