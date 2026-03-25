@@ -201,12 +201,9 @@ def estimate_header_block_height(text, width_in, font_size):
 
 def infer_slide_header_style(slide_spec):
     """Choose one consistent header language per content slide."""
-    zones = slide_spec.get('zones', []) or []
-    for zone in zones:
-        for artifact in zone.get('artifacts', []) or []:
-            sentiment = str(artifact.get('sentiment', '') or '').lower()
-            if sentiment in ('warning', 'negative', 'risk'):
-                return 'brand_fill'
+    # Keep artifact headers visually consistent across all content slides.
+    # Agent 5 controls placement; Agent 6 should not switch header language
+    # slide-by-slide based on artifact sentiment.
     return 'underline'
 
 
