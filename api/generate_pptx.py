@@ -768,6 +768,14 @@ def render_chart(slide, artifact, bt, suppress_heading=False):
         except Exception:
             pass
 
+    # Remove gridlines for a cleaner chart surface.
+    try:
+        if hasattr(chart, 'value_axis') and chart.value_axis is not None:
+            chart.value_axis.has_major_gridlines = False
+            chart.value_axis.has_minor_gridlines = False
+    except Exception:
+        pass
+
     # Series colors + data labels
     try:
         for si, ser_obj in enumerate(chart.series):
@@ -789,7 +797,7 @@ def render_chart(slide, artifact, bt, suppress_heading=False):
                     for lbl in ser_obj.data_labels:
                         try:
                             lbl.font.color.rgb = hex_to_rgb(lbl_color)
-                            lbl.font.size = Pt(min(8, max_chart_label_size))
+                            lbl.font.size = Pt(min(max_chart_label_size, header_font_size))
                         except Exception:
                             pass
                 except Exception:
