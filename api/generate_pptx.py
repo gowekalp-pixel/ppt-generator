@@ -1179,28 +1179,45 @@ def render_workflow(slide, artifact, bt):
         node_w = max(0.75, usable_w / count)
         total_h = max(0.70, target_rect['h'] - 2 * pad_y)
 
-        # Split height: colored box at top, description text below the box.
-        # When any node carries description content, reserve ~45% for the box
-        # and ~55% for the description band below it (outside the fill).
-        has_any_desc = any(bool(n.get('description', '')) for n in nodes_)
-        box_ratio = 0.42 if has_any_desc else 1.0
-        box_h = max(0.45, total_h * box_ratio)
+        has_top_notes = any(bool(n.get('value', '')) for n in nodes_)
+        has_bottom_notes = any(bool(n.get('description', '')) for n in nodes_)
+        note_gap = 0.06
+        top_h = max(0.16, min(0.34, total_h * 0.16)) if has_top_notes else 0.0
+        desired_box_h = total_h * (0.34 if has_bottom_notes else 0.50)
+        box_h = max(0.72, min(1.05, desired_box_h))
+        bottom_h = max(0.0, total_h - box_h - top_h
+                       - (note_gap if has_top_notes else 0.0)
+                       - (note_gap if has_bottom_notes else 0.0))
+        if has_bottom_notes and bottom_h < 0.18:
+            deficit = 0.18 - bottom_h
+            reducible = max(0.0, box_h - 0.62)
+            take = min(deficit, reducible)
+            box_h -= take
+            bottom_h += take
 
         start_x = target_rect['x'] + pad_x
         node_y = target_rect['y'] + max(0.02, (target_rect['h'] - total_h) / 2.0)
 
         laid_out = []
         for i, node in enumerate(nodes_):
+            box_y = node_y + top_h + (note_gap if has_top_notes else 0.0)
             laid_out.append({
                 **node,
                 'x': start_x + i * (node_w + gap),
                 'y': node_y,
-                'box_h': box_h,   # height of colored fill only
+                'box_y': box_y,
+                'box_h': box_h,
+                'top_h': top_h,
+                'bottom_h': bottom_h,
+                'note_top_y': node_y,
+                'note_top_h': top_h,
+                'note_bottom_y': box_y + box_h + (note_gap if has_bottom_notes else 0.0),
+                'note_bottom_h': bottom_h,
                 'w': node_w,
                 'h': total_h
             })
 
-        conn_y = node_y + box_h / 2.0
+        conn_y = node_y + top_h + (note_gap if has_top_notes else 0.0) + box_h / 2.0
         laid_conns = []
         for i in range(len(laid_out) - 1):
             cur = laid_out[i]
@@ -1212,6 +1229,64 @@ def render_workflow(slide, artifact, bt):
                 'path': [
                     {'x': cur['x'] + cur['w'], 'y': conn_y},
                     {'x': nxt['x'], 'y': conn_y}
+                ]
+            })
+
+        return laid_out, laid_conns
+
+    def _layout_vertical_flow(nodes_, target_rect, upward=False):
+        if not nodes_ or not _has_rect(target_rect):
+            return nodes_, []
+
+        count = max(1, len(nodes_))
+        pad_x = min(0.12, max(0.05, target_rect['w'] * 0.04))
+        pad_y = min(0.12, max(0.05, target_rect['h'] * 0.04))
+        gap_y = min(0.16, max(0.06, target_rect['h'] * 0.025))
+        has_notes = any(bool(n.get('description', '') or n.get('value', '')) for n in nodes_)
+        note_gap = 0.14 if has_notes else 0.0
+
+        usable_w = max(0.4, target_rect['w'] - 2 * pad_x)
+        box_w = min(max(1.05, usable_w * 0.40), max(1.05, usable_w - 0.75)) if has_notes else max(1.10, usable_w * 0.65)
+        note_w = max(0.0, usable_w - box_w - note_gap)
+        box_x = target_rect['x'] + pad_x
+        note_x = box_x + box_w + note_gap
+
+        band_h = max(0.80, (target_rect['h'] - 2 * pad_y - gap_y * (count - 1)) / count)
+        box_h = max(0.54, min(0.85, band_h * 0.62))
+
+        block_starts = [target_rect['y'] + pad_y + i * (band_h + gap_y) for i in range(count)]
+        if upward:
+            block_starts = list(reversed(block_starts))
+
+        laid_out = []
+        for i, node in enumerate(nodes_):
+            block_y = block_starts[i]
+            box_y = block_y + max(0.0, (band_h - box_h) / 2.0)
+            laid_out.append({
+                **node,
+                'x': box_x,
+                'y': box_y,
+                'w': box_w,
+                'h': box_h,
+                'box_y': box_y,
+                'box_h': box_h,
+                'note_right_x': note_x,
+                'note_right_y': block_y,
+                'note_right_w': note_w,
+                'note_right_h': band_h,
+            })
+
+        laid_conns = []
+        for i in range(len(laid_out) - 1):
+            cur = laid_out[i]
+            nxt = laid_out[i + 1]
+            laid_conns.append({
+                'from': cur.get('id'),
+                'to': nxt.get('id'),
+                'type': 'arrow',
+                'path': [
+                    {'x': cur['x'] + cur['w'] / 2.0, 'y': cur['y'] + cur['h']},
+                    {'x': nxt['x'] + nxt['w'] / 2.0, 'y': nxt['y']}
                 ]
             })
 
@@ -1236,6 +1311,8 @@ def render_workflow(slide, artifact, bt):
     if target_rect:
         if flow_direction in ('left_to_right', 'horizontal') or workflow_type in ('timeline', 'roadmap'):
             nodes, conns = _layout_horizontal_timeline(nodes, target_rect)
+        elif flow_direction in ('top_to_bottom', 'top_down', 'bottom_up'):
+            nodes, conns = _layout_vertical_flow(nodes, target_rect, upward=(flow_direction == 'bottom_up'))
         else:
             nodes, conns = _normalize_workflow_to_rect(nodes, conns, target_rect)
 
@@ -1252,7 +1329,8 @@ def render_workflow(slide, artifact, bt):
 
     v_font  = ws.get('node_value_font_family', bt.get('body_font_family', 'Arial'))
     v_size  = ws.get('node_value_font_size', 10)
-    v_color = ws.get('node_value_color', '#FFFFFF')
+    v_color = ws.get('node_value_color', bt.get('body_color', '#000000'))
+    top_note_color = bt.get('primary_color') or bt.get('title_color') or t_color
 
     # Draw connections first (behind nodes)
     for conn in conns:
@@ -1277,21 +1355,25 @@ def render_workflow(slide, artifact, bt):
                 pass
 
     # Draw nodes
-    # Layout pattern: colored box at the TOP of each node (label + value inside),
-    # description text rendered BELOW the box in the body color — outside the fill.
+    # Layout pattern:
+    # - horizontal flows: optional note above, primary label inside box, optional note below
+    # - vertical flows: primary label inside box, optional note to the right
+    # - all other flows: primary/value inside box, description below
     body_color = bt.get('body_color', '#000000')
-    node_map = {n.get('id'): n for n in nodes}
+    is_horizontal_flow = flow_direction in ('left_to_right', 'horizontal') or workflow_type in ('timeline', 'roadmap')
+    is_vertical_flow = flow_direction in ('top_to_bottom', 'top_down', 'bottom_up')
+    effective_node_fill = (bt.get('primary_color') or bt.get('title_color') or node_fill) if is_horizontal_flow else node_fill
     for node in nodes:
         nx   = node.get('x', 0)
         ny   = node.get('y', 0)
         nw   = node.get('w', 2)
         nh   = node.get('h', 0.8)
-        # box_h is the colored fill portion; falls back to full nh for non-timeline flows
+        box_y = node.get('box_y', ny)
         bxh  = node.get('box_h', nh)
 
         # ── Colored fill box (label + value only) ────────────────────────────
-        add_filled_rect(slide, nx, ny, nw, bxh,
-                        fill_hex=node_fill,
+        add_filled_rect(slide, nx, box_y, nw, bxh,
+                        fill_hex=effective_node_fill,
                         border_hex=node_border,
                         border_pt=node_bw,
                         corner_radius=node_cr)
@@ -1299,33 +1381,61 @@ def render_workflow(slide, artifact, bt):
         # Node label (primary text — inside the colored box)
         label = node.get('label', node.get('id', ''))
         value = node.get('value', '')
+        desc = node.get('description', '')
         has_value = bool(value)
         label_h = bxh * (0.55 if has_value else 0.70)
         val_h   = max(0.14, bxh - label_h - 0.10) if has_value else 0
 
         if label:
-            label_size = estimate_fit_font_size(str(label), max(0.3, nw - 0.2), max(0.18, label_h), t_size, 8)
-            add_text_box(slide, nx + 0.1, ny + 0.06, nw - 0.2, label_h,
+            label_size = estimate_fit_font_size(str(label), max(0.3, nw - 0.2), max(0.22, bxh - 0.12), t_size, 8)
+            add_text_box(slide, nx + 0.1, box_y + 0.06, nw - 0.2, max(0.22, bxh - 0.12),
                          str(label), t_font, label_size, t_bold, t_color, 'center', 'middle')
 
         # Node value (secondary metric — also inside the colored box, below label)
-        if value:
-            value_size = estimate_fit_font_size(str(value), max(0.3, nw - 0.2), max(0.14, val_h), v_size, 7)
-            add_text_box(slide, nx + 0.1, ny + 0.06 + label_h, nw - 0.2, val_h,
-                         str(value), v_font, value_size, False, v_color, 'center', 'middle')
+        if is_horizontal_flow:
+            top_h = max(0.0, float(node.get('note_top_h', 0.0) or 0.0))
+            if value and top_h > 0.08:
+                top_y = float(node.get('note_top_y', ny) or ny)
+                value_size = estimate_fit_font_size(str(value), max(0.28, nw - 0.10), top_h, max(8, v_size), 7)
+                add_text_box(slide, nx + 0.05, top_y, nw - 0.10, top_h,
+                             str(value), v_font, value_size, True, top_note_color, 'center', 'middle')
+        elif is_vertical_flow:
+            note_x = float(node.get('note_right_x', nx + nw + 0.10) or (nx + nw + 0.10))
+            note_y = float(node.get('note_right_y', ny) or ny)
+            note_w = max(0.0, float(node.get('note_right_w', 0.0) or 0.0))
+            note_h = max(0.0, float(node.get('note_right_h', nh) or nh))
+            note_parts = [str(x).strip() for x in (value, desc) if str(x or '').strip()]
+            note_text = '\n'.join(note_parts[:2])
+            if note_text and note_w > 0.12 and note_h > 0.12:
+                note_size = estimate_fit_font_size(note_text, max(0.24, note_w), note_h,
+                                                   max(7, v_size - 1), 6)
+                add_text_box(slide, note_x, note_y, note_w, note_h,
+                             note_text, v_font, note_size, False, body_color, 'left', 'middle')
+        elif value:
+            value_size = estimate_fit_font_size(str(value), max(0.3, nw - 0.2), max(0.14, val_h), max(7, v_size - 1), 7)
+            add_text_box(slide, nx + 0.1, box_y + 0.06 + label_h, nw - 0.2, val_h,
+                         str(value), v_font, value_size, False, t_color, 'center', 'middle')
 
         # ── Description text BELOW the colored box ───────────────────────────
         # Rendered outside the fill in body color so it reads as supporting detail,
         # not as part of the highlighted header block.
-        desc = node.get('description', '')
-        desc_gap = 0.06
-        desc_y   = ny + bxh + desc_gap
-        desc_h   = max(0.0, nh - bxh - desc_gap)
-        if desc and desc_h > 0.12:
-            desc_size = estimate_fit_font_size(str(desc), max(0.28, nw - 0.12), desc_h,
-                                               max(7, v_size - 1), 6)
-            add_text_box(slide, nx + 0.06, desc_y, nw - 0.12, desc_h,
-                         str(desc), v_font, desc_size, False, body_color, 'center', 'top')
+        if is_horizontal_flow:
+            bottom_h = max(0.0, float(node.get('note_bottom_h', 0.0) or 0.0))
+            if desc and bottom_h > 0.12:
+                bottom_y = float(node.get('note_bottom_y', box_y + bxh) or (box_y + bxh))
+                desc_size = estimate_fit_font_size(str(desc), max(0.28, nw - 0.12), bottom_h,
+                                                   max(7, v_size - 1), 6)
+                add_text_box(slide, nx + 0.06, bottom_y, nw - 0.12, bottom_h,
+                             str(desc), v_font, desc_size, False, body_color, 'center', 'top')
+        elif not is_vertical_flow:
+            desc_gap = 0.06
+            desc_y   = box_y + bxh + desc_gap
+            desc_h   = max(0.0, ny + nh - desc_y)
+            if desc and desc_h > 0.12:
+                desc_size = estimate_fit_font_size(str(desc), max(0.28, nw - 0.12), desc_h,
+                                                   max(7, v_size - 1), 6)
+                add_text_box(slide, nx + 0.06, desc_y, nw - 0.12, desc_h,
+                             str(desc), v_font, desc_size, False, body_color, 'center', 'top')
 
 
 def render_table(slide, artifact, bt):

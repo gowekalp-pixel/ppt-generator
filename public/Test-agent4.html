@@ -179,11 +179,15 @@
 
     /* Workflow preview */
     .wf-preview { overflow-x: auto; }
-    .wf-nodes { display: flex; gap: 6px; flex-wrap: wrap; }
-    .wf-node { background: #eff6ff; border: 1.5px solid #2563eb; border-radius: 5px; padding: 5px 8px; min-width: 60px; text-align: center; }
-    .wf-node-label { font-size: 10px; font-weight: 600; color: #1e3a8a; }
-    .wf-node-val   { font-size: 11px; font-weight: 700; color: #1e3a8a; margin-top: 1px; }
-    .wf-node-desc  { font-size: 9px; color: #555; margin-top: 1px; }
+    .wf-nodes { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-start; }
+    .wf-nodes.vertical { flex-direction: column; }
+    .wf-step { min-width: 84px; display: flex; flex-direction: column; align-items: center; }
+    .wf-step.vertical { width: 100%; flex-direction: row; align-items: center; gap: 10px; }
+    .wf-note-top { font-size: 10px; font-weight: 700; color: #1e3a8a; text-align: center; margin-bottom: 4px; }
+    .wf-node { background: #2563eb; border: 1.5px solid #2563eb; border-radius: 6px; padding: 7px 10px; min-width: 76px; text-align: center; }
+    .wf-node-label { font-size: 10px; font-weight: 700; color: #fff; }
+    .wf-note-bottom  { font-size: 9px; color: #555; margin-top: 5px; text-align: center; line-height: 1.35; }
+    .wf-note-right { font-size: 9px; color: #555; text-align: left; line-height: 1.35; max-width: 180px; }
     .wf-arrow { font-size: 14px; color: #d97706; align-self: center; }
     .wf-conn-list { font-size: 10px; color: #888; margin-top: 4px; }
 
@@ -519,16 +523,28 @@
 
     else if (t === 'workflow') {
       const nodes = a.nodes||[], conns = a.connections||[]
+      const flow = a.flow_direction || ''
+      const isHorizontal = flow === 'left_to_right' || flow === 'horizontal' || a.workflow_type === 'timeline'
+      const isVertical = flow === 'top_to_bottom' || flow === 'top_down' || flow === 'bottom_up'
       header = `<span class="ah-type atype-workflow">WORKFLOW</span><span class="ah-detail">${a.workflow_type||''} · ${a.flow_direction||''}</span>`
-      const nodeHTML = nodes.slice(0,6).map((n,i) => `${i>0?'<div class="wf-arrow">→</div>':''}<div class="wf-node">
-        <div class="wf-node-label">${n.label||''}</div>
-        ${n.value?`<div class="wf-node-val">${n.value}</div>`:''}
-        ${n.description?`<div class="wf-node-desc">${n.description.slice(0,30)}</div>`:''}
-      </div>`).join('')
+      const nodeHTML = nodes.slice(0,6).map((n,i) => {
+        const arrow = isHorizontal && i > 0 ? '<div class="wf-arrow">→</div>' : ''
+        if (isVertical) {
+          return `${i>0?'<div class="wf-arrow">↓</div>':''}<div class="wf-step vertical">
+            <div class="wf-node"><div class="wf-node-label">${n.label||''}</div></div>
+            ${n.description || n.value ? `<div class="wf-note-right">${(n.description || n.value || '').slice(0,60)}</div>` : ''}
+          </div>`
+        }
+        return `${arrow}<div class="wf-step">
+          ${n.value?`<div class="wf-note-top">${n.value}</div>`:''}
+          <div class="wf-node"><div class="wf-node-label">${n.label||''}</div></div>
+          ${n.description?`<div class="wf-note-bottom">${n.description.slice(0,60)}</div>`:''}
+        </div>`
+      }).join('')
       const connSummary = conns.slice(0,6).map(c=>`${c.from}→${c.to}`).join(', ')
       body = `<div class="wf-preview">
         ${a.workflow_insight?`<div class="cm-insight" style="margin-bottom:6px;">↗ ${a.workflow_insight}</div>`:''}
-        <div class="wf-nodes">${nodeHTML}</div>
+        <div class="wf-nodes ${isVertical ? 'vertical' : ''}">${nodeHTML}</div>
         ${connSummary?`<div class="wf-conn-list">Connections: ${connSummary}</div>`:''}
       </div>`
     }

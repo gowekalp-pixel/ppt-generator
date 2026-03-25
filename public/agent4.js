@@ -211,6 +211,20 @@ PHASE 2 — ARTIFACT SPECIFICATION
       Example: loan seasoning buckets (<3M, 3-6M, … >5Y) with outstanding balance
                → Use: bar chart (seasoning vs outstanding) + insight_text (repayment trend)
 
+      ─────────────────────────────────────────────────────────────────
+      PATTERN 8 — TOTAL + STATUS / RISK BUCKETS
+      ─────────────────────────────────────────────────────────────────
+      Signs:  one headline total plus 3–5 mutually exclusive categories that represent
+              status, risk, stage, or provisioning quality of that same total
+              (e.g., Standard / SubStandard / Doubtful; Current / SMA / NPA;
+               Open / Closed / Pending)
+      WRONG:  cards for each bucket, or cards for total + each bucket
+      RIGHT:  card (total only) + pie / horizontal_bar / clustered_bar for the buckets
+              OR decomposition workflow (total → status buckets)
+              + insight_text if the slide needs interpretation or action guidance
+      MANDATORY: if the categories are status buckets of the same portfolio, process,
+                 or book, they are NOT independent KPIs and can NEVER be cards.
+
       If NO pattern matches → proceed with single artifact from 2c data shape classification.
 
   2d.5 ZONE MESSAGE → ARTIFACT ALIGNMENT CHECK (mandatory override gate):
@@ -244,6 +258,11 @@ PHASE 2 — ARTIFACT SPECIFICATION
 
       message implies KPI ANCHORING (a single independent metric as headline)
         → card is allowed (but only for this case)
+
+      message implies STATUS MIX / ASSET QUALITY MIX / RISK BUCKETS / STAGE DISTRIBUTION
+        → MUST use pie / horizontal_bar / clustered_bar / decomposition workflow
+        → ONLY the aggregate total may be a card
+        → NEVER cards for the buckets themselves
 
       OVERRIDE RULE:
       If the currently selected artifact does NOT match the message intent above
@@ -671,6 +690,8 @@ If ANY of the following is true → DO NOT use cards → use chart instead:
   - Categories form a whole (sum to 100% or a total)
   - Categories are mutually exclusive and comparable
   - The insight depends on relative size or ranking across categories
+  - Values are status / risk / stage buckets of the same total
+  - One value is an aggregate total and the others are named components of that total
 
 ═══════════════════════════
 CARDS — STRICT USAGE RULES
@@ -704,7 +725,9 @@ CARDS — STRICT USAGE RULES
 
 6. CARD ROLE IN SLIDE
    VALID uses: headline KPIs, executive summary stats, recommendations / priorities.
-   INVALID uses: analytical proof, breakdown analysis, portfolio composition.
+   INVALID uses: analytical proof, breakdown analysis, portfolio composition,
+   asset-quality categories, provisioning categories, stage/status buckets,
+   or any total-plus-components decomposition.
 
 7. CARD + SUPPORTING ARTIFACT PATTERN
    Correct:  cards (top) + chart (bottom) | chart (left) + cards (right) | cards + insight_text
@@ -722,6 +745,12 @@ Before finalizing cards, run this check:
   → Add insight_text zone for interpretation
 
 This upgrade is MANDATORY — do not retain cards when the data fits a chart.
+Additional mandatory override:
+  IF one card is an aggregate total
+  AND the remaining cards are named categories, statuses, stages, or provisioning classes
+  of that same total
+  → AUTOMATICALLY replace the category cards with a chart or decomposition workflow
+  → At most ONE card may remain, and it must be the total / anchor KPI.
 
 ═══════════════════════════
 ARTIFACT 4: workflow
@@ -765,6 +794,26 @@ Node rules:
 - label is required
 - value and description are optional
 - level is required for hierarchy / decomposition
+
+Workflow content semantics (MANDATORY):
+- label = PRIMARY message only — short enough to fit comfortably inside the node box
+- For left_to_right / timeline:
+  - value = OPTIONAL short secondary message shown ABOVE the box
+  - description = OPTIONAL longer secondary message shown BELOW the box
+  - If there is only one secondary message, prefer description and leave value empty
+  - If there are two secondary messages, the shorter one MUST go in value and the longer one in description
+- For top_to_bottom / bottom_up:
+  - label = PRIMARY message inside the box
+  - use ONLY ONE secondary message, placed in description
+  - leave value empty unless it must be merged into the single right-side note
+- For top_down_branching:
+  - keep labels short inside nodes
+  - use description sparingly; only when one concise external note materially improves interpretation
+
+Workflow copy-length limits:
+- label: 2–5 words preferred, hard max 18 characters if possible
+- value: 2–6 words preferred
+- description: 8–18 words preferred, one idea only
 
 Connection rules:
 - directional arrows only
@@ -861,9 +910,11 @@ GATE 3 — ARTIFACT VALIDITY
   [ ] Every workflow: nodes and connections are coherent and non-crossing
   [ ] Every artifact has its header field populated (except cards)
   [ ] DATA SHAPE CHECK: No cards used for part-of-whole, portfolio mix, or mutually exclusive category data
+  [ ] DATA SHAPE CHECK: No cards used for status buckets, risk categories, or total-plus-components structures
   [ ] DATA SHAPE CHECK: No cards used where a pie or bar chart is the correct representation
   [ ] DATA SHAPE CHECK: Every cards artifact contains only INDEPENDENT metrics with no structural relationship to each other
   [ ] COMBINATION PATTERN CHECK: Content matching Pattern 1–7 uses the recommended artifact combination, not a single artifact or all-cards layout
+  [ ] COMBINATION PATTERN CHECK: Total + status/risk bucket content uses Pattern 8 (card total + chart/workflow + optional insight), never multi-card decomposition
   [ ] COMBINATION PATTERN CHECK: Total + breakdown content uses decomposition workflow OR pie+card, never cards-only
   [ ] COMBINATION PATTERN CHECK: Dominant category (>50%) content uses pie or sorted bar, never cards
   [ ] ALIGNMENT CHECK: Every artifact's type matches its zone message_objective intent (dominance→chart, composition→chart/workflow, comparison→chart, decomposition→workflow/pie+card, explanation→insight_text, process→workflow, single KPI→card)
@@ -1466,7 +1517,7 @@ async function runAgent4(state) {
   }
 
   const layoutNames = brand.content_layout_names && brand.content_layout_names.length > 0
-    ? brand.content_layout_names
+    ? brand.content_layout_names.filter(n => !_isNonContent({ name: n }))
     : (brand.layout_blueprints || brand.slide_layouts || [])
         .filter(l => !_isNonContent(l))
         .map(l => l.name || l.layout_name || '').filter(Boolean)
@@ -1511,7 +1562,7 @@ async function runAgent4(state) {
   const hasLayouts = layoutNames.length >= 5
   if (hasLayouts) {
     allSlides = allSlides.map(s => {
-      if (s.slide_type === 'content' && !s.selected_layout_name) {
+      if (s.slide_type === 'content' && (!s.selected_layout_name || _isNonContent({ name: s.selected_layout_name }))) {
         const assigned = pickBestLayout(s, layoutNames)
         console.log('  Auto-assigned layout for slide', s.slide_number, '→', assigned)
         return { ...s, selected_layout_name: assigned }
@@ -1548,7 +1599,7 @@ async function runAgent4(state) {
   // Second enforcement pass: repaired slides may still be missing selected_layout_name
   if (hasLayouts) {
     allSlides = allSlides.map(s => {
-      if (s.slide_type === 'content' && !s.selected_layout_name) {
+      if (s.slide_type === 'content' && (!s.selected_layout_name || _isNonContent({ name: s.selected_layout_name }))) {
         const assigned = pickBestLayout(s, layoutNames)
         console.log('  Post-repair layout assignment for slide', s.slide_number, '→', assigned)
         return { ...s, selected_layout_name: assigned }

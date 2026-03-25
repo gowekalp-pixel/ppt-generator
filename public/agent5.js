@@ -556,11 +556,26 @@ Workflow rules:
 - all node x,y,w,h must be computed within container bounds
 - connection path waypoints: straight or single-elbow only
 
+Workflow message placement rules (MANDATORY):
+- The PRIMARY message is the node label and must sit INSIDE the colored node box.
+- For left_to_right / timeline:
+  - value = short secondary line ABOVE the box, center-aligned
+  - description = longer secondary line BELOW the box, center-aligned
+  - if both exist, reserve space for both bands; keep the box visually dominant
+  - if only one secondary message exists, prefer the below-box description band
+- For top_to_bottom / bottom_up:
+  - label stays inside the box
+  - description is the ONLY external secondary message and must sit to the RIGHT of the box
+  - do not place text above or below the box in these vertical flows
+- For top_down_branching:
+  - keep nodes compact and centered; external notes should be minimal and only used when necessary
+- Never place long explanatory copy inside the node fill.
+
 Workflow coordinate rules:
 - Node sizing:
-    process_flow / timeline (left_to_right): node w = (container.w − (n−1)×0.20) / n; node h = 0.70–1.00"
+    process_flow / timeline (left_to_right): node w = (container.w − (n−1)×0.20) / n; node h must include any above/below message bands
     hierarchy / decomposition (top_down_branching): root node centered; children evenly spaced across width
-    top_to_bottom: node w = 60–70% of container.w, centered; node h = 0.60–0.80"
+    top_to_bottom / bottom_up: node box occupies roughly 35–45% of container.w with the remaining width reserved for the right-side message band
 - Node spacing: min 0.20" gap between adjacent nodes; evenly distribute remaining space
 - Level assignment: all nodes at the same level must share the SAME y (horizontal) or x (vertical) coordinate
 - Balance: for branching layouts, distribute child nodes symmetrically around parent x-center
@@ -1540,7 +1555,16 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
 function inferLayoutName(manifestSlide, brand) {
   const st   = manifestSlide.slide_type      || 'content'
   const arch = manifestSlide.slide_archetype || ''
-  const avail= brand.slide_layouts || []
+  const _NON_CONTENT_TYPES = new Set(['title', 'sechead', 'blank'])
+  const isNonContent = (l) => {
+    const t = (l.type || '').toLowerCase()
+    const n = (l.name || '').toLowerCase()
+    return _NON_CONTENT_TYPES.has(t) ||
+      /^blank$/i.test(n) ||
+      /thank[\s_-]*you|end[\s_-]*slide|closing[\s_-]*slide|section[\s_-]*header|^section$|divider|title slide/i.test(n)
+  }
+  const allLayouts = brand.slide_layouts || []
+  const avail = st === 'content' ? allLayouts.filter(l => !isNonContent(l)) : allLayouts
   const find = (kws) => avail.find(l => kws.some(k => (l.name || '').toLowerCase().includes(k.toLowerCase())))
 
   if (st === 'title')   return (find(['Title Slide', 'title'])                     || {}).name || 'Title Slide'
@@ -1549,7 +1573,7 @@ function inferLayoutName(manifestSlide, brand) {
     return (find(['3 Across','3 across','body text'])                              || {}).name || 'Body Text'
   if (['dashboard','summary'].includes(arch))
     return (find(['2 Across','1 Across','2 across','1 across'])                   || {}).name || '1 Across'
-  return (find(['1 Across','Body Text','1 across','body text'])                    || {}).name || 'Body Text'
+  return (find(['1 Across','Body Text','1 across','body text','2 Column','2 column']) || {}).name || (avail[0] || {}).name || 'Body Text'
 }
 
 

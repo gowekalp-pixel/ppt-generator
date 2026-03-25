@@ -1035,6 +1035,12 @@ function safeParseJSON(raw, fallback) {
       const wx  = (ctr.x || 0) * SCALE, wy = (ctr.y || 0) * SCALE
       const ww  = (ctr.w || 4) * SCALE, wh = (ctr.h || 2) * SCALE
       const ws  = art.workflow_style || {}
+      const flow = (art.flow_direction || '').toLowerCase()
+      const wtype = (art.workflow_type || '').toLowerCase()
+      const isHorizontal = flow === 'left_to_right' || flow === 'horizontal' || wtype === 'timeline' || wtype === 'roadmap'
+      const isVertical = flow === 'top_to_bottom' || flow === 'top_down' || flow === 'bottom_up'
+      const brandPrimary = bt.primary_color || bt.title_color || zoneColor
+      const bodyColor = bt.body_color || '#333'
 
       // Background
       ctx.fillStyle = '#F7F5FF'; ctx.fillRect(wx, wy, ww, wh)
@@ -1070,11 +1076,15 @@ function safeParseJSON(raw, fallback) {
         const nx = node.x * SCALE, ny = node.y * SCALE
         const nw = node.w * SCALE, nh = node.h * SCALE
         const cr = (ws.node_corner_radius || 4) * (SCALE / 72)
+        const topGap = isHorizontal && node.value ? 16 : 0
+        const bottomGap = isHorizontal && node.description ? 26 : 0
+        const boxY = ny + topGap
+        const boxH = Math.max(22, nh - topGap - bottomGap)
 
-        ctx.fillStyle   = ws.node_fill_color   || zoneColor
+        ctx.fillStyle   = isHorizontal ? brandPrimary : (ws.node_fill_color || zoneColor)
         ctx.strokeStyle = ws.node_border_color || '#FFFFFF'
         ctx.lineWidth   = ws.node_border_width || 1
-        roundRect(ctx, nx, ny, nw, nh, cr); ctx.fill(); ctx.stroke()
+        roundRect(ctx, nx, boxY, nw, boxH, cr); ctx.fill(); ctx.stroke()
 
         // Node label — use actual label field
         const label = node.label || node.id || ''
@@ -1084,7 +1094,7 @@ function safeParseJSON(raw, fallback) {
         ctx.textAlign = 'center'
         // Word-wrap inside node
         const words = label.split(' ')
-        let line = '', lineY = ny + nh / 2 - (words.length > 2 ? nfs : 0)
+        let line = '', lineY = boxY + boxH / 2 - (words.length > 2 ? nfs : 0)
         words.forEach(w => {
           const test = line + w + ' '
           if (ctx.measureText(test).width > nw - 8 && line) {
@@ -1093,12 +1103,27 @@ function safeParseJSON(raw, fallback) {
         })
         ctx.fillText(line.trim(), nx + nw/2, lineY)
 
-        // Node value (secondary metric)
-        if (node.value) {
-          const vfs = Math.max(5, (ws.node_value_font_size || 8) * SCALE / 72)
-          ctx.fillStyle = ws.node_value_color || '#CCDDFF'
-          ctx.font = vfs + 'px ' + (ws.node_value_font_family || 'Arial')
-          ctx.fillText(String(node.value), nx + nw/2, lineY + vfs + 2)
+        if (isHorizontal && node.value) {
+          const vfs = Math.max(6, (ws.node_value_font_size || 8) * SCALE / 72)
+          ctx.fillStyle = brandPrimary
+          ctx.font = 'bold ' + vfs + 'px ' + (ws.node_value_font_family || 'Arial')
+          ctx.fillText(String(node.value).slice(0, 28), nx + nw/2, ny + vfs)
+        }
+
+        if (isHorizontal && node.description) {
+          const dfs = Math.max(5, (ws.node_value_font_size || 8) * SCALE / 72)
+          ctx.fillStyle = bodyColor
+          ctx.font = dfs + 'px ' + (ws.node_value_font_family || 'Arial')
+          ctx.fillText(String(node.description).slice(0, 36), nx + nw/2, boxY + boxH + dfs + 4)
+        }
+
+        if (isVertical && (node.description || node.value)) {
+          const note = String(node.description || node.value).slice(0, 44)
+          const dfs = Math.max(5, (ws.node_value_font_size || 8) * SCALE / 72)
+          ctx.fillStyle = bodyColor
+          ctx.font = dfs + 'px ' + (ws.node_value_font_family || 'Arial')
+          ctx.textAlign = 'left'
+          ctx.fillText(note, nx + nw + 8, ny + nh/2 + dfs/2)
         }
       })
     }
