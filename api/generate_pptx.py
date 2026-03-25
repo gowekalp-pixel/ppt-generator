@@ -773,26 +773,32 @@ def render_chart(slide, artifact, bt, suppress_heading=False):
         except Exception:
             pass
 
-    # Legend — position driven by chart proportions so it never overlaps bars/lines.
+    # Legend placement — driven by rendered chart footprint on the slide.
     # XL_LEGEND_POSITION: BOTTOM=3  RIGHT=4  TOP=1  LEFT=2
-    # Decision matrix (based on actual rendered w/h after ph_frame is applied):
-    #   wide  & short  (w/h >= 1.8)            → BOTTOM  (doesn't steal column width)
-    #   tall  & narrow (h/w >= 1.4, w <= 55%)  → TOP     (doesn't steal row height)
-    #   otherwise                               → RIGHT
+    # Rules:
+    #   a) chart width  > 60% of slide width  → RIGHT
+    #   b) else if chart height > 60% of slide height → TOP
+    #   c) else pie charts → RIGHT; other charts → TOP
     SLIDE_W, SLIDE_H = 10.0, 7.5
-    _aspect = (float(w) / float(h)) if float(h) > 0 else 1.0
-    if _aspect >= 1.8:
-        legend_pos = 3   # BOTTOM
-    elif float(h) / float(w) >= 1.4 and float(w) <= SLIDE_W * 0.55:
-        legend_pos = 1   # TOP
-    else:
+    chart_w_ratio = (float(w) / SLIDE_W) if SLIDE_W > 0 else 0.0
+    chart_h_ratio = (float(h) / SLIDE_H) if SLIDE_H > 0 else 0.0
+    if chart_w_ratio > 0.60:
         legend_pos = 4   # RIGHT
+    elif chart_h_ratio > 0.60:
+        legend_pos = 1   # TOP
+    elif chart_type_str == 'pie':
+        legend_pos = 4   # RIGHT
+    else:
+        legend_pos = 1   # TOP
 
     chart.has_legend = show_legend
     if show_legend and chart.has_legend:
         try:
             chart.legend.position = legend_pos
             chart.legend.include_in_layout = True   # keep legend inside chart frame, not floating
+            legend_font_size = min(int(cs.get('legend_font_size', header_font_size) or header_font_size), header_font_size)
+            chart.legend.font.size = Pt(max(7, legend_font_size))
+            chart.legend.font.color.rgb = hex_to_rgb(cs.get('legend_color', bt.get('body_color', '#000000')))
         except Exception:
             pass
 
@@ -819,10 +825,19 @@ def render_chart(slide, artifact, bt, suppress_heading=False):
                 pass
             if show_labels:
                 try:
-                    ser_obj.data_labels.show_value = True
+                    if chart_type_str == 'pie':
+                        ser_obj.data_labels.show_value = False
+                        ser_obj.data_labels.show_percentage = True
+                        try:
+                            ser_obj.data_labels.number_format = '0%'
+                        except Exception:
+                            pass
+                    else:
+                        ser_obj.data_labels.show_value = True
                     lbl_color = (series_styles[si].get('data_label_color', '#000000')
                                  if si < len(series_styles) else '#000000')
-                    _lbl_pt = Pt(max_chart_label_size)
+                    _lbl_size = min(max_chart_label_size, header_font_size)
+                    _lbl_pt = Pt(_lbl_size)
                     _lbl_rgb = hex_to_rgb(lbl_color)
                     # Set at series level first — this is the reliable path in python-pptx
                     try:
