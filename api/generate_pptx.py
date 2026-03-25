@@ -1381,13 +1381,27 @@ def _write_heading_to_header_ph(slide, heading_text, header_ph_idx, bt, header_s
                     font_size = 10
                     text_h = estimate_header_block_height(heading_text, ph_w, font_size)
                     if header_style == 'brand_fill':
-                        add_filled_rect(
+                        fill_color = bt.get('primary_color', '#1A3C8F')
+                        text_color = '#FFFFFF' if is_dark_color(fill_color) else '#111111'
+                        # Hide placeholder text and render an explicit fill header above it.
+                        try:
+                            ph.text_frame.clear()
+                        except Exception:
+                            pass
+                        add_filled_rect(slide, ph_x, ph_y, ph_w, HEADER_HEIGHT, fill_hex=fill_color)
+                        add_text_box(
                             slide,
-                            ph_x,
+                            ph_x + MIN_TEXT_MARGIN,
                             ph_y,
-                            ph_w,
+                            max(0.2, ph_w - MIN_TEXT_MARGIN * 2),
                             HEADER_HEIGHT,
-                            fill_hex=bt.get('primary_color', '#1A3C8F')
+                            str(heading_text),
+                            bt.get('title_font_family', 'Arial'),
+                            font_size,
+                            True,
+                            text_color,
+                            'left',
+                            'middle'
                         )
                         return ph_y + HEADER_HEIGHT
                     else:
