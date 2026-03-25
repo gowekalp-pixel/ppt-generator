@@ -207,6 +207,13 @@ def infer_slide_header_style(slide_spec):
     return 'underline'
 
 
+def infer_artifact_header_style(artifact_type):
+    """Choose header emphasis by artifact type."""
+    if str(artifact_type or '').lower() == 'insight_text':
+        return 'brand_fill'
+    return 'underline'
+
+
 def add_image_box(slide, image_b64, x, y, w, h):
     """Render an image from base64."""
     if not image_b64:
@@ -688,6 +695,9 @@ def render_chart(slide, artifact, bt, suppress_heading=False):
     dual_axis       = artifact.get('dual_axis', False)
     secondary_names = set(artifact.get('secondary_series', []))
     chart_palette   = bt.get('chart_palette', ['#0F2FB5', '#FF8E00', '#2D962D', '#D60202'])
+    header_block    = artifact.get('header_block', {}) or {}
+    header_font_size = int(header_block.get('font_size') or cs.get('title_font_size', 11) or 11)
+    max_chart_label_size = max(7, header_font_size - 1)
 
     # Map chart type string to XL_CHART_TYPE
     chart_type_map = {
@@ -779,7 +789,7 @@ def render_chart(slide, artifact, bt, suppress_heading=False):
                     for lbl in ser_obj.data_labels:
                         try:
                             lbl.font.color.rgb = hex_to_rgb(lbl_color)
-                            lbl.font.size = Pt(8)
+                            lbl.font.size = Pt(min(8, max_chart_label_size))
                         except Exception:
                             pass
                 except Exception:
@@ -802,7 +812,7 @@ def render_chart(slide, artifact, bt, suppress_heading=False):
 
     # Axis font sizes + category label rotation for many categories
     try:
-        ax_font_size = cs.get('axis_font_size', 9)
+        ax_font_size = min(cs.get('axis_font_size', 9), max_chart_label_size)
         ax_color     = cs.get('axis_color', '#000000')
         for ax in (chart.category_axis, chart.value_axis):
             try:
@@ -916,41 +926,34 @@ def render_cards(slide, artifact, bt):
         has_body = bool(card_body)
 
         if inner_h > 0.05:
-            if has_sub and has_body:
-                title_h = inner_h * 0.20
-                sub_h   = inner_h * 0.40
-                body_h  = max(0.12, inner_h - title_h - sub_h - TITLE_TO_SUBTITLE - SUBTITLE_TO_BODY)
-            elif has_sub:
-                title_h = inner_h * 0.28
-                sub_h   = inner_h - title_h - TITLE_TO_SUBTITLE
-                body_h  = 0
-            elif has_body:
-                title_h = inner_h * 0.25
-                sub_h   = 0
-                body_h  = inner_h - title_h - TITLE_TO_SUBTITLE
-            else:
-                title_h = inner_h
-                sub_h   = 0
-                body_h  = 0
+            title_h = max(0.18, inner_h * 0.16) if card_title else 0
+            sub_h   = max(0.28, inner_h * 0.40) if card_sub else 0
+            body_h  = max(0.12, inner_h - title_h - sub_h - (TITLE_TO_SUBTITLE if card_title and card_sub else 0) - (SUBTITLE_TO_BODY if card_sub and card_body else 0)) if card_body else 0
 
             actual_title_size = estimate_fit_font_size(str(card_title), max(0.3, fw - padding*2), max(0.14, title_h), t_size, 8) if card_title else t_size
-            actual_su_size = estimate_fit_font_size(str(card_sub), max(0.3, fw - padding*2), max(0.18, sub_h), su_size, 12) if sub_h > 0 else su_size
-            actual_body_size = estimate_fit_font_size(str(card_body), max(0.3, fw - padding*2), max(0.12, body_h), b_size, 7) if body_h > 0 else b_size
+            actual_su_size = estimate_fit_font_size(str(card_sub), max(0.3, fw - padding*2), max(0.22, sub_h), su_size, 14) if sub_h > 0 else su_size
 
-            cur_y = inner_top
-            if card_title:
-                add_text_box(slide, fx + padding, cur_y, fw - padding*2, title_h,
+            body_text = str(card_body or '')
+            if body_text:
+                max_chars = max(30, int(((fw - padding * 2) * 72 / 5.5) * 2))
+                if len(body_text) > max_chars:
+                    body_text = body_text[:max_chars - 1].rstrip() + '…'
+            actual_body_size = estimate_fit_font_size(body_text, max(0.3, fw - padding*2), max(0.10, body_h), b_size, 7) if body_h > 0 else b_size
+
+            title_y = inner_top
+            if card_title and title_h > 0:
+                add_text_box(slide, fx + padding, title_y, fw - padding*2, title_h,
                              str(card_title), t_font, actual_title_size, t_bold, t_color, 'left', 'top')
-            cur_y += title_h + (TITLE_TO_SUBTITLE if has_sub else 0)
 
             if card_sub and sub_h > 0:
-                add_text_box(slide, fx + padding, cur_y, fw - padding*2, sub_h,
-                             str(card_sub), su_font, actual_su_size, False, su_color, 'left', 'top')
-            cur_y += sub_h + (SUBTITLE_TO_BODY if has_body else 0)
+                subtitle_y = inner_top + title_h + (TITLE_TO_SUBTITLE if card_title else 0)
+                add_text_box(slide, fx + padding, subtitle_y, fw - padding*2, sub_h,
+                             str(card_sub), su_font, actual_su_size, False, su_color, 'center', 'middle')
 
-            if card_body and body_h > 0.05:
-                add_text_box(slide, fx + padding, cur_y, fw - padding*2, body_h,
-                             str(card_body), b_font, actual_body_size, False, b_color, 'left', 'top')
+            if body_text and body_h > 0.05:
+                body_y = fy + fh - padding - body_h
+                add_text_box(slide, fx + padding, body_y, fw - padding*2, body_h,
+                             body_text, b_font, actual_body_size, False, b_color, 'left', 'bottom')
 
 
 def render_workflow(slide, artifact, bt):
@@ -1281,6 +1284,10 @@ def render_table(slide, artifact, bt):
             cell = table.cell(0, ci)
             cell.text = str(hdr)
             enable_text_fit(cell.text_frame)
+            try:
+                cell.text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
+            except Exception:
+                pass
             cell.fill.solid()
             cell.fill.fore_color.rgb = hex_to_rgb(h_fill)
             _apply_cell_margin(cell, cell_pad_emu)
@@ -1311,19 +1318,26 @@ def render_table(slide, artifact, bt):
                 cell_text = str(row[ci]) if ci < len(row) else ''
                 cell.text = cell_text
                 enable_text_fit(cell.text_frame)
+                try:
+                    cell.text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
+                except Exception:
+                    pass
                 cell.fill.solid()
                 cell.fill.fore_color.rgb = hex_to_rgb(row_fill or b_fill)
                 _apply_cell_margin(cell, cell_pad_emu)
                 try:
                     run = cell.text_frame.paragraphs[0].runs[0]
+                    is_highlight = ri in hl_rows
+                    font_size = b_size + 0.5 if is_highlight else b_size
                     fit_size = estimate_fit_font_size(
                         cell_text,
                         norm_col_ws[ci],
                         norm_row_hs[row_idx],
-                        b_size,
+                        font_size,
                         7
                     )
-                    set_font(run, b_font, fit_size, False, False, b_text)
+                    text_color = ts.get('highlight_text_color', b_text) if is_highlight else b_text
+                    set_font(run, b_font, fit_size, is_highlight, False, text_color)
                     # Numeric columns → right-align; text columns → left-align
                     align = PP_ALIGN.RIGHT if col_is_numeric[ci] else PP_ALIGN.LEFT
                     cell.text_frame.paragraphs[0].alignment = align
@@ -1407,6 +1421,7 @@ def render_artifact(slide, artifact, bt, ph_frame=None, header_ph_idx=None, head
                     that was preserved in the slide (not removed).
     """
     t = (artifact.get('type') or '').lower()
+    artifact_header_style = infer_artifact_header_style(t)
 
     artifact = dict(artifact)   # shallow copy — don't mutate the spec
 
@@ -1436,7 +1451,7 @@ def render_artifact(slide, artifact, bt, ph_frame=None, header_ph_idx=None, head
         else:
             heading_text = ''
         if heading_text:
-            placeholder_header_bottom = _write_heading_to_header_ph(slide, heading_text, header_ph_idx, bt, header_style=header_style)
+            placeholder_header_bottom = _write_heading_to_header_ph(slide, heading_text, header_ph_idx, bt, header_style=artifact_header_style)
             heading_handled = placeholder_header_bottom is not None
 
     # Render header_block only when the heading wasn't routed to a layout placeholder
@@ -1446,7 +1461,7 @@ def render_artifact(slide, artifact, bt, ph_frame=None, header_ph_idx=None, head
             hb['x'] = artifact.get('x')
             hb['w'] = artifact.get('w')
         if hb and not hb.get('placeholder_ref'):
-            rendered_header_bottom = render_header_block(slide, hb, bt, header_style=header_style)
+            rendered_header_bottom = render_header_block(slide, hb, bt, header_style=artifact_header_style)
             inline_header_rendered = True
 
     suppress_internal_heading = heading_handled or inline_header_rendered
@@ -1587,6 +1602,47 @@ def _sanitise_system_placeholders(slide, slide_number):
                     pass
     except Exception:
         pass
+
+
+def normalize_zone_artifact_stack(zone):
+    """For multi-artifact zones, enforce a stacked 65/35 split inside the zone frame."""
+    if not isinstance(zone, dict):
+        return zone
+    artifacts = [dict(a) for a in (zone.get('artifacts') or [])]
+    frame = zone.get('frame') or {}
+    padding = frame.get('padding') or {}
+    if len(artifacts) < 2 or not all(k in frame for k in ('x', 'y', 'w', 'h')):
+        return { **zone, 'artifacts': artifacts }
+
+    left = float(frame.get('x', 0)) + float(padding.get('left', INTERNAL_PADDING) or 0)
+    top = float(frame.get('y', 0)) + float(padding.get('top', ZONE_TOP_OFFSET) or 0)
+    width = max(0.2, float(frame.get('w', 0)) - float(padding.get('left', INTERNAL_PADDING) or 0) - float(padding.get('right', INTERNAL_PADDING) or 0))
+    height = max(0.2, float(frame.get('h', 0)) - float(padding.get('top', ZONE_TOP_OFFSET) or 0) - float(padding.get('bottom', INTERNAL_PADDING) or 0))
+
+    gap = ARTIFACT_TO_ARTIFACT
+    primary_h = max(0.2, (height - gap) * 0.65)
+    secondary_band_h = max(0.2, height - primary_h - gap)
+
+    laid_out = []
+    for idx, art in enumerate(artifacts):
+        if idx == 0:
+            ax, ay, aw, ah = left, top, width, primary_h
+        else:
+            remaining = len(artifacts) - 1
+            each_h = max(0.15, (secondary_band_h - max(0, remaining - 1) * gap) / max(remaining, 1))
+            ax = left
+            ay = top + primary_h + gap + (idx - 1) * (each_h + gap)
+            aw = width
+            ah = each_h
+        art['x'] = ax
+        art['y'] = ay
+        art['w'] = aw
+        art['h'] = ah
+        if art.get('type') == 'workflow':
+            art['container'] = { 'x': ax, 'y': ay, 'w': aw, 'h': ah }
+        laid_out.append(art)
+
+    return { **zone, 'artifacts': laid_out }
 
 
 def build_slide(prs, slide_spec, blank_layout, use_template=False,
@@ -1784,6 +1840,7 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
     # Zones → Artifacts
     _layout_ph_bounds = _ph_bounds if (layout_mode and use_template) else {}
     for zone_idx, zone in enumerate(slide_spec.get('zones', [])):
+        zone = normalize_zone_artifact_stack(zone)
         # In layout mode, each zone may have a paired header placeholder
         hdr_ph_idx = zone.get('header_ph_idx') if layout_mode else None
         zone_artifacts = zone.get('artifacts', [])
