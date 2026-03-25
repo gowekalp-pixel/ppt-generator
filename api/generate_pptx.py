@@ -895,6 +895,8 @@ def render_workflow(slide, artifact, bt):
     ws    = artifact.get('workflow_style', {})
     nodes = artifact.get('nodes', [])
     conns = artifact.get('connections', [])
+    flow_direction = str(artifact.get('flow_direction', '') or '').lower()
+    workflow_type = str(artifact.get('workflow_type', '') or '').lower()
 
     def _num(v, default=0.0):
         try:
@@ -966,6 +968,47 @@ def render_workflow(slide, artifact, bt):
 
         return mapped_nodes, mapped_conns
 
+    def _layout_horizontal_timeline(nodes_, target_rect):
+        if not nodes_ or not _has_rect(target_rect):
+            return nodes_, []
+
+        count = max(1, len(nodes_))
+        pad_x = min(0.10, max(0.04, target_rect['w'] * 0.025))
+        pad_y = min(0.10, max(0.04, target_rect['h'] * 0.04))
+        gap = min(0.12, max(0.05, target_rect['w'] * 0.02))
+        usable_w = max(0.3, target_rect['w'] - 2 * pad_x - gap * (count - 1))
+        node_w = max(0.75, usable_w / count)
+        node_h = max(0.70, target_rect['h'] - 2 * pad_y)
+        start_x = target_rect['x'] + pad_x
+        node_y = target_rect['y'] + max(0.02, (target_rect['h'] - node_h) / 2.0)
+
+        laid_out = []
+        for i, node in enumerate(nodes_):
+            laid_out.append({
+                **node,
+                'x': start_x + i * (node_w + gap),
+                'y': node_y,
+                'w': node_w,
+                'h': node_h
+            })
+
+        conn_y = node_y + node_h / 2.0
+        laid_conns = []
+        for i in range(len(laid_out) - 1):
+            cur = laid_out[i]
+            nxt = laid_out[i + 1]
+            laid_conns.append({
+                'from': cur.get('id'),
+                'to': nxt.get('id'),
+                'type': 'arrow',
+                'path': [
+                    {'x': cur['x'] + cur['w'], 'y': conn_y},
+                    {'x': nxt['x'], 'y': conn_y}
+                ]
+            })
+
+        return laid_out, laid_conns
+
     target_rect = None
     container = artifact.get('container')
     if _has_rect(container):
@@ -983,7 +1026,10 @@ def render_workflow(slide, artifact, bt):
             'h': max(0.05, _num(artifact.get('h')))
         }
     if target_rect:
-        nodes, conns = _normalize_workflow_to_rect(nodes, conns, target_rect)
+        if flow_direction in ('left_to_right', 'horizontal') or workflow_type in ('timeline', 'roadmap'):
+            nodes, conns = _layout_horizontal_timeline(nodes, target_rect)
+        else:
+            nodes, conns = _normalize_workflow_to_rect(nodes, conns, target_rect)
 
     node_fill   = ws.get('node_fill_color', bt.get('primary_color', '#1A3C8F'))
     node_border = ws.get('node_border_color', '#FFFFFF')
@@ -1038,21 +1084,28 @@ def render_workflow(slide, artifact, bt):
 
         # Node label (primary text)
         label = node.get('label', node.get('id', ''))
+        has_desc = bool(node.get('description', ''))
+        title_h = nh * (0.28 if has_desc else 0.34)
+        value_h = nh * (0.22 if has_desc else 0.26)
+        desc_h  = max(0.16, nh - title_h - value_h - 0.12)
         if label:
-            add_text_box(slide, nx + 0.1, ny + 0.06, nw - 0.2, nh * 0.45,
-                         str(label), t_font, t_size, t_bold, t_color, 'center', 'middle')
+            label_size = estimate_fit_font_size(str(label), max(0.3, nw - 0.2), max(0.18, title_h), t_size, 8)
+            add_text_box(slide, nx + 0.1, ny + 0.06, nw - 0.2, title_h,
+                         str(label), t_font, label_size, t_bold, t_color, 'center', 'middle')
 
         # Node value (secondary metric)
         value = node.get('value', '')
         if value:
-            add_text_box(slide, nx + 0.1, ny + nh * 0.45, nw - 0.2, nh * 0.3,
-                         str(value), v_font, v_size, False, v_color, 'center', 'middle')
+            value_size = estimate_fit_font_size(str(value), max(0.3, nw - 0.2), max(0.16, value_h), v_size, 7)
+            add_text_box(slide, nx + 0.1, ny + 0.06 + title_h, nw - 0.2, value_h,
+                         str(value), v_font, value_size, False, v_color, 'center', 'middle')
 
         # Description (small text below value)
         desc = node.get('description', '')
-        if desc and nh > 0.9:
-            add_text_box(slide, nx + 0.08, ny + nh * 0.72, nw - 0.16, nh * 0.25,
-                         str(desc), v_font, max(7, v_size - 2), False, v_color, 'center', 'top')
+        if desc and desc_h > 0.14:
+            desc_size = estimate_fit_font_size(str(desc), max(0.28, nw - 0.16), desc_h, max(7, v_size - 2), 6)
+            add_text_box(slide, nx + 0.08, ny + 0.08 + title_h + value_h, nw - 0.16, desc_h,
+                         str(desc), v_font, desc_size, False, v_color, 'center', 'top')
 
 
 def render_table(slide, artifact, bt):
@@ -1258,7 +1311,9 @@ def render_artifact(slide, artifact, bt, ph_frame=None, header_ph_idx=None):
 
     # Route artifact heading into the layout's paired header placeholder when available
     heading_handled = False
-    if header_ph_idx is not None and t != 'cards':
+    header_block = artifact.get('header_block') or {}
+    use_placeholder_header = bool(header_block.get('placeholder_ref'))
+    if header_ph_idx is not None and t != 'cards' and use_placeholder_header:
         if t == 'insight_text':
             heading_text = artifact.get('heading') or artifact.get('insight_header', '')
         elif t == 'chart':
@@ -1274,7 +1329,7 @@ def render_artifact(slide, artifact, bt, ph_frame=None, header_ph_idx=None):
 
     # Render header_block only when the heading wasn't routed to a layout placeholder
     if t != 'cards' and not heading_handled:
-        hb = artifact.get('header_block')
+        hb = header_block
         if hb and not hb.get('placeholder_ref'):
             render_header_block(slide, hb, bt)
 
