@@ -1268,6 +1268,10 @@ def _write_heading_to_header_ph(slide, heading_text, header_ph_idx, bt):
     try:
         for ph in slide.placeholders:
             if ph.placeholder_format.idx == header_ph_idx:
+                ph_x = ph.left / 914400
+                ph_y = ph.top / 914400
+                ph_w = ph.width / 914400
+                ph_h = ph.height / 914400
                 ph.text_frame.text = str(heading_text)
                 try:
                     run = ph.text_frame.paragraphs[0].runs[0]
@@ -1281,6 +1285,19 @@ def _write_heading_to_header_ph(slide, heading_text, header_ph_idx, bt):
                         int(color_hex[0:2], 16),
                         int(color_hex[2:4], 16),
                         int(color_hex[4:6], 16)
+                    )
+                except Exception:
+                    pass
+                # Apply the same artifact-header treatment for layout placeholder
+                # headings: blue underline directly beneath the placeholder row.
+                try:
+                    add_filled_rect(
+                        slide,
+                        ph_x,
+                        ph_y + max(0.01, ph_h - 0.04),
+                        ph_w,
+                        0.03,
+                        fill_hex=bt.get('primary_color', '#1A3C8F')
                     )
                 except Exception:
                     pass
@@ -1303,9 +1320,10 @@ def render_artifact(slide, artifact, bt, ph_frame=None, header_ph_idx=None):
     """
     t = (artifact.get('type') or '').lower()
 
+    artifact = dict(artifact)   # shallow copy — don't mutate the spec
+
     # Apply pre-saved placeholder bounds when the artifact's own coords are null/missing
     if ph_frame is not None:
-        artifact = dict(artifact)   # shallow copy — don't mutate the spec
         artifact['x'] = ph_frame['x']
         artifact['y'] = ph_frame['y']
         artifact['w'] = ph_frame['w']
@@ -1338,6 +1356,15 @@ def render_artifact(slide, artifact, bt, ph_frame=None, header_ph_idx=None):
             inline_header_rendered = True
 
     suppress_internal_heading = heading_handled or inline_header_rendered
+    if inline_header_rendered and header_block:
+        gap = 0.08
+        header_bottom = float(header_block.get('y', artifact.get('y', 0)) or 0) + float(header_block.get('h', 0.25) or 0) + gap
+        art_y = float(artifact.get('y', 0) or 0)
+        art_h = float(artifact.get('h', 0) or 0)
+        if art_h > 0 and header_bottom > art_y:
+            delta = header_bottom - art_y
+            artifact['y'] = header_bottom
+            artifact['h'] = max(0.2, art_h - delta)
 
     try:
         if   t == 'insight_text': render_insight_text(slide, artifact, bt,
