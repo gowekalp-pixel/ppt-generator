@@ -1078,19 +1078,33 @@ def render_table(slide, artifact, bt):
     n_rows  = len(rows) + 1   # +1 for header row
     data_rows = rows
 
+    def _norm_sizes(values, count, total):
+        nums = []
+        for i in range(count):
+            try:
+                v = float(values[i]) if i < len(values) else 0
+            except Exception:
+                v = 0
+            nums.append(max(0, v))
+        summed = sum(nums)
+        if summed > 0:
+            return [(v / summed) * total for v in nums]
+        return [total / max(count, 1)] * count
+
+    norm_col_ws = _norm_sizes(col_ws, n_cols, w)
+    norm_row_hs = _norm_sizes(row_hs, n_rows, h)
+
     try:
         table_shape = slide.shapes.add_table(n_rows, n_cols, inches(x), inches(y), inches(w), inches(h))
         table       = table_shape.table
 
         # Column widths
-        if col_ws and len(col_ws) == n_cols:
-            for ci, cw in enumerate(col_ws):
-                table.columns[ci].width = inches(cw)
+        for ci, cw in enumerate(norm_col_ws):
+            table.columns[ci].width = inches(cw)
 
         # Row heights
-        if row_hs and len(row_hs) >= n_rows:
-            for ri in range(n_rows):
-                table.rows[ri].height = inches(row_hs[ri] if ri < len(row_hs) else h / n_rows)
+        for ri, rh in enumerate(norm_row_hs):
+            table.rows[ri].height = inches(rh)
 
         # Header row styles
         h_fill  = ts.get('header_fill_color', bt.get('primary_color', '#1A3C8F'))
@@ -1144,8 +1158,8 @@ def render_table(slide, artifact, bt):
                 run = cell.text_frame.paragraphs[0].runs[0]
                 fit_size = estimate_fit_font_size(
                     hdr,
-                    (col_ws[ci] if ci < len(col_ws) else w / n_cols),
-                    (row_hs[0] if row_hs else h / n_rows),
+                    norm_col_ws[ci],
+                    norm_row_hs[0],
                     h_size,
                     8
                 )
@@ -1174,8 +1188,8 @@ def render_table(slide, artifact, bt):
                     run = cell.text_frame.paragraphs[0].runs[0]
                     fit_size = estimate_fit_font_size(
                         cell_text,
-                        (col_ws[ci] if ci < len(col_ws) else w / n_cols),
-                        (row_hs[row_idx] if row_idx < len(row_hs) else h / n_rows),
+                        norm_col_ws[ci],
+                        norm_row_hs[row_idx],
                         b_size,
                         7
                     )
