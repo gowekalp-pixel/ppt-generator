@@ -545,7 +545,7 @@ def render_insight_text(slide, artifact, bt, suppress_heading=False):
 
     # Render heading now (font size finalised)
     if _h_params:
-        add_text_box(slide, x, y + TOP_PAD * 0.25, w, 0.34,
+        add_text_box(slide, x + INSIGHT_LEFT_PADDING, y + TOP_PAD, w - INSIGHT_LEFT_PADDING, 0.34,
                      str(heading), _h_params['font'], _h_params['size'],
                      _h_params['bold'], _h_params['color'], 'left', 'middle')
 
@@ -773,18 +773,26 @@ def render_chart(slide, artifact, bt, suppress_heading=False):
         except Exception:
             pass
 
-    # Legend — position based on frame dimensions
-    # Vertically stretched (tall, narrow): legend on top; everything else: right
+    # Legend — position driven by chart proportions so it never overlaps bars/lines.
+    # XL_LEGEND_POSITION: BOTTOM=3  RIGHT=4  TOP=1  LEFT=2
+    # Decision matrix (based on actual rendered w/h after ph_frame is applied):
+    #   wide  & short  (w/h >= 1.8)            → BOTTOM  (doesn't steal column width)
+    #   tall  & narrow (h/w >= 1.4, w <= 55%)  → TOP     (doesn't steal row height)
+    #   otherwise                               → RIGHT
     SLIDE_W, SLIDE_H = 10.0, 7.5
-    legend_pos = 4   # right (XL_LEGEND_POSITION.RIGHT = 4)
-    if h > SLIDE_H * 0.6 and w <= SLIDE_W * 0.6:
-        legend_pos = 1   # top (XL_LEGEND_POSITION.TOP = 1)
+    _aspect = (float(w) / float(h)) if float(h) > 0 else 1.0
+    if _aspect >= 1.8:
+        legend_pos = 3   # BOTTOM
+    elif float(h) / float(w) >= 1.4 and float(w) <= SLIDE_W * 0.55:
+        legend_pos = 1   # TOP
+    else:
+        legend_pos = 4   # RIGHT
 
     chart.has_legend = show_legend
     if show_legend and chart.has_legend:
         try:
             chart.legend.position = legend_pos
-            chart.legend.include_in_layout = False
+            chart.legend.include_in_layout = True   # keep legend inside chart frame, not floating
         except Exception:
             pass
 
@@ -814,10 +822,19 @@ def render_chart(slide, artifact, bt, suppress_heading=False):
                     ser_obj.data_labels.show_value = True
                     lbl_color = (series_styles[si].get('data_label_color', '#000000')
                                  if si < len(series_styles) else '#000000')
+                    _lbl_pt = Pt(max_chart_label_size)
+                    _lbl_rgb = hex_to_rgb(lbl_color)
+                    # Set at series level first — this is the reliable path in python-pptx
+                    try:
+                        ser_obj.data_labels.font.size = _lbl_pt
+                        ser_obj.data_labels.font.color.rgb = _lbl_rgb
+                    except Exception:
+                        pass
+                    # Also apply per-label for charts where series-level is ignored
                     for lbl in ser_obj.data_labels:
                         try:
-                            lbl.font.color.rgb = hex_to_rgb(lbl_color)
-                            lbl.font.size = Pt(min(max_chart_label_size, header_font_size))
+                            lbl.font.size = _lbl_pt
+                            lbl.font.color.rgb = _lbl_rgb
                         except Exception:
                             pass
                 except Exception:
@@ -1496,7 +1513,10 @@ def render_artifact(slide, artifact, bt, ph_frame=None, header_ph_idx=None, head
             placeholder_header_bottom = _write_heading_to_header_ph(slide, heading_text, header_ph_idx, bt, header_style=artifact_header_style)
             heading_handled = placeholder_header_bottom is not None
 
-    # Render header_block only when the heading wasn't routed to a layout placeholder
+    # Render header_block only when the heading wasn't routed to a layout placeholder.
+    # NOTE: if placeholder_ref=True but heading_handled=False it means no real placeholder
+    # was available — fall back to rendering the header inline ABOVE the artifact so it
+    # sits outside any filled/bordered box rather than inside it.
     if t != 'cards' and not heading_handled:
         hb = dict(header_block)
         # Align header x/w to the artifact's effective bounds.
@@ -1512,7 +1532,11 @@ def render_artifact(slide, artifact, bt, ph_frame=None, header_ph_idx=None, head
             if _eff_x is not None and _eff_w is not None:
                 hb['x'] = _eff_x
                 hb['w'] = _eff_w
-        if hb and not hb.get('placeholder_ref'):
+        if hb:
+            # Always render inline when heading_handled=False — even when placeholder_ref=True,
+            # since we only reach here when no placeholder actually received the text.
+            # Strip placeholder_ref so render_header_block treats this as a normal inline header.
+            hb['placeholder_ref'] = False
             rendered_header_bottom = render_header_block(slide, hb, bt, header_style=artifact_header_style)
             inline_header_rendered = True
 
@@ -1946,10 +1970,10 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
                 )
                 if needs_bounds and ph_idx_spec in _layout_ph_bounds:
                     ph_frame = _layout_ph_bounds[ph_idx_spec]
-                elif artifact.get('x') is None and not _wf_has_container and _content_ph_frames:
-                    # Fallback for specs that lost placeholder_idx but still rely on
-                    # layout_mode with null coordinates. Prefer zone order for 1:1
-                    # layouts; for multi-artifact zones, step through slots by artifact.
+                # Always try the content-area fallback when coordinates are still missing —
+                # this covers cases where placeholder_idx was specified but the named layout
+                # does not contain that index (e.g. a different template was loaded).
+                if ph_frame is None and artifact.get('x') is None and not _wf_has_container and _content_ph_frames:
                     fallback_slot = zone_idx if len(zone_artifacts) == 1 else (zone_idx + art_idx)
                     fallback_slot = min(fallback_slot, len(_content_ph_frames) - 1)
                     ph_frame = _content_ph_frames[fallback_slot]
