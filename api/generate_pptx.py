@@ -903,6 +903,94 @@ def render_cards(slide, artifact, bt):
     bs       = artifact.get('body_style', {})
     frames   = artifact.get('card_frames', [])
     cards    = artifact.get('cards', [])
+    layout   = str(artifact.get('cards_layout', 'row') or 'row').lower()
+
+    def _num(v, default=None):
+        try:
+            if v is None:
+                return default
+            return float(v)
+        except Exception:
+            return default
+
+    def _valid_rect(rect):
+        return isinstance(rect, dict) and all(_num(rect.get(k)) is not None for k in ('x', 'y', 'w', 'h'))
+
+    def _resolve_container_rect():
+        container = artifact.get('container') or {}
+        if _valid_rect(container):
+            return {
+                'x': _num(container.get('x'), 0.0),
+                'y': _num(container.get('y'), 0.0),
+                'w': max(0.2, _num(container.get('w'), 0.2)),
+                'h': max(0.2, _num(container.get('h'), 0.2)),
+            }
+
+        if all(_num(artifact.get(k)) is not None for k in ('x', 'y', 'w', 'h')):
+            return {
+                'x': _num(artifact.get('x'), 0.0),
+                'y': _num(artifact.get('y'), 0.0),
+                'w': max(0.2, _num(artifact.get('w'), 0.2)),
+                'h': max(0.2, _num(artifact.get('h'), 0.2)),
+            }
+
+        valid_frames = [f for f in frames if _valid_rect(f)]
+        if valid_frames:
+            min_x = min(_num(f.get('x'), 0.0) for f in valid_frames)
+            min_y = min(_num(f.get('y'), 0.0) for f in valid_frames)
+            max_x = max(_num(f.get('x'), 0.0) + max(0.01, _num(f.get('w'), 0.01)) for f in valid_frames)
+            max_y = max(_num(f.get('y'), 0.0) + max(0.01, _num(f.get('h'), 0.01)) for f in valid_frames)
+            return {
+                'x': min_x,
+                'y': min_y,
+                'w': max(0.2, max_x - min_x),
+                'h': max(0.2, max_y - min_y),
+            }
+        return None
+
+    def _auto_card_frames(count, rect, layout_mode):
+        if count <= 0 or not rect:
+            return []
+
+        gap = CARD_GAP
+        rx, ry, rw, rh = rect['x'], rect['y'], rect['w'], rect['h']
+
+        if layout_mode == 'column':
+            each_h = max(0.2, (rh - gap * (count - 1)) / max(count, 1))
+            return [
+                {'x': rx, 'y': ry + i * (each_h + gap), 'w': rw, 'h': each_h}
+                for i in range(count)
+            ]
+
+        if layout_mode == 'grid':
+            cols = 2 if count > 1 else 1
+            rows = int((count + cols - 1) / cols)
+            cell_w = max(0.2, (rw - gap * (cols - 1)) / cols)
+            cell_h = max(0.2, (rh - gap * (rows - 1)) / max(rows, 1))
+            out = []
+            for i in range(count):
+                row = i // cols
+                col = i % cols
+                out.append({
+                    'x': rx + col * (cell_w + gap),
+                    'y': ry + row * (cell_h + gap),
+                    'w': cell_w,
+                    'h': cell_h,
+                })
+            return out
+
+        each_w = max(0.2, (rw - gap * (count - 1)) / max(count, 1))
+        return [
+            {'x': rx + i * (each_w + gap), 'y': ry, 'w': each_w, 'h': rh}
+            for i in range(count)
+        ]
+
+    container_rect = _resolve_container_rect()
+    valid_frames = [f for f in frames if _valid_rect(f)]
+    if len(valid_frames) != len(cards):
+        frames = _auto_card_frames(len(cards), container_rect, layout)
+        if not _valid_rect(artifact.get('container') or {}):
+            artifact['container'] = container_rect
 
     fill_hex   = cs.get('fill_color', '#F5F5F5')
     border_hex = cs.get('border_color') or '#E0E0E0'
@@ -1545,14 +1633,22 @@ def render_artifact(slide, artifact, bt, ph_frame=None, header_ph_idx=None, head
         # as the authoritative source so the header never inherits a full-slide ph_frame width.
         if hb:
             _eff_x = artifact.get('x')
+            _eff_y = artifact.get('y')
             _eff_w = artifact.get('w')
+            _eff_h = artifact.get('h')
             if t == 'workflow' and (_eff_x is None or _eff_w is None):
                 _ctr = artifact.get('container') or {}
                 _eff_x = _ctr.get('x', _eff_x)
+                _eff_y = _ctr.get('y', _eff_y)
                 _eff_w = _ctr.get('w', _eff_w)
+                _eff_h = _ctr.get('h', _eff_h)
             if _eff_x is not None and _eff_w is not None:
                 hb['x'] = _eff_x
                 hb['w'] = _eff_w
+            if _eff_y is not None and hb.get('y') is None:
+                hb['y'] = _eff_y
+            if _eff_h is not None and hb.get('h') is None:
+                hb['h'] = min(HEADER_HEIGHT, max(0.2, float(_eff_h)))
         if hb:
             # Always render inline when heading_handled=False — even when placeholder_ref=True,
             # since we only reach here when no placeholder actually received the text.
@@ -2002,6 +2098,28 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
                     fallback_slot = zone_idx if len(zone_artifacts) == 1 else (zone_idx + art_idx)
                     fallback_slot = min(fallback_slot, len(_content_ph_frames) - 1)
                     ph_frame = _content_ph_frames[fallback_slot]
+
+            # Zone-frame fallback — last resort for scratch mode (use_template=False) and
+            # for template/layout-mode cases where neither _layout_ph_bounds nor
+            # _content_ph_frames could provide positioning (placeholder index mismatch,
+            # or template has no large-enough content placeholder).
+            # normalize_zone_artifact_stack only stacks multi-artifact zones; for single-
+            # artifact zones the zone frame is never applied to the artifact itself.
+            if ph_frame is None and artifact.get('x') is None and not _wf_has_container:
+                _zf = zone.get('frame') or {}
+                if all(_zf.get(k) is not None for k in ('x', 'y', 'w', 'h')):
+                    _zp = _zf.get('padding') or {}
+                    _zl = float(_zp.get('left', 0) or 0)
+                    _zt = float(_zp.get('top',  0) or 0)
+                    _zr = float(_zp.get('right', 0) or 0)
+                    _zb = float(_zp.get('bottom', 0) or 0)
+                    ph_frame = {
+                        'x': float(_zf['x']) + _zl,
+                        'y': float(_zf['y']) + _zt,
+                        'w': max(0.2, float(_zf['w']) - _zl - _zr),
+                        'h': max(0.2, float(_zf['h']) - _zt - _zb),
+                    }
+
             render_artifact(slide, artifact, bt, ph_frame=ph_frame, header_ph_idx=hdr_ph_idx, header_style=slide_header_style)
 
     # ── Global elements (scratch only) ────────────────────────────────────────
