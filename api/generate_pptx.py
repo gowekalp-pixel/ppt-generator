@@ -1454,6 +1454,15 @@ def render_artifact(slide, artifact, bt, ph_frame=None, header_ph_idx=None, head
             delta = header_bottom - art_y
             artifact['y'] = header_bottom
             artifact['h'] = max(0.2, art_h - delta)
+    elif heading_handled:
+        # Layout-placeholder headers need the same non-overlap rule as inline headers:
+        # reserve space below the header row + underline before the artifact begins.
+        art_y = float(artifact.get('y', 0) or 0)
+        art_h = float(artifact.get('h', 0) or 0)
+        header_bottom = art_y + HEADER_HEIGHT + HEADER_TO_ARTIFACT
+        if art_h > 0:
+            artifact['y'] = header_bottom
+            artifact['h'] = max(0.2, art_h - (header_bottom - art_y))
 
     try:
         if   t == 'insight_text': render_insight_text(slide, artifact, bt,
