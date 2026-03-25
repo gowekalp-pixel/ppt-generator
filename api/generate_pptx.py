@@ -1339,7 +1339,7 @@ def render_table(slide, artifact, bt):
 def _write_heading_to_header_ph(slide, heading_text, header_ph_idx, bt, header_style='underline'):
     """Write heading text into the layout's paired header placeholder."""
     if not heading_text or header_ph_idx is None:
-        return False
+        return None
     try:
         for ph in slide.placeholders:
             if ph.placeholder_format.idx == header_ph_idx:
@@ -1375,21 +1375,24 @@ def _write_heading_to_header_ph(slide, heading_text, header_ph_idx, bt, header_s
                             HEADER_HEIGHT,
                             fill_hex=bt.get('primary_color', '#1A3C8F')
                         )
+                        return ph_y + HEADER_HEIGHT
                     else:
+                        rule_y = ph_y + text_h + 0.02
                         add_filled_rect(
                             slide,
                             ph_x,
-                            ph_y + text_h + 0.02,
+                            rule_y,
                             ph_w,
                             0.03,
                             fill_hex=bt.get('primary_color', '#1A3C8F')
                         )
+                        return rule_y + 0.03
                 except Exception:
                     pass
-                return True
+                return ph_y + max(text_h, HEADER_HEIGHT)
     except Exception as e:
         print(f'_write_heading_to_header_ph error (idx={header_ph_idx}):', e)
-    return False
+    return None
 
 
 def render_artifact(slide, artifact, bt, ph_frame=None, header_ph_idx=None, header_style='underline'):
@@ -1416,6 +1419,7 @@ def render_artifact(slide, artifact, bt, ph_frame=None, header_ph_idx=None, head
 
     # Route artifact heading into the layout's paired header placeholder when available
     heading_handled = False
+    placeholder_header_bottom = None
     inline_header_rendered = False
     rendered_header_bottom = None
     header_block = artifact.get('header_block') or {}
@@ -1432,7 +1436,8 @@ def render_artifact(slide, artifact, bt, ph_frame=None, header_ph_idx=None, head
         else:
             heading_text = ''
         if heading_text:
-            heading_handled = _write_heading_to_header_ph(slide, heading_text, header_ph_idx, bt, header_style=header_style)
+            placeholder_header_bottom = _write_heading_to_header_ph(slide, heading_text, header_ph_idx, bt, header_style=header_style)
+            heading_handled = placeholder_header_bottom is not None
 
     # Render header_block only when the heading wasn't routed to a layout placeholder
     if t != 'cards' and not heading_handled:
@@ -1455,14 +1460,14 @@ def render_artifact(slide, artifact, bt, ph_frame=None, header_ph_idx=None, head
             artifact['y'] = header_bottom
             artifact['h'] = max(0.2, art_h - delta)
     elif heading_handled:
-        # Layout-placeholder headers need the same non-overlap rule as inline headers:
-        # reserve space below the header row + underline before the artifact begins.
+        # Only introduce the minimum gap required after the actual rendered header.
         art_y = float(artifact.get('y', 0) or 0)
         art_h = float(artifact.get('h', 0) or 0)
-        header_bottom = art_y + HEADER_HEIGHT + HEADER_TO_ARTIFACT
-        if art_h > 0:
-            artifact['y'] = header_bottom
-            artifact['h'] = max(0.2, art_h - (header_bottom - art_y))
+        required_top = float(placeholder_header_bottom or art_y) + HEADER_TO_ARTIFACT
+        if art_h > 0 and required_top > art_y:
+            delta = required_top - art_y
+            artifact['y'] = required_top
+            artifact['h'] = max(0.2, art_h - delta)
 
     try:
         if   t == 'insight_text': render_insight_text(slide, artifact, bt,
