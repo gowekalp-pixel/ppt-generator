@@ -2204,8 +2204,9 @@ function buildMinimalSafeSlide(manifestSlide, tokens) {
 // artifact IN PLACE, so generate_pptx.py can act as a pure renderer.
 // Called after mergeContentIntoZones (and applyLayoutZoneFrames if used).
 // ─────────────────────────────────────────────────────────────────────────────
-function computeArtifactInternals(zones, canvas) {
+function computeArtifactInternals(zones, canvas, brandTokens) {
   const round2 = x => Math.round(x * 100) / 100
+  const bt = brandTokens || {}
 
   for (const zone of (zones || [])) {
     const artifacts = zone.artifacts || []
@@ -4372,7 +4373,7 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
 
   // Post-process: fill computed layout/sizing fields (stacking, chart, table, cards, font scaling)
   // so that generate_pptx.py can act as a pure renderer reading pre-computed values.
-  computeArtifactInternals(finalZones, branded.canvas || {})
+  computeArtifactInternals(finalZones, branded.canvas || {}, branded.brand_tokens || {})
   normalizeArtifactHeaderBands(finalZones)
 
   // Flatten to blocks[] — ordered, self-contained render units.
