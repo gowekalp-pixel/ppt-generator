@@ -127,7 +127,8 @@ Rules:
   workflow: workflow_style{} + nodes[] with x/y/w/h + connections[] with path[]
   table: table_style{} + column_widths[] + row_heights[]
   cards: card_style{} + card_frames[] with x/y/w/h
-  insight_text: style{} + heading_style{} + body_style{}
+  insight_text standard: style{} + heading_style{} + body_style{}
+  insight_text grouped:  heading_style{} + group_layout + group_header_style{} + group_bullet_box_style{} + bullet_style{} + group_gap_in + header_to_box_gap_in
 - Return ONLY a valid JSON array of exactly the requested slides. No markdown. No explanation.`
 
 

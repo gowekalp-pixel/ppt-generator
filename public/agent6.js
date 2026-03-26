@@ -6,6 +6,68 @@
 // No Claude API call. Pure POST to backend → decode base64 → download.
 // Schema expected: canvas, brand_tokens, title_block, subtitle_block,
 //                  zones[].artifacts[], global_elements
+//
+// ─── RENDERING CONTRACT: insight_text ────────────────────────────────────────
+//
+// artifact.insight_mode determines the render path:
+//
+// ── "standard" mode ──────────────────────────────────────────────────────────
+// Render flat bullet list using artifact.body_style:
+//   - list_style "bullet"/"tick_cross"/"numbered"
+//   - vertical_distribution "spread": evenly space points across full artifact height
+//   - header_block rendered above the list (if not null)
+//
+// ── "grouped" mode ───────────────────────────────────────────────────────────
+// All dimensions come from the spec as calculated by Agent 5 — do NOT hardcode.
+// Use the formulas below to reconstruct positions from spec values.
+//
+// artifact.group_layout === "columns":
+//   n        = groups.length
+//   col_w    = (artifact.w - (n-1) × group_gap_in) / n          [equal width]
+//   header_h = group_header_style.h                              [from spec]
+//   box_h    = artifact.h - header_block_h - header_h - header_to_box_gap_in  [fills rest]
+//
+//   Per group column i (x_offset = artifact.x + i × (col_w + group_gap_in)):
+//     1. GROUP HEADER at (x_offset, artifact.y + header_block_h):
+//        - "rounded_rect": rect w=col_w, h=header_h, filled, corner_radius from spec
+//        - "circle_badge": circle diameter=header_h, centered horizontally in col_w;
+//          show 1-based priority number in bold text inside
+//        Text: group_header_style font, text_color, centered
+//     2. GAP of header_to_box_gap_in
+//     3. BULLET BOX at (x_offset, above_y + header_h + header_to_box_gap_in):
+//        w=col_w, h=box_h; rounded rect, fill + border from group_bullet_box_style
+//        Bullet list from groups[i].bullets using artifact.bullet_style
+//        Inner padding from group_bullet_box_style.padding
+//
+// artifact.group_layout === "rows":
+//   n             = groups.length
+//   total_bullets = sum of groups[i].bullets.length
+//   total_row_h   = artifact.h - header_block_h - (n-1) × group_gap_in
+//   row_h[i]      = total_row_h × (groups[i].bullets.length / total_bullets)
+//                   [PROPORTIONAL to bullet count — rows with more bullets get more height]
+//                   enforce minimum: group_header_style.h + header_to_box_gap_in + one text line
+//   header_w      = group_header_style.w                         [from spec]
+//   box_w         = artifact.w - header_w - header_to_box_gap_in [fills rest]
+//
+//   Per group row i (y_offset = artifact.y + header_block_h + sum of prior row_h + i × group_gap_in):
+//     1. GROUP HEADER at (artifact.x, y_offset):
+//        - "rounded_rect": rect w=header_w, h=row_h[i], filled, corner_radius from spec
+//        - "circle_badge": circle diameter=group_header_style.h, centered vertically in row_h[i];
+//          show 1-based priority number inside
+//        Text: group_header_style font, text_color, centered
+//     2. GAP of header_to_box_gap_in to the right of header
+//     3. BULLET BOX at (artifact.x + header_w + header_to_box_gap_in, y_offset):
+//        w=box_w, h=row_h[i]; rounded rect, fill + border from group_bullet_box_style
+//        Bullet list from groups[i].bullets using artifact.bullet_style
+//        Inner padding from group_bullet_box_style.padding
+//
+// SPACING CONSISTENCY:
+//   - group_gap_in and header_to_box_gap_in are uniform across all groups
+//   - All padding values are uniform across all bullet boxes
+//
+// BRAND COLORS:
+//   group_header_style.fill_color — use exactly as specified; do NOT substitute
+//   group_bullet_box_style.border_color — use exactly as specified; do NOT darken
 
 async function generatePPTX() {
   const btn        = $('pptx-btn')

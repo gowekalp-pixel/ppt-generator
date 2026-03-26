@@ -79,6 +79,166 @@ PHASE 1.5 — ZONE DERIVATION (MANDATORY)
      → 1 SECONDARY (interpretation)
      → 1 SUPPORTING (detail)
 
+  6. KPI ANCHOR + BREAKDOWN
+      Use when:
+      - A headline number needs to be established before explaining its composition
+
+      Structure:
+      → 1 PRIMARY (anchor — overall metric)
+      → 1 SECONDARY (breakdown — components of the metric)
+
+      Intent:
+      - First anchor the scale
+      - Then explain how it is composed
+
+   7. CLAIM → EVIDENCE (PROOF STACK)
+    Use when:
+    - A strong assertion needs to be validated with multiple supporting views
+
+    Structure:
+    → 1 PRIMARY (core proof)
+    → 1 SECONDARY (supporting evidence)
+    → optional 1 SUPPORTING (interpretation)
+
+    Intent:
+    - Build confidence through layered validation
+
+   
+    8. BEFORE → AFTER (TRANSFORMATION)
+    Use when:
+    - Demonstrating change, improvement, or impact
+
+    Structure:
+    → 2 PRIMARY (before vs after)
+    → 1 SECONDARY (implication or delta explanation)
+
+    Intent:
+    - Highlight contrast across states
+    - Make improvement or deterioration obvious
+
+     9. DRIVER / CAUSAL BREAKDOWN
+    Use when:
+    - Explaining WHY an outcome occurred
+
+    Structure:
+    → 1 PRIMARY (drivers or causal structure)
+    → 1 SECONDARY (interpretation)
+
+    Intent:
+    - Move from outcome → underlying drivers
+
+    10. CONTRAST (TENSION / IMBALANCE)
+       Use when:
+    - Highlighting imbalance, risk vs opportunity, or uneven performance
+
+    Structure:
+    → 2 PRIMARY (contrasting elements)
+    → optional 1 SECONDARY (implication)
+
+    Intent:
+    - Make differences explicit and interpretable
+
+    NOTE:
+    - This is NOT generic comparison
+    - This is interpretive contrast (good vs bad, strong vs weak, risk vs safe)
+
+    11. SEGMENT FOCUS (ZOOM-IN)
+    Use when:
+    - One segment requires deeper attention within a broader context
+
+    Structure:
+    → 1 PRIMARY (overall context)
+    → 1 SECONDARY (focused segment detail)
+    → optional 1 SUPPORTING (implication)
+
+    Intent:
+    - Show full picture
+    - Then zoom into the most important segment
+
+    
+    12. RANKING + INTERPRETATION
+      Use when:
+    - Relative ordering of entities is critical to the message
+
+    Structure:
+    → 1 PRIMARY (ordered view)
+    → 1 SECONDARY (insight or implication)
+
+    Intent:
+    - Emphasize relative importance or hierarchy
+
+    
+    13. DISTRIBUTION + THRESHOLD
+    
+    Use when:
+    - Evaluating performance against limits, policies, or thresholds
+
+    Structure:
+    → 1 PRIMARY (distribution or spread)
+    → 1 SECONDARY (threshold interpretation)
+
+    Intent:
+    - Show how values are distributed
+    - Then interpret against a benchmark or rule
+
+    14. SUMMARY SNAPSHOT
+    Use when:
+    - Providing a quick executive overview of independent metrics
+
+    Structure:
+    → 1 PRIMARY (summary metrics)
+    → optional 1 SECONDARY (implication)
+
+    Intent:
+    - Enable fast scanning of key stats
+    - No deep analytical relationship required
+
+    NOTE:
+    - Use sparingly
+    - Only when metrics are independent
+
+    
+    15. PROCESS + OUTCOME
+    
+    Use when:
+    - A process is meaningful because of the outcome it produces
+
+    Structure:
+    → 1 PRIMARY (process or sequence)
+    → 1 SECONDARY (result / outcome)
+
+    Intent:
+    - Connect execution → result
+
+    
+    16. EXCEPTION / OUTLIER HIGHLIGHT
+    
+    Use when:
+    - One element deviates significantly from the rest
+
+    Structure:
+    → 1 PRIMARY (overall distribution or context)
+    → 1 SECONDARY (highlighted exception)
+    → optional 1 SUPPORTING (implication)
+
+    Intent:
+    - Draw attention to anomaly or risk
+
+
+    17. LAYERED EXPLANATION (TOP-DOWN)
+    
+    Use when:
+    - Explaining a concept across multiple levels of detail
+
+    Structure:
+    → 1 PRIMARY (top-level message)
+    → 1 SECONDARY (first layer detail)
+    → 1 SUPPORTING (deeper layer detail)
+
+    Intent:
+    - Gradually build understanding
+    - Move from high-level → detailed explanation
+
   STRICT RULES:
   - Zones MUST come from message decomposition — NOT from layout
   - Do NOT think about layout in this phase
@@ -576,20 +736,89 @@ ARTIFACT 1: insight_text
   "type": "insight_text",
   "insight_header": "Key Insight" | "So What" | "Risk Alert" | "Action Required",
   "points": ["specific insight with data", "..."],
+  "groups": [
+    { "header": "2-4 word group label", "bullets": ["crisp point with data", "..."] }
+  ],
   "sentiment": "positive" | "warning" | "neutral"
 }
 
-Rules:
-- each point must be SPECIFIC — include actual numbers, names, percentages
-- final point should ideally state implication or action
-- ZERO placeholder or generic text
-- highlight the positive or negative for each point
+NOTE: Use either "points" (STANDARD mode) or "groups" (LARGE mode) — never both.
 
-Content compression rules (do NOT cut facts to save space — Agent 5 scales font):
-- Include ALL relevant insight points from the source — never drop a point to reduce length
-- Preserve all numbers, names, and percentages EXACTLY as in the source document
-- Only shorten WORDING, never facts: "The company achieved revenue of INR 120Cr in FY24" -> "Revenue: INR 120Cr in FY24"
-- Max 6 points per artifact — if more are needed, split across two zones or two insight artifacts
+---
+
+STEP 1 — CLASSIFY INSIGHT SIZE
+
+If ANY of the following is true:
+- insight_text zone MIN_HEIGHT ≥ 60% of slide content area
+- OR insight_text zone MIN_WIDTH ≥ 60% of slide content area
+- OR zone containing insight_text is PRIMARY and visually dominant (no co-equal chart/workflow)
+
+→ classify as: LARGE INSIGHT → use STRUCTURED MODE (groups)
+
+Else:
+→ classify as: STANDARD INSIGHT → use BULLET MODE (points)
+
+DO NOT use STRUCTURED MODE if:
+- insight_text is supporting (≤ 40% area)
+- insight is paired with a dominant chart or workflow
+- insight is clearly secondary in narrative weight
+
+---
+
+STEP 2A — STANDARD INSIGHT (BULLET MODE)
+
+Use "points" array. Rules:
+- Max 6 bullet points
+- Each point crisp: max ~10–12 words
+- Each point SPECIFIC — include actual numbers, names, percentages
+- Final point should state implication or action where possible
+- No grouping, no headers — flat list only
+- ZERO placeholder or generic text
+
+---
+
+STEP 2B — LARGE INSIGHT (STRUCTURED MODE — MANDATORY for large zones)
+
+Flat bullet lists are NOT allowed in large zones. Use "groups" array instead.
+
+STRUCTURING APPROACH (derive from content — not predefined):
+
+1. Analyze all insight points. Identify natural groupings based on:
+   - thematic similarity
+   - subject / entity
+   - causal relationships
+   - priority / importance
+   - logical sequencing
+
+2. Organize into groups:
+   - Max 5 groups
+   - Each group: header (2–4 words, derived from content) + 1–6 bullets
+   - Each group represents ONE coherent idea
+   - No mixing of unrelated ideas within a group
+   - Avoid single-bullet groups unless unavoidable
+   - Prefer 2–4 bullets per group for balance
+
+3. Allowed structuring styles (choose based on content):
+   - thematic grouping
+   - strategic clustering
+   - prioritized ordering
+   - causal flow
+
+BULLET QUALITY RULES (applies to both modes):
+- Each bullet crisp: max ~10–12 words
+- Prefer data-first phrasing: "Revenue: INR 120Cr in FY24" not "The company achieved revenue of INR 120Cr in FY24"
+- No paragraph-style text
+
+CONTENT INTEGRITY RULES (strict — applies to both modes):
+- Preserve ALL facts, numbers, names, percentages EXACTLY as in source
+- DO NOT drop any insight point to reduce length
+- DO NOT introduce new content
+- Only reorganize and compress wording
+- If more than 6 points needed in STANDARD mode — split across two zones or two insight artifacts
+
+VISUAL INTENT:
+- LARGE INSIGHT → user scans group headers first, then reads bullets
+- STANDARD INSIGHT → user reads flat list top-to-bottom
 
 ═══════════════════════════
 ARTIFACT 2: chart

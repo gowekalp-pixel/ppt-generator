@@ -289,8 +289,16 @@ Allowed types: insight_text | chart | cards | workflow | table
 1. INSIGHT TEXT
 ═══════════════════════════
 
+─── STEP 1: SET insight_mode ───────────────────────────────────────────────────
+Inspect the Agent 4 artifact:
+- Agent 4 provides "groups[]"  → set insight_mode: "grouped"
+- Agent 4 provides "points[]"  → set insight_mode: "standard"
+
+─── STANDARD MODE SCHEMA ───────────────────────────────────────────────────────
+
 {
   "type": "insight_text",
+  "insight_mode": "standard",
   "x": number, "y": number, "w": number, "h": number,
   "style": {
     "fill_color": "hex or null",
@@ -325,24 +333,149 @@ Allowed types: insight_text | chart | cards | workflow | table
   }
 }
 
-insight_text styling rules:
-- style.fill_color: use null (transparent) or a very light brand background tint
-- style.border_color: use brand accent color for a subtle border, or null — do NOT use a heavy full-border box
-- heading_style.color: brand primary color; use a risk/alert accent only for "Risk Alert" headings
-- list_style: choose based on content:
-    "tick_cross" — use ✓ for positive points, ✗ for negative/risk points, → for neutral
-    "numbered"   — use when points are sequential steps or ranked priorities
-    "bullet"     — use for parallel, non-sequential observations
-- indent_inches: 0.12–0.18 for comfortable list indentation
-- space_before_pt: 4–8pt between points for comfortable reading
-- vertical_distribution "spread": points must be distributed evenly across the full artifact height
-  — do NOT cluster points at the top; use line_spacing and space_before_pt to fill the area
+Standard mode styling rules:
+- style.fill_color: null (transparent) or very light brand background tint
+- style.border_color: subtle brand accent color or null — no heavy full-border box
+- heading_style.color: brand primary color; risk/alert accent only for "Risk Alert"
+- list_style: "tick_cross" for positive/negative mix; "numbered" for sequential/ranked; "bullet" for parallel
+- indent_inches: 0.12–0.18; space_before_pt: 4–8pt
+- vertical_distribution "spread": distribute points evenly — do NOT cluster at top
+- body font_size proportional to artifact height:
+    h < 2.0": 9–11pt;  h 2.0–3.5": 11–14pt;  h > 3.5": 14–18pt
+- Do NOT pre-shrink font — renderer auto-fits; use upper end of range
+- heading_style.font_size = body_style.font_size + 2 to 4pt
 
-Visual balance rules:
-- font_size in body_style must be proportional to the artifact height:
-    zone h < 2.0": body font 9–11pt; zone h 2.0–3.5": 11–14pt; zone h > 3.5": 14–18pt
-- Do NOT pre-shrink font_size to avoid overflow — the renderer auto-fits; set font_size to the upper end of the range
-- heading_style.font_size should be body_style.font_size + 2 to 4pt (heading slightly larger, not double)
+─── GROUPED MODE SCHEMA ────────────────────────────────────────────────────────
+
+{
+  "type": "insight_text",
+  "insight_mode": "grouped",
+  "x": number, "y": number, "w": number, "h": number,
+  "style": { "fill_color": null, "border_color": null, "border_width": 0, "corner_radius": 0 },
+  "heading_style": {
+    "font_family": "string",
+    "font_size": number,
+    "font_weight": "semibold" | "bold",
+    "color": "hex"
+  },
+  "header_block": null or { ... same as standard mode ... },
+
+  "group_layout": "columns" | "rows",
+
+  "group_header_style": {
+    "shape": "rounded_rect" | "circle_badge",
+    "fill_color": "hex",
+    "text_color": "hex",
+    "font_family": "string",
+    "font_size": number,
+    "font_weight": "bold" | "semibold",
+    "corner_radius": number,
+    "w": number,
+    "h": number
+  },
+
+  "group_bullet_box_style": {
+    "fill_color": "hex or null",
+    "border_color": "hex",
+    "border_width": number,
+    "corner_radius": number,
+    "padding": { "top": number, "right": number, "bottom": number, "left": number }
+  },
+
+  "bullet_style": {
+    "font_family": "string",
+    "font_size": number,
+    "font_weight": "regular",
+    "color": "hex",
+    "line_spacing": number,
+    "indent_inches": number,
+    "space_before_pt": number,
+    "char": "string"
+  },
+
+  "group_gap_in": number,
+  "header_to_box_gap_in": number
+}
+
+─── GROUPED MODE DESIGN RULES ──────────────────────────────────────────────────
+
+GROUP LAYOUT — choose based on zone dimensions and group count:
+- "columns": use when zone w > zone h AND group count ≤ 3 (groups side-by-side)
+- "rows":    use when zone h ≥ zone w OR group count ≥ 3 (groups stacked vertically, header left + box right)
+
+GROUP HEADER SHAPE — choose based on content semantics:
+- "circle_badge": ONLY when groups represent numbered priority steps (1, 2, 3…) or sequential phases
+  - Renders as a filled circle; priority number (1-based index) shown as bold text inside
+- "rounded_rect": DEFAULT for all text-label group headers
+  - columns layout: spans full column width as a header bar
+  - rows layout: left-side label block beside the bullet box
+
+GROUP HEADER COLORS:
+- fill_color: brand primary color (EY yellow #FFE600, or dark brand color for contrast)
+- text_color: #111111 on light/yellow fills; #FFFFFF on dark fills
+- Do NOT use a subtle/light fill — headers must be visually dominant
+
+GROUP BULLET BOX:
+- fill_color: null or very light near-white tint
+- border_color: light brand border — use brand secondary light or a neutral — NEVER heavy/dark
+- border_width: 0.5–1.0pt
+- corner_radius: match group_header_style.corner_radius for visual consistency
+
+DIMENSION CALCULATION — derive ALL sizes from content and available area:
+
+  Let n       = number of groups
+  Let f       = bullet_style.font_size (pt)
+  Let line_h  = f / 72  (inches per line, 1pt = 1/72")
+  Let header_block_h = height consumed by artifact-level header_block (0 if null)
+
+  1. group_header_style.h   — height of the group header shape:
+       rounded_rect → h = max(f × 1.8 / 72,  artifact.h × 0.06)
+       circle_badge → h = max(f × 2.2 / 72,  artifact.h × 0.08)   [w = h, always a circle]
+
+  2. group_header_style.w   — width of the group header shape:
+       columns layout → NOT specified here; renderer uses full column width
+       rows layout, rounded_rect → estimate from longest group header label:
+           w = (max_header_chars × f × 0.55 / 72) + (f × 2.0 / 72)
+       rows layout, circle_badge → w = h (square bounding box)
+
+  3. group_gap_in — gap between adjacent groups:
+       columns → max(artifact.w × 0.015, 0.05)
+       rows    → max(artifact.h × 0.015, 0.05)
+
+  4. header_to_box_gap_in:
+       = max(f × 0.5 / 72, 0.03)
+
+  5. group_bullet_box_style.padding:
+       top = bottom = max(f × 0.8 / 72, 0.05)
+       left = right = max(f × 1.0 / 72, 0.07)
+
+  6. bullet_style.font_size — derive from available box area:
+       columns layout:
+           col_w = (artifact.w - (n-1) × group_gap_in) / n
+           box_h = artifact.h - header_block_h - group_header_style.h - header_to_box_gap_in
+           max_bullets_in_col = max bullets across all groups
+           f = floor(box_h × 72 / (max_bullets_in_col × 1.5))  → clamp to [8, 14]
+       rows layout:
+           total_row_h = artifact.h - header_block_h - (n-1) × group_gap_in
+           max_bullets_in_row = max bullets across all groups
+           min_row_h = total_row_h × (max_bullets_in_row / total_bullets)
+           box_w = artifact.w - group_header_style.w - header_to_box_gap_in
+           f = floor(min_row_h × 72 / (max_bullets_in_row × 1.5))  → clamp to [8, 14]
+
+  7. space_before_pt = max(f × 0.4, 2)   (scales with font — tighter than standard mode)
+     indent_inches   = max(f × 1.0 / 72, 0.08)
+
+GEOMETRY — columns layout (renderer uses these formulas, NOT hardcoded values):
+- col_w[i]   = (artifact.w - (n-1) × group_gap_in) / n          [equal width per column]
+- header_h   = group_header_style.h                               [same for all columns]
+- box_h[i]   = artifact.h - header_block_h - header_h - header_to_box_gap_in  [same for all columns]
+
+GEOMETRY — rows layout (renderer uses these formulas):
+- total_row_h = artifact.h - header_block_h - (n-1) × group_gap_in
+- row_h[i]   = total_row_h × (bullets[i].length / total_bullets)  [PROPORTIONAL to bullet count — NOT equal]
+               minimum row_h[i] = group_header_style.h + header_to_box_gap_in + (1 line of text)
+- header_w   = group_header_style.w                               [same for all rows]
+- box_w[i]   = artifact.w - header_w - header_to_box_gap_in      [same for all rows]
 
 ═══════════════════════════
 2. CHART
@@ -858,7 +991,8 @@ async function designSlideBatch(batchManifest, brand, brief, batchNum) {
     '\n- workflow: must have workflow_style, nodes[] with x/y/w/h, connections[] with path[]' +
     '\n- table: must have table_style, column_widths[], row_heights[]' +
     '\n- cards: must have card_style, card_frames[] with x/y/w/h per card' +
-    '\n- insight_text: must have style, heading_style, body_style' +
+    '\n- insight_text (standard mode): must have insight_mode:"standard", style, heading_style, body_style' +
+    '\n- insight_text (grouped mode):  must have insight_mode:"grouped", heading_style, group_layout, group_header_style, group_bullet_box_style, bullet_style, group_gap_in, header_to_box_gap_in' +
     '\n- Return a valid JSON array of exactly ' + batchManifest.length + ' slide objects'
 
   const raw    = await callClaude(AGENT5_SYSTEM, [{ role: 'user', content: prompt }], 6000)
@@ -908,7 +1042,10 @@ function validateDesignedSlide(slide) {
       if (a.type === 'cards'    && !a.card_frames?.length) issues.push(p + ': cards missing card_frames')
       if (a.type === 'cards'    && !a.card_style)      issues.push(p + ': cards missing card_style')
       if (a.type === 'insight_text' && !a.heading_style) issues.push(p + ': insight_text missing heading_style')
-      if (a.type === 'insight_text' && !a.body_style)    issues.push(p + ': insight_text missing body_style')
+      if (a.type === 'insight_text' && a.insight_mode === 'grouped' && !a.group_header_style) issues.push(p + ': grouped insight_text missing group_header_style')
+      if (a.type === 'insight_text' && a.insight_mode === 'grouped' && !a.group_bullet_box_style) issues.push(p + ': grouped insight_text missing group_bullet_box_style')
+      if (a.type === 'insight_text' && a.insight_mode === 'grouped' && !a.bullet_style) issues.push(p + ': grouped insight_text missing bullet_style')
+      if (a.type === 'insight_text' && (!a.insight_mode || a.insight_mode === 'standard') && !a.body_style) issues.push(p + ': insight_text missing body_style')
     })
   })
 
@@ -984,13 +1121,32 @@ function enforceArtifactBounds(zone) {
     }
 
     if (a.type === 'insight_text') {
-      const pointCount = (a.points || []).length
-      const avgChars = pointCount ? Math.round((a.points || []).join(' ').length / pointCount) : 0
-      const baseSize = (a.body_style || {}).font_size || 10
-      const fitted = pointCount > 6 || avgChars > 120 ? Math.max(8, baseSize - 2)
-        : pointCount > 4 || avgChars > 80 ? Math.max(8.5, baseSize - 1)
-        : baseSize
-      a.body_style = { ...(a.body_style || {}), font_size: fitted }
+      if (a.insight_mode === 'grouped') {
+        // For grouped mode: scale bullet font based on total bullet count across all groups
+        const groups = a.groups || []
+        const totalBullets = groups.reduce((s, g) => s + (g.bullets || []).length, 0)
+        const maxBullets = groups.reduce((m, g) => Math.max(m, (g.bullets || []).length), 0)
+        const baseSize = (a.bullet_style || {}).font_size || 10
+        const fitted = totalBullets > 20 || maxBullets > 6 ? Math.max(8, baseSize - 2)
+          : totalBullets > 12 || maxBullets > 4 ? Math.max(8.5, baseSize - 1)
+          : baseSize
+        a.bullet_style = { ...(a.bullet_style || {}), font_size: fitted }
+        // Clamp spacing proportional to artifact dimensions — no hardcoded defaults
+        const dimForGap = a.group_layout === 'rows' ? (a.h || 5) : (a.w || 10)
+        const minGap = r2(Math.max(dimForGap * 0.01, 0.04))
+        const maxGap = r2(Math.min(dimForGap * 0.03, 0.18))
+        a.group_gap_in = r2(Math.min(maxGap, Math.max(minGap, a.group_gap_in || dimForGap * 0.015)))
+        const f = (a.bullet_style || {}).font_size || 10
+        a.header_to_box_gap_in = r2(Math.min(0.10, Math.max(f * 0.5 / 72, 0.02)))
+      } else {
+        const pointCount = (a.points || []).length
+        const avgChars = pointCount ? Math.round((a.points || []).join(' ').length / pointCount) : 0
+        const baseSize = (a.body_style || {}).font_size || 10
+        const fitted = pointCount > 6 || avgChars > 120 ? Math.max(8, baseSize - 2)
+          : pointCount > 4 || avgChars > 80 ? Math.max(8.5, baseSize - 1)
+          : baseSize
+        a.body_style = { ...(a.body_style || {}), font_size: fitted }
+      }
     }
 
     if (a.type === 'cards') {
@@ -1150,7 +1306,8 @@ CRITICAL — all artifacts must be FULLY specified:
 - workflow: include workflow_style{}, nodes[] with x/y/w/h, connections[] with path[]
 - table: include table_style{}, column_widths[], row_heights[]
 - cards: include card_style{}, card_frames[] with x/y/w/h per card
-- insight_text: include style{}, heading_style{}, body_style{}
+- insight_text standard: include insight_mode:"standard", style{}, heading_style{}, body_style{}
+- insight_text grouped:  include insight_mode:"grouped", heading_style{}, group_layout, group_header_style{}, group_bullet_box_style{}, bullet_style{}, group_gap_in, header_to_box_gap_in
 
 All coordinates in decimal inches, 2 decimal places.
 Return ONLY a valid JSON object. No explanation. No markdown.`
