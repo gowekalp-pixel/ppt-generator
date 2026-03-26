@@ -1686,11 +1686,21 @@ function validateReasoningArtifactUsage(slide) {
   return true
 }
 
+function validateSlideArtifactMix(slide) {
+  if (slide.slide_type !== 'content') return true
+  const artifacts = []
+  ;(slide.zones || []).forEach(zone => (zone.artifacts || []).forEach(art => artifacts.push((art.type || '').toLowerCase())))
+  if (!artifacts.length) return false
+  if (artifacts.every(t => t === 'cards')) return false
+  return true
+}
+
 function hasPlaceholderContent(slide) {
   if (slide.slide_type !== 'content') return false
   if (!slide.zones || !slide.zones.length) return true
   if (!slide.key_message || slide.key_message.trim().length < 10) return true
   if (!validateReasoningArtifactUsage(slide)) return true
+  if (!validateSlideArtifactMix(slide)) return true
 
   for (const zone of slide.zones) {
     for (const artifact of (zone.artifacts || [])) {

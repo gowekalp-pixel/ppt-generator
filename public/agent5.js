@@ -1815,6 +1815,8 @@ async function buildFallbackDesign(manifestSlide, brand) {
     JSON.stringify(manifestSlide, null, 2) +
     '\n\nBuild the best possible layout for this slide.' +
     '\nPreserve the title, key_message, zones structure and artifact content from the manifest.' +
+    '\nCRITICAL: preserve the exact number of zones and the exact artifact types in each zone from the manifest.' +
+    '\nDo NOT collapse charts, tables, workflows, cards, matrix, driver_tree, or prioritization into generic insight_text unless the manifest itself uses insight_text.' +
     '\nChoose the cleanest, most board-ready layout given the archetype: ' + (manifestSlide.slide_archetype || 'summary') +
     '\nReturn a single JSON object for this one slide.'
 
@@ -1827,13 +1829,12 @@ async function buildFallbackDesign(manifestSlide, brand) {
 
     if (candidate && typeof candidate === 'object' && candidate.canvas && candidate.zones) {
       const issues = validateDesignedSlide(candidate)
-      if (issues.length === 0) {
+      const signatureIssues = validateFallbackStructure(candidate, manifestSlide)
+      if (issues.length === 0 && signatureIssues.length === 0) {
         console.log('Agent 5 -- fallback Claude succeeded for S' + manifestSlide.slide_number)
         return candidate
       }
-      console.warn('Agent 5 -- fallback Claude still has issues for S' + manifestSlide.slide_number + ':', issues.join('; '))
-      // Return anyway -- better than nothing, zone repair will patch what it can
-      return candidate
+      console.warn('Agent 5 -- fallback Claude still has issues for S' + manifestSlide.slide_number + ':', issues.concat(signatureIssues).join('; '))
     }
   } catch (e) {
     console.warn('Agent 5 -- fallback Claude call failed for S' + manifestSlide.slide_number + ':', e.message)
@@ -1842,6 +1843,235 @@ async function buildFallbackDesign(manifestSlide, brand) {
   // Last resort: minimal structurally valid object derived purely from brand tokens
   // No hardcoded content — pull everything from manifest and brand
   return buildMinimalSafeSlide(manifestSlide, tokens)
+}
+
+function manifestZoneArtifactSignature(slideLike) {
+  return (slideLike?.zones || []).map(z => (z.artifacts || []).map(a => a.type || 'unknown'))
+}
+
+function validateFallbackStructure(candidate, manifestSlide) {
+  const issues = []
+  const candSig = manifestZoneArtifactSignature(candidate)
+  const manifestSig = manifestZoneArtifactSignature(manifestSlide)
+  if (candSig.length !== manifestSig.length) {
+    issues.push('zone count mismatch vs manifest')
+    return issues
+  }
+  for (let zi = 0; zi < manifestSig.length; zi++) {
+    const mArts = manifestSig[zi]
+    const cArts = candSig[zi] || []
+    if (cArts.length !== mArts.length) {
+      issues.push('z' + zi + ': artifact count mismatch vs manifest')
+      continue
+    }
+    for (let ai = 0; ai < mArts.length; ai++) {
+      if (String(cArts[ai] || '') !== String(mArts[ai] || '')) {
+        issues.push('z' + zi + '.a' + ai + ': artifact type mismatch vs manifest (' + cArts[ai] + ' != ' + mArts[ai] + ')')
+      }
+    }
+  }
+  return issues
+}
+
+function makeHeaderBlockFromManifestArtifact(artifact, bt) {
+  const text = (
+    artifact?.insight_header ||
+    artifact?.chart_header ||
+    artifact?.table_header ||
+    artifact?.workflow_header ||
+    artifact?.matrix_header ||
+    artifact?.tree_header ||
+    artifact?.priority_header ||
+    artifact?.heading ||
+    ''
+  )
+  if (!text) return null
+  return {
+    text,
+    x: 0, y: 0, w: 1, h: 0.3,
+    font_family: bt.title_font_family || 'Arial',
+    font_size: 11,
+    font_weight: 'semibold',
+    color: bt.primary_color || '#0078AE',
+    style: 'underline',
+    accent_color: bt.primary_color || '#0078AE'
+  }
+}
+
+function buildSafeArtifactShell(manifestArt, bt) {
+  const t = manifestArt?.type || 'insight_text'
+  const header_block = makeHeaderBlockFromManifestArtifact(manifestArt, bt)
+  if (t === 'chart') {
+    return {
+      type: 'chart',
+      x: null, y: null, w: null, h: null,
+      chart_style: {
+        title_font_family: bt.title_font_family || 'Arial',
+        title_font_size: 12,
+        axis_font_family: bt.body_font_family || 'Arial',
+        axis_font_size: 9,
+        label_font_family: bt.body_font_family || 'Arial',
+        label_font_size: 9,
+        title_color: bt.primary_color || '#0078AE',
+        axis_color: bt.body_color || '#111111',
+        gridline_color: '#DDDDDD',
+        legend_font_family: bt.body_font_family || 'Arial',
+        legend_font_size: 9,
+        legend_color: bt.body_color || '#111111',
+        show_gridlines: false,
+        show_border: false,
+        border_color: null,
+        background_color: null,
+        legend_position: 'top',
+        data_label_size: 9,
+        category_label_rotation: 0
+      },
+      series_style: [],
+      header_block
+    }
+  }
+  if (t === 'table') {
+    return {
+      type: 'table',
+      x: null, y: null, w: null, h: null,
+      table_style: {
+        header_fill_color: bt.primary_color || '#0078AE',
+        header_text_color: '#FFFFFF',
+        header_font_family: bt.title_font_family || 'Arial',
+        header_font_size: 10,
+        body_fill_color: '#FFFFFF',
+        body_alt_fill_color: '#F7F8FA',
+        body_text_color: bt.body_color || '#111111',
+        body_font_family: bt.body_font_family || 'Arial',
+        body_font_size: 9,
+        grid_color: '#D7DEE8',
+        grid_width: 0.5,
+        highlight_fill_color: '#FFF4BF',
+        cell_padding: 0.06
+      },
+      column_widths: [],
+      column_x_positions: [],
+      row_heights: [],
+      header_row_height: null,
+      row_y_positions: [],
+      column_types: [],
+      column_alignments: [],
+      header_cell_frames: [],
+      body_cell_frames: [],
+      header_block
+    }
+  }
+  if (t === 'workflow') {
+    return {
+      type: 'workflow',
+      x: null, y: null, w: null, h: null,
+      workflow_style: {
+        node_fill_color: bt.primary_color || '#0078AE',
+        node_border_color: '#FFFFFF',
+        node_border_width: 1,
+        node_title_font_family: bt.title_font_family || 'Arial',
+        node_title_font_size: 10,
+        node_title_color: '#FFFFFF',
+        node_value_font_family: bt.body_font_family || 'Arial',
+        node_value_font_size: 9,
+        node_value_color: bt.body_color || '#111111',
+        node_inner_padding: 0.08,
+        external_label_gap: 0.08,
+        connector_color: bt.primary_color || '#0078AE',
+        connector_width: 0.5,
+        node_corner_radius: 4
+      },
+      nodes: [],
+      connections: [],
+      container: null,
+      header_block
+    }
+  }
+  if (t === 'cards') {
+    return {
+      type: 'cards',
+      x: null, y: null, w: null, h: null,
+      cards_layout: manifestArt.cards_layout || 'column',
+      container: null,
+      card_frames: [],
+      card_style: {
+        fill_color: '#F5F5F5',
+        border_color: '#DDDDDD',
+        border_width: 0.75,
+        corner_radius: 0,
+        shadow: false,
+        internal_padding: 0.12
+      },
+      title_style: {
+        font_family: bt.title_font_family || 'Arial',
+        font_size: 12,
+        font_weight: 'bold',
+        color: bt.primary_color || '#0078AE'
+      },
+      subtitle_style: {
+        font_family: bt.body_font_family || 'Arial',
+        font_size: 22,
+        font_weight: 'bold',
+        color: bt.body_color || '#111111'
+      },
+      body_style: {
+        font_family: bt.body_font_family || 'Arial',
+        font_size: 9,
+        font_weight: 'regular',
+        color: bt.body_color || '#111111',
+        line_spacing: 1.2
+      }
+    }
+  }
+  if (t === 'matrix') {
+    return {
+      type: 'matrix',
+      x: null, y: null, w: null, h: null,
+      matrix_style: {},
+      header_block
+    }
+  }
+  if (t === 'driver_tree') {
+    return {
+      type: 'driver_tree',
+      x: null, y: null, w: null, h: null,
+      tree_style: {},
+      header_block
+    }
+  }
+  if (t === 'prioritization') {
+    return {
+      type: 'prioritization',
+      x: null, y: null, w: null, h: null,
+      priority_style: {},
+      header_block
+    }
+  }
+
+  const grouped = !!(manifestArt?.groups && manifestArt.groups.length)
+  return grouped ? {
+    type: 'insight_text',
+    insight_mode: 'grouped',
+    x: null, y: null, w: null, h: null,
+    style: { fill_color: null, border_color: null, border_width: 0, corner_radius: 0 },
+    heading_style: { font_family: bt.title_font_family || 'Arial', font_size: 12, font_weight: 'bold', color: bt.primary_color || '#0078AE' },
+    group_layout: 'rows',
+    group_header_style: { shape: 'rounded_rect', fill_color: bt.primary_color || '#0078AE', text_color: '#FFFFFF', font_family: bt.title_font_family || 'Arial', font_size: 10, font_weight: 'bold', corner_radius: 0.04, w: 1.4, h: 0.28 },
+    group_bullet_box_style: { fill_color: null, border_color: '#CCCCCC', border_width: 0.75, corner_radius: 0.04, padding: { top: 0.08, right: 0.1, bottom: 0.08, left: 0.1 } },
+    bullet_style: { font_family: bt.body_font_family || 'Arial', font_size: 10, font_weight: 'regular', color: bt.body_color || '#111111', line_spacing: 1.35, indent_inches: 0.1, space_before_pt: 3, char: '▶' },
+    group_gap_in: 0.08,
+    header_to_box_gap_in: 0.04,
+    header_block
+  } : {
+    type: 'insight_text',
+    insight_mode: 'standard',
+    x: null, y: null, w: null, h: null,
+    style: { fill_color: null, border_color: (bt.primary_color || '#0078AE') + '33', border_width: 0.5, corner_radius: 3 },
+    heading_style: { font_family: bt.title_font_family || 'Arial', font_size: 12, font_weight: 'bold', color: bt.primary_color || '#0078AE' },
+    body_style: { font_family: bt.body_font_family || 'Arial', font_size: 11, font_weight: 'regular', color: bt.body_color || '#111111', line_spacing: 1.4, indent_inches: 0.15, list_style: 'bullet', space_before_pt: 5, vertical_distribution: 'spread' },
+    heading: manifestArt?.heading || manifestArt?.insight_header || 'Key Insight',
+    header_block
+  }
 }
 
 
@@ -1856,101 +2086,74 @@ function buildMinimalSafeSlide(manifestSlide, tokens) {
   const titleFont = (tokens.title_font   || {}).family || 'Calibri'
   const bodyFont  = (tokens.body_font    || {}).family || 'Calibri'
   const isDark    = ['title', 'divider'].includes(manifestSlide.slide_type)
+  const cw        = r2(w - 0.80)
 
-  const ct  = 1.05
-  const cw  = r2(w - 0.80)
-  const ch  = r2(h - ct - 0.40)
+  const fallbackBrandTokens = {
+    title_font_family: titleFont,
+    body_font_family: bodyFont,
+    caption_font_family: bodyFont,
+    title_color: isDark ? '#FFFFFF' : primary,
+    body_color: isDark ? '#CCDDFF' : '#111111',
+    caption_color: '#888888',
+    primary_color: primary,
+    secondary_color: secondary,
+    accent_colors: tokens.accent_colors || [],
+    chart_palette: tokens.chart_colors || [primary, secondary, '#2E9E5B', '#C82333']
+  }
 
-  // Pull real content from manifest insight_text artifacts — prefer groups over points
-  let manifestGroups = null
-  const manifestPoints = []
-  ;(manifestSlide.zones || []).forEach(z =>
-    (z.artifacts || []).forEach(a => {
-      if (a.type === 'insight_text') {
-        if (a.groups && a.groups.length > 0 && !manifestGroups) manifestGroups = a.groups
-        ;(a.points || []).forEach(p => manifestPoints.push(p))
-      }
-    })
-  )
-  const isGrouped = !!manifestGroups
-  const bodyPoints = manifestPoints.length > 0
-    ? manifestPoints.slice(0, 4)
-    : [manifestSlide.key_message || 'See source document for details']
+  const fallbackZones = manifestSlide.slide_type === 'content'
+    ? (manifestSlide.zones || []).map((zone, zoneIdx) => ({
+        zone_id: zone.zone_id || `z${zoneIdx + 1}` ,
+        zone_role: zone.zone_role || (zoneIdx === 0 ? 'primary_proof' : 'supporting_evidence'),
+        message_objective: zone.message_objective || manifestSlide.key_message || '',
+        narrative_weight: zone.narrative_weight || (zoneIdx === 0 ? 'primary' : 'secondary'),
+        frame: null,
+        padding: zone.padding || null,
+        layout_hint: zone.layout_hint || null,
+        artifacts: (zone.artifacts || []).map(art => buildSafeArtifactShell(art, fallbackBrandTokens))
+      }))
+    : []
 
   return {
-    slide_number:    manifestSlide.slide_number,
-    slide_type:      manifestSlide.slide_type      || 'content',
+    slide_number: manifestSlide.slide_number,
+    slide_type: manifestSlide.slide_type || 'content',
     slide_archetype: manifestSlide.slide_archetype || 'summary',
     canvas: {
       width_in: w, height_in: h,
-      margin:     { left: 0.40, right: 0.40, top: 0.15, bottom: 0.30 },
+      margin: { left: 0.40, right: 0.40, top: 0.15, bottom: 0.30 },
       background: { color: isDark ? primary : bg }
     },
     brand_tokens: {
-      title_font_family:   titleFont,
-      body_font_family:    bodyFont,
-      caption_font_family: bodyFont,
-      title_color:   isDark ? '#FFFFFF' : primary,
-      body_color:    isDark ? '#CCDDFF' : '#111111',
-      caption_color: '#888888',
-      primary_color:   primary,
-      secondary_color: secondary,
-      accent_colors:   tokens.accent_colors || [],
-      chart_palette:   tokens.chart_colors  || [primary, secondary, '#2E9E5B', '#C82333']
+      title_font_family: fallbackBrandTokens.title_font_family,
+      body_font_family: fallbackBrandTokens.body_font_family,
+      caption_font_family: fallbackBrandTokens.caption_font_family,
+      title_color: fallbackBrandTokens.title_color,
+      body_color: fallbackBrandTokens.body_color,
+      caption_color: fallbackBrandTokens.caption_color,
+      primary_color: fallbackBrandTokens.primary_color,
+      secondary_color: fallbackBrandTokens.secondary_color,
+      accent_colors: fallbackBrandTokens.accent_colors,
+      chart_palette: fallbackBrandTokens.chart_palette
     },
     title_block: {
-      text:        manifestSlide.title || '',
+      text: manifestSlide.title || '',
       x: 0.40, y: 0.15, w: cw,
-      h:           isDark ? 2.00 : 0.75,
+      h: isDark ? 2.00 : 0.75,
       font_family: titleFont,
-      font_size:   isDark ? 30 : 18,
+      font_size: isDark ? 30 : 18,
       font_weight: 'bold',
-      color:       isDark ? '#FFFFFF' : primary,
+      color: isDark ? '#FFFFFF' : primary,
       align: 'left', valign: 'middle', wrap: true
     },
     subtitle_block: manifestSlide.subtitle ? {
-      text:        manifestSlide.subtitle,
+      text: manifestSlide.subtitle,
       x: 0.40, y: isDark ? 2.60 : 0.95,
       w: cw, h: 0.45,
       font_family: bodyFont, font_size: 14, font_weight: 'regular',
-      color:       isDark ? '#BBCCFF' : '#555555',
+      color: isDark ? '#BBCCFF' : '#555555',
       align: 'left', valign: 'top', wrap: true
     } : null,
-    zones: manifestSlide.slide_type === 'content' ? [{
-      zone_id:           'z1',
-      zone_role:         'primary_proof',
-      message_objective: manifestSlide.key_message || '',
-      narrative_weight:  'primary',
-      frame: {
-        x: 0.40, y: ct, w: cw, h: ch,
-        padding: { top: 0.10, right: 0.10, bottom: 0.10, left: 0.10 }
-      },
-      artifacts: [isGrouped ? {
-        type: 'insight_text',
-        insight_mode: 'grouped',
-        x: 0.50, y: r2(ct + 0.10), w: r2(cw - 0.20), h: r2(ch - 0.20),
-        style:         { fill_color: null, border_color: null, border_width: 0, corner_radius: 0 },
-        heading_style: { font_family: titleFont, font_size: 12, font_weight: 'bold', color: primary },
-        group_layout:  ch > (cw - 0.20) ? 'rows' : 'columns',
-        group_header_style:    { shape: 'rounded_rect', fill_color: primary, text_color: '#FFFFFF', font_family: titleFont, font_size: 10, font_weight: 'bold', corner_radius: 0.04, w: 1.40, h: r2(Math.max(10 * 1.8 / 72, (ch - 0.20) * 0.06)) },
-        group_bullet_box_style:{ fill_color: null, border_color: '#CCCCCC', border_width: 0.75, corner_radius: 0.04, padding: { top: 0.08, right: 0.10, bottom: 0.08, left: 0.10 } },
-        bullet_style:  { font_family: bodyFont, font_size: 10, font_weight: 'regular', color: '#111111', line_spacing: 1.35, indent_inches: 0.10, space_before_pt: 3, char: '▶' },
-        group_gap_in: r2(Math.max((ch - 0.20) * 0.015, 0.05)),
-        header_to_box_gap_in: r2(Math.max(10 * 0.5 / 72, 0.03)),
-        groups:    manifestGroups,
-        sentiment: 'neutral'
-      } : {
-        type: 'insight_text',
-        insight_mode: 'standard',
-        x: 0.50, y: r2(ct + 0.10), w: r2(cw - 0.20), h: r2(ch - 0.20),
-        style:         { fill_color: null, border_color: primary + '33', border_width: 0.5, corner_radius: 3 },
-        heading_style: { font_family: titleFont, font_size: 12, font_weight: 'bold', color: primary },
-        body_style:    { font_family: bodyFont, font_size: 11, font_weight: 'regular', color: '#111111', line_spacing: 1.4, indent_inches: 0.15, list_style: 'bullet', space_before_pt: 5, vertical_distribution: 'spread' },
-        heading: 'Key Insight',
-        points:  bodyPoints,
-        sentiment: 'neutral'
-      }]
-    }] : [],
+    zones: fallbackZones,
     global_elements: {
       footer: {
         show: true, x: 0.40, y: r2(h - 0.26), w: 3.00, h: 0.20,
@@ -1961,12 +2164,19 @@ function buildMinimalSafeSlide(manifestSlide, tokens) {
         font_family: bodyFont, font_size: 8, color: '#AAAAAA', align: 'right'
       }
     },
+    layout_mode: manifestSlide.layout_mode !== false,
+    selected_layout_name: manifestSlide.selected_layout_name || manifestSlide.layout_name || '',
+    section_name: manifestSlide.section_name || '',
+    section_type: manifestSlide.section_type || '',
+    title: manifestSlide.title || '',
+    subtitle: manifestSlide.subtitle || '',
+    key_message: manifestSlide.key_message || '',
+    visual_flow_hint: manifestSlide.visual_flow_hint || '',
+    speaker_note: manifestSlide.speaker_note || '',
     _fallback: true
   }
 }
 
-
-// ═══════════════════════════════════════════════════════════════════════════════
 // CONTENT MERGER
 // Injects Agent 4 manifest artifact content into Agent 5 designed artifacts.
 // Agent 5 produces layout + style. Agent 4 holds the actual data.
@@ -4303,3 +4513,4 @@ async function runAgent5(state) {
 
   return allDesigned
 }
+
