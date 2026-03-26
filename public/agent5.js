@@ -821,6 +821,149 @@ TABLE MICRO-LAYOUT OWNERSHIP:
 - You must output final column_widths, column_x_positions, header_row_height, row_heights, row_y_positions, column_types, column_alignments, header_cell_frames, and body_cell_frames
 - The renderer must not infer table density, alignment, or spacing
 
+6. MATRIX
+═══════════════════════════
+
+{
+  "type": "matrix",
+  "x": number, "y": number, "w": number, "h": number,
+  "matrix_style": {
+    "border_color": "hex",
+    "border_width": number,
+    "divider_color": "hex",
+    "divider_width": number,
+    "axis_color": "hex",
+    "axis_width": number,
+    "axis_label_font_family": "string",
+    "axis_label_font_size": number,
+    "axis_label_color": "hex",
+    "quadrant_title_font_family": "string",
+    "quadrant_title_font_size": number,
+    "quadrant_title_color": "hex",
+    "quadrant_body_font_family": "string",
+    "quadrant_body_font_size": number,
+    "quadrant_body_color": "hex",
+    "point_label_font_family": "string",
+    "point_label_font_size": number,
+    "point_label_color": "hex",
+    "point_palette": ["hex"],
+    "quadrant_fills": ["hex", "hex", "hex", "hex"]
+  },
+  "header_block": null or {
+    "text": "string — the matrix_header value from Agent 4",
+    "x": number, "y": number, "w": number, "h": number,
+    "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
+    "style": "underline" | "brand_fill",
+    "accent_color": "hex"
+  }
+}
+
+Matrix rules:
+- Use ONLY primitive geometry in the final blocks: rect, text_box, rule, circle
+- Reserve space for:
+  - x axis title + low/high labels
+  - y axis title + low/high labels
+  - quadrant titles + quadrant insight lines
+- Quadrant fills must be subtle light tints with clear contrast against labels and points
+- Plot point positions semantically:
+  - low = 25% of axis span
+  - medium = 50%
+  - high = 75%
+- Y increases upward conceptually: y=high must plot nearer the TOP of the matrix
+- Point labels must not collide with quadrant headings; offset labels around the marker if needed
+- Use brand colors for points in sequence; max 6 points
+
+7. DRIVER_TREE
+═══════════════════════════
+
+{
+  "type": "driver_tree",
+  "x": number, "y": number, "w": number, "h": number,
+  "tree_style": {
+    "node_fill_color": "hex",
+    "node_fill_color_secondary": "hex",
+    "node_fill_color_leaf": "hex",
+    "node_border_color": "hex",
+    "node_border_width": number,
+    "connector_color": "hex",
+    "connector_width": number,
+    "label_font_family": "string",
+    "label_font_size": number,
+    "label_color": "hex",
+    "value_font_family": "string",
+    "value_font_size": number,
+    "value_color": "hex",
+    "corner_radius": number
+  },
+  "header_block": null or {
+    "text": "string — the tree_header value from Agent 4",
+    "x": number, "y": number, "w": number, "h": number,
+    "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
+    "style": "underline" | "brand_fill",
+    "accent_color": "hex"
+  }
+}
+
+Driver tree rules:
+- Use ONLY primitive geometry in the final blocks: rect, text_box, rule
+- Root node centered at top; branch nodes on next row; leaf nodes on final row
+- Max 3 levels
+- Use orthogonal connectors only: vertical + horizontal segments
+- Node labels inside the node box; values as second line or lower text block inside the same box
+- Root must be visually dominant, level 2 medium, leaves smallest
+- Keep branch distribution symmetric across the container
+
+8. PRIORITIZATION
+═══════════════════════════
+
+{
+  "type": "prioritization",
+  "x": number, "y": number, "w": number, "h": number,
+  "priority_style": {
+    "row_fill_color": "hex",
+    "row_border_color": "hex",
+    "row_border_width": number,
+    "row_corner_radius": number,
+    "row_gap_in": number,
+    "rank_palette": ["hex"],
+    "rank_font_family": "string",
+    "rank_font_size": number,
+    "rank_text_color": "hex",
+    "title_font_family": "string",
+    "title_font_size": number,
+    "title_color": "hex",
+    "description_font_family": "string",
+    "description_font_size": number,
+    "description_color": "hex",
+    "qualifier_fill_color": "hex",
+    "qualifier_text_color": "hex",
+    "qualifier_value_palette": ["hex"],
+    "qualifier_label_font_family": "string",
+    "qualifier_label_font_size": number,
+    "qualifier_value_font_family": "string",
+    "qualifier_value_font_size": number
+  },
+  "header_block": null or {
+    "text": "string — the priority_header value from Agent 4",
+    "x": number, "y": number, "w": number, "h": number,
+    "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
+    "style": "underline" | "brand_fill",
+    "accent_color": "hex"
+  }
+}
+
+Prioritization rules:
+- Use ONLY primitive geometry in the final blocks: rect, text_box, circle
+- Rows must be stacked vertically in rank order
+- Each row contains:
+  - left rank badge
+  - action title
+  - action description
+  - up to 2 qualifier pills on the right
+- Qualifier slots may be empty; do not render empty pills
+- Rank 1 should be visually strongest; later ranks may step down subtly through the rank palette
+- Title must dominate description; qualifiers must remain compact, secondary metadata
+
 ARTIFACT HEADER
 ═══════════════════════════
 
@@ -830,6 +973,8 @@ that names the insight it proves.
 Source text from Agent 4:
   insight_text → insight_header   chart → chart_header
   workflow     → workflow_header  table → table_header
+  matrix       → matrix_header    driver_tree → tree_header
+  prioritization → priority_header
 
 If header text is empty or null: set header_block to null.
 
@@ -1040,11 +1185,17 @@ async function designSlideBatch(batchManifest, brand, batchNum) {
     '\n- workflow: must have workflow_style, nodes[] with x/y/w/h, connections[] with path[]' +
     '\n- table: must have table_style, column_widths[], column_x_positions[], header_row_height, row_heights[], row_y_positions[], header_cell_frames[], body_cell_frames[]' +
     '\n- cards: must have card_style, card_frames[] with x/y/w/h per card' +
+    '\n- matrix: must have matrix_style plus semantic fields from Agent 4 (x_axis, y_axis, quadrants, points)' +
+    '\n- driver_tree: must have tree_style plus semantic fields from Agent 4 (root, branches)' +
+    '\n- prioritization: must have priority_style plus semantic fields from Agent 4 (items[], qualifiers[])' +
     '\n- insight_text (standard mode): must have insight_mode:"standard", style, heading_style, body_style' +
     '\n- insight_text (grouped mode):  must have insight_mode:"grouped", heading_style, group_layout, group_header_style, group_bullet_box_style, bullet_style, group_gap_in, header_to_box_gap_in' +
     '\n- charts: include final legend_position, data_label_size, category_label_rotation, and series styling' +
     '\n- workflows: include final node geometry, connection paths, node_inner_padding, and external_label_gap' +
     '\n- tables: include final column_widths, column_x_positions, column_types, column_alignments, header_row_height, row_heights, row_y_positions, header_cell_frames, body_cell_frames, and cell_padding' +
+    '\n- matrix: include final matrix_style and preserve semantic matrix content for block flattening' +
+    '\n- driver_tree: include final tree_style and preserve root/branches for block flattening' +
+    '\n- prioritization: include final priority_style and preserve ranked items/qualifiers for block flattening' +
     '\n- Return a valid JSON array of exactly ' + batchManifest.length + ' slide objects'
 
   const raw    = await callClaude(AGENT5_SYSTEM, [{ role: 'user', content: prompt }], 6000)
@@ -1110,6 +1261,17 @@ function validateDesignedSlide(slide) {
       if (a.type === 'cards'    && !a.card_style)      issues.push(p + ': cards missing card_style')
       if (a.type === 'cards'    && !a.cards_layout)    issues.push(p + ': cards missing cards_layout')
       if (a.type === 'cards'    && !a.container)       issues.push(p + ': cards missing container')
+      if (a.type === 'matrix'   && !a.matrix_style)    issues.push(p + ': matrix missing matrix_style')
+      if (a.type === 'matrix'   && !a.x_axis?.label)   issues.push(p + ': matrix missing x_axis.label')
+      if (a.type === 'matrix'   && !a.y_axis?.label)   issues.push(p + ': matrix missing y_axis.label')
+      if (a.type === 'matrix'   && (a.quadrants || []).length !== 4) issues.push(p + ': matrix must define 4 quadrants')
+      if (a.type === 'matrix'   && !(a.points || []).length) issues.push(p + ': matrix missing points')
+      if (a.type === 'driver_tree' && !a.tree_style)   issues.push(p + ': driver_tree missing tree_style')
+      if (a.type === 'driver_tree' && !a.root?.label)  issues.push(p + ': driver_tree missing root.label')
+      if (a.type === 'driver_tree' && !(a.branches || []).length) issues.push(p + ': driver_tree missing branches')
+      if (a.type === 'prioritization' && !a.priority_style) issues.push(p + ': prioritization missing priority_style')
+      if (a.type === 'prioritization' && !(a.items || []).length) issues.push(p + ': prioritization missing items')
+      if (a.type === 'prioritization' && (a.items || []).some(it => it.rank == null || !String(it.title || '').trim())) issues.push(p + ': prioritization items require rank and title')
       if (a.type === 'insight_text' && !a.heading_style) issues.push(p + ': insight_text missing heading_style')
       if (a.type === 'insight_text' && a.insight_mode === 'grouped' && !a.group_header_style) issues.push(p + ': grouped insight_text missing group_header_style')
       if (a.type === 'insight_text' && a.insight_mode === 'grouped' && !a.group_bullet_box_style) issues.push(p + ': grouped insight_text missing group_bullet_box_style')
@@ -1822,6 +1984,9 @@ function buildMinimalSafeSlide(manifestSlide, tokens) {
 //   workflow     : workflow_type, flow_direction, workflow_title, workflow_insight,
 //                  node labels/values/descriptions/levels, connection from/to/type
 //   table        : title, headers[], rows[][], highlight_rows[], note
+//   matrix       : matrix_type, matrix_header, x_axis, y_axis, quadrants[], points[]
+//   driver_tree  : tree_header, root, branches[]
+//   prioritization: priority_header, items[]
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ─── computeArtifactInternals ────────────────────────────────────────────────
@@ -2102,6 +2267,100 @@ function computeArtifactInternals(zones, canvas) {
       }
 
       // ── 5. insight_text (standard): font scaling ───────────────────────────
+      if (artType === 'matrix') {
+        const ms = art.matrix_style || {}
+        const pointPalette = [
+          bt.primary_color,
+          bt.secondary_color,
+          ...(bt.accent_colors || []),
+          ...(bt.chart_palette || [])
+        ].filter(Boolean)
+        art.matrix_style = {
+          border_color: ms.border_color || '#D7DEE8',
+          border_width: ms.border_width != null ? ms.border_width : 0.8,
+          divider_color: ms.divider_color || '#7B8794',
+          divider_width: ms.divider_width != null ? ms.divider_width : 0.6,
+          axis_color: ms.axis_color || '#4B5563',
+          axis_width: ms.axis_width != null ? ms.axis_width : 0.7,
+          axis_label_font_family: ms.axis_label_font_family || bt.body_font_family || 'Arial',
+          axis_label_font_size: ms.axis_label_font_size || 10,
+          axis_label_color: ms.axis_label_color || bt.body_color || '#374151',
+          quadrant_title_font_family: ms.quadrant_title_font_family || bt.title_font_family || 'Arial',
+          quadrant_title_font_size: ms.quadrant_title_font_size || 12,
+          quadrant_title_color: ms.quadrant_title_color || '#2D3748',
+          quadrant_body_font_family: ms.quadrant_body_font_family || bt.body_font_family || 'Arial',
+          quadrant_body_font_size: ms.quadrant_body_font_size || 9,
+          quadrant_body_color: ms.quadrant_body_color || '#374151',
+          point_label_font_family: ms.point_label_font_family || bt.body_font_family || 'Arial',
+          point_label_font_size: ms.point_label_font_size || 10,
+          point_label_color: ms.point_label_color || '#111111',
+          point_palette: (ms.point_palette && ms.point_palette.length ? ms.point_palette : pointPalette),
+          quadrant_fills: (ms.quadrant_fills && ms.quadrant_fills.length === 4)
+            ? ms.quadrant_fills
+            : ['#FFF4BF', '#E4F2DE', '#F4F5F7', '#DDEFF5']
+        }
+      }
+
+      if (artType === 'driver_tree') {
+        const ts = art.tree_style || {}
+        art.tree_style = {
+          node_fill_color: ts.node_fill_color || '#EAF2FB',
+          node_fill_color_secondary: ts.node_fill_color_secondary || '#EDF7F3',
+          node_fill_color_leaf: ts.node_fill_color_leaf || '#F4F7FA',
+          node_border_color: ts.node_border_color || '#D7DEE8',
+          node_border_width: ts.node_border_width != null ? ts.node_border_width : 0.6,
+          connector_color: ts.connector_color || '#7A8FA8',
+          connector_width: ts.connector_width != null ? ts.connector_width : 0.5,
+          label_font_family: ts.label_font_family || bt.title_font_family || 'Arial',
+          label_font_size: ts.label_font_size || 11,
+          label_color: ts.label_color || '#111111',
+          value_font_family: ts.value_font_family || bt.body_font_family || 'Arial',
+          value_font_size: ts.value_font_size || 10,
+          value_color: ts.value_color || bt.primary_color || '#0078AE',
+          corner_radius: ts.corner_radius != null ? ts.corner_radius : 6
+        }
+      }
+
+      if (artType === 'prioritization') {
+        const ps = art.priority_style || {}
+        const rankPalette = [
+          bt.secondary_color,
+          bt.primary_color,
+          ...(bt.accent_colors || []),
+          ...(bt.chart_palette || [])
+        ].filter(Boolean)
+        const qualifierPalette = [
+          bt.primary_color,
+          bt.secondary_color,
+          ...(bt.accent_colors || []),
+          ...(bt.chart_palette || [])
+        ].filter(Boolean)
+        art.priority_style = {
+          row_fill_color: ps.row_fill_color || '#FFFFFF',
+          row_border_color: ps.row_border_color || '#D7DEE8',
+          row_border_width: ps.row_border_width != null ? ps.row_border_width : 0.6,
+          row_corner_radius: ps.row_corner_radius != null ? ps.row_corner_radius : 6,
+          row_gap_in: ps.row_gap_in != null ? ps.row_gap_in : 0.16,
+          rank_palette: (ps.rank_palette && ps.rank_palette.length ? ps.rank_palette : rankPalette),
+          rank_font_family: ps.rank_font_family || bt.title_font_family || 'Arial',
+          rank_font_size: ps.rank_font_size || 17,
+          rank_text_color: ps.rank_text_color || '#FFFFFF',
+          title_font_family: ps.title_font_family || bt.title_font_family || 'Arial',
+          title_font_size: ps.title_font_size || 14,
+          title_color: ps.title_color || '#1F2937',
+          description_font_family: ps.description_font_family || bt.body_font_family || 'Arial',
+          description_font_size: ps.description_font_size || 11,
+          description_color: ps.description_color || '#374151',
+          qualifier_fill_color: ps.qualifier_fill_color || '#EEF4E2',
+          qualifier_text_color: ps.qualifier_text_color || '#1F2937',
+          qualifier_value_palette: (ps.qualifier_value_palette && ps.qualifier_value_palette.length ? ps.qualifier_value_palette : qualifierPalette),
+          qualifier_label_font_family: ps.qualifier_label_font_family || bt.body_font_family || 'Arial',
+          qualifier_label_font_size: ps.qualifier_label_font_size || 10,
+          qualifier_value_font_family: ps.qualifier_value_font_family || bt.title_font_family || 'Arial',
+          qualifier_value_font_size: ps.qualifier_value_font_size || 10
+        }
+      }
+
       if (artType === 'insight_text' && art.insight_mode !== 'grouped') {
         const bs = art.body_style
         if (bs && bs.font_size != null) {
@@ -2150,6 +2409,9 @@ function resolveArtifactSubtype(art) {
     case 'workflow':     return art.workflow_type || art.flow_direction || 'workflow'
     case 'cards':        return art.cards_layout || 'cards'
     case 'table':        return art.table_subtype || 'standard'
+    case 'matrix':       return art.matrix_type || '2x2'
+    case 'driver_tree':  return 'driver_tree'
+    case 'prioritization': return 'ranked_list'
     default:             return art.type || 'generic'
   }
 }
@@ -2160,6 +2422,9 @@ function resolveArtifactHeaderText(art) {
     art.insight_header ||
     art.chart_header ||
     art.table_header ||
+    art.matrix_header ||
+    art.tree_header ||
+    art.priority_header ||
     art.workflow_header ||
     art.heading ||
     '')
@@ -2252,6 +2517,511 @@ function decorateArtifactBlocks(blocks, startIdx, endIdx, art, blockRole) {
       fallback_policy: blocks[i].fallback_policy || fallbackPolicy
     }
   }
+}
+
+function _matrixToBlocks(art, content_y, blocks, bt, r2) {
+  const ms = art.matrix_style || {}
+  const xAxis = art.x_axis || {}
+  const yAxis = art.y_axis || {}
+  const quadrants = art.quadrants || []
+  const points = art.points || []
+  const palette = ms.point_palette || [bt.primary_color, bt.secondary_color, ...(bt.accent_colors || []), ...(bt.chart_palette || [])].filter(Boolean)
+
+  const ax = art.x || 0
+  const ay = content_y
+  const aw = art.w || 0
+  const ah = r2((art.y || 0) + (art.h || 0) - content_y)
+
+  const leftBand = r2(Math.min(Math.max(0.72, aw * 0.18), 1.05))
+  const bottomBand = r2(Math.min(Math.max(0.62, ah * 0.16), 0.95))
+  const topPad = 0.04
+  const rightPad = 0.05
+
+  const gridX = r2(ax + leftBand)
+  const gridY = r2(ay + topPad)
+  const gridW = r2(Math.max(1.6, aw - leftBand - rightPad))
+  const gridH = r2(Math.max(1.4, ah - bottomBand - topPad))
+  const midX = r2(gridX + gridW / 2)
+  const midY = r2(gridY + gridH / 2)
+  const quadW = r2(gridW / 2)
+  const quadH = r2(gridH / 2)
+
+  const fills = ms.quadrant_fills || ['#FFF4BF', '#E4F2DE', '#F4F5F7', '#DDEFF5']
+  const quadRects = [
+    { id: 'q1', x: gridX, y: gridY, w: quadW, h: quadH, fill: fills[0] },
+    { id: 'q2', x: midX, y: gridY, w: quadW, h: quadH, fill: fills[1] },
+    { id: 'q3', x: gridX, y: midY, w: quadW, h: quadH, fill: fills[2] },
+    { id: 'q4', x: midX, y: midY, w: quadW, h: quadH, fill: fills[3] }
+  ]
+
+  blocks.push({
+    block_type: 'rect',
+    x: gridX, y: gridY, w: gridW, h: gridH,
+    fill_color: '#FFFFFF',
+    border_color: ms.border_color || '#D7DEE8',
+    border_width: ms.border_width != null ? ms.border_width : 0.8,
+    corner_radius: 0
+  })
+
+  quadRects.forEach(q => {
+    blocks.push({
+      block_type: 'rect',
+      x: q.x, y: q.y, w: q.w, h: q.h,
+      fill_color: q.fill,
+      border_color: null,
+      border_width: 0,
+      corner_radius: 0
+    })
+  })
+
+  blocks.push({
+    block_type: 'rect',
+    x: midX, y: gridY, w: 0.02, h: gridH,
+    fill_color: ms.divider_color || '#7B8794',
+    border_color: null,
+    border_width: 0,
+    corner_radius: 0
+  })
+  blocks.push({
+    block_type: 'rect',
+    x: gridX, y: midY, w: gridW, h: 0.02,
+    fill_color: ms.divider_color || '#7B8794',
+    border_color: null,
+    border_width: 0,
+    corner_radius: 0
+  })
+
+  const axisColor = ms.axis_color || '#4B5563'
+  blocks.push({
+    block_type: 'rect',
+    x: gridX, y: r2(gridY + gridH), w: gridW, h: 0.02,
+    fill_color: axisColor,
+    border_color: null,
+    border_width: 0,
+    corner_radius: 0
+  })
+  blocks.push({
+    block_type: 'rect',
+    x: gridX, y: gridY, w: 0.02, h: gridH,
+    fill_color: axisColor,
+    border_color: null,
+    border_width: 0,
+    corner_radius: 0
+  })
+
+  const axisFont = ms.axis_label_font_family || bt.body_font_family || 'Arial'
+  const axisFs = ms.axis_label_font_size || 10
+  const axisTextColor = ms.axis_label_color || bt.body_color || '#374151'
+
+  blocks.push({
+    block_type: 'text_box',
+    x: gridX,
+    y: r2(gridY + gridH + 0.06),
+    w: gridW,
+    h: 0.22,
+    text: xAxis.label || '',
+    font_family: axisFont,
+    font_size: axisFs + 1,
+    bold: true,
+    color: axisTextColor,
+    align: 'center',
+    valign: 'middle'
+  })
+  blocks.push({
+    block_type: 'text_box',
+    x: gridX,
+    y: r2(gridY + gridH + 0.28),
+    w: 0.6,
+    h: 0.2,
+    text: xAxis.low_label || 'Low',
+    font_family: axisFont,
+    font_size: axisFs,
+    bold: false,
+    color: axisTextColor,
+    align: 'left',
+    valign: 'middle'
+  })
+  blocks.push({
+    block_type: 'text_box',
+    x: r2(gridX + gridW - 0.6),
+    y: r2(gridY + gridH + 0.28),
+    w: 0.6,
+    h: 0.2,
+    text: xAxis.high_label || 'High',
+    font_family: axisFont,
+    font_size: axisFs,
+    bold: false,
+    color: axisTextColor,
+    align: 'right',
+    valign: 'middle'
+  })
+
+  blocks.push({
+    block_type: 'text_box',
+    x: ax,
+    y: r2(gridY + gridH / 2 - 0.32),
+    w: r2(Math.max(0.55, leftBand - 0.1)),
+    h: 0.64,
+    text: yAxis.label || '',
+    font_family: axisFont,
+    font_size: axisFs + 1,
+    bold: true,
+    color: axisTextColor,
+    align: 'center',
+    valign: 'middle'
+  })
+  blocks.push({
+    block_type: 'text_box',
+    x: r2(gridX - 0.52),
+    y: gridY,
+    w: 0.42,
+    h: 0.2,
+    text: yAxis.high_label || 'High',
+    font_family: axisFont,
+    font_size: axisFs,
+    bold: false,
+    color: axisTextColor,
+    align: 'right',
+    valign: 'middle'
+  })
+  blocks.push({
+    block_type: 'text_box',
+    x: r2(gridX - 0.52),
+    y: r2(gridY + gridH - 0.2),
+    w: 0.42,
+    h: 0.2,
+    text: yAxis.low_label || 'Low',
+    font_family: axisFont,
+    font_size: axisFs,
+    bold: false,
+    color: axisTextColor,
+    align: 'right',
+    valign: 'middle'
+  })
+
+  const quadMap = Object.fromEntries(quadrants.map(q => [String(q.id || '').toLowerCase(), q]))
+  quadRects.forEach((rect, idx) => {
+    const q = quadMap[rect.id] || quadrants[idx] || {}
+    blocks.push({
+      block_type: 'text_box',
+      x: r2(rect.x + 0.14),
+      y: r2(rect.y + 0.12),
+      w: r2(rect.w - 0.28),
+      h: 0.24,
+      text: q.name || '',
+      font_family: ms.quadrant_title_font_family || bt.title_font_family || 'Arial',
+      font_size: ms.quadrant_title_font_size || 12,
+      bold: true,
+      color: ms.quadrant_title_color || '#2D3748',
+      align: 'left',
+      valign: 'top'
+    })
+    blocks.push({
+      block_type: 'text_box',
+      x: r2(rect.x + 0.14),
+      y: r2(rect.y + 0.4),
+      w: r2(rect.w - 0.28),
+      h: 0.46,
+      text: q.insight || '',
+      font_family: ms.quadrant_body_font_family || bt.body_font_family || 'Arial',
+      font_size: ms.quadrant_body_font_size || 9,
+      bold: false,
+      color: ms.quadrant_body_color || '#374151',
+      align: 'left',
+      valign: 'top'
+    })
+  })
+
+  const semanticToRatio = { low: 0.25, medium: 0.50, high: 0.75 }
+  const markerSize = 0.14
+  points.slice(0, 6).forEach((pt, i) => {
+    const px = r2(gridX + gridW * (semanticToRatio[String(pt.x || 'medium').toLowerCase()] || 0.5))
+    const py = r2(gridY + gridH * (1 - (semanticToRatio[String(pt.y || 'medium').toLowerCase()] || 0.5)))
+    const fill = palette[i % Math.max(palette.length, 1)] || bt.primary_color || '#0078AE'
+    blocks.push({
+      block_type: 'circle',
+      x: r2(px - markerSize / 2),
+      y: r2(py - markerSize / 2),
+      w: markerSize,
+      h: markerSize,
+      fill_color: fill,
+      font_color: '#FFFFFF',
+      text: ''
+    })
+
+    const rightSpace = gridX + gridW - px
+    const labelW = Math.min(1.1, Math.max(0.6, (String(pt.label || '').length || 8) * 0.08))
+    const labelX = rightSpace > labelW + 0.18 ? r2(px + 0.12) : r2(px - labelW - 0.12)
+    blocks.push({
+      block_type: 'text_box',
+      x: labelX,
+      y: r2(py - 0.11),
+      w: labelW,
+      h: 0.24,
+      text: pt.label || '',
+      font_family: ms.point_label_font_family || bt.body_font_family || 'Arial',
+      font_size: ms.point_label_font_size || 10,
+      bold: false,
+      color: ms.point_label_color || '#111111',
+      align: 'left',
+      valign: 'middle'
+    })
+  })
+}
+
+function _driverTreeToBlocks(art, content_y, blocks, bt, r2) {
+  const ts = art.tree_style || {}
+  const root = art.root || {}
+  const branches = art.branches || []
+  const ax = art.x || 0
+  const ay = content_y
+  const aw = art.w || 0
+  const ah = r2((art.y || 0) + (art.h || 0) - content_y)
+
+  const leafCount = branches.reduce((sum, b) => sum + Math.max((b.children || []).length, 1), 0) || Math.max(branches.length, 1)
+  const hasThirdLevel = branches.some(b => (b.children || []).length > 0)
+  const rowY = [
+    r2(ay + 0.06),
+    r2(ay + ah * 0.40),
+    r2(ay + ah * 0.73)
+  ]
+  const rootW = r2(Math.min(Math.max(2.8, aw * 0.42), 3.9))
+  const rootH = r2(Math.min(Math.max(0.9, ah * 0.20), 1.2))
+  const branchW = r2(Math.min(Math.max(2.2, aw * 0.30), 3.0))
+  const branchH = r2(Math.min(Math.max(0.8, ah * 0.18), 1.05))
+  const leafW = r2(Math.min(Math.max(1.6, aw * 0.20), 2.2))
+  const leafH = r2(Math.min(Math.max(0.7, ah * 0.16), 0.95))
+
+  const rootX = r2(ax + (aw - rootW) / 2)
+  const rootY = rowY[0]
+
+  const leafCenters = []
+  if (leafCount === 1) {
+    leafCenters.push(r2(ax + aw / 2))
+  } else {
+    const left = ax + leafW / 2
+    const usable = Math.max(0.5, aw - leafW)
+    const step = usable / (leafCount - 1)
+    for (let i = 0; i < leafCount; i++) leafCenters.push(r2(left + i * step))
+  }
+
+  let cursor = 0
+  const branchLayout = branches.map((branch, i) => {
+    const childCount = Math.max((branch.children || []).length, 1)
+    const branchLeafCenters = leafCenters.slice(cursor, cursor + childCount)
+    cursor += childCount
+    const centerX = branchLeafCenters.length
+      ? r2(branchLeafCenters.reduce((s, x) => s + x, 0) / branchLeafCenters.length)
+      : r2(ax + aw / 2)
+    return {
+      branch,
+      centerX,
+      children: (branch.children || []).length
+        ? branch.children.map((child, ci) => ({ child, centerX: branchLeafCenters[ci] }))
+        : [{ child: null, centerX }]
+    }
+  })
+
+  const pushNode = (x, y, w, h, fill, label, value, isRoot) => {
+    blocks.push({
+      block_type: 'rect',
+      x, y, w, h,
+      fill_color: fill,
+      border_color: ts.node_border_color || '#D7DEE8',
+      border_width: ts.node_border_width != null ? ts.node_border_width : 0.6,
+      corner_radius: ts.corner_radius != null ? ts.corner_radius : 6
+    })
+    const labelH = value ? r2(h * 0.52) : r2(h * 0.72)
+    blocks.push({
+      block_type: 'text_box',
+      x: r2(x + 0.1), y: r2(y + 0.08), w: r2(w - 0.2), h: labelH,
+      text: label || '',
+      font_family: ts.label_font_family || bt.title_font_family || 'Arial',
+      font_size: isRoot ? (ts.label_font_size || 11) + 1 : (ts.label_font_size || 11),
+      bold: false,
+      color: ts.label_color || '#111111',
+      align: 'center',
+      valign: 'top'
+    })
+    if (value) {
+      blocks.push({
+        block_type: 'text_box',
+        x: r2(x + 0.1), y: r2(y + h * 0.58), w: r2(w - 0.2), h: r2(h * 0.22),
+        text: value,
+        font_family: ts.value_font_family || bt.body_font_family || 'Arial',
+        font_size: isRoot ? (ts.value_font_size || 10) + 2 : (ts.value_font_size || 10) + 1,
+        bold: true,
+        color: ts.value_color || bt.primary_color || '#0078AE',
+        align: 'center',
+        valign: 'middle'
+      })
+    }
+  }
+
+  const pushConnector = (x, y, w, h) => {
+    blocks.push({
+      block_type: 'rect',
+      x: r2(x), y: r2(y), w: r2(w), h: r2(h),
+      fill_color: ts.connector_color || '#7A8FA8',
+      border_color: null,
+      border_width: 0,
+      corner_radius: 0
+    })
+  }
+
+  pushNode(rootX, rootY, rootW, rootH, ts.node_fill_color || '#EAF2FB', root.label, root.value, true)
+
+  const rootBottomX = r2(rootX + rootW / 2)
+  const branchY = rowY[1]
+  const branchBottomY = r2(branchY + branchH)
+  const branchCenters = branchLayout.map(b => b.centerX)
+  if (branchCenters.length) {
+    const trunkBottomY = r2(branchY - 0.14)
+    pushConnector(r2(rootBottomX - 0.01), r2(rootY + rootH), 0.02, r2(trunkBottomY - (rootY + rootH)))
+    pushConnector(Math.min(...branchCenters), r2(trunkBottomY - 0.01), Math.max(0.02, Math.max(...branchCenters) - Math.min(...branchCenters)), 0.02)
+  }
+
+  branchLayout.forEach((entry, i) => {
+    const bx = r2(entry.centerX - branchW / 2)
+    pushNode(bx, branchY, branchW, branchH, ts.node_fill_color_secondary || '#EDF7F3', entry.branch.label, entry.branch.value, false)
+    pushConnector(r2(entry.centerX - 0.01), r2(branchY - 0.14), 0.02, 0.14)
+
+    if (!hasThirdLevel) return
+    const childCenters = entry.children.map(c => c.centerX)
+    const childY = rowY[2]
+    const childTopY = childY
+    pushConnector(r2(entry.centerX - 0.01), branchBottomY, 0.02, r2((childY - 0.14) - branchBottomY))
+    if (childCenters.length > 1) {
+      pushConnector(Math.min(...childCenters), r2(childY - 0.15), Math.max(0.02, Math.max(...childCenters) - Math.min(...childCenters)), 0.02)
+    }
+
+    entry.children.forEach(({ child, centerX }) => {
+      const lx = r2(centerX - leafW / 2)
+      pushConnector(r2(centerX - 0.01), r2(childY - 0.15), 0.02, 0.15)
+      const label = child ? child.label : entry.branch.label
+      const value = child ? child.value : entry.branch.value
+      pushNode(lx, childTopY, leafW, leafH, ts.node_fill_color_leaf || '#F4F7FA', label, value, false)
+    })
+  })
+}
+
+function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
+  const ps = art.priority_style || {}
+  const items = (art.items || []).slice().sort((a, b) => (+a.rank || 999) - (+b.rank || 999)).slice(0, 5)
+  const ax = art.x || 0
+  const ay = content_y
+  const aw = art.w || 0
+  const ah = r2((art.y || 0) + (art.h || 0) - content_y)
+  if (!items.length || aw <= 0 || ah <= 0) return
+
+  const gap = ps.row_gap_in != null ? ps.row_gap_in : 0.16
+  const rowH = r2((ah - gap * Math.max(0, items.length - 1)) / Math.max(items.length, 1))
+  const rankSize = r2(Math.min(0.62, Math.max(0.42, rowH * 0.40)))
+  const leftPad = 0.12
+  const rightPad = 0.14
+  const rankPalette = ps.rank_palette || [bt.secondary_color || '#E0B324', bt.primary_color || '#0078AE']
+  const qualifierPalette = ps.qualifier_value_palette || [bt.primary_color || '#0078AE']
+
+  items.forEach((item, idx) => {
+    const rowY = r2(ay + idx * (rowH + gap))
+    const rowX = ax
+    const rowW = aw
+    const qualifiers = Array.isArray(item.qualifiers) ? item.qualifiers.slice(0, 2) : []
+    const nonEmptyQualifiers = qualifiers.filter(q => String(q?.label || '').trim() || String(q?.value || '').trim())
+    const qualifierAreaW = nonEmptyQualifiers.length ? r2(Math.min(1.9, Math.max(1.45, aw * 0.26))) : 0
+    const rankX = r2(rowX + leftPad)
+    const rankY = r2(rowY + (rowH - rankSize) / 2)
+    const textX = r2(rankX + rankSize + 0.14)
+    const textW = r2(Math.max(1.1, rowW - (textX - rowX) - qualifierAreaW - rightPad - (qualifierAreaW ? 0.14 : 0)))
+    const qualifierX = qualifierAreaW ? r2(rowX + rowW - rightPad - qualifierAreaW) : 0
+    const rankFill = rankPalette[idx % Math.max(rankPalette.length, 1)] || bt.primary_color || '#0078AE'
+
+    blocks.push({
+      block_type: 'rect',
+      x: rowX, y: rowY, w: rowW, h: rowH,
+      fill_color: ps.row_fill_color || '#FFFFFF',
+      border_color: ps.row_border_color || '#D7DEE8',
+      border_width: ps.row_border_width != null ? ps.row_border_width : 0.6,
+      corner_radius: ps.row_corner_radius != null ? ps.row_corner_radius : 6
+    })
+
+    blocks.push({
+      block_type: 'circle',
+      x: rankX, y: rankY, w: rankSize, h: rankSize,
+      fill_color: rankFill,
+      font_color: ps.rank_text_color || '#FFFFFF',
+      text: String(item.rank != null ? item.rank : idx + 1)
+    })
+    blocks.push({
+      block_type: 'text_box',
+      x: rankX, y: rankY, w: rankSize, h: rankSize,
+      text: String(item.rank != null ? item.rank : idx + 1),
+      font_family: ps.rank_font_family || bt.title_font_family || 'Arial',
+      font_size: ps.rank_font_size || 17,
+      bold: true,
+      color: ps.rank_text_color || '#FFFFFF',
+      align: 'center',
+      valign: 'middle'
+    })
+
+    const titleH = r2(Math.min(0.34, Math.max(0.24, rowH * 0.34)))
+    const descY = r2(rowY + 0.12 + titleH)
+    const descH = r2(Math.max(0.24, rowH - (descY - rowY) - 0.12))
+    blocks.push({
+      block_type: 'text_box',
+      x: textX, y: r2(rowY + 0.1), w: textW, h: titleH,
+      text: item.title || '',
+      font_family: ps.title_font_family || bt.title_font_family || 'Arial',
+      font_size: ps.title_font_size || 14,
+      bold: true,
+      color: ps.title_color || '#1F2937',
+      align: 'left',
+      valign: 'top'
+    })
+    blocks.push({
+      block_type: 'text_box',
+      x: textX, y: descY, w: textW, h: descH,
+      text: item.description || '',
+      font_family: ps.description_font_family || bt.body_font_family || 'Arial',
+      font_size: ps.description_font_size || 11,
+      bold: false,
+      color: ps.description_color || '#374151',
+      align: 'left',
+      valign: 'top'
+    })
+
+    if (nonEmptyQualifiers.length) {
+      const pillGap = 0.08
+      const pillCount = nonEmptyQualifiers.length
+      const pillH = r2(Math.min(0.28, Math.max(0.2, (rowH - 0.18 - pillGap * Math.max(0, pillCount - 1)) / Math.max(pillCount, 1))))
+      nonEmptyQualifiers.forEach((q, qi) => {
+        const pillY = r2(rowY + 0.12 + qi * (pillH + pillGap))
+        const valueColor = qualifierPalette[qi % Math.max(qualifierPalette.length, 1)] || bt.primary_color || '#0078AE'
+        blocks.push({
+          block_type: 'rect',
+          x: qualifierX, y: pillY, w: qualifierAreaW, h: pillH,
+          fill_color: ps.qualifier_fill_color || '#EEF4E2',
+          border_color: null,
+          border_width: 0,
+          corner_radius: 4
+        })
+        const label = String(q.label || '').trim()
+        const value = String(q.value || '').trim()
+        const pillText = label && value ? (label + ': ' + value) : (label || value)
+        blocks.push({
+          block_type: 'text_box',
+          x: r2(qualifierX + 0.08), y: pillY, w: r2(qualifierAreaW - 0.16), h: pillH,
+          text: pillText,
+          font_family: ps.qualifier_label_font_family || bt.body_font_family || 'Arial',
+          font_size: ps.qualifier_label_font_size || 10,
+          bold: false,
+          color: ps.qualifier_text_color || '#1F2937',
+          align: 'center',
+          valign: 'middle'
+        })
+      })
+    }
+  })
 }
 
 function _artifactToBlocks(art, blocks, bt, r2) {
@@ -2415,6 +3185,21 @@ function _artifactToBlocks(art, blocks, bt, r2) {
         body_cell_frames:   bodyCellFrames,
         table_style:        art.table_style         || {}
       })
+      break
+    }
+
+    case 'matrix': {
+      _matrixToBlocks(art, content_y, blocks, bt, r2)
+      break
+    }
+
+    case 'driver_tree': {
+      _driverTreeToBlocks(art, content_y, blocks, bt, r2)
+      break
+    }
+
+    case 'prioritization': {
+      _prioritizationToBlocks(art, content_y, blocks, bt, r2)
       break
     }
 
@@ -3151,6 +3936,42 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
           rows:           mArt.rows           || dArt.rows           || [],
           highlight_rows: mArt.highlight_rows || dArt.highlight_rows || [],
           note:           mArt.note           || dArt.note           || ''
+        }
+      }
+
+      if (t === 'matrix') {
+        return {
+          ...dArt,
+          matrix_type:   mArt.matrix_type   || dArt.matrix_type   || '2x2',
+          matrix_header: mArt.matrix_header || dArt.matrix_header || '',
+          x_axis:        mArt.x_axis        || dArt.x_axis        || { label: '', low_label: '', high_label: '' },
+          y_axis:        mArt.y_axis        || dArt.y_axis        || { label: '', low_label: '', high_label: '' },
+          quadrants:     mArt.quadrants     || dArt.quadrants     || [],
+          points:        mArt.points        || dArt.points        || []
+        }
+      }
+
+      if (t === 'driver_tree') {
+        return {
+          ...dArt,
+          tree_header: mArt.tree_header || dArt.tree_header || '',
+          root:        mArt.root        || dArt.root        || { label: '', value: '' },
+          branches:    mArt.branches    || dArt.branches    || []
+        }
+      }
+
+      if (t === 'prioritization') {
+        return {
+          ...dArt,
+          priority_header: mArt.priority_header || dArt.priority_header || '',
+          items: (mArt.items || dArt.items || []).map(it => ({
+            rank: it.rank,
+            title: it.title || '',
+            description: it.description || '',
+            qualifiers: Array.isArray(it.qualifiers)
+              ? it.qualifiers.slice(0, 2).map(q => ({ label: q?.label || '', value: q?.value || '' }))
+              : [{ label: '', value: '' }, { label: '', value: '' }]
+          }))
         }
       }
 

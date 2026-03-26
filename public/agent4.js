@@ -309,6 +309,74 @@ PHASE 2 — ARTIFACT SPECIFICATION
       - If categories are mutually exclusive and comparable → prefer chart over cards
       - Cards are ONLY for independent metrics that have no structural relationship
 
+  2c.5 DECISION / REASONING ARTIFACT IDENTIFICATION (MANDATORY OVERRIDE LAYER)
+      Before selecting a chart, cards, or table, evaluate whether the content represents
+      a higher-order reasoning pattern. If YES → override standard artifact selection.
+
+      These artifacts encode interpretation, causality, positioning, and decisions —
+      they take precedence over charts/cards when applicable.
+
+      ─────────────────────────────────────────────────
+      PATTERN A — POSITIONING / TRADE-OFF / PRIORITIZATION GRID
+      ─────────────────────────────────────────────────
+      Signs:
+      - Two competing dimensions (e.g., Risk vs Return, Growth vs Concentration)
+      - Entities positioned relative to each other
+      - Insight depends on quadrant interpretation, not exact numeric comparison
+
+      → Use: matrix (2x2)
+
+      STRICT:
+      - MUST define both axes
+      - MUST define quadrant meaning
+      - Max 6 plotted entities
+      - NEVER use chart or cards for this scenario
+
+      ─────────────────────────────────────────────────
+      PATTERN B — CAUSAL EXPLANATION / DRIVER ANALYSIS
+      ─────────────────────────────────────────────────
+      Signs:
+      - Question being answered: "WHY did this happen?"
+      - Outcome explained through contributing drivers
+      - Hierarchical breakdown of causes
+
+      → Use: driver_tree
+
+      STRICT:
+      - Max 3 levels
+      - Max 6–8 nodes
+      - Root must represent the outcome
+      - Child nodes must represent drivers (not sequence steps)
+      - NEVER use workflow for causality
+
+      ─────────────────────────────────────────────────
+      PATTERN C — ACTION PRIORITIZATION / DECISION OUTPUT
+      ─────────────────────────────────────────────────
+      Signs:
+      - Slide answers "What should we do next?"
+      - Multiple actions need ordering by importance
+      - Output is prescriptive (not analytical)
+
+      → Use: prioritization
+
+      STRICT:
+      - Max 5 items
+      - MUST include rank/order
+      - MUST be action-oriented (verbs)
+      - MUST be sorted by importance
+      - NEVER use cards when ordering matters
+
+      CRITICAL slide-level grounding rule:
+      - If matrix, driver_tree, or prioritization is selected:
+        - it may appear ONLY in the PRIMARY zone
+        - it may be accompanied ONLY by insight_text
+        - do NOT pair it with chart, cards, table, or workflow on the same slide
+
+      OVERRIDE RULE (CRITICAL)
+      If ANY of the above patterns are detected:
+      → DO NOT proceed with chart/cards/table selection
+      → Use matrix / driver_tree / prioritization respectively
+
   2d. RECOGNIZE THE ARTIFACT COMBINATION PATTERN (mandatory before selecting chart_type):
       After classifying data shape, check if the content matches a KNOWN COMBINATION PATTERN.
       These patterns produce significantly more insightful slides than single-artifact choices.
@@ -418,6 +486,15 @@ PHASE 2 — ARTIFACT SPECIFICATION
 
       message implies KPI ANCHORING (a single independent metric as headline)
         → card is allowed (but only for this case)
+
+      message implies POSITIONING / TRADE-OFF
+        → MUST use matrix
+
+      message implies CAUSAL EXPLANATION ("why")
+        → MUST use driver_tree
+
+      message implies DECISION / ACTION PRIORITIZATION
+        → MUST use prioritization
 
       message implies STATUS MIX / ASSET QUALITY MIX / RISK BUCKETS / STAGE DISTRIBUTION
         → MUST use pie / horizontal_bar / clustered_bar / decomposition workflow
@@ -715,18 +792,38 @@ Zone rules:
 ARTIFACT TYPES
 ═══════════════════════════
 
-Allowed artifact types: insight_text | chart | cards | workflow | table
+Allowed artifact types:
+- insight_text
+- chart
+- cards
+- workflow
+- table
+- matrix
+- driver_tree
+- prioritization
 Good artifact combinations inside one zone:
 - chart + insight_text
 - workflow + insight_text
 - table + insight_text
 - cards + insight_text
+- matrix + insight_text
+- driver_tree + insight_text
+- prioritization + insight_text
 - chart + table
 
 Discouraged:
 - chart + chart  (use two separate zones instead)
 - table + table
 - workflow + workflow
+- matrix + chart
+- driver_tree + workflow
+- prioritization + cards
+
+CRITICAL reasoning-artifact zone rule:
+- If a slide uses matrix, driver_tree, or prioritization:
+  - that artifact may appear ONLY in a PRIMARY zone
+  - that artifact may be accompanied ONLY by insight_text
+  - do NOT pair it with chart, cards, table, or workflow anywhere on the same slide
 
 ═══════════════════════════
 ARTIFACT 1: insight_text
@@ -1122,6 +1219,123 @@ Table content rules:
 - highlight_rows: use [index] to mark the single most important row — the one the audience should focus on first
 
 ═══════════════════════════
+ARTIFACT 6: matrix
+═══════════════════════════
+
+{
+  "type": "matrix",
+  "matrix_type": "2x2",
+  "matrix_header": "string",
+
+  "x_axis": {
+    "label": "string",
+    "low_label": "string",
+    "high_label": "string"
+  },
+
+  "y_axis": {
+    "label": "string",
+    "low_label": "string",
+    "high_label": "string"
+  },
+
+  "quadrants": [
+    {
+      "id": "q1",
+      "name": "string",
+      "insight": "string"
+    }
+  ],
+
+  "points": [
+    {
+      "label": "string",
+      "x": "low|medium|high",
+      "y": "low|medium|high"
+    }
+  ]
+}
+
+Rules:
+- max 6 points
+- MUST define both axes
+- MUST define all 4 quadrants
+- Use ONLY for positioning / trade-offs
+- NOT for precise numeric comparison
+- MUST be in the PRIMARY zone only
+- If paired, may be paired ONLY with insight_text
+
+═══════════════════════════
+ARTIFACT 7: driver_tree
+═══════════════════════════
+
+{
+  "type": "driver_tree",
+  "tree_header": "string",
+
+  "root": {
+    "label": "string",
+    "value": "string"
+  },
+
+  "branches": [
+    {
+      "label": "string",
+      "value": "string",
+      "children": []
+    }
+  ]
+}
+
+Rules:
+- max 3 levels
+- max 6–8 nodes total
+- root = outcome
+- children = drivers
+- NOT a process → do not confuse with workflow
+- MUST be in the PRIMARY zone only
+- If paired, may be paired ONLY with insight_text
+
+═══════════════════════════
+ARTIFACT 8: prioritization
+═══════════════════════════
+
+{
+  "type": "prioritization",
+  "priority_header": "string",
+
+  "items": [
+    {
+      "rank": 1,
+      "title": "string",
+      "description": "string",
+      "qualifiers": [
+        {
+          "label": "string",
+          "value": "string"
+        },
+        {
+          "label": "string",
+          "value": "string"
+        }
+      ]
+    }
+  ]
+}
+
+Rules:
+- max 5 items
+- MUST include rank
+- MUST be action-oriented
+- MUST be sorted by importance
+- each item may include up to 2 qualifier slots
+- qualifier labels must be content-driven, not hardcoded
+- either qualifier slot may be empty if the content does not support it
+- NOT for parallel metrics (use cards instead)
+- MUST be in the PRIMARY zone only
+- If paired, may be paired ONLY with insight_text
+
+═══════════════════════════
 STORYTELLING RULES
 ═══════════════════════════
 
@@ -1146,8 +1360,8 @@ STORYTELLING RULES
 6. Avoid text-only slides unless archetype demands it:
    ONLY "summary" and "recommendation" archetypes may use insight_text as the sole artifact.
    ALL other archetypes (trend, comparison, breakdown, driver_analysis, process, dashboard, proof, roadmap)
-   MUST include at least one non-text artifact: chart, cards, workflow, or table.
-   If no data exists for a chart, fall back to cards or a workflow — never default to text-only.
+   MUST include at least one non-text artifact: chart, cards, workflow, table, matrix, driver_tree, or prioritization.
+   If no data exists for a chart, fall back to cards, workflow, matrix, driver_tree, or prioritization as appropriate — never default to text-only.
 
 ═══════════════════════════
 PRE-OUTPUT QUALITY GATES
@@ -1181,8 +1395,13 @@ GATE 3 — ARTIFACT VALIDITY
   [ ] COMBINATION PATTERN CHECK: Total + status/risk bucket content uses Pattern 8 (card total + chart/workflow + optional insight), never multi-card decomposition
   [ ] COMBINATION PATTERN CHECK: Total + breakdown content uses decomposition workflow OR pie+card, never cards-only
   [ ] COMBINATION PATTERN CHECK: Dominant category (>50%) content uses pie or sorted bar, never cards
+  [ ] POSITIONING CHECK: Any positioning / trade-off scenario uses matrix (not chart/cards)
+  [ ] CAUSAL CHECK: Any "why" explanation uses driver_tree (not workflow/chart)
+  [ ] DECISION CHECK: Any action-oriented output uses prioritization (not cards)
   [ ] ALIGNMENT CHECK: Every artifact's type matches its zone message_objective intent (dominance→chart, composition→chart/workflow, comparison→chart, decomposition→workflow/pie+card, explanation→insight_text, process→workflow, single KPI→card)
   [ ] ALIGNMENT CHECK: No artifact was retained from data shape classification if it conflicts with message_objective intent
+  [ ] REASONING ARTIFACT CHECK: matrix / driver_tree / prioritization appear only in PRIMARY zones
+  [ ] REASONING ARTIFACT CHECK: matrix / driver_tree / prioritization are accompanied only by insight_text
   [ ] WORKFLOW ZONE CHECK: Every left_to_right / timeline workflow is in a zone that spans the FULL HORIZONTAL WIDTH — no other zone is placed beside it (left/right)
   [ ] WORKFLOW ZONE CHECK: Any companion artifact to a left_to_right workflow is in a STACKED zone (above or below), never a side-by-side zone
   [ ] WORKFLOW ZONE CHECK: Every top_to_bottom / top_down_branching workflow is in a zone that spans the FULL VERTICAL HEIGHT — no other zone is stacked above or below it
@@ -1431,13 +1650,47 @@ function validateArtifact(artifact) {
     return { valid: true }
   }
 
+  if (t === 'matrix') {
+    if (!artifact.x_axis?.label || !artifact.y_axis?.label) return { valid: false, reason: 'matrix missing axis labels' }
+    if ((artifact.quadrants || []).length !== 4) return { valid: false, reason: 'matrix must define 4 quadrants' }
+    if (!(artifact.points || []).length) return { valid: false, reason: 'matrix has no points' }
+    return { valid: true }
+  }
+
+  if (t === 'driver_tree') {
+    if (!artifact.root?.label) return { valid: false, reason: 'driver_tree missing root label' }
+    if (!(artifact.branches || []).length) return { valid: false, reason: 'driver_tree has no branches' }
+    return { valid: true }
+  }
+
+  if (t === 'prioritization') {
+    if (!(artifact.items || []).length) return { valid: false, reason: 'prioritization has no items' }
+    if ((artifact.items || []).some(i => i.rank == null || !i.title)) return { valid: false, reason: 'prioritization items missing rank/title' }
+    return { valid: true }
+  }
+
   return { valid: true }
+}
+
+function validateReasoningArtifactUsage(slide) {
+  const reasoningTypes = new Set(['matrix', 'driver_tree', 'prioritization'])
+  const zones = slide.zones || []
+  for (const zone of zones) {
+    const arts = zone.artifacts || []
+    const reasoningArts = arts.filter(a => reasoningTypes.has((a.type || '').toLowerCase()))
+    if (!reasoningArts.length) continue
+    if ((zone.narrative_weight || 'primary') !== 'primary') return false
+    if (reasoningArts.length > 1) return false
+    if (arts.some(a => !reasoningTypes.has((a.type || '').toLowerCase()) && (a.type || '').toLowerCase() !== 'insight_text')) return false
+  }
+  return true
 }
 
 function hasPlaceholderContent(slide) {
   if (slide.slide_type !== 'content') return false
   if (!slide.zones || !slide.zones.length) return true
   if (!slide.key_message || slide.key_message.trim().length < 10) return true
+  if (!validateReasoningArtifactUsage(slide)) return true
 
   for (const zone of slide.zones) {
     for (const artifact of (zone.artifacts || [])) {
@@ -1521,6 +1774,40 @@ function normaliseArtifact(a) {
     if (!a.rows) a.rows = []
     if (!a.title) a.title = ''
     if (!a.table_header) a.table_header = ''
+  }
+
+  if (t === 'matrix') {
+    if (!a.matrix_type) a.matrix_type = '2x2'
+    if (!a.matrix_header) a.matrix_header = ''
+    if (!a.x_axis) a.x_axis = { label: '', low_label: '', high_label: '' }
+    if (!a.y_axis) a.y_axis = { label: '', low_label: '', high_label: '' }
+    if (!a.quadrants) a.quadrants = []
+    if (!a.points) a.points = []
+  }
+
+  if (t === 'driver_tree') {
+    if (!a.tree_header) a.tree_header = ''
+    if (!a.root) a.root = { label: '', value: '' }
+    if (!a.branches) a.branches = []
+  }
+
+  if (t === 'prioritization') {
+    if (!a.priority_header) a.priority_header = ''
+    if (!a.items) a.items = []
+    a.items = a.items.map((item, idx) => ({
+      rank: item.rank != null ? item.rank : (idx + 1),
+      title: item.title || '',
+      description: item.description || '',
+      qualifiers: Array.isArray(item.qualifiers)
+        ? item.qualifiers.slice(0, 2).map(q => ({
+            label: (q && q.label) || '',
+            value: (q && q.value) || ''
+          }))
+        : [
+            { label: '', value: '' },
+            { label: '', value: '' }
+          ]
+    }))
   }
 
   return a
@@ -1663,6 +1950,10 @@ INSTRUCTIONS:
 - Every insight_text: MUST have specific, data-driven points; set insight_header to one of: Key Insight | So What | Risk Alert | Action Required
 - Workflows: fully populate nodes and connections; set workflow_header to the one-line insight
 - Tables: set table_header to the one-line insight the table proves
+- Matrix: fully populate axes, all 4 quadrants, and plotted points; set matrix_header
+- Driver_tree: fully populate root and branches; set tree_header
+- Prioritization: fully populate ranked items sorted by importance; set priority_header
+- If matrix / driver_tree / prioritization is used, it must be in the PRIMARY zone and may be paired only with insight_text
 - Return ONLY a valid JSON array for these ${batchPlan.length} slides`
 
   const messages = [{
@@ -1740,6 +2031,10 @@ Fix rules:
 - insight_text: specific points with data; ensure insight_header is set
 - Workflows: fully populated nodes and connections; ensure workflow_header is set
 - Tables: ensure table_header is set
+- Matrix: fully populate x_axis, y_axis, all 4 quadrants, and points; ensure matrix_header is set
+- Driver_tree: fully populate root and branches; ensure tree_header is set
+- Prioritization: fully populate ranked action items; ensure priority_header is set
+- If matrix / driver_tree / prioritization is present, keep it only in the PRIMARY zone and pair it only with insight_text
 - selected_layout_name: choose from available layouts; set to "" if none available
 - layout_hint.split: ${layoutNames && layoutNames.length >= 5 ? 'set to "full" (Agent 5 uses selected_layout_name for positioning)' : 'keep existing split values'}
 - Return ONLY a single JSON object for this one slide`

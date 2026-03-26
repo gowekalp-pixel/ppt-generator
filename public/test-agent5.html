@@ -116,6 +116,9 @@
     .ap-cards        { background: #fef3c7; color: #92400e; }
     .ap-workflow     { background: #fdf4ff; color: #6b21a8; }
     .ap-table        { background: #f0fdf4; color: #15803d; }
+    .ap-matrix       { background: #e0f2fe; color: #0c4a6e; }
+    .ap-driver_tree  { background: #ecfccb; color: #365314; }
+    .ap-prioritization { background: #fce7f3; color: #9d174d; }
 
     /* Validation issues */
     .issue-list { display: flex; flex-direction: column; gap: 3px; }
@@ -148,7 +151,7 @@
 
   <div class="badge">Isolated Test — Agent 5 Only</div>
   <h1>Layout Design Engine Tester</h1>
-  <p class="subhead">Paste the Brand Rulebook (Agent 2 output) and Slide Manifest (Agent 4 output). Agent 5 calls Claude to produce render-ready layout specs: canvas dimensions, brand tokens, positioned title blocks, zones with fully specified artifacts and a flat blocks[] array for the renderer.</p>
+  <p class="subhead">Paste the Brand Rulebook (Agent 2 output) and Slide Manifest (Agent 4 output). Agent 5 calls Claude to produce render-ready layout specs: canvas dimensions, brand tokens, slide/title blocks inside blocks[], zones with fully specified artifacts, and a flat blocks[] array for the renderer.</p>
 
   <!-- INPUTS -->
   <div class="card">
@@ -295,7 +298,10 @@ function safeParseJSON(raw, fallback) {
           (t === 'chart'        && (a.categories || []).length > 0) ||
           (t === 'cards'        && (a.cards || []).length > 0) ||
           (t === 'workflow'     && (a.nodes || []).some(n => n.label && n.label !== n.id)) ||
-          (t === 'table'        && (a.headers || []).length > 0)
+          (t === 'table'        && (a.headers || []).length > 0) ||
+          (t === 'matrix'       && (a.quadrants || []).length === 4 && (a.points || []).length > 0) ||
+          (t === 'driver_tree'  && !!a.root?.label && (a.branches || []).length > 0) ||
+          (t === 'prioritization' && (a.items || []).length > 0)
         hasContent ? counts.ok++ : counts.empty++
       })
     })
@@ -605,6 +611,31 @@ function safeParseJSON(raw, fallback) {
             preview = hasContent
               ? hdrs.length + ' cols · ' + rows.length + ' rows — [' + hdrs.slice(0,3).join(', ') + ']'
               : 'no headers'
+          }
+
+          else if (t === 'matrix') {
+            const points = a.points || []
+            const quadrants = a.quadrants || []
+            hasContent = quadrants.length === 4
+            preview = hasContent
+              ? '2x2 matrix · ' + points.length + ' point' + (points.length === 1 ? '' : 's') + ' — "' + String((a.matrix_header || (a.header_block || {}).text || '')).slice(0, 40) + '"'
+              : 'incomplete matrix'
+          }
+          else if (t === 'driver_tree') {
+            const branches = a.branches || []
+            const leaves = branches.reduce((n, b) => n + (((b.children || []).length) || 0), 0)
+            const nodeCount = 1 + branches.length + leaves
+            hasContent = !!(a.root && a.root.label)
+            preview = hasContent
+              ? 'driver tree · ' + nodeCount + ' nodes — "' + String((a.root || {}).label || '').slice(0, 36) + '"'
+              : 'incomplete driver tree'
+          }
+          else if (t === 'prioritization') {
+            const items = a.items || []
+            hasContent = items.length > 0
+            preview = hasContent
+              ? items.length + ' ranked action' + (items.length === 1 ? '' : 's') + ' — "' + String((items[0] || {}).title || '').slice(0, 34) + '"'
+              : 'no prioritization items'
           }
 
           const contentDot = hasContent
@@ -1360,6 +1391,123 @@ function safeParseJSON(raw, fallback) {
       // Outer border
       ctx.strokeStyle = ts.grid_color || '#CCC'; ctx.lineWidth = 1
       ctx.strokeRect(tx, ty, tw, th)
+    }
+
+    // ── matrix ─────────────────────────────────────────────────────────────
+    else if (t === 'matrix') {
+      const ms = art.matrix_style || {}
+      const gridPadL = 42, gridPadR = 14, gridPadT = 14, gridPadB = 28
+      const gx = ax + gridPadL, gy = ay + gridPadT
+      const gw = Math.max(40, aw - gridPadL - gridPadR)
+      const gh = Math.max(40, ah - gridPadT - gridPadB)
+      const quadFills = ms.quadrant_fills || ['#FFF4BF', '#E4F2DE', '#F4F5F7', '#DDEFF5']
+
+      ctx.fillStyle = quadFills[0] || '#FFF4BF'; ctx.fillRect(gx, gy, gw / 2, gh / 2)
+      ctx.fillStyle = quadFills[1] || '#E4F2DE'; ctx.fillRect(gx + gw / 2, gy, gw / 2, gh / 2)
+      ctx.fillStyle = quadFills[2] || '#F4F5F7'; ctx.fillRect(gx, gy + gh / 2, gw / 2, gh / 2)
+      ctx.fillStyle = quadFills[3] || '#DDEFF5'; ctx.fillRect(gx + gw / 2, gy + gh / 2, gw / 2, gh / 2)
+      ctx.strokeStyle = ms.border_color || '#CBD5E1'; ctx.lineWidth = 1; ctx.strokeRect(gx, gy, gw, gh)
+      ctx.strokeStyle = ms.divider_color || '#7B8794'
+      ctx.beginPath(); ctx.moveTo(gx + gw / 2, gy); ctx.lineTo(gx + gw / 2, gy + gh); ctx.stroke()
+      ctx.beginPath(); ctx.moveTo(gx, gy + gh / 2); ctx.lineTo(gx + gw, gy + gh / 2); ctx.stroke()
+
+      ctx.fillStyle = ms.axis_label_color || primary
+      ctx.font = 'bold 11px Arial'; ctx.textAlign = 'center'
+      ctx.fillText((art.x_axis || {}).label || 'X Axis', gx + gw / 2, ay + ah - 6)
+      ctx.save()
+      ctx.translate(ax + 14, gy + gh / 2)
+      ctx.rotate(-Math.PI / 2)
+      ctx.fillText((art.y_axis || {}).label || 'Y Axis', 0, 0)
+      ctx.restore()
+
+      const palette = ms.point_palette || [bt.primary_color, bt.secondary_color, ...(bt.accent_colors || []), ...(bt.chart_palette || [])]
+      const semanticToRatio = { low: 0.25, medium: 0.5, high: 0.75 }
+      ;(art.points || []).slice(0, 6).forEach((pt, i) => {
+        const px = gx + gw * (semanticToRatio[String(pt.x || 'medium').toLowerCase()] || 0.5)
+        const py = gy + gh * (1 - (semanticToRatio[String(pt.y || 'medium').toLowerCase()] || 0.5))
+        ctx.fillStyle = palette[i % Math.max(palette.length, 1)] || primary
+        ctx.beginPath(); ctx.arc(px, py, 6, 0, Math.PI * 2); ctx.fill()
+        ctx.fillStyle = '#111'; ctx.font = '10px Arial'; ctx.textAlign = 'left'
+        ctx.fillText(String(pt.label || '').slice(0, 16), px + 9, py + 3)
+      })
+    }
+
+    // ── driver_tree ────────────────────────────────────────────────────────
+    else if (t === 'driver_tree') {
+      const ts = art.tree_style || {}
+      ctx.fillStyle = '#F8FAFC'; ctx.fillRect(ax, ay, aw, ah)
+      ctx.strokeStyle = ts.connector_color || '#7A8FA8'
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      ctx.moveTo(ax + aw / 2, ay + 36)
+      ctx.lineTo(ax + aw / 2, ay + 58)
+      ctx.lineTo(ax + aw * 0.22, ay + 58)
+      ctx.moveTo(ax + aw / 2, ay + 58)
+      ctx.lineTo(ax + aw * 0.78, ay + 58)
+      ctx.stroke()
+
+      const node = (x, y, w, h, fill, label, value) => {
+        ctx.fillStyle = fill
+        ctx.strokeStyle = ts.node_border_color || '#D7DEE8'
+        ctx.lineWidth = 0.8
+        roundRect(ctx, x, y, w, h, 10); ctx.fill(); ctx.stroke()
+        ctx.fillStyle = '#111'; ctx.font = 'bold 10px Arial'; ctx.textAlign = 'center'
+        ctx.fillText(String(label || '').slice(0, 24), x + w / 2, y + 20)
+        if (value) {
+          ctx.fillStyle = ts.value_color || primary
+          ctx.font = 'bold 11px Arial'
+          ctx.fillText(String(value).slice(0, 14), x + w / 2, y + h - 12)
+        }
+      }
+
+      node(ax + aw * 0.29, ay + 10, aw * 0.42, 44, ts.node_fill_color || '#EAF2FB', (art.root || {}).label, (art.root || {}).value)
+      const branches = art.branches || []
+      branches.slice(0, 2).forEach((b, i) => {
+        const bx = ax + (i === 0 ? aw * 0.02 : aw * 0.56)
+        const by = ay + 76
+        const bw = aw * 0.30
+        node(bx, by, bw, 40, ts.node_fill_color_secondary || '#EDF7F3', b.label, b.value)
+      })
+    }
+
+    // ── prioritization ─────────────────────────────────────────────────────
+    else if (t === 'prioritization') {
+      const ps = art.priority_style || {}
+      const items = (art.items || []).slice(0, 5)
+      const gap = 8
+      const rowH = Math.max(30, (ah - gap * Math.max(0, items.length - 1)) / Math.max(items.length, 1))
+      const rankPalette = ps.rank_palette || [bt.secondary_color, bt.primary_color, ...(bt.accent_colors || [])]
+
+      items.forEach((item, i) => {
+        const ry = ay + i * (rowH + gap)
+        ctx.fillStyle = ps.row_fill_color || '#FFFFFF'
+        ctx.strokeStyle = ps.row_border_color || '#D7DEE8'
+        ctx.lineWidth = 1
+        roundRect(ctx, ax, ry, aw, rowH, 10); ctx.fill(); ctx.stroke()
+
+        const badge = 22
+        const bx = ax + 12, by = ry + (rowH - badge) / 2
+        ctx.fillStyle = rankPalette[i % Math.max(rankPalette.length, 1)] || primary
+        ctx.beginPath(); ctx.arc(bx + badge / 2, by + badge / 2, badge / 2, 0, Math.PI * 2); ctx.fill()
+        ctx.fillStyle = '#FFF'; ctx.font = 'bold 12px Arial'; ctx.textAlign = 'center'
+        ctx.fillText(String(item.rank != null ? item.rank : i + 1), bx + badge / 2, by + 15)
+
+        ctx.fillStyle = '#1F2937'; ctx.textAlign = 'left'; ctx.font = 'bold 11px Arial'
+        ctx.fillText(String(item.title || '').slice(0, 28), ax + 44, ry + 17)
+        ctx.fillStyle = '#4B5563'; ctx.font = '9px Arial'
+        ctx.fillText(String(item.description || '').slice(0, 38), ax + 44, ry + 31)
+
+        ;((item.qualifiers || []).filter(q => (q && (q.label || q.value))).slice(0, 2)).forEach((q, qi) => {
+          const pw = 82, ph = 16
+          const px = ax + aw - pw - 10
+          const py = ry + 8 + qi * (ph + 4)
+          ctx.fillStyle = '#EEF4E2'
+          roundRect(ctx, px, py, pw, ph, 4); ctx.fill()
+          ctx.fillStyle = '#1F2937'; ctx.font = '9px Arial'; ctx.textAlign = 'center'
+          const pillText = (q.label && q.value) ? (q.label + ': ' + q.value) : (q.label || q.value || '')
+          ctx.fillText(String(pillText).slice(0, 18), px + pw / 2, py + 11)
+        })
+      })
     }
   }
 
