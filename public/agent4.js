@@ -1372,7 +1372,14 @@ function validateArtifact(artifact) {
   }
 
   if (t === 'insight_text') {
+    const groups = artifact.groups || []
     const points = artifact.points || []
+    if (groups.length > 0) {
+      // Grouped mode: valid if at least one group has bullets
+      const hasBullets = groups.some(g => (g.bullets || []).length > 0)
+      if (!hasBullets) return { valid: false, reason: 'insight_text grouped has no bullets in any group' }
+      return { valid: true }
+    }
     if (!points.length) return { valid: false, reason: 'insight_text has no points' }
     if (points.every(p => !p || p.trim().length < 5)) return { valid: false, reason: 'insight_text has only placeholder points' }
     return { valid: true }

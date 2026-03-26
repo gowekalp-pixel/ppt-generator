@@ -805,10 +805,17 @@ function safeParseJSON(raw, fallback) {
       const hs = art.heading_style || {}
       const iMode = art.insight_mode || (art.groups ? 'grouped' : 'standard')
 
-      // Artifact-level background
+      // Artifact-level background + border
       if (st.fill_color) {
         ctx.fillStyle = st.fill_color
         ctx.fillRect(ax, ay, aw, ah)
+      }
+      if (st.border_color && (st.border_width || 0) > 0) {
+        ctx.strokeStyle = st.border_color
+        ctx.lineWidth   = (st.border_width || 0.75) * (SCALE / 72)
+        const cr = (st.corner_radius || 0) * SCALE
+        if (cr > 0) { roundRect(ctx, ax, ay, aw, ah, cr); ctx.stroke() }
+        else         { ctx.strokeRect(ax, ay, aw, ah) }
       }
 
       const pad = 10
@@ -1039,11 +1046,14 @@ function safeParseJSON(raw, fallback) {
         })
 
       } else if (chartType === 'pie' && categories.length > 0) {
-        // Simple pie
+        // Simple pie — legend aware: reserve right portion when show_legend is true
+        const showLegend = art.show_legend && categories.length > 0
+        const legW       = showLegend ? Math.min(aw * 0.35, 90) : 0
+        const pieW       = aw - legW
         const allVals  = (series[0]?.values || []).map(Number)
         const total    = allVals.reduce((a, b) => a + b, 0) || 1
-        const cx2 = ax + aw / 2, cy2 = dataTop + dataH / 2
-        const radius = Math.min(aw, dataH) * 0.38
+        const cx2 = ax + pieW / 2, cy2 = dataTop + dataH / 2
+        const radius = Math.min(pieW, dataH) * 0.38
         let angle = -Math.PI / 2
         allVals.forEach((val, i) => {
           const slice = (val / total) * Math.PI * 2
@@ -1055,6 +1065,25 @@ function safeParseJSON(raw, fallback) {
           ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke()
           angle += slice
         })
+        // Legend
+        if (showLegend) {
+          const legX  = ax + pieW + 6
+          const legFs = Math.max(7, Math.min(9, (cs.legend_font_size || 9)))
+          const legLh = legFs + 5
+          const legStartY = cy2 - (categories.length * legLh) / 2
+          ctx.textAlign = 'left'
+          categories.forEach((cat, i) => {
+            const color = (bt.chart_palette || [])[i] || '#888'
+            const ly    = legStartY + i * legLh
+            const pct   = total > 0 ? Math.round((allVals[i] / total) * 100) : 0
+            ctx.fillStyle = color
+            ctx.fillRect(legX, ly, legFs - 1, legFs - 1)
+            ctx.fillStyle = cs.legend_color || '#333333'
+            ctx.font = legFs + 'px ' + (cs.legend_font_family || 'Arial')
+            const label = String(cat).slice(0, 14) + ' ' + pct + '%'
+            ctx.fillText(label, legX + legFs + 3, ly + legFs - 1)
+          })
+        }
       } else {
         // No data — placeholder label
         ctx.fillStyle = '#AAA'; ctx.font = '9px Arial'; ctx.textAlign = 'center'

@@ -1516,8 +1516,10 @@ function buildMinimalSafeSlide(manifestSlide, tokens) {
 //   table        : title, headers[], rows[][], highlight_rows[], note
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function mergeContentIntoZones(designedZones, manifestZones) {
+function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
   if (!designedZones || !manifestZones) return designedZones || []
+
+  const bt = brandTokens || {}
 
   return designedZones.map((dZone, zi) => {
     // Find the matching manifest zone — by index first, then by zone_id
@@ -1533,19 +1535,112 @@ function mergeContentIntoZones(designedZones, manifestZones) {
       const t = dArt.type
 
       if (t === 'insight_text') {
-        // Determine mode from manifest — manifest is authoritative for content structure
+        // ── Determine mode: manifest (Agent 4) is authoritative for content structure ──
         const mGroups = mArt.groups && mArt.groups.length > 0 ? mArt.groups : null
         const mPoints = mArt.points && mArt.points.length > 0 ? mArt.points : null
         const resolvedMode = mArt.insight_mode
           || (mGroups ? 'grouped' : mPoints ? 'standard' : dArt.insight_mode || 'standard')
+
+        const heading        = mArt.heading        || mArt.insight_header || dArt.heading        || 'Key Insight'
+        const insight_header = mArt.insight_header || mArt.heading        || dArt.insight_header || 'Key Insight'
+        const sentiment      = mArt.sentiment      || dArt.sentiment      || 'neutral'
+
+        // ── FLOW 2: Grouped ──────────────────────────────────────────────────────
+        if (resolvedMode === 'grouped') {
+          const primary   = bt.primary_color      || '#1A3C8F'
+          const titleFont = bt.title_font_family  || 'Arial'
+          const bodyFont  = bt.body_font_family   || 'Arial'
+          const artW = dArt.w || 4
+          const artH = dArt.h || 4
+          const n    = (mGroups || []).length || 1
+
+          // Layout direction: columns = headers above boxes (horizontal groups);
+          //                   rows    = headers left of boxes (vertical groups)
+          const gLayout = dArt.group_layout
+            || (artW > artH && n <= 3 ? 'columns' : 'rows')
+
+          // Re-use Agent 5 grouped styling when it exists; fill gaps otherwise
+          const agentHasGrouped = dArt.insight_mode === 'grouped' && !!dArt.group_header_style
+          const f = agentHasGrouped ? ((dArt.bullet_style || {}).font_size || 10) : 10
+
+          const group_header_style = dArt.group_header_style || {
+            shape:        'rounded_rect',
+            fill_color:   primary,
+            text_color:   '#FFFFFF',
+            font_family:  titleFont,
+            font_size:    10,
+            font_weight:  'bold',
+            corner_radius: 4,
+            w: gLayout === 'rows' ? r2(Math.min(1.5, artW * 0.30)) : artW,
+            h: r2(Math.max(10 * 1.8 / 72, artH * 0.06))
+          }
+
+          const group_bullet_box_style = dArt.group_bullet_box_style || {
+            fill_color:   null,
+            border_color: '#CCCCCC',
+            border_width:  0.75,
+            corner_radius: group_header_style.corner_radius || 4,
+            padding: {
+              top:    r2(Math.max(f * 0.8 / 72, 0.05)),
+              right:  r2(Math.max(f * 1.0 / 72, 0.07)),
+              bottom: r2(Math.max(f * 0.8 / 72, 0.05)),
+              left:   r2(Math.max(f * 1.0 / 72, 0.07))
+            }
+          }
+
+          const bullet_style = dArt.bullet_style || {
+            font_family:     bodyFont,
+            font_size:       f,
+            font_weight:     'regular',
+            color:           bt.body_color || '#111111',
+            line_spacing:    1.35,
+            indent_inches:   0.10,
+            space_before_pt: r2(Math.max(f * 0.4, 2)),
+            char:            '•'
+          }
+
+          const dimForGap = gLayout === 'rows' ? artH : artW
+          const group_gap_in         = dArt.group_gap_in         || r2(Math.max(dimForGap * 0.015, 0.05))
+          const header_to_box_gap_in = dArt.header_to_box_gap_in || r2(Math.max(f * 0.5 / 72, 0.03))
+
+          return {
+            ...dArt,
+            insight_mode:          'grouped',
+            heading,
+            insight_header,
+            sentiment,
+            groups:                mGroups,
+            points:                [],
+            group_layout:          gLayout,
+            group_header_style,
+            group_bullet_box_style,
+            bullet_style:          { ...bullet_style },
+            group_gap_in:          r2(group_gap_in),
+            header_to_box_gap_in:  r2(header_to_box_gap_in)
+          }
+        }
+
+        // ── FLOW 1: Standard (points) ────────────────────────────────────────────
+        const body_style = dArt.body_style || {
+          font_family:           bt.body_font_family || 'Arial',
+          font_size:             10,
+          font_weight:           'regular',
+          color:                 bt.body_color || '#000000',
+          line_spacing:          1.3,
+          indent_inches:         0.15,
+          list_style:            'bullet',
+          space_before_pt:       6,
+          vertical_distribution: 'spread'
+        }
         return {
           ...dArt,
-          insight_mode:   resolvedMode,
-          heading:        mArt.heading        || mArt.insight_header || dArt.heading        || 'Key Insight',
-          insight_header: mArt.insight_header || mArt.heading        || dArt.insight_header || 'Key Insight',
-          points:         mPoints             || dArt.points         || [],
-          groups:         mGroups             || dArt.groups         || undefined,
-          sentiment:      mArt.sentiment      || dArt.sentiment      || 'neutral'
+          insight_mode:   'standard',
+          heading,
+          insight_header,
+          sentiment,
+          points:  mPoints || dArt.points || [],
+          groups:  undefined,
+          body_style
         }
       }
 
@@ -1703,7 +1798,8 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
   // Merge Agent 4 content into Agent 5 layout zones
   const mergedZones = mergeContentIntoZones(
     branded.zones || [],
-    manifestSlide.zones || []
+    manifestSlide.zones || [],
+    branded.brand_tokens || {}
   )
 
   // Layout mode: fill zone frames + artifact placeholder_idx from the layout's content_areas.

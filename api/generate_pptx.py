@@ -350,7 +350,7 @@ def _compact_title_placeholder(slide, title_ph, text, font_size):
         old_bottom    = title_ph.top + old_h_emu
 
         if shrink_emu <= int(0.05 * 914400):          # less than 0.05" — not worth moving
-            return
+            return 0.0
 
         title_ph.height = new_h_emu
 
@@ -363,8 +363,11 @@ def _compact_title_placeholder(slide, title_ph, text, font_size):
             if ph.top >= threshold:
                 ph.top    = max(0, ph.top - shrink_emu)
                 ph.height = ph.height + shrink_emu
+
+        return shrink_emu / 914400.0   # return shrink in inches so caller can shift free shapes
     except Exception as e:
         print('_compact_title_placeholder error:', e)
+        return 0.0
 
 
 def place_in_placeholder(slide, ph_idx, text, style_spec, bt):
@@ -385,6 +388,17 @@ def place_in_placeholder(slide, ph_idx, text, style_spec, bt):
                 tf = ph.text_frame
                 tf.clear()
                 tf.word_wrap = True
+                # Reset any vertical text direction inherited from the template layout.
+                # Some layouts (e.g. "2 Column") have the title placeholder's bodyPr
+                # set to vert="vert" which makes the title render sideways on the slide.
+                try:
+                    body_pr = tf._txBody.find(
+                        '{http://schemas.openxmlformats.org/drawingml/2006/main}bodyPr'
+                    )
+                    if body_pr is not None:
+                        body_pr.attrib.pop('vert', None)
+                except Exception:
+                    pass
                 p   = tf.paragraphs[0]
                 run = p.add_run()
                 run.text = str(text)
@@ -397,8 +411,8 @@ def place_in_placeholder(slide, ph_idx, text, style_spec, bt):
                 align_map = {'left': PP_ALIGN.LEFT, 'center': PP_ALIGN.CENTER, 'right': PP_ALIGN.RIGHT}
                 p.alignment = align_map.get(align, PP_ALIGN.LEFT)
                 if ph_idx == 0:
-                    _compact_title_placeholder(slide, ph, text, font_size)
-                return
+                    return _compact_title_placeholder(slide, ph, text, font_size) or 0.0
+                return 0.0
     except Exception as e:
         print(f'place_in_placeholder({ph_idx}) lookup error:', e)
 
@@ -417,6 +431,7 @@ def place_in_placeholder(slide, ph_idx, text, style_spec, bt):
                      False,
                      style_spec.get('color', bt.get('body_color', '#333333')),
                      style_spec.get('align', 'left'), 'middle')
+    return 0.0
 
 
 def render_header_block(slide, header_block, bt, header_style='underline'):
@@ -479,15 +494,16 @@ def render_insight_text(slide, artifact, bt, suppress_heading=False):
     heading = artifact.get('heading', '') if not suppress_heading else ''
     points  = artifact.get('points', [])
 
-    # Background fill + border (skip in layout mode — template provides styling)
-    if not suppress_heading:
-        fill   = style.get('fill_color')
-        border = style.get('border_color')
-        bw     = style.get('border_width', 0)
-        cr     = style.get('corner_radius', 0)
-        if fill or (border and bw):
-            add_filled_rect(slide, x, y, w, h, fill_hex=fill,
-                            border_hex=border, border_pt=bw, corner_radius=cr)
+    # Background fill + border — always render the container box; only the inline
+    # heading text is suppressed when suppress_heading=True (because the header_block
+    # was already rendered above the artifact by render_artifact).
+    fill   = style.get('fill_color')
+    border = style.get('border_color')
+    bw     = style.get('border_width', 0)
+    cr     = style.get('corner_radius', 0)
+    if fill or (border and bw):
+        add_filled_rect(slide, x, y, w, h, fill_hex=fill,
+                        border_hex=border, border_pt=bw, corner_radius=cr)
 
     # ── Heading & body layout ────────────────────────────────────────────────
     TOP_PAD   = INSIGHT_TOP_PADDING
@@ -586,6 +602,129 @@ def render_insight_text(slide, artifact, bt, suppress_heading=False):
         add_text_box(slide, x + INSIGHT_LEFT_PADDING, y + TOP_PAD, w - INSIGHT_LEFT_PADDING, 0.34,
                      str(heading), _h_params['font'], _h_params['size'],
                      _h_params['bold'], _h_params['color'], 'left', 'middle')
+
+    # ── Grouped mode ─────────────────────────────────────────────────────────
+    insight_mode = artifact.get('insight_mode', 'standard')
+    groups       = artifact.get('groups') or []
+
+    if insight_mode == 'grouped' and groups:
+        ghs      = artifact.get('group_header_style', {}) or {}
+        gbs      = artifact.get('group_bullet_box_style', {}) or {}
+        bsty     = artifact.get('bullet_style', {}) or {}
+        g_gap    = float(artifact.get('group_gap_in')    or 0.08)
+        hb_gap   = float(artifact.get('header_to_box_gap_in') or 0.05)
+        g_layout = artifact.get('group_layout', 'rows')
+
+        b_font   = bsty.get('font_family', bt.get('body_font_family', 'Arial'))
+        b_size   = int(bsty.get('font_size', 10) or 10)
+        b_color  = bsty.get('color', '#000000')
+        b_char   = bsty.get('char', '•')
+        b_space  = max(1, int(bsty.get('space_before_pt', 4) or 4))
+        b_indent = float(bsty.get('indent_inches', 0.10) or 0.10)
+        GRP_HANG = 0.15   # bullet hang indent inside group boxes
+
+        h_font   = ghs.get('font_family', bt.get('title_font_family', 'Arial'))
+        h_size   = int(ghs.get('font_size', 11) or 11)
+        h_color  = ghs.get('text_color', '#FFFFFF')
+        h_bold   = ghs.get('font_weight', 'bold') in ('bold', 'semibold')
+        h_fill   = ghs.get('fill_color', bt.get('primary_color', '#0078AE'))
+        h_cr     = float(ghs.get('corner_radius', 4) or 0)
+
+        box_fill = gbs.get('fill_color')
+        box_bdr  = gbs.get('border_color')
+        box_bw   = float(gbs.get('border_width', 0.75) or 0)
+        box_cr   = float(gbs.get('corner_radius', 4) or 0)
+        box_pad  = gbs.get('padding', {}) or {}
+        bp_t     = float(box_pad.get('top',    0.08) or 0)
+        bp_r     = float(box_pad.get('right',  0.10) or 0)
+        bp_b     = float(box_pad.get('bottom', 0.08) or 0)
+        bp_l     = float(box_pad.get('left',   0.10) or 0)
+
+        n             = len(groups)
+        total_bullets = max(1, sum(len(g.get('bullets') or []) for g in groups))
+        header_block_h = content_y - y   # space already used by header_block / heading
+
+        def _render_group_bullets(bx, by, bw, bh, bullets):
+            if not bullets:
+                return
+            bx2 = bx + bp_l + b_indent
+            by2 = by + bp_t
+            bw2 = max(0.2, bw - bp_l - bp_r - b_indent - GRP_HANG)
+            bh2 = max(0.1, bh - bp_t - bp_b)
+            txBox = slide.shapes.add_textbox(
+                inches(bx2), inches(by2), inches(bw2), inches(bh2))
+            tf = txBox.text_frame
+            enable_text_fit(tf)
+            _hang_emu = int(Emu(inches(GRP_HANG)))
+            for bi, bullet in enumerate(bullets):
+                if bi == 0:
+                    p_obj = tf.paragraphs[0]
+                    p_obj.space_before = pt(0)
+                else:
+                    p_obj = tf.add_paragraph()
+                    p_obj.space_before = pt(b_space)
+                pPr = p_obj._p.get_or_add_pPr()
+                for tag in [nsmap.qn('a:buNone'), nsmap.qn('a:buChar'),
+                            nsmap.qn('a:buAutoNum'), nsmap.qn('a:buFont')]:
+                    for el in pPr.findall(tag):
+                        pPr.remove(el)
+                pPr.set('marL',   str(_hang_emu))
+                pPr.set('indent', str(-_hang_emu))
+                buFont = etree.SubElement(pPr, nsmap.qn('a:buFont'))
+                buFont.set('typeface', b_font)
+                buChar = etree.SubElement(pPr, nsmap.qn('a:buChar'))
+                buChar.set('char', b_char)
+                run = p_obj.add_run()
+                run.text = _strip_marker(str(bullet))
+                set_font(run, b_font, b_size, False, False, b_color)
+
+        if g_layout == 'rows':
+            h_w      = float(ghs.get('w', 1.2) or 1.2)
+            box_x    = x + h_w + hb_gap
+            box_w    = max(0.2, w - h_w - hb_gap - INSIGHT_RIGHT_PADDING)
+            total_rh = max(0.2, h - header_block_h - INSIGHT_BOTTOM_PADDING
+                           - (n - 1) * g_gap)
+            cur_y    = content_y
+            for g in groups:
+                nbullets = max(1, len(g.get('bullets') or []))
+                row_h    = max(0.25, total_rh * (nbullets / total_bullets))
+                # Header label (left column)
+                add_filled_rect(slide, x, cur_y, h_w, row_h,
+                                fill_hex=h_fill, corner_radius=h_cr)
+                add_text_box(slide, x + 0.06, cur_y, h_w - 0.12, row_h,
+                             str(g.get('header', '')),
+                             h_font, h_size, h_bold, h_color, 'center', 'middle')
+                # Bullet box (right column)
+                if box_fill or (box_bdr and box_bw):
+                    add_filled_rect(slide, box_x, cur_y, box_w, row_h,
+                                    fill_hex=box_fill, border_hex=box_bdr,
+                                    border_pt=box_bw, corner_radius=box_cr)
+                _render_group_bullets(box_x, cur_y, box_w, row_h,
+                                      g.get('bullets') or [])
+                cur_y += row_h + g_gap
+
+        else:  # columns
+            col_w   = max(0.2, (w - INSIGHT_RIGHT_PADDING - (n - 1) * g_gap) / max(n, 1))
+            h_h     = float(ghs.get('h', 0.28) or 0.28)
+            box_h   = max(0.1, h - header_block_h - h_h - hb_gap - INSIGHT_BOTTOM_PADDING)
+            cur_x   = x
+            for g in groups:
+                # Header label (top of column)
+                add_filled_rect(slide, cur_x, content_y, col_w, h_h,
+                                fill_hex=h_fill, corner_radius=h_cr)
+                add_text_box(slide, cur_x + 0.05, content_y, col_w - 0.10, h_h,
+                             str(g.get('header', '')),
+                             h_font, h_size, h_bold, h_color, 'center', 'middle')
+                # Bullet box (below header)
+                bullet_y = content_y + h_h + hb_gap
+                if box_fill or (box_bdr and box_bw):
+                    add_filled_rect(slide, cur_x, bullet_y, col_w, box_h,
+                                    fill_hex=box_fill, border_hex=box_bdr,
+                                    border_pt=box_bw, corner_radius=box_cr)
+                _render_group_bullets(cur_x, bullet_y, col_w, box_h,
+                                      g.get('bullets') or [])
+                cur_x += col_w + g_gap
+        return   # grouped mode fully rendered
 
     def _bullet_char(point, idx):
         s = str(point)
@@ -2170,9 +2309,13 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
     # ════════════════════════════════════════════════════════════════════════
 
     # Title & subtitle: placeholders in template mode, text boxes in scratch
+    # title_shrink_in: how much the title placeholder was compacted (inches).
+    # Zone artifacts are positioned by Agent 5 assuming the full placeholder height,
+    # so we shift their y-coords up by this amount to close the resulting gap.
+    title_shrink_in = 0.0
     if use_template:
         if tb.get('text'):
-            place_in_placeholder(slide, 0, tb['text'], tb, bt)
+            title_shrink_in = place_in_placeholder(slide, 0, tb['text'], tb, bt) or 0.0
         if sb.get('text'):
             place_in_placeholder(slide, 1, sb['text'], sb, bt)
     else:
@@ -2206,8 +2349,20 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
                 sb.get('align', 'left'), 'middle')
 
     # Zones → Artifacts
+    # If the title placeholder was compacted, shift all artifact y-coords up so
+    # content tracks the actual title bottom rather than the spec's assumed height.
+    _zones = slide_spec.get('zones', [])
+    if title_shrink_in > 0.02:
+        for _z in _zones:
+            for _a in (_z.get('artifacts') or []):
+                if _a.get('y') is not None:
+                    _a['y'] = round(max(0.0, _a['y'] - title_shrink_in), 4)
+                if _a.get('header_block') and _a['header_block'].get('y') is not None:
+                    _a['header_block']['y'] = round(
+                        max(0.0, _a['header_block']['y'] - title_shrink_in), 4)
+
     _layout_ph_bounds = _ph_bounds if (layout_mode and use_template) else {}
-    for zone_idx, zone in enumerate(slide_spec.get('zones', [])):
+    for zone_idx, zone in enumerate(_zones):
         zone = normalize_zone_artifact_stack(zone)
         # ── Fix: multi-artifact zone with null frame in layout mode ───────────
         # normalize_zone_artifact_stack exits early when frame is null, leaving
