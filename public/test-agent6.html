@@ -113,8 +113,8 @@
   <div class="card">
     <div class="card-title">Agent 5 Designed Spec JSON — Step 2</div>
 
-    <div class="hint">Paste the full JSON array from Agent 5 output (the array of slide objects with canvas, zones, artifacts)</div>
-    <textarea id="spec-input" placeholder='[ { "slide_number": 1, "slide_type": "title", "canvas": { "width_in": 11.02, ... }, "zones": [], ... }, ... ]'></textarea>
+    <div class="hint">Paste the full JSON array from Agent 5 output (each slide has canvas, blocks[], zones, brand_tokens)</div>
+    <textarea id="spec-input" placeholder='[ { "slide_number": 1, "slide_type": "title", "canvas": { "width_in": 11.02, ... }, "blocks": [...], "zones": [], ... }, ... ]'></textarea>
 
     <div class="upload-zone" id="zone-spec">
       <input type="file" accept=".json" onchange="loadSpecFile(this)">
@@ -221,43 +221,73 @@
 
   // ─── SPEC SUMMARY ────────────────────────────────────────────────────────────
   function showSummary(spec) {
-    const totalZones   = spec.reduce((n, s) => n + (s.zones || []).length, 0)
-    const layoutSlides = spec.filter(s => s.layout_mode === true).length
-    const scratchSlides= spec.filter(s => s.slide_type === 'content' && !s.layout_mode).length
-    const artCounts    = {}
-    spec.forEach(s => (s.zones || []).forEach(z =>
-      (z.artifacts || []).forEach(a => { artCounts[a.type] = (artCounts[a.type] || 0) + 1 })
-    ))
+    const layoutSlides  = spec.filter(s => s.layout_mode === true).length
+    const scratchSlides = spec.filter(s => s.slide_type === 'content' && !s.layout_mode).length
+    const totalBlocks   = spec.reduce((n, s) => n + (s.blocks || []).length, 0)
+
+    // Block type counts from blocks[] (primary render contract)
+    const blockCounts = {}
+    const artTypeCounts = {}  // artifact types from zones[] for display alongside
+    spec.forEach(s => {
+      ;(s.blocks || []).forEach(b => {
+        const bt = b.block_type || 'unknown'
+        blockCounts[bt] = (blockCounts[bt] || 0) + 1
+      })
+      ;(s.zones || []).forEach(z =>
+        (z.artifacts || []).forEach(a => { artTypeCounts[a.type] = (artTypeCounts[a.type] || 0) + 1 })
+      )
+    })
 
     document.getElementById('sum-grid').innerHTML = [
-      { val: spec.length,                                         lbl: 'Slides',       color: '' },
+      { val: spec.length,                                          lbl: 'Slides',       color: '' },
       { val: spec.filter(s => s.slide_type === 'content').length, lbl: 'Content',      color: '' },
-      { val: layoutSlides,                                        lbl: 'Layout Mode',  color: layoutSlides > 0 ? '#059669' : '' },
-      { val: scratchSlides,                                       lbl: 'Scratch Mode', color: '' },
-      { val: totalZones,                                          lbl: 'Zones',        color: '' },
-      { val: Object.values(artCounts).reduce((a,b)=>a+b, 0),     lbl: 'Artifacts',    color: '' }
+      { val: layoutSlides,                                         lbl: 'Layout Mode',  color: layoutSlides > 0 ? '#059669' : '' },
+      { val: scratchSlides,                                        lbl: 'Scratch Mode', color: '' },
+      { val: totalBlocks,                                          lbl: 'Blocks',       color: totalBlocks > 0 ? '#059669' : '' },
+      { val: Object.values(artTypeCounts).reduce((a,b)=>a+b, 0),  lbl: 'Artifacts',    color: '' }
     ].map(i => `<div class="sum-item"><div class="sum-val" ${i.color ? 'style="color:'+i.color+'"' : ''}>${i.val}</div><div class="sum-lbl">${i.lbl}</div></div>`).join('')
 
-    // Art type breakdown
-    const artBar = Object.entries(artCounts)
+    // Block type breakdown (primary) + artifact type breakdown (secondary)
+    const blockBar = Object.entries(blockCounts)
+      .map(([t, n]) => `<span class="ap ap-${t.replace('_','-')}">${t}: ${n}</span>`).join(' ')
+    const artBar = Object.entries(artTypeCounts)
       .map(([t, n]) => `<span class="ap ap-${t}">${t}: ${n}</span>`).join(' ')
     document.getElementById('sum-grid').innerHTML +=
-      `<div style="grid-column:1/-1;display:flex;gap:4px;flex-wrap:wrap;">${artBar}</div>`
+      `<div style="grid-column:1/-1;">` +
+      (blockBar ? `<div style="margin-bottom:4px;font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.05em;">blocks[]</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;">${blockBar}</div>` : '') +
+      (artBar   ? `<div style="margin-bottom:4px;font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.05em;">artifacts (zones)</div><div style="display:flex;gap:4px;flex-wrap:wrap;">${artBar}</div>` : '') +
+      `</div>`
 
-    // Slide list
+    // Slide list — show block count per slide; prefer blocks[], fall back to artifact types
     document.getElementById('slide-list').innerHTML = spec.map(s => {
-      const arts = (s.zones || []).flatMap(z => (z.artifacts || []).map(a => a.type))
-      const uniqueArts = [...new Set(arts)]
-      const isLayoutMode = s.layout_mode === true
-      const layoutBadge = isLayoutMode
+      const slideBlocks   = s.blocks || []
+      const hasBlocks     = slideBlocks.length > 0
+      const isLayoutMode  = s.layout_mode === true
+      const layoutBadge   = isLayoutMode
         ? `<span style="font-size:9px;background:#dcfce7;color:#166534;padding:1px 5px;border-radius:10px;font-weight:700;flex-shrink:0;" title="${s.selected_layout_name || 'layout mode'}">📐${s.selected_layout_name ? ' ' + s.selected_layout_name : ''}</span>`
         : ''
+
+      let pillsHtml
+      if (hasBlocks) {
+        // Show distinct artifact-level block types (chart/table/workflow/bullet_list/cards)
+        const renderTypes = [...new Set(slideBlocks
+          .map(b => b.block_type)
+          .filter(t => ['chart','table','workflow','bullet_list','circle'].includes(t))
+        )]
+        const artTypes = [...new Set((s.zones || []).flatMap(z => (z.artifacts || []).map(a => a.type)))]
+        pillsHtml = artTypes.map(t => `<span class="ap ap-${t}">${t}</span>`).join('')
+          + `<span style="font-size:9px;background:#f0fdf4;color:#166534;padding:1px 5px;border-radius:10px;font-weight:600;">${slideBlocks.length} blocks</span>`
+      } else {
+        const arts = (s.zones || []).flatMap(z => (z.artifacts || []).map(a => a.type))
+        pillsHtml = [...new Set(arts)].map(t => `<span class="ap ap-${t}">${t}</span>`).join('')
+      }
+
       return `<div class="slide-row">
         <span class="sn">S${s.slide_number}</span>
         <span class="st-badge st-${s.slide_type}">${s.slide_type}</span>
         <span class="slide-title-text">${(s.title || (s.title_block || {}).text || '—').slice(0, 60)}</span>
         ${layoutBadge}
-        <div class="art-pills">${uniqueArts.map(t => `<span class="ap ap-${t}">${t}</span>`).join('')}</div>
+        <div class="art-pills">${pillsHtml}</div>
       </div>`
     }).join('')
 
@@ -289,9 +319,14 @@
     // Validate schema
     const first = parsedSpec[0]
     if (!first.canvas) {
-      errEl.textContent = 'Invalid schema — expected canvas/zones format from the new Agent 5. Old elements[] format is not supported.'
+      errEl.textContent = 'Invalid schema — expected Agent 5 output with canvas + blocks[]. Old elements[] format is not supported.'
       errEl.classList.add('show')
       return
+    }
+    if (!Array.isArray(first.blocks) || first.blocks.length === 0) {
+      errEl.textContent = 'Warning: spec has no blocks[] on the first slide. Make sure you are pasting Agent 5 output (not the raw manifest). Agent 5 must run first to generate blocks[].'
+      errEl.classList.add('show')
+      // Allow proceeding — blocks may be present on later slides or spec may be title-only
     }
 
     const btn    = document.getElementById('run-btn')

@@ -148,12 +148,12 @@
 
   <div class="badge">Isolated Test — Agent 5 Only</div>
   <h1>Layout Design Engine Tester</h1>
-  <p class="subhead">Paste the Brand Rulebook (Agent 2 output), Slide Manifest (Agent 4 output), and optionally the brief (Agent 3). Agent 5 calls Claude to produce render-ready layout specs: canvas dimensions, brand tokens, positioned title blocks, zones with fully specified artifacts.</p>
+  <p class="subhead">Paste the Brand Rulebook (Agent 2 output) and Slide Manifest (Agent 4 output). Agent 5 calls Claude to produce render-ready layout specs: canvas dimensions, brand tokens, positioned title blocks, zones with fully specified artifacts and a flat blocks[] array for the renderer.</p>
 
   <!-- INPUTS -->
   <div class="card">
     <div class="card-title">Inputs</div>
-    <div class="three-up">
+    <div class="two-up">
       <div>
         <div class="hint">Agent 2 — Brand Rulebook JSON</div>
         <textarea id="brand-input" placeholder='{ "primary_colors": ["#0F2FB5"], "slide_width_inches": 13.33, "title_font": { "family": "Calibri" }, ... }'></textarea>
@@ -169,11 +169,7 @@
           <input type="file" accept=".json" onchange="loadJSON('manifest', this)">
           <div class="uz">Or upload <span>manifest.json</span></div>
         </div>
-      </div>
-      <div>
-        <div class="hint">Agent 3 — Presentation Brief (optional)</div>
-        <textarea id="brief-input" class="short" placeholder='{ "document_type": "financial report", "governing_thought": "...", "narrative_flow": "...", "tone": "confident", "data_heavy": true }'></textarea>
-        <div class="hint" style="margin-top:8px;">Slide range (optional — leave blank for all)</div>
+        <div class="hint" style="margin-top:10px;">Slide range (optional — leave blank for all)</div>
         <div style="display:flex;gap:8px;align-items:center;margin-top:4px;">
           <input type="number" id="range-from" placeholder="From" min="1" style="width:80px;padding:6px 8px;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;">
           <span style="font-size:12px;color:#888;">to</span>
@@ -336,7 +332,6 @@ function safeParseJSON(raw, fallback) {
     document.getElementById('error-box').classList.remove('show')
     const brand    = safeJSON(document.getElementById('brand-input').value,    null)
     const manifest = safeJSON(document.getElementById('manifest-input').value, null)
-    const brief    = safeJSON(document.getElementById('brief-input').value,    {})
     const fromSlide= parseInt(document.getElementById('range-from').value) || 1
     const toSlide  = parseInt(document.getElementById('range-to').value)   || 9999
 
@@ -365,8 +360,7 @@ function safeParseJSON(raw, fallback) {
 
       const spec = await runAgent5({
         slideManifest: filteredSlides,
-        brandRulebook: brand,
-        outline:       brief
+        brandRulebook: brand
       })
 
       resultSpec  = spec
@@ -392,6 +386,7 @@ function safeParseJSON(raw, fallback) {
     // Stats
     const totalZones     = spec.reduce((n, s) => n + (s.zones || []).length, 0)
     const totalArtifacts = spec.reduce((n, s) => n + (s.zones || []).reduce((m, z) => m + (z.artifacts || []).length, 0), 0)
+    const totalBlocks    = spec.reduce((n, s) => n + (s.blocks || []).length, 0)
     const withIssues    = spec.filter(s => s._validation_issues?.length > 0)
     const withFallback  = spec.filter(s => s._fallback === true)
 
@@ -416,6 +411,7 @@ function safeParseJSON(raw, fallback) {
       { val: scratchSlides.length,    lbl: 'Scratch Mode' },
       { val: totalZones,                                            lbl: 'Zones' },
       { val: totalArtifacts,                                        lbl: 'Artifacts' },
+      { val: totalBlocks,                                           lbl: 'Blocks' },
       { val: withFallback.length, lbl: 'Fallback' },
       { val: withIssues.length,   lbl: 'Issues' }
     ].map(s => {
@@ -566,8 +562,9 @@ function safeParseJSON(raw, fallback) {
               const grps = a.groups || []
               hasContent = grps.length > 0
               const totalBullets = grps.reduce((s, g) => s + (g.bullets || []).length, 0)
+              const shape = (a.group_header_style || {}).shape || 'rounded_rect'
               preview = hasContent
-                ? grps.length + ' group' + (grps.length > 1 ? 's' : '') + ', ' + totalBullets + ' bullets [' + (a.group_layout || '?') + '] — "' + String((grps[0] || {}).header || '').slice(0, 35) + '"'
+                ? grps.length + ' group' + (grps.length > 1 ? 's' : '') + ', ' + totalBullets + ' bullets [' + (a.group_layout || '?') + ', ' + shape + '] — "' + String((grps[0] || {}).header || '').slice(0, 35) + '"'
                 : 'no groups'
             } else {
               const pts = a.points || []
@@ -876,20 +873,33 @@ function safeParseJSON(raw, fallback) {
         const usedH      = contentY - ay
         const totalBullets = groups.reduce((s, g) => s + (g.bullets || []).length, 0) || 1
 
+        const isBadge = ghs.shape === 'circle_badge'
+
         if (gLayout === 'columns') {
           const colW = (aw - (n - 1) * gapPx) / n
           const boxH = ah - usedH - headerH - hbGapPx
           groups.forEach((g, i) => {
             const cx = ax + i * (colW + gapPx)
-            // group header bar
-            ctx.fillStyle = headerFill
-            roundRect(ctx, cx, contentY, colW, headerH, 3); ctx.fill()
-            ctx.fillStyle = headerText
-            ctx.font = 'bold ' + Math.max(7, bfs * 0.95) + 'px Arial'
-            ctx.textAlign = 'center'
-            let hTxt = String(g.header || '')
-            while (hTxt.length > 3 && ctx.measureText(hTxt).width > colW - 8) hTxt = hTxt.slice(0, -4) + '…'
-            ctx.fillText(hTxt, cx + colW / 2, contentY + headerH * 0.65)
+            if (isBadge) {
+              // circle centered horizontally in column
+              const dia = headerH
+              const bx  = cx + (colW - dia) / 2
+              ctx.fillStyle = headerFill
+              ctx.beginPath(); ctx.arc(bx + dia / 2, contentY + dia / 2, dia / 2, 0, Math.PI * 2); ctx.fill()
+              ctx.fillStyle = headerText
+              ctx.font = 'bold ' + Math.max(7, bfs * 0.95) + 'px Arial'
+              ctx.textAlign = 'center'
+              ctx.fillText(String(i + 1), bx + dia / 2, contentY + dia * 0.65)
+            } else {
+              ctx.fillStyle = headerFill
+              roundRect(ctx, cx, contentY, colW, headerH, 3); ctx.fill()
+              ctx.fillStyle = headerText
+              ctx.font = 'bold ' + Math.max(7, bfs * 0.95) + 'px Arial'
+              ctx.textAlign = 'center'
+              let hTxt = String(g.header || '')
+              while (hTxt.length > 3 && ctx.measureText(hTxt).width > colW - 8) hTxt = hTxt.slice(0, -4) + '…'
+              ctx.fillText(hTxt, cx + colW / 2, contentY + headerH * 0.65)
+            }
             // bullet box
             const by = contentY + headerH + hbGapPx
             ctx.strokeStyle = boxBorder; ctx.lineWidth = 0.8
@@ -920,15 +930,26 @@ function safeParseJSON(raw, fallback) {
             const rowH = Math.max(headerH + hbGapPx + lh + padV, totalRowH * ((g.bullets || []).length / totalBullets))
             const boxX = ax + headerW + hbGapPx
             const boxW = aw - headerW - hbGapPx
-            // group header block (left side)
-            ctx.fillStyle = headerFill
-            roundRect(ctx, ax, curY, headerW, rowH, 3); ctx.fill()
-            ctx.fillStyle = headerText
-            ctx.font = 'bold ' + Math.max(7, bfs * 0.9) + 'px Arial'
-            ctx.textAlign = 'center'
-            let hTxt = String(g.header || '')
-            while (hTxt.length > 3 && ctx.measureText(hTxt).width > headerW - 8) hTxt = hTxt.slice(0, -4) + '…'
-            ctx.fillText(hTxt, ax + headerW / 2, curY + rowH / 2 + bfs * 0.35)
+            if (isBadge) {
+              // circle centered vertically in the header column
+              const dia = Math.min(headerH, rowH)
+              const by2 = curY + (rowH - dia) / 2
+              ctx.fillStyle = headerFill
+              ctx.beginPath(); ctx.arc(ax + dia / 2, by2 + dia / 2, dia / 2, 0, Math.PI * 2); ctx.fill()
+              ctx.fillStyle = headerText
+              ctx.font = 'bold ' + Math.max(7, bfs * 0.9) + 'px Arial'
+              ctx.textAlign = 'center'
+              ctx.fillText(String(i + 1), ax + dia / 2, by2 + dia * 0.65)
+            } else {
+              ctx.fillStyle = headerFill
+              roundRect(ctx, ax, curY, headerW, rowH, 3); ctx.fill()
+              ctx.fillStyle = headerText
+              ctx.font = 'bold ' + Math.max(7, bfs * 0.9) + 'px Arial'
+              ctx.textAlign = 'center'
+              let hTxt = String(g.header || '')
+              while (hTxt.length > 3 && ctx.measureText(hTxt).width > headerW - 8) hTxt = hTxt.slice(0, -4) + '…'
+              ctx.fillText(hTxt, ax + headerW / 2, curY + rowH / 2 + bfs * 0.35)
+            }
             // bullet box (right side)
             ctx.strokeStyle = boxBorder; ctx.lineWidth = 0.8
             ctx.fillStyle = gbs.fill_color || '#FAFAFA'

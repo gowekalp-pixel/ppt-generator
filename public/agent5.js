@@ -21,7 +21,6 @@ var AGENT5_SYSTEM = `You are a senior presentation designer and layout system ar
 You will receive:
 1. A slide content manifest created by Agent 4
 2. A brand guideline JSON for the current deck
-3. A presentation brief that explains the narrative flow and tone
 
 ═══════════════════════════
 BATCH PROCESSING RULE
@@ -965,8 +964,7 @@ function extractBrandTokens(brand) {
   }
 }
 
-function buildBrandBrief(brand, brief) {
-  const b = brief || {}
+function buildBrandBrief(brand) {
   const tokens = extractBrandTokens(brand)
   return 'BRAND DESIGN TOKENS:\n' +
     JSON.stringify(tokens, null, 2) +
@@ -985,13 +983,7 @@ function buildBrandBrief(brand, brief) {
         '\n- Content slides with selected_layout_name: LAYOUT MODE — set layout_mode:true, zone.frame:null; do NOT set placeholder_idx (pipeline assigns from layout content_areas)' +
         '\n- Content slides without selected_layout_name: SCRATCH MODE — compute all coordinates from layout_hint'
       : '\n- SCRATCH MODE: compute all coordinates; specify background, footer, logo in global_elements') +
-    '\n\nPRESENTATION BRIEF:' +
-    '\nDocument type:     ' + (b.document_type     || 'Business document') +
-    '\nGoverning thought: ' + (b.governing_thought || 'Key insights from the document') +
-    '\nNarrative flow:    ' + (b.narrative_flow    || 'Situation to Recommendation') +
-    '\nTone:              ' + (b.tone              || 'professional') +
-    '\nData heavy:        ' + (b.data_heavy        ? 'yes' : 'no') +
-    '\nLogo policy:       Use the provided logo asset when available and keep it inside safe margins'
+    '\n\nLogo policy: Use the provided logo asset when available and keep it inside safe margins'
 }
 
 
@@ -1000,7 +992,7 @@ function buildBrandBrief(brand, brief) {
 // Sends one batch of slides to Claude and returns the array of layout specs
 // ═══════════════════════════════════════════════════════════════════════════════
 
-async function designSlideBatch(batchManifest, brand, brief, batchNum) {
+async function designSlideBatch(batchManifest, brand, batchNum) {
   const slideNums = batchManifest.map(s => s.slide_number)
   console.log('Agent 5 batch', batchNum, ':', slideNums.join(', '))
 
@@ -1015,7 +1007,7 @@ async function designSlideBatch(batchManifest, brand, brief, batchNum) {
   }))
 
   const prompt =
-    buildBrandBrief(brand, brief) +
+    buildBrandBrief(brand) +
     '\n\nSLIDE BATCH ' + batchNum + ' (' + annotatedManifest.length + ' slides):\n' +
     JSON.stringify(annotatedManifest, null, 2) +
     '\n\nINSTRUCTIONS:' +
@@ -1534,20 +1526,16 @@ CRITICAL — all artifacts must be FULLY specified:
 All coordinates in decimal inches, 2 decimal places.
 Return ONLY a valid JSON object. No explanation. No markdown.`
 
-async function buildFallbackDesign(manifestSlide, brand, brief) {
+async function buildFallbackDesign(manifestSlide, brand) {
   console.log('Agent 5 -- fallback Claude call for S' + manifestSlide.slide_number)
 
   const tokens = extractBrandTokens(brand)
-  const b      = brief || {}
 
   const prompt =
     'BRAND DESIGN TOKENS:\n' +
     JSON.stringify(tokens, null, 2) +
     '\n\nSLIDE TO REBUILD:\n' +
     JSON.stringify(manifestSlide, null, 2) +
-    '\n\nContext:' +
-    '\nDocument type: ' + (b.document_type || 'Business document') +
-    '\nTone: ' + (b.tone || 'professional') +
     '\n\nBuild the best possible layout for this slide.' +
     '\nPreserve the title, key_message, zones structure and artifact content from the manifest.' +
     '\nChoose the cleanest, most board-ready layout given the archetype: ' + (manifestSlide.slide_archetype || 'summary') +
@@ -2895,7 +2883,6 @@ function inferLayoutName(manifestSlide, brand) {
 async function runAgent5(state) {
   const manifest = state.slideManifest
   const brand    = state.brandRulebook
-  const brief    = state.outline || {}
 
   if (!manifest || !manifest.length) {
     console.error('Agent 5 -- slideManifest is empty')
@@ -2907,7 +2894,6 @@ async function runAgent5(state) {
   console.log('  Primary color:', (tokens.primary_colors || [])[0] || 'none')
   console.log('  Slide size:', tokens.slide_width_inches + '" x ' + tokens.slide_height_inches + '"')
   console.log('  Title font:', (tokens.title_font || {}).family || 'default')
-  console.log('  Deck type:', brief.document_type || 'unknown')
 
   // Batch into groups of 3 — smaller batches mean more token headroom per slide,
   // which is the primary cause of incomplete artifact specs
@@ -2926,13 +2912,13 @@ async function runAgent5(state) {
       await new Promise(r => setTimeout(r, 65000))
     }
     const batch  = batches[b]
-    const result = await designSlideBatch(batch, brand, brief, b + 1)
+    const result = await designSlideBatch(batch, brand, b + 1)
 
     if (!result) {
       // Entire batch failed to parse — fall back per slide via Claude
       console.warn('Agent 5 -- batch', b + 1, 'failed entirely, running per-slide fallbacks')
       for (const ms of batch) {
-        const fb = await buildFallbackDesign(ms, brand, brief)
+        const fb = await buildFallbackDesign(ms, brand)
         allDesigned.push(normaliseDesignedSlide(fb, ms, brand) || buildMinimalSafeSlide(ms, tokens))
       }
       continue
@@ -2947,7 +2933,7 @@ async function runAgent5(state) {
 
       if (!match) {
         console.warn('Agent 5 -- no match for S' + mSlide.slide_number + ', running fallback')
-        const fb = await buildFallbackDesign(mSlide, brand, brief)
+        const fb = await buildFallbackDesign(mSlide, brand)
         allDesigned.push(normaliseDesignedSlide(fb, mSlide, brand) || buildMinimalSafeSlide(mSlide, tokens))
         continue
       }
@@ -2977,7 +2963,7 @@ async function runAgent5(state) {
         if (critical.length > 0) {
           // Critical structural gaps — fallback Claude call for this slide
           console.warn('Agent 5 -- S' + mSlide.slide_number + ' has critical issues, running fallback:', critical.join('; '))
-          const fb = await buildFallbackDesign(mSlide, brand, brief)
+          const fb = await buildFallbackDesign(mSlide, brand)
           allDesigned.push(normaliseDesignedSlide(fb, mSlide, brand) || buildMinimalSafeSlide(mSlide, tokens))
         } else {
           // Minor issues (e.g. empty title) — accept Claude's work with warnings
