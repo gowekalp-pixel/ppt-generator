@@ -974,7 +974,7 @@ function extractBrandTokens(brand) {
         acc[l.name] = {
           ph_count:          l.ph_count          || 0,
           usage_guidance:    l.usage_guidance    || '',
-          title_placeholder: l.title_placeholder || null,
+          title_placeholder: l.title_placeholder || (l.master_summary || {}).title_placeholder || null,
           body_placeholder:  l.body_placeholder  || null,
           content_areas:     contentAreas
         }
@@ -1549,6 +1549,7 @@ function applyLayoutTitleFrames(slide, layoutName, brand) {
     return t === 'title' || t === 'center_title' || t === 'centertitle' || t === 'ctrtitle'
   }
   const titlePh = layout.title_placeholder
+    || (layout.master_summary || {}).title_placeholder
     || placeholders.find(isTitleType)
     || placeholders
       .filter(p => String(p?.type || '').toLowerCase() !== 'body')
@@ -1892,21 +1893,19 @@ function computeArtifactInternals(zones, canvas) {
         const canvasH = (canvas && canvas.height_in) ? canvas.height_in : 7.5
 
         // legend_position
-        if (computed.legend_position == null) {
-          if (art.show_legend) {
-            const widthRatio = (art.w || 0) / Math.max(canvasW, 0.1)
-            const heightRatio = (art.h || 0) / Math.max(canvasH, 0.1)
-            if (heightRatio > 0.60) computed.legend_position = 'top'
-            else if (widthRatio > 0.60) computed.legend_position = 'right'
-            else computed.legend_position = (art.chart_type === 'pie') ? 'right' : 'top'
-          } else {
-            computed.legend_position = 'none'
-          }
+        if (art.show_legend) {
+          const widthRatio = (art.w || 0) / Math.max(canvasW, 0.1)
+          const heightRatio = (art.h || 0) / Math.max(canvasH, 0.1)
+          if (heightRatio > 0.60) computed.legend_position = 'top'
+          else if (widthRatio > 0.60) computed.legend_position = 'right'
+          else computed.legend_position = (art.chart_type === 'pie') ? 'right' : 'top'
+        } else {
+          computed.legend_position = 'none'
         }
 
         const cs = art.chart_style || {}
         const headerFs = ((art.header_block || {}).font_size) || cs.title_font_size || 11
-        const maxLegendFs = Math.max(8, Math.min(headerFs, 10))
+        const maxLegendFs = Math.max(8, Math.min(headerFs - 1, 9))
         art.chart_style = {
           ...cs,
           legend_font_size: Math.min(cs.legend_font_size || maxLegendFs, maxLegendFs)

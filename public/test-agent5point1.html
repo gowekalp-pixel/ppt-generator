@@ -648,14 +648,17 @@ function safeParseJSON(raw, fallback) {
         })
       }
     } else if (t === 'cards') {
-      ;(art.card_frames || []).forEach(cf => {
+      const accentPalette = [bt.primary_color, bt.secondary_color, ...(bt.accent_colors || []), ...(bt.chart_palette || [])]
+        .filter(Boolean)
+      ;(art.card_frames || []).forEach((cf, fi) => {
         const fx = cf.x * SCALE, fy = cf.y * SCALE
         const fw = cf.w * SCALE, fh = cf.h * SCALE
         ctx.fillStyle = '#F8FAFF'
-        roundRect51(ctx, fx, fy, fw, fh, 3); ctx.fill()
+        ctx.fillRect(fx, fy, fw, fh)
         ctx.strokeStyle = primary + '33'; ctx.lineWidth = 0.5
-        roundRect51(ctx, fx, fy, fw, fh, 3); ctx.stroke()
-        ctx.fillStyle = primary; ctx.fillRect(fx, fy, fw, 3)
+        ctx.strokeRect(fx, fy, fw, fh)
+        ctx.fillStyle = accentPalette[fi % Math.max(accentPalette.length, 1)] || primary
+        ctx.fillRect(fx, fy, 5, fh)
       })
     } else if (t === 'workflow') {
       ctx.fillStyle = '#F7F5FF'; ctx.fillRect(ax, ay, aw, ah)

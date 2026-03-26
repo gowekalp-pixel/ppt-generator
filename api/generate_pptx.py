@@ -1082,7 +1082,7 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
             chart.legend.position = legend_pos
             chart.legend.include_in_layout = True   # keep legend inside chart frame, not floating
             legend_font_size = int(cs.get('legend_font_size', header_font_size) or header_font_size)
-            legend_font_size = min(legend_font_size, header_font_size)
+            legend_font_size = min(legend_font_size, max(8, header_font_size - 1), 9)
             chart.legend.font.size = Pt(max(7, legend_font_size))
             chart.legend.font.color.rgb = hex_to_rgb(cs.get('legend_color', bt.get('body_color', '#000000')))
         except Exception:

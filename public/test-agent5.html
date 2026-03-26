@@ -1119,6 +1119,9 @@ function safeParseJSON(raw, fallback) {
       const sub_s  = art.subtitle_style || {}
       const bs     = art.body_style  || {}
       const frames = art.card_frames || []
+      const accentW = 5
+      const accentPalette = [bt.primary_color, bt.secondary_color, ...(bt.accent_colors || []), ...(bt.chart_palette || [])]
+        .filter(Boolean)
       // Card data lives in the manifest — Agent 5 only produces layout, not content.
       // We label cards by index so designer can see the count and positions.
       const cardData = art.cards || []  // may exist if Agent 5 passed through manifest data
@@ -1126,34 +1129,35 @@ function safeParseJSON(raw, fallback) {
       frames.forEach((cf, fi) => {
         const fx = cf.x * SCALE, fy = cf.y * SCALE
         const fw = cf.w * SCALE, fh = cf.h * SCALE
-        const cr = (cs.corner_radius || 3) * (SCALE / 72)
+        const accent = accentPalette[fi % Math.max(accentPalette.length, 1)] || zoneColor
 
         // Card background
         ctx.fillStyle   = cs.fill_color  || '#F8FAFF'
         ctx.strokeStyle = cs.border_color || zoneColor + '44'
         ctx.lineWidth   = cs.border_width || 0.5
-        roundRect(ctx, fx, fy, fw, fh, cr); ctx.fill(); ctx.stroke()
+        ctx.fillRect(fx, fy, fw, fh)
+        ctx.strokeRect(fx, fy, fw, fh)
 
-        // Top accent strip using primary color
-        ctx.fillStyle = ts.color || zoneColor
-        roundRect(ctx, fx, fy, fw, 4, cr); ctx.fill()
+        // Left accent rail
+        ctx.fillStyle = accent
+        ctx.fillRect(fx, fy, accentW, fh)
 
         // Card title — use actual data if available, else numbered label
         const card = cardData[fi] || {}
         const cardTitle = card.title || ('Card ' + (fi + 1))
         const tfs = Math.max(7, (ts.font_size || 10) * SCALE / 72)
-        ctx.fillStyle = ts.color || zoneColor
+        ctx.fillStyle = ts.color || accent
         ctx.font = 'bold ' + tfs + 'px ' + (ts.font_family || 'Arial')
         ctx.textAlign = 'left'
         const truncTitle = cardTitle.length > 22 ? cardTitle.slice(0, 22) + '...' : cardTitle
-        ctx.fillText(truncTitle, fx + 8, fy + 8 + tfs)
+        ctx.fillText(truncTitle, fx + accentW + 8, fy + 8 + tfs)
 
         // Subtitle / metric
         if (card.subtitle) {
           const sfs = Math.max(6, (sub_s.font_size || 9) * SCALE / 72)
-          ctx.fillStyle = sub_s.color || '#666'
-          ctx.font = sfs + 'px ' + (sub_s.font_family || 'Arial')
-          ctx.fillText(card.subtitle.slice(0, 20), fx + 8, fy + 10 + tfs + sfs)
+          ctx.fillStyle = sub_s.color || '#111'
+          ctx.font = 'bold ' + sfs + 'px ' + (sub_s.font_family || 'Arial')
+          ctx.fillText(card.subtitle.slice(0, 20), fx + accentW + 8, fy + 10 + tfs + sfs)
         }
 
         // Body preview
@@ -1163,7 +1167,7 @@ function safeParseJSON(raw, fallback) {
           ctx.font = bfs2 + 'px ' + (bs.font_family || 'Arial')
           const bodyY = card.subtitle ? fy + 12 + tfs * 2 + 4 : fy + 10 + tfs + 8
           const trunc = card.body.length > 40 ? card.body.slice(0, 40) + '...' : card.body
-          ctx.fillText(trunc, fx + 8, bodyY)
+          ctx.fillText(trunc, fx + accentW + 8, bodyY)
         }
       })
 
