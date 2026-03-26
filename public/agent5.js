@@ -2527,6 +2527,84 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
         }
       }
 
+      if (artType === 'workflow') {
+        const nodes = Array.isArray(art.nodes) ? art.nodes : []
+        const ws = art.workflow_style || {}
+        art.container = { x: art.x || 0, y: art.y || 0, w: art.w || 0, h: art.h || 0 }
+
+        const flow = String(art.flow_direction || '').toLowerCase()
+        const wtype = String(art.workflow_type || '').toLowerCase()
+        const isHorizontal = flow === 'left_to_right' || flow === 'horizontal' || wtype === 'timeline' || wtype === 'roadmap' || wtype === 'process_flow'
+
+        if (nodes.length > 0 && isHorizontal) {
+          const hasValues = nodes.some(n => String(n?.value || '').trim())
+          const hasDescriptions = nodes.some(n => String(n?.description || '').trim())
+          const ax = art.x || 0
+          const ay = art.y || 0
+          const aw = art.w || 0
+          const ah = art.h || 0
+          const hb = art.header_block || {}
+          const headerLeft = hb.x != null ? hb.x : ax
+          const headerRight = hb.x != null && hb.w != null ? (hb.x + hb.w) : (ax + aw)
+          const railLeft = Math.max(ax, headerLeft)
+          const railRight = Math.min(ax + aw, headerRight)
+          const padX = Math.min(0.18, Math.max(0.10, aw * 0.02))
+          const topBand = hasValues ? 0.30 : 0.12
+          const bottomBand = hasDescriptions ? Math.min(0.95, Math.max(0.60, ah * 0.26)) : 0.12
+          const titleFs = ws.node_title_font_size || 10
+          const innerPad = ws.node_inner_padding != null ? ws.node_inner_padding : 0.08
+          const avgCharW = titleFs * 0.58 / 72
+          const longestLabel = Math.max(...nodes.map(n => String(n?.label || '').length), 8)
+          const targetLines = longestLabel > 16 ? 3 : 2
+          const minFitW = Math.max(0.92, Math.ceil(longestLabel / targetLines) * avgCharW + innerPad * 2 + 0.12)
+          const gapMin = nodes.length >= 4 ? 0.16 : 0.20
+          const alignmentSpan = Math.max(railRight - railLeft, aw - padX * 2)
+          let nodeW = round2(Math.min(2.10, Math.max(minFitW, (alignmentSpan - gapMin * Math.max(nodes.length - 1, 0)) / Math.max(nodes.length, 1))))
+          let gap = nodes.length > 1
+            ? round2((alignmentSpan - nodeW * nodes.length) / Math.max(nodes.length - 1, 1))
+            : 0
+          if (gap < gapMin) {
+            nodeW = round2((alignmentSpan - gapMin * Math.max(nodes.length - 1, 0)) / Math.max(nodes.length, 1))
+            gap = gapMin
+          }
+          nodeW = round2(Math.max(0.88, nodeW))
+          const nodeH = round2(Math.max(0.72, Math.min(1.00, ah - topBand - bottomBand - 0.18)))
+          const nodeY = round2(ay + topBand + 0.08)
+          const startX = nodes.length > 1 ? railLeft : round2(Math.max(ax + padX, railLeft + (alignmentSpan - nodeW) / 2))
+
+          art.nodes = nodes.map((node, i) => ({
+            ...node,
+            x: round2(startX + i * (nodeW + gap)),
+            y: nodeY,
+            w: nodeW,
+            h: nodeH
+          }))
+
+          art.connections = art.nodes.slice(0, -1).map((node, i) => {
+            const next = art.nodes[i + 1]
+            return {
+              from: node.id,
+              to: next.id,
+              type: ((art.connections || [])[i] || {}).type || 'arrow',
+              path: [
+                { x: round2(node.x + node.w), y: round2(node.y + node.h / 2) },
+                { x: round2(next.x), y: round2(next.y + next.h / 2) }
+              ]
+            }
+          })
+
+          const valueFs = ws.node_value_font_size || 9
+          const widthRatio = nodeW / Math.max(minFitW, 1.2)
+          if (widthRatio < 1) {
+            art.workflow_style = {
+              ...ws,
+              node_title_font_size: Math.max(8, Math.floor(titleFs * Math.max(widthRatio, 0.88))),
+              node_value_font_size: Math.max(7, Math.floor(valueFs * Math.max(widthRatio, 0.85)))
+            }
+          }
+        }
+      }
+
       // ── 5. insight_text (standard): font scaling ───────────────────────────
       if (artType === 'matrix') {
         const ms = art.matrix_style || {}
