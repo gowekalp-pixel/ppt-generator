@@ -12,6 +12,13 @@
 // Agent 5.1 then reviews this spec and applies targeted fixes.
 // Agent 6 (python-pptx) consumes the final reviewed spec.
 
+// Defensive global fallback: some older browser-served bundles or indirect
+// preview/eval paths may still reference `bt` without a local binding.
+// Keeping a harmless global object prevents a hard ReferenceError while the
+// local per-function brand token bindings continue to be the primary source.
+if (typeof globalThis.bt === 'undefined') globalThis.bt = {}
+var bt = globalThis.bt
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // SYSTEM PROMPT
 // ═══════════════════════════════════════════════════════════════════════════════
