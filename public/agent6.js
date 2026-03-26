@@ -148,12 +148,14 @@ async function generatePPTX() {
   }
 
   // ── Schema validation ─────────────────────────────────────────────────────
-  const firstSlide   = state.finalSpec[0]
-  const hasNewSchema = !!(firstSlide && firstSlide.canvas && Array.isArray(firstSlide.blocks))
+  const hasNewSchema = state.finalSpec.every(slide =>
+    slide && slide.canvas && Array.isArray(slide.blocks) && slide.blocks.length > 0
+  )
   if (!hasNewSchema) {
-    alert('Spec schema mismatch. Expected canvas plus blocks[] from Agent 5. Please re-run the pipeline.')
+    alert('Spec schema mismatch. Agent 6 only accepts Agent 5 output with canvas plus non-empty blocks[] on every slide.')
     return
   }
+  const firstSlide   = state.finalSpec[0]
 
   const slideCount    = state.finalSpec.length
   const useTemplate   = (state.brandExt === 'pptx' || state.brandExt === 'ppt') && !!state.brandB64

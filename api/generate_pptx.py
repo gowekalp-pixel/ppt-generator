@@ -2954,6 +2954,18 @@ def build_presentation(final_spec, brand_rulebook, template_b64=None):
     """
     if not final_spec:
         raise ValueError('finalSpec is empty')
+    invalid_slides = []
+    for slide_spec in final_spec:
+        slide_no = slide_spec.get('slide_number', '?')
+        has_canvas = bool(slide_spec.get('canvas'))
+        has_blocks = isinstance(slide_spec.get('blocks'), list) and len(slide_spec.get('blocks', [])) > 0
+        if not has_canvas or not has_blocks:
+            invalid_slides.append(str(slide_no))
+    if invalid_slides:
+        raise ValueError(
+            'Agent 6 requires Agent 5 render specs with canvas + non-empty blocks[] on every slide. '
+            'Invalid slides: ' + ', '.join(invalid_slides)
+        )
 
     use_template = bool(template_b64)
 

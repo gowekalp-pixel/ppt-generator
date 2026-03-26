@@ -1529,6 +1529,67 @@ function applyBrandGuidelineOverrides(slide, manifestSlide, brand) {
   return normalized
 }
 
+function applyLayoutTitleFrames(slide, layoutName, brand) {
+  if (!slide || !layoutName || !brand) return slide
+  const layouts = brand.slide_layouts || []
+  const layout = layouts.find(l => (l.name || '').toLowerCase() === layoutName.toLowerCase())
+    || layouts.find(l => (l.name || '').toLowerCase().includes(layoutName.toLowerCase()))
+  if (!layout) return slide
+
+  const titlePh = layout.title_placeholder || (layout.placeholders || []).find(p => p.type === 'title')
+  if (!titlePh) return slide
+
+  const out = JSON.parse(JSON.stringify(slide))
+  const r2 = x => Math.round(x * 100) / 100
+  const contentAreas = (layout.placeholders || [])
+    .filter(p => p.type === 'body' && (p.h_in || 0) > 0.5)
+    .sort((a, b) => {
+      const rowA = Math.round((a.y_in || 0) * 2)
+      const rowB = Math.round((b.y_in || 0) * 2)
+      if (rowA !== rowB) return rowA - rowB
+      return (a.x_in || 0) - (b.x_in || 0)
+    })
+  const topContentY = contentAreas.length ? Math.min(...contentAreas.map(p => p.y_in || 99)) : null
+
+  if (out.title_block) {
+    out.title_block = {
+      ...out.title_block,
+      x: r2(titlePh.x_in != null ? titlePh.x_in : out.title_block.x || 0.4),
+      y: r2(titlePh.y_in != null ? titlePh.y_in : out.title_block.y || 0.15),
+      w: r2(titlePh.w_in != null ? titlePh.w_in : out.title_block.w || 9.2),
+      h: r2(titlePh.h_in != null ? titlePh.h_in : out.title_block.h || 0.7),
+      align: out.title_block.align || 'left',
+      valign: out.title_block.valign || 'middle',
+      wrap: out.title_block.wrap !== false
+    }
+  }
+
+  if (out.subtitle_block) {
+    const subtitleX = titlePh.x_in != null ? titlePh.x_in : (out.subtitle_block.x != null ? out.subtitle_block.x : 0.4)
+    const subtitleW = titlePh.w_in != null ? titlePh.w_in : (out.subtitle_block.w != null ? out.subtitle_block.w : 9.2)
+    const defaultSubtitleY = (titlePh.y_in || 0.15) + (titlePh.h_in || 0.7) + 0.08
+    let subtitleY = out.subtitle_block.y != null ? out.subtitle_block.y : defaultSubtitleY
+    let subtitleH = out.subtitle_block.h != null ? out.subtitle_block.h : 0.35
+    if (topContentY != null) {
+      const maxBottom = topContentY - 0.08
+      subtitleY = Math.min(subtitleY, Math.max(defaultSubtitleY, maxBottom - subtitleH))
+      subtitleH = Math.max(0.18, Math.min(subtitleH, maxBottom - subtitleY))
+    }
+    out.subtitle_block = {
+      ...out.subtitle_block,
+      x: r2(subtitleX),
+      y: r2(subtitleY),
+      w: r2(subtitleW),
+      h: r2(subtitleH),
+      align: out.subtitle_block.align || 'left',
+      valign: out.subtitle_block.valign || 'top',
+      wrap: out.subtitle_block.wrap !== false
+    }
+  }
+
+  return out
+}
+
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CLAUDE-BASED FALLBACK
@@ -1947,6 +2008,14 @@ function computeArtifactInternals(zones, canvas) {
           const aw     = art.w || 0
           const ah     = art.h || 0
           const aspect = ah > 0 ? aw / ah : 1
+          const minReadableCardWidth = 1.45
+          const minReadableCardHeight = 1.10
+          const rowCardWidth = count > 0 ? (aw - gap * (count - 1)) / Math.max(count, 1) : aw
+          const columnCardHeight = count > 0 ? (ah - gap * (count - 1)) / Math.max(count, 1) : ah
+          const gridCols = count > 1 ? 2 : 1
+          const gridRows = Math.ceil(count / Math.max(gridCols, 1))
+          const gridCardWidth = (aw - gap * (gridCols - 1)) / Math.max(gridCols, 1)
+          const gridCardHeight = (ah - gap * (gridRows - 1)) / Math.max(gridRows, 1)
 
           let layout = requestedLayout
           if (!['row', 'column', 'grid'].includes(layout)) {
@@ -1955,6 +2024,18 @@ function computeArtifactInternals(zones, canvas) {
             else if (count === 3) layout = aspect >= 1 ? 'row' : 'column'
             else if (count === 4) layout = 'grid'
             else layout = aspect >= 1.15 ? 'row' : 'grid'
+          }
+
+          // Readability override: never keep a horizontal row when it makes KPI cards too narrow.
+          if (layout === 'row' && rowCardWidth < minReadableCardWidth) {
+            layout = count <= 3 ? 'column' : 'grid'
+          }
+          if (layout === 'grid' && (gridCardWidth < minReadableCardWidth || gridCardHeight < minReadableCardHeight)) {
+            if (count <= 3) layout = 'column'
+            else if (rowCardWidth >= minReadableCardWidth && aspect >= 1.15) layout = 'row'
+          }
+          if (layout === 'column' && columnCardHeight < minReadableCardHeight && rowCardWidth >= minReadableCardWidth) {
+            layout = 'row'
           }
 
           const frames = []
@@ -2066,6 +2147,27 @@ function buildBlockFallbackPolicy(art, blockRole) {
   }
 }
 
+function estimateHeaderBlockHeight(text, widthIn, fontSizePt) {
+  const textStr = String(text || '').trim()
+  if (!textStr) return 0.3
+  const usableWidth = Math.max(0.6, Number(widthIn) || 0.6)
+  const fontSize = Math.max(8, Number(fontSizePt) || 11)
+  const charsPerLine = Math.max(10, Math.floor((usableWidth * 72) / (fontSize * 0.52)))
+  const words = textStr.split(/\s+/).filter(Boolean)
+  let lines = 1
+  let lineLen = 0
+  for (const word of words) {
+    const nextLen = lineLen === 0 ? word.length : lineLen + 1 + word.length
+    if (nextLen <= charsPerLine) lineLen = nextLen
+    else {
+      lines += 1
+      lineLen = word.length
+    }
+  }
+  const textHeight = lines * (fontSize * 1.28 / 72)
+  return Math.max(0.3, Math.round((textHeight + 0.06) * 100) / 100)
+}
+
 function decorateArtifactBlocks(blocks, startIdx, endIdx, art, blockRole) {
   if (!art || startIdx >= endIdx) return
   const artifactType = art.type || 'generic'
@@ -2100,8 +2202,9 @@ function _artifactToBlocks(art, blocks, bt, r2) {
     const hx  = hb.x  != null ? hb.x  : ax
     const hy  = hb.y  != null ? hb.y  : ay
     const hw  = hb.w  != null ? hb.w  : aw
-    const hh  = hb.h  != null ? hb.h  : 0.30
     const hfs = hb.font_size || 11
+    const estimatedH = estimateHeaderBlockHeight(hb.text, hw, hfs)
+    const hh  = Math.max(hb.h != null ? hb.h : 0.30, estimatedH)
     content_y = r2(hy + hh + 0.04)  // small gap below header band
 
     const headerStyle = hb.style || 'underline'
@@ -3085,6 +3188,9 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
   // This runs after merge so Agent 4's artifact content is already in place.
   const layoutName = manifestSlide.selected_layout_name || designed.selected_layout_name || ''
   const isLayoutMode = !!(designed.layout_mode || layoutName)
+  const brandedWithLayoutTitle = isLayoutMode && layoutName
+    ? applyLayoutTitleFrames(branded, layoutName, brand)
+    : branded
   const finalZones = isLayoutMode && layoutName
     ? applyLayoutZoneFrames(mergedZones, layoutName, brand)
     : mergedZones
@@ -3095,11 +3201,11 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
 
   // Flatten to blocks[] — ordered, self-contained render units.
   // generate_pptx.py reads these directly when present; zones path is legacy fallback.
-  branded.blocks = flattenToBlocks(
-    { ...branded, zones: finalZones },
-    branded.brand_tokens || {}
+  brandedWithLayoutTitle.blocks = flattenToBlocks(
+    { ...brandedWithLayoutTitle, zones: finalZones },
+    brandedWithLayoutTitle.brand_tokens || {}
   )
-  const renderIssues = validateRenderCompleteness({ ...branded, zones: finalZones })
+  const renderIssues = validateRenderCompleteness({ ...brandedWithLayoutTitle, zones: finalZones })
   if (renderIssues.length > 0) {
     console.warn('Agent 5 -- S' + (manifestSlide.slide_number || '?') + ' render issues:', renderIssues.join('; '))
   }
@@ -3117,7 +3223,7 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
     title_block: _ignoredTitleBlock,
     subtitle_block: _ignoredSubtitleBlock,
     ...brandedWithoutZones
-  } = branded
+  } = brandedWithLayoutTitle
 
   return {
     ...brandedWithoutZones,
@@ -3131,8 +3237,8 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
     section_name:          manifestSlide.section_name          || '',
     section_type:          manifestSlide.section_type          || '',
     // Slide-level content metadata
-    title:            (designed.title_block || {}).text || manifestSlide.title    || '',
-    subtitle:         (designed.subtitle_block || {}).text || manifestSlide.subtitle || '',
+    title:            (brandedWithLayoutTitle.title_block || {}).text || manifestSlide.title    || '',
+    subtitle:         (brandedWithLayoutTitle.subtitle_block || {}).text || manifestSlide.subtitle || '',
     key_message:      manifestSlide.key_message      || '',
     visual_flow_hint: manifestSlide.visual_flow_hint || '',
     speaker_note:     manifestSlide.speaker_note     || '',

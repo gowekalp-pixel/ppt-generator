@@ -324,9 +324,9 @@
       return
     }
     if (!Array.isArray(first.blocks) || first.blocks.length === 0) {
-      errEl.textContent = 'Warning: spec has no blocks[] on the first slide. Make sure you are pasting Agent 5 output (not the raw manifest). Agent 5 must run first to generate blocks[].'
+      errEl.textContent = 'Invalid schema — this looks like pre-render manifest JSON, not Agent 5 output. Agent 6 only accepts slides with canvas + blocks[]. Run Agent 5 first.'
       errEl.classList.add('show')
-      // Allow proceeding — blocks may be present on later slides or spec may be title-only
+      return
     }
 
     const btn    = document.getElementById('run-btn')
