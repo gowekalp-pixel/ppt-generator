@@ -5,7 +5,8 @@
 //
 // No Claude API call. Pure POST to backend → decode base64 → download.
 // Schema expected: canvas, brand_tokens, title_block, subtitle_block,
-//                  zones[].artifacts[], global_elements
+//                  blocks[] as the primary render contract.
+//                  zones[].artifacts[] remains as backward-compatible metadata.
 //
 // ─── RENDERING CONTRACT: insight_text ────────────────────────────────────────
 //
@@ -69,6 +70,68 @@
 //   group_header_style.fill_color — use exactly as specified; do NOT substitute
 //   group_bullet_box_style.border_color — use exactly as specified; do NOT darken
 
+// ─── TITLE BLOCK SANITISER ────────────────────────────────────────────────────
+// Agent 5 occasionally outputs title_block / subtitle_block coordinates that
+// push text off-canvas or produce a very narrow w — causing python-pptx to
+// render the title vertically down the left edge (each character on its own line).
+//
+// Rules enforced per slide:
+//   title_block.x  ≤ 15 % of canvas width           (not pushed to far left)
+//   title_block.w  ≥ 70 % of canvas width            (wide enough for horizontal text)
+//   title_block.y  in [0.05, 1.5]                    (within top region)
+//   title_block.h  ≥ 0.35                            (enough height for at least one line)
+//   subtitle_block follows same x/w rules, y ≤ 2.5
+//
+// Coordinates that already satisfy the rules are left untouched.
+function sanitiseTitleBlocks(spec) {
+  if (!Array.isArray(spec)) return spec
+  return spec.map(slide => {
+    const cvs      = slide.canvas || {}
+    const slideW   = cvs.width_in  || 10
+
+    const minW     = slideW * 0.70
+    const maxX     = slideW * 0.15
+    const defaultX = 0.4
+    const defaultW = slideW - 0.8
+
+    function fixBlock(blk, maxY, defaultY, defaultH) {
+      if (!blk || !blk.text) return blk
+      const out = Object.assign({}, blk)
+
+      // x: must not be so large that w becomes too narrow
+      if ((out.x == null) || out.x > maxX) {
+        console.warn('Agent 6 sanitise: title_block.x', out.x, '→', defaultX)
+        out.x = defaultX
+      }
+
+      // w: must cover at least 70% of slide width
+      if ((out.w == null) || out.w < minW) {
+        console.warn('Agent 6 sanitise: title_block.w', out.w, '→', defaultW)
+        out.w = defaultW
+      }
+
+      // y: must be in the title region
+      if ((out.y == null) || out.y < 0.05 || out.y > maxY) {
+        console.warn('Agent 6 sanitise: title_block.y', out.y, '→', defaultY)
+        out.y = defaultY
+      }
+
+      // h: minimum single-line height
+      if ((out.h == null) || out.h < 0.35) {
+        console.warn('Agent 6 sanitise: title_block.h', out.h, '→', defaultH)
+        out.h = defaultH
+      }
+
+      return out
+    }
+
+    return Object.assign({}, slide, {
+      title_block:    fixBlock(slide.title_block,    1.5, 0.15, 0.75),
+      subtitle_block: fixBlock(slide.subtitle_block, 2.5, 1.0,  0.45)
+    })
+  })
+}
+
 async function generatePPTX() {
   const btn        = $('pptx-btn')
   const statusEl   = $('agent6-status')
@@ -87,9 +150,16 @@ async function generatePPTX() {
 
   // ── Schema validation ─────────────────────────────────────────────────────
   const firstSlide   = state.finalSpec[0]
-  const hasNewSchema = firstSlide && firstSlide.canvas && firstSlide.zones !== undefined
+  const hasNewSchema = !!(
+    firstSlide &&
+    firstSlide.canvas &&
+    (
+      Array.isArray(firstSlide.blocks) ||
+      firstSlide.zones !== undefined
+    )
+  )
   if (!hasNewSchema) {
-    alert('Spec schema mismatch. Expected canvas/zones schema from the new Agent 5. Please re-run the pipeline.')
+    alert('Spec schema mismatch. Expected canvas plus blocks[] from Agent 5 (zones[] accepted only as legacy metadata). Please re-run the pipeline.')
     return
   }
 
@@ -114,7 +184,7 @@ async function generatePPTX() {
     statusEl.textContent   = '⏳ python-pptx building ' + slideCount + ' slides on server...'
 
     const payload = {
-      finalSpec:     state.finalSpec,
+      finalSpec:     sanitiseTitleBlocks(state.finalSpec),
       brandRulebook: state.brandRulebook,
       templateB64:   useTemplate ? state.brandB64 : null
     }

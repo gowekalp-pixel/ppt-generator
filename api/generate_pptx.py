@@ -55,6 +55,17 @@ TITLE_TO_SUBTITLE = 0.08
 SUBTITLE_TO_BODY = 0.10
 TABLE_MIN_ROW_HEIGHT = 0.32
 CELL_PADDING = 0.09
+
+
+def renderer_fallback_allowed(spec):
+    """Whether Agent 6 is allowed to make design-time fallback decisions."""
+    if not isinstance(spec, dict):
+        return False
+    return bool(
+        spec.get('allow_renderer_fallback') or
+        spec.get('allow_renderer_fit') or
+        spec.get('allow_renderer_layout_fallback')
+    )
 CHART_HEADER_GAP = 0.11
 OPTICAL_NUDGE = 0.02
 
@@ -536,6 +547,7 @@ def render_insight_text(slide, artifact, bt, suppress_heading=False):
         indent_in    = float(bs.get('indent_inches', INSIGHT_LEFT_PADDING))
         vert_dist    = bs.get('vertical_distribution', '')
         space_bef_pt = max(1, int(bs.get('space_before_pt', 4)))
+        allow_fit_fallback = renderer_fallback_allowed(bs) or bs.get('font_size') is None
 
         body_h = max(0.1, h - (content_y - y) - INSIGHT_BOTTOM_PADDING)
         text_w = max(0.5, w - indent_in - INSIGHT_RIGHT_PADDING - BULLET_HANG)
@@ -560,42 +572,40 @@ def render_insight_text(slide, artifact, bt, suppress_heading=False):
                     lines += 1
                     line_len = wlen
             return lines
-
-        # Estimate total rendered height using actual wrap count — ONLY scale DOWN, never up.
-        # If text already fits at the spec font_size, keep it as-is.
+        # Estimate total rendered height using actual wrap count.
         def _total_h(font_pt, gap_pt):
             lh = (font_pt / 72.0) * 1.30   # line height with leading
             gh = gap_pt / 72.0
             return sum(_wrapped_lines(p, font_pt, text_w) * lh + gh for p in points)
 
-        total_h_est = _total_h(b_size, space_bef_pt)
-        if total_h_est > body_h * 0.95:
-            # Binary search for the largest font_pt that still fits
-            lo, hi = 7, b_size
-            while hi - lo > 0.5:
-                mid = (lo + hi) / 2.0
-                if _total_h(mid, space_bef_pt) <= body_h * 0.95:
-                    lo = mid
-                else:
-                    hi = mid
-            b_size = max(7, int(lo))
-        # else: text fits → keep b_size unchanged (no upscaling)
+        if allow_fit_fallback:
+            total_h_est = _total_h(b_size, space_bef_pt)
+            if total_h_est > body_h * 0.95:
+                # Binary search for the largest font_pt that still fits
+                lo, hi = 7, b_size
+                while hi - lo > 0.5:
+                    mid = (lo + hi) / 2.0
+                    if _total_h(mid, space_bef_pt) <= body_h * 0.95:
+                        lo = mid
+                    else:
+                        hi = mid
+                b_size = max(7, int(lo))
 
-        # Inter-bullet gap: use spec value; only increase if there is clear excess space
-        total_lines = sum(_wrapped_lines(p, b_size, text_w) for p in points)
-        if total_lines > 12:
-            b_size = max(7, b_size - 1)
-            space_bef_pt = max(2, space_bef_pt - 1)
-        available_per_slot = body_h / max(len(points), 1)
-        used_per_slot      = _total_h(b_size, space_bef_pt) / max(len(points), 1)
-        slack_pt           = (available_per_slot - used_per_slot) * 72
-        if vert_dist == 'spread' and slack_pt > 4:
-            space_bef_pt = min(space_bef_pt + int(slack_pt * 0.5), 20)
+            # Inter-bullet gap: renderer may adjust only on guarded fallback
+            total_lines = sum(_wrapped_lines(p, b_size, text_w) for p in points)
+            if total_lines > 12:
+                b_size = max(7, b_size - 1)
+                space_bef_pt = max(2, space_bef_pt - 1)
+            available_per_slot = body_h / max(len(points), 1)
+            used_per_slot      = _total_h(b_size, space_bef_pt) / max(len(points), 1)
+            slack_pt           = (available_per_slot - used_per_slot) * 72
+            if vert_dist == 'spread' and slack_pt > 4:
+                space_bef_pt = min(space_bef_pt + int(slack_pt * 0.5), 20)
 
-        # Scale heading font proportionally to body size (but never smaller than 10pt)
-        if _h_params:
-            spec_body          = bs.get('font_size', 10)
-            _h_params['size']  = max(10, round(_h_params['size'] * (b_size / max(spec_body, 1))))
+            # Keep heading/body proportionate only on guarded fallback
+            if _h_params:
+                spec_body          = bs.get('font_size', 10)
+                _h_params['size']  = max(10, round(_h_params['size'] * (b_size / max(spec_body, 1))))
 
     # Render heading now (font size finalised)
     if _h_params:
@@ -654,7 +664,8 @@ def render_insight_text(slide, artifact, bt, suppress_heading=False):
             txBox = slide.shapes.add_textbox(
                 inches(bx2), inches(by2), inches(bw2), inches(bh2))
             tf = txBox.text_frame
-            enable_text_fit(tf)
+            if renderer_fallback_allowed(artifact):
+                enable_text_fit(tf)
             _hang_emu = int(Emu(inches(GRP_HANG)))
             for bi, bullet in enumerate(bullets):
                 if bi == 0:
@@ -875,26 +886,36 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
     header_block    = artifact.get('header_block', {}) or {}
     header_font_size = int(header_block.get('font_size') or cs.get('title_font_size', 11) or 11)
 
+    # Read Agent-5-pre-computed fields (if present) for legend, label size, rotation.
+    art_computed = artifact.get('_computed', {}) or {}
+    _computed_legend_pos   = art_computed.get('legend_position', None)
+    _computed_label_size   = art_computed.get('data_label_size', None)
+    _computed_cat_rotation = art_computed.get('category_label_rotation', None)
+
     # Adaptive data label size — always a proportion of header_font_size.
     # A density factor (0.0–1.0) scales down the ratio when categories are
     # tightly packed relative to the chart's available space.
-    _n_cat   = max(1, len(categories))
-    _chart_w = float(w or 5)
-    _chart_h = float(h or 3)
-    if chart_type_str == 'horizontal_bar':
-        # Space per bar in inches; 0.55" is a comfortable single-bar baseline
-        _density = min(1.0, (_chart_h / _n_cat) / 0.55)
-    elif chart_type_str in ('bar', 'clustered_bar', 'line', 'waterfall'):
-        # Space per column in inches; 0.65" is a comfortable single-column baseline
-        _density = min(1.0, (_chart_w / _n_cat) / 0.65)
+    # Use Agent 5 pre-computed value when available, else fall back to heuristic.
+    if _computed_label_size is not None:
+        max_chart_label_size = int(_computed_label_size)
     else:
-        _density = 1.0
-    # At full density: labels at 75% of header. Scales down proportionally with density.
-    # Floor: never below 55% of header (keeps labels readable even on dense charts).
-    max_chart_label_size = max(
-        round(header_font_size * 0.55),
-        round(header_font_size * 0.75 * _density)
-    )
+        _n_cat   = max(1, len(categories))
+        _chart_w = float(w or 5)
+        _chart_h = float(h or 3)
+        if chart_type_str == 'horizontal_bar':
+            # Space per bar in inches; 0.55" is a comfortable single-bar baseline
+            _density = min(1.0, (_chart_h / _n_cat) / 0.55)
+        elif chart_type_str in ('bar', 'clustered_bar', 'line', 'waterfall'):
+            # Space per column in inches; 0.65" is a comfortable single-column baseline
+            _density = min(1.0, (_chart_w / _n_cat) / 0.65)
+        else:
+            _density = 1.0
+        # At full density: labels at 75% of header. Scales down proportionally with density.
+        # Floor: never below 55% of header (keeps labels readable even on dense charts).
+        max_chart_label_size = max(
+            round(header_font_size * 0.55),
+            round(header_font_size * 0.75 * _density)
+        )
 
     # Map chart type string to XL_CHART_TYPE
     chart_type_map = {
@@ -950,25 +971,31 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
         except Exception:
             pass
 
-    # Legend placement — driven by rendered chart footprint on the slide.
+    # Legend placement — prefer Agent 5 pre-computed value; fall back to heuristic.
     # XL_LEGEND_POSITION: BOTTOM=3  RIGHT=4  TOP=1  LEFT=2
-    # Rules:
-    #   a) chart width  > 60% of actual slide width  → RIGHT
-    #   b) else if chart height > 60% of actual slide height → TOP
-    #   c) else pie charts → RIGHT; other charts → TOP
-    chart_w_ratio = (float(w) / float(slide_w)) if slide_w > 0 else 0.0
-    chart_h_ratio = (float(h) / float(slide_h)) if slide_h > 0 else 0.0
-    if chart_w_ratio > 0.60:
-        legend_pos = 4   # RIGHT
-    elif chart_h_ratio > 0.60:
-        legend_pos = 1   # TOP
-    elif chart_type_str == 'pie':
-        legend_pos = 4   # RIGHT
+    _legend_pos_map = {'right': 4, 'top': 1, 'bottom': 3, 'left': 2, 'none': None}
+    if _computed_legend_pos is not None and _computed_legend_pos in _legend_pos_map:
+        legend_pos = _legend_pos_map[_computed_legend_pos]
     else:
-        legend_pos = 1   # TOP
+        # Heuristic:
+        #   a) chart width  > 60% of actual slide width  → RIGHT
+        #   b) else if chart height > 60% of actual slide height → TOP
+        #   c) else pie charts → RIGHT; other charts → TOP
+        chart_w_ratio = (float(w) / float(slide_w)) if slide_w > 0 else 0.0
+        chart_h_ratio = (float(h) / float(slide_h)) if slide_h > 0 else 0.0
+        if chart_w_ratio > 0.60:
+            legend_pos = 4   # RIGHT
+        elif chart_h_ratio > 0.60:
+            legend_pos = 1   # TOP
+        elif chart_type_str == 'pie':
+            legend_pos = 4   # RIGHT
+        else:
+            legend_pos = 1   # TOP
 
-    chart.has_legend = show_legend
-    if show_legend and chart.has_legend:
+    # If _computed says 'none', treat as no legend regardless of show_legend flag
+    _effective_show_legend = show_legend and (legend_pos is not None)
+    chart.has_legend = _effective_show_legend
+    if _effective_show_legend and chart.has_legend:
         try:
             chart.legend.position = legend_pos
             chart.legend.include_in_layout = True   # keep legend inside chart frame, not floating
@@ -1057,9 +1084,14 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
             except Exception:
                 pass
 
-        # Rotate category labels when many categories to prevent overlap
+        # Rotate category labels — prefer Agent 5 pre-computed rotation; fall back to heuristic.
         n_cats = len(categories)
-        if chart_type_str in ('bar', 'line', 'clustered_bar') and n_cats > 6:
+        _apply_rotation = (
+            _computed_cat_rotation == -45
+            if _computed_cat_rotation is not None
+            else (chart_type_str in ('bar', 'line', 'clustered_bar') and n_cats > 6)
+        )
+        if _apply_rotation:
             try:
                 # -2700000 EMU = -270 degrees = 45° slanted (OOXML uses 1/60000 degree units * -1)
                 # rotation: -45 degrees = -2700000 in OOXML tickLblSkip/txPr
@@ -1095,6 +1127,7 @@ def render_cards(slide, artifact, bt):
     frames   = artifact.get('card_frames', [])
     cards    = artifact.get('cards', [])
     layout   = str(artifact.get('cards_layout', 'row') or 'row').lower()
+    allow_card_fallback = renderer_fallback_allowed(artifact) or not frames
 
     def _num(v, default=None):
         try:
@@ -1178,10 +1211,16 @@ def render_cards(slide, artifact, bt):
 
     container_rect = _resolve_container_rect()
     valid_frames = [f for f in frames if _valid_rect(f)]
-    if len(valid_frames) != len(cards):
+    # If Agent 5 pre-computed card_frames (via computeArtifactInternals), use them directly.
+    # Fall back to _auto_card_frames only when frames are absent or count mismatches.
+    if len(valid_frames) == len(cards):
+        frames = valid_frames   # use Agent 5 pre-computed frames as-is
+    elif allow_card_fallback:
         frames = _auto_card_frames(len(cards), container_rect, layout)
         if not _valid_rect(artifact.get('container') or {}):
             artifact['container'] = container_rect
+    else:
+        frames = valid_frames
 
     fill_hex   = cs.get('fill_color', '#F5F5F5')
     border_hex = cs.get('border_color') or '#E0E0E0'
@@ -1254,15 +1293,15 @@ def render_cards(slide, artifact, bt):
             sub_h   = max(0.28, inner_h * 0.40) if card_sub else 0
             body_h  = max(0.12, inner_h - title_h - sub_h - (TITLE_TO_SUBTITLE if card_title and card_sub else 0) - (SUBTITLE_TO_BODY if card_sub and card_body else 0)) if card_body else 0
 
-            actual_title_size = estimate_fit_font_size(str(card_title), max(0.3, fw - padding*2), max(0.14, title_h), t_size, 8) if card_title else t_size
-            actual_su_size = estimate_fit_font_size(str(card_sub), max(0.3, fw - padding*2), max(0.22, sub_h), su_size, 14) if sub_h > 0 else su_size
+            actual_title_size = estimate_fit_font_size(str(card_title), max(0.3, fw - padding*2), max(0.14, title_h), t_size, 8) if (allow_card_fallback and card_title) else t_size
+            actual_su_size = estimate_fit_font_size(str(card_sub), max(0.3, fw - padding*2), max(0.22, sub_h), su_size, 14) if (allow_card_fallback and sub_h > 0) else su_size
 
             body_text = str(card_body or '')
-            if body_text:
+            if body_text and allow_card_fallback:
                 max_chars = max(30, int(((fw - padding * 2) * 72 / 5.5) * 2))
                 if len(body_text) > max_chars:
                     body_text = body_text[:max_chars - 1].rstrip() + '…'
-            actual_body_size = estimate_fit_font_size(body_text, max(0.3, fw - padding*2), max(0.10, body_h), b_size, 7) if body_h > 0 else b_size
+            actual_body_size = estimate_fit_font_size(body_text, max(0.3, fw - padding*2), max(0.10, body_h), b_size, 7) if (allow_card_fallback and body_h > 0) else b_size
 
             title_y = inner_top
             if card_title and title_h > 0:
@@ -1287,6 +1326,7 @@ def render_workflow(slide, artifact, bt):
     conns = artifact.get('connections', [])
     flow_direction = str(artifact.get('flow_direction', '') or '').lower()
     workflow_type = str(artifact.get('workflow_type', '') or '').lower()
+    allow_workflow_fallback = renderer_fallback_allowed(artifact)
 
     def _num(v, default=0.0):
         try:
@@ -1296,6 +1336,12 @@ def render_workflow(slide, artifact, bt):
 
     def _has_rect(rect):
         return isinstance(rect, dict) and all(rect.get(k) is not None for k in ('x', 'y', 'w', 'h'))
+
+    def _nodes_have_explicit_layout(nodes_):
+        return bool(nodes_) and all(_has_rect(n) for n in nodes_)
+
+    def _connections_have_explicit_paths(conns_):
+        return all(isinstance(c.get('path'), list) and len(c.get('path', [])) >= 2 for c in conns_)
 
     def _workflow_bounds(nodes_, conns_):
         xs, ys, xe, ye = [], [], [], []
@@ -1499,7 +1545,11 @@ def render_workflow(slide, artifact, bt):
             'w': max(0.05, _num(artifact.get('w'))),
             'h': max(0.05, _num(artifact.get('h')))
         }
-    if target_rect:
+    needs_layout_fallback = (
+        not _nodes_have_explicit_layout(nodes) or
+        not _connections_have_explicit_paths(conns)
+    )
+    if target_rect and (allow_workflow_fallback or needs_layout_fallback):
         if flow_direction in ('left_to_right', 'horizontal') or workflow_type in ('timeline', 'roadmap'):
             nodes, conns = _layout_horizontal_timeline(nodes, target_rect)
         elif flow_direction in ('top_to_bottom', 'top_down', 'bottom_up'):
@@ -1523,25 +1573,27 @@ def render_workflow(slide, artifact, bt):
     v_color = ws.get('node_value_color', bt.get('body_color', '#000000'))
     top_note_color = bt.get('primary_color') or bt.get('title_color') or t_color
 
+    def _fit_or_spec(text, width_in, height_in, spec_size, min_size):
+        if allow_workflow_fallback:
+            return estimate_fit_font_size(text, width_in, height_in, spec_size, min_size)
+        return spec_size
+
     # Draw connections first (behind nodes)
     for conn in conns:
         path = conn.get('path', [])
         if len(path) >= 2:
             try:
-                from pptx.util import Emu
-                from pptx.oxml.ns import qn
-                # Use a connector shape for simple lines
-                x1 = float(path[0].get('x', 0))
-                y1 = float(path[0].get('y', 0))
-                x2 = float(path[-1].get('x', 0))
-                y2 = float(path[-1].get('y', 0))
-
-                connector = slide.shapes.add_connector(
-                    1,  # MSO_CONNECTOR_TYPE.STRAIGHT
-                    inches(x1), inches(y1), inches(x2), inches(y2)
-                )
-                connector.line.color.rgb = hex_to_rgb(conn_color)
-                connector.line.width     = Pt(ws.get('connector_width', 2))
+                for i in range(len(path) - 1):
+                    x1 = float(path[i].get('x', 0))
+                    y1 = float(path[i].get('y', 0))
+                    x2 = float(path[i + 1].get('x', 0))
+                    y2 = float(path[i + 1].get('y', 0))
+                    connector = slide.shapes.add_connector(
+                        1,  # MSO_CONNECTOR_TYPE.STRAIGHT
+                        inches(x1), inches(y1), inches(x2), inches(y2)
+                    )
+                    connector.line.color.rgb = hex_to_rgb(conn_color)
+                    connector.line.width     = Pt(ws.get('connector_width', 2))
             except Exception:
                 pass
 
@@ -1578,7 +1630,7 @@ def render_workflow(slide, artifact, bt):
         val_h   = max(0.14, bxh - label_h - 0.10) if has_value else 0
 
         if label:
-            label_size = estimate_fit_font_size(str(label), max(0.3, nw - 0.2), max(0.22, bxh - 0.12), t_size, 8)
+            label_size = _fit_or_spec(str(label), max(0.3, nw - 0.2), max(0.22, bxh - 0.12), t_size, 8)
             add_text_box(slide, nx + 0.1, box_y + 0.06, nw - 0.2, max(0.22, bxh - 0.12),
                          str(label), t_font, label_size, t_bold, t_color, 'center', 'middle')
 
@@ -1587,7 +1639,7 @@ def render_workflow(slide, artifact, bt):
             top_h = max(0.0, float(node.get('note_top_h', 0.0) or 0.0))
             if value and top_h > 0.08:
                 top_y = float(node.get('note_top_y', ny) or ny)
-                value_size = estimate_fit_font_size(str(value), max(0.28, nw - 0.10), top_h, max(8, v_size), 7)
+                value_size = _fit_or_spec(str(value), max(0.28, nw - 0.10), top_h, max(8, v_size), 7)
                 add_text_box(slide, nx + 0.05, top_y, nw - 0.10, top_h,
                              str(value), v_font, value_size, True, top_note_color, 'center', 'middle')
         elif is_vertical_flow:
@@ -1598,12 +1650,12 @@ def render_workflow(slide, artifact, bt):
             note_parts = [str(x).strip() for x in (value, desc) if str(x or '').strip()]
             note_text = '\n'.join(note_parts[:2])
             if note_text and note_w > 0.12 and note_h > 0.12:
-                note_size = estimate_fit_font_size(note_text, max(0.24, note_w), note_h,
-                                                   max(7, v_size - 1), 6)
+                note_size = _fit_or_spec(note_text, max(0.24, note_w), note_h,
+                                         max(7, v_size - 1), 6)
                 add_text_box(slide, note_x, note_y, note_w, note_h,
                              note_text, v_font, note_size, False, body_color, 'left', 'middle')
         elif value:
-            value_size = estimate_fit_font_size(str(value), max(0.3, nw - 0.2), max(0.14, val_h), max(7, v_size - 1), 7)
+            value_size = _fit_or_spec(str(value), max(0.3, nw - 0.2), max(0.14, val_h), max(7, v_size - 1), 7)
             add_text_box(slide, nx + 0.1, box_y + 0.06 + label_h, nw - 0.2, val_h,
                          str(value), v_font, value_size, False, t_color, 'center', 'middle')
 
@@ -1614,8 +1666,8 @@ def render_workflow(slide, artifact, bt):
             bottom_h = max(0.0, float(node.get('note_bottom_h', 0.0) or 0.0))
             if desc and bottom_h > 0.12:
                 bottom_y = float(node.get('note_bottom_y', box_y + bxh) or (box_y + bxh))
-                desc_size = estimate_fit_font_size(str(desc), max(0.28, nw - 0.12), bottom_h,
-                                                   max(7, v_size - 1), 6)
+                desc_size = _fit_or_spec(str(desc), max(0.28, nw - 0.12), bottom_h,
+                                         max(7, v_size - 1), 6)
                 add_text_box(slide, nx + 0.06, bottom_y, nw - 0.12, bottom_h,
                              str(desc), v_font, desc_size, False, body_color, 'center', 'top')
         elif not is_vertical_flow:
@@ -1623,8 +1675,8 @@ def render_workflow(slide, artifact, bt):
             desc_y   = box_y + bxh + desc_gap
             desc_h   = max(0.0, ny + nh - desc_y)
             if desc and desc_h > 0.12:
-                desc_size = estimate_fit_font_size(str(desc), max(0.28, nw - 0.12), desc_h,
-                                                   max(7, v_size - 1), 6)
+                desc_size = _fit_or_spec(str(desc), max(0.28, nw - 0.12), desc_h,
+                                         max(7, v_size - 1), 6)
                 add_text_box(slide, nx + 0.06, desc_y, nw - 0.12, desc_h,
                              str(desc), v_font, desc_size, False, body_color, 'center', 'top')
 
@@ -1676,11 +1728,29 @@ def render_table(slide, artifact, bt):
         total_weight = sum(weights) or 1
         return [w * (wt / total_weight) for wt in weights]
 
-    norm_col_ws = _auto_col_widths()
-    norm_row_hs = [max(TABLE_MIN_ROW_HEIGHT, rh) for rh in _norm_sizes(row_hs, n_rows, h)]
-    row_total = sum(norm_row_hs)
-    if row_total > h:
-        norm_row_hs = [rh * (h / row_total) for rh in norm_row_hs]
+    # Use Agent 5 pre-computed column widths when available; else auto-compute.
+    pre_col_ws      = artifact.get('column_widths', [])
+    pre_col_types   = artifact.get('column_types', [])
+    pre_col_aligns  = artifact.get('column_alignments', [])
+    pre_row_hs      = artifact.get('row_heights', [])
+    pre_hdr_h       = artifact.get('header_row_height', None)
+
+    if pre_col_ws and len(pre_col_ws) == n_cols:
+        norm_col_ws = list(pre_col_ws)
+    else:
+        norm_col_ws = _auto_col_widths()
+
+    if pre_hdr_h is not None and pre_row_hs and len(pre_row_hs) == len(data_rows):
+        # Build full row heights list: [header_h, data_row_h...]
+        norm_row_hs = [float(pre_hdr_h)] + [float(rh) for rh in pre_row_hs]
+        row_total = sum(norm_row_hs)
+        if row_total > h:
+            norm_row_hs = [rh * (h / row_total) for rh in norm_row_hs]
+    else:
+        norm_row_hs = [max(TABLE_MIN_ROW_HEIGHT, rh) for rh in _norm_sizes(row_hs, n_rows, h)]
+        row_total = sum(norm_row_hs)
+        if row_total > h:
+            norm_row_hs = [rh * (h / row_total) for rh in norm_row_hs]
 
     try:
         table_shape = slide.shapes.add_table(n_rows, n_cols, inches(x), inches(y), inches(w), inches(h))
@@ -1709,19 +1779,22 @@ def render_table(slide, artifact, bt):
         grid_c  = ts.get('grid_color', '#CCCCCC')
         cell_p  = max(0.08, min(0.10, ts.get('cell_padding', CELL_PADDING) or CELL_PADDING))
 
-        # Detect which columns are numeric (right-align) vs text (left-align)
-        # A column is "numeric" if > 50% of its body values look like numbers/currency
-        def _is_numeric_col(col_idx):
-            import re
-            _num_pat = re.compile(r'^[\s₹$€£¥\-\+]?[\d,\.]+[%KMBCr\s]*$')
-            hits = sum(1 for r in data_rows
-                       if col_idx < len(r) and _num_pat.match(str(r[col_idx]).strip()))
-            return (hits / max(len(data_rows), 1)) > 0.5
+        # Detect which columns are numeric (right-align) vs text (left-align).
+        # Use Agent 5 pre-computed column_types/alignments when available.
+        if pre_col_types and len(pre_col_types) == n_cols:
+            col_is_numeric = [t == 'numeric' for t in pre_col_types]
+        else:
+            def _is_numeric_col(col_idx):
+                import re
+                _num_pat = re.compile(r'^[\s₹$€£¥\-\+]?[\d,\.]+[%KMBCr\s]*$')
+                hits = sum(1 for r in data_rows
+                           if col_idx < len(r) and _num_pat.match(str(r[col_idx]).strip()))
+                return (hits / max(len(data_rows), 1)) > 0.5
 
-        col_is_numeric = [_is_numeric_col(ci) for ci in range(n_cols)]
-        # First column is always text (entity/label column)
-        if n_cols > 0:
-            col_is_numeric[0] = False
+            col_is_numeric = [_is_numeric_col(ci) for ci in range(n_cols)]
+            # First column is always text (entity/label column)
+            if n_cols > 0:
+                col_is_numeric[0] = False
 
         cell_pad_emu = int(Emu(cell_p * 914400))  # cell_p in inches → EMU
 
@@ -1793,8 +1866,12 @@ def render_table(slide, artifact, bt):
                     )
                     text_color = ts.get('highlight_text_color', b_text) if is_highlight else b_text
                     set_font(run, b_font, fit_size, is_highlight, False, text_color)
-                    # Numeric columns → right-align; text columns → left-align
-                    align = PP_ALIGN.RIGHT if col_is_numeric[ci] else PP_ALIGN.LEFT
+                    # Numeric columns → right-align; text columns → left-align.
+                    # Prefer Agent 5 pre-computed alignments when available.
+                    if pre_col_aligns and ci < len(pre_col_aligns):
+                        align = PP_ALIGN.RIGHT if pre_col_aligns[ci] == 'right' else PP_ALIGN.LEFT
+                    else:
+                        align = PP_ALIGN.RIGHT if col_is_numeric[ci] else PP_ALIGN.LEFT
                     cell.text_frame.paragraphs[0].alignment = align
                 except Exception:
                     pass
@@ -2120,6 +2197,10 @@ def normalize_zone_artifact_stack(zone):
 
     laid_out = []
     for idx, art in enumerate(artifacts):
+        # Agent 5 pre-computed this artifact's bounds — skip override
+        if all(art.get(k) is not None for k in ('x', 'y', 'w', 'h')):
+            laid_out.append(art)
+            continue
         if idx == 0:
             ax, ay, aw, ah = left, top, width, primary_h
         else:
@@ -2138,6 +2219,345 @@ def normalize_zone_artifact_stack(zone):
         laid_out.append(art)
 
     return { **zone, 'artifacts': laid_out }
+
+
+# ─── BLOCKS-BASED RENDERER ────────────────────────────────────────────────────
+# These thin wrappers are called by render_blocks() — the new pure renderer that
+# iterates slide_spec['blocks'] and dispatches each to its typed handler.
+# All layout decisions are pre-computed by flattenToBlocks() in agent5.js.
+
+def render_block_title(slide, block, bt, use_template):
+    """Render a title or subtitle block."""
+    text = block.get('text', '')
+    if not text:
+        return
+    ph_idx = 0 if block.get('block_type') == 'title' else 1
+    if use_template:
+        place_in_placeholder(slide, ph_idx, text, block, bt)
+    else:
+        add_text_box(slide,
+            block.get('x', 0.4), block.get('y', 0.15),
+            block.get('w', 9.2),  block.get('h', 0.7),
+            text,
+            block.get('font_family', bt.get('title_font_family', 'Arial')),
+            block.get('font_size', 20),
+            block.get('bold', True),
+            block.get('color', bt.get('title_color', '#1A3C8F')),
+            block.get('align', 'left'),
+            block.get('valign', 'top'))
+
+
+def render_block_text_box(slide, block, bt):
+    """Render a generic text_box block."""
+    text = block.get('text', '')
+    if not text:
+        return
+    add_text_box(slide,
+        block.get('x', 0), block.get('y', 0),
+        block.get('w', 1),  block.get('h', 0.3),
+        text,
+        block.get('font_family', bt.get('body_font_family', 'Arial')),
+        block.get('font_size', 10),
+        block.get('bold', False),
+        block.get('color', '#000000'),
+        block.get('align', 'left'),
+        block.get('valign', 'middle'))
+
+
+def render_block_rect(slide, block):
+    """Render a rect block (filled rectangle with optional border)."""
+    fill   = block.get('fill_color')
+    border = block.get('border_color')
+    bw     = block.get('border_width', 0)
+    cr     = block.get('corner_radius', 0)
+    if not fill and not (border and bw):
+        return
+    add_filled_rect(slide,
+        block.get('x', 0), block.get('y', 0),
+        block.get('w', 1), block.get('h', 0.3),
+        fill_hex=fill, border_hex=border,
+        border_pt=bw, corner_radius=cr)
+
+
+def render_block_circle(slide, block, bt):
+    """Render a filled circle (oval) with centered bold text — used for circle_badge group headers."""
+    x = block.get('x', 0)
+    y = block.get('y', 0)
+    w = block.get('w', 0.3)
+    h = block.get('h', 0.3)
+    fill = block.get('fill_color')
+    shape = slide.shapes.add_shape(
+        9,  # MSO_SHAPE.OVAL
+        inches(x), inches(y), inches(w), inches(h)
+    )
+    if fill:
+        shape.fill.solid()
+        shape.fill.fore_color.rgb = hex_to_rgb(fill)
+    else:
+        shape.fill.background()
+    shape.line.fill.background()
+
+    text = str(block.get('text', ''))
+    if text:
+        tf = shape.text_frame
+        tf.word_wrap = False
+        tf.vertical_anchor = MSO_ANCHOR.MIDDLE
+        para = tf.paragraphs[0]
+        para.alignment = PP_ALIGN.CENTER
+        run = para.add_run()
+        run.text = text
+        run.font.bold = True
+        run.font.size = Pt(block.get('font_size', 10))
+        run.font.color.rgb = hex_to_rgb(block.get('font_color') or bt.get('body_color', '#FFFFFF'))
+        fam = block.get('font_family') or bt.get('body_font_family', 'Arial')
+        if fam:
+            run.font.name = fam
+
+
+def render_block_rule(slide, block, bt):
+    """Render a horizontal rule line."""
+    x = block.get('x', 0)
+    y = block.get('y', 0)
+    w = block.get('w', 1)
+    h = block.get('h', 0.03)
+    color = block.get('color') or bt.get('primary_color', '#1A3C8F')
+    add_filled_rect(slide, x, y, w, h, fill_hex=color)
+
+
+def render_block_bullet_list(slide, block, bt):
+    """Render a bullet_list block — calls existing render_insight_text logic."""
+    # Build a minimal artifact dict that render_insight_text expects.
+    # suppress_heading=True because the header band was already emitted as
+    # separate text_box/rect blocks before this bullet_list block.
+    artifact = {
+        'type':             'insight_text',
+        'insight_mode':     'standard',
+        'x':                block.get('x', 0),
+        'y':                block.get('y', 0),
+        'w':                block.get('w', 4),
+        'h':                block.get('h', 3),
+        'points':           block.get('points', []),
+        'body_style':       dict(block.get('body_style', {})),
+        'sentiment':        block.get('sentiment', 'neutral'),
+        'heading':          None,
+        'insight_header':   None,
+        'style':            {},   # container rect already emitted as a separate rect block
+    }
+    # Apply padding if provided (for grouped bullet boxes)
+    padding = block.get('padding', {})
+    if padding:
+        bs = artifact['body_style']
+        if padding.get('top') is not None and not bs.get('padding_top'):
+            bs['padding_top'] = padding.get('top')
+        if padding.get('bottom') is not None and not bs.get('padding_bottom'):
+            bs['padding_bottom'] = padding.get('bottom')
+        if padding.get('left') is not None and not bs.get('padding_left'):
+            bs['padding_left'] = padding.get('left')
+        if padding.get('right') is not None and not bs.get('padding_right'):
+            bs['padding_right'] = padding.get('right')
+    elif renderer_fallback_allowed(block):
+        bs = artifact['body_style']
+        if not bs.get('padding_top'):    bs['padding_top']    = 0.08
+        if not bs.get('padding_bottom'): bs['padding_bottom'] = 0.08
+        if not bs.get('padding_left'):   bs['padding_left']   = 0.10
+        if not bs.get('padding_right'):  bs['padding_right']  = 0.10
+    render_insight_text(slide, artifact, bt, suppress_heading=True)
+
+
+def render_block_chart(slide, block, bt):
+    """Render a chart block."""
+    # Build artifact dict compatible with render_chart
+    artifact = dict(block)
+    artifact['type'] = 'chart'
+    # Map pre-computed fields into _computed sub-dict for backward compat
+    artifact['_computed'] = {
+        'legend_position':         block.get('legend_position', 'none'),
+        'data_label_size':         block.get('data_label_size', 9),
+        'category_label_rotation': block.get('category_label_rotation', 0),
+    }
+    # Merge brand_tokens if provided in block
+    block_bt = block.get('brand_tokens', {})
+    merged_bt = {**bt, **{k: v for k, v in (block_bt or {}).items() if v}}
+    render_chart(slide, artifact, merged_bt)
+
+
+def render_block_table(slide, block, bt):
+    """Render a table block."""
+    artifact = dict(block)
+    artifact['type'] = 'table'
+    render_table(slide, artifact, bt)
+
+
+def render_block_workflow(slide, block, bt):
+    """Render a workflow block."""
+    artifact = dict(block)
+    artifact['type'] = 'workflow'
+    render_workflow(slide, artifact, bt)
+
+
+def render_block_footer(slide, block, bt):
+    """Render footer / page_number text block."""
+    text = block.get('text', '')
+    if not text:
+        return
+    add_text_box(slide,
+        block.get('x', 0.4), block.get('y', 7.3),
+        block.get('w', 5.0),  block.get('h', 0.22),
+        text,
+        block.get('font_family', bt.get('body_font_family', 'Arial')),
+        block.get('font_size', 8),
+        False,
+        block.get('color', '#AAAAAA'),
+        block.get('align', 'left'),
+        'middle')
+
+
+def render_blocks(slide, slide_spec, bt, use_template):
+    """
+    Pure renderer: iterates slide_spec['blocks'] and dispatches each block
+    to its type-specific render function. No layout decisions are made here.
+    """
+    for block in (slide_spec.get('blocks') or []):
+        btype = block.get('block_type', '')
+        try:
+            if btype in ('title', 'subtitle'):
+                render_block_title(slide, block, bt, use_template)
+            elif btype == 'text_box':
+                render_block_text_box(slide, block, bt)
+            elif btype == 'rect':
+                render_block_rect(slide, block)
+            elif btype == 'circle':
+                render_block_circle(slide, block, bt)
+            elif btype == 'rule':
+                render_block_rule(slide, block, bt)
+            elif btype == 'bullet_list':
+                render_block_bullet_list(slide, block, bt)
+            elif btype == 'chart':
+                render_block_chart(slide, block, bt)
+            elif btype == 'table':
+                render_block_table(slide, block, bt)
+            elif btype == 'workflow':
+                render_block_workflow(slide, block, bt)
+            elif btype in ('footer', 'page_number'):
+                render_block_footer(slide, block, bt)
+            elif btype == 'image':
+                pass  # logo/image handled by template master; skip in scratch mode
+        except Exception as e:
+            print(f'render_blocks: error on block_type={btype}: {e}')
+
+
+def _legacy_render_zones(slide, slide_spec, bt, use_template, layout_mode,
+                          _ph_bounds, _content_ph_frames, slide_header_style,
+                          title_shrink_in, cvs):
+    """
+    Legacy zones-based rendering path.
+    Called from build_slide only when slide_spec has no 'blocks' key (old specs).
+    """
+    _zones = slide_spec.get('zones', [])
+    if title_shrink_in > 0.02:
+        for _z in _zones:
+            for _a in (_z.get('artifacts') or []):
+                if _a.get('y') is not None:
+                    _a['y'] = round(max(0.0, _a['y'] - title_shrink_in), 4)
+                if _a.get('header_block') and _a['header_block'].get('y') is not None:
+                    _a['header_block']['y'] = round(
+                        max(0.0, _a['header_block']['y'] - title_shrink_in), 4)
+
+    _layout_ph_bounds = _ph_bounds if (layout_mode and use_template) else {}
+    for zone_idx, zone in enumerate(_zones):
+        zone = normalize_zone_artifact_stack(zone)
+        _zone_arts_check = zone.get('artifacts', [])
+        if (layout_mode
+                and len(_zone_arts_check) >= 2
+                and all(a.get('x') is None for a in _zone_arts_check)
+                and _content_ph_frames):
+            _slot = min(zone_idx, len(_content_ph_frames) - 1)
+            _phf  = _content_ph_frames[_slot]
+            _synth_zone = {
+                **zone,
+                'frame': {
+                    'x': _phf['x'], 'y': _phf['y'],
+                    'w': _phf['w'], 'h': _phf['h'],
+                    'padding': {'top': 0.0, 'right': 0.0, 'bottom': 0.0, 'left': 0.0}
+                }
+            }
+            zone = normalize_zone_artifact_stack(_synth_zone)
+        hdr_ph_idx = zone.get('header_ph_idx') if layout_mode else None
+        zone_artifacts = zone.get('artifacts', [])
+        for art_idx, artifact in enumerate(zone_artifacts):
+            ph_frame = None
+            if layout_mode:
+                ph_idx_spec = artifact.get('placeholder_idx')
+                _wf_has_container = (
+                    str(artifact.get('type', '')).lower() == 'workflow'
+                    and isinstance(artifact.get('container'), dict)
+                    and all(artifact.get('container', {}).get(k) is not None for k in ('x', 'y', 'w', 'h'))
+                )
+                needs_bounds = (
+                    ph_idx_spec is not None
+                    and len(zone_artifacts) == 1
+                    and artifact.get('x') is None
+                    and not _wf_has_container
+                )
+                if needs_bounds and ph_idx_spec in _layout_ph_bounds:
+                    ph_frame = _layout_ph_bounds[ph_idx_spec]
+                if ph_frame is None and artifact.get('x') is None and not _wf_has_container and _content_ph_frames:
+                    fallback_slot = zone_idx if len(zone_artifacts) == 1 else (zone_idx + art_idx)
+                    fallback_slot = min(fallback_slot, len(_content_ph_frames) - 1)
+                    ph_frame = _content_ph_frames[fallback_slot]
+
+            if ph_frame is None and artifact.get('x') is None and not (
+                str(artifact.get('type', '')).lower() == 'workflow'
+                and isinstance(artifact.get('container'), dict)
+                and all(artifact.get('container', {}).get(k) is not None for k in ('x', 'y', 'w', 'h'))
+            ):
+                _zf = zone.get('frame') or {}
+                if all(_zf.get(k) is not None for k in ('x', 'y', 'w', 'h')):
+                    _zp = _zf.get('padding') or {}
+                    _zl = float(_zp.get('left', 0) or 0)
+                    _zt = float(_zp.get('top',  0) or 0)
+                    _zr = float(_zp.get('right', 0) or 0)
+                    _zb = float(_zp.get('bottom', 0) or 0)
+                    ph_frame = {
+                        'x': float(_zf['x']) + _zl,
+                        'y': float(_zf['y']) + _zt,
+                        'w': max(0.2, float(_zf['w']) - _zl - _zr),
+                        'h': max(0.2, float(_zf['h']) - _zt - _zb),
+                    }
+
+            render_artifact(slide, artifact, bt, ph_frame=ph_frame, header_ph_idx=hdr_ph_idx,
+                            header_style=slide_header_style,
+                            slide_w=float(cvs.get('width_in') or 13.33),
+                            slide_h=float(cvs.get('height_in') or 7.5))
+
+    # Global elements (scratch only)
+    if not use_template:
+        ge = slide_spec.get('global_elements', {})
+        logo = ge.get('logo', {})
+        if logo.get('show') and logo.get('image_base64'):
+            add_image_box(slide, logo['image_base64'],
+                logo.get('x', 0.0), logo.get('y', 0.0),
+                logo.get('w', 1.2), logo.get('h', 0.4))
+        footer = ge.get('footer', {})
+        if footer.get('show'):
+            add_text_box(slide,
+                footer.get('x', 0.4), footer.get('y', 7.5),
+                footer.get('w', 5),   footer.get('h', 0.25),
+                'Confidential',
+                footer.get('font_family', 'Arial'),
+                footer.get('font_size', 8),
+                False, footer.get('color', '#AAAAAA'),
+                footer.get('align', 'left'), 'middle')
+        pn = ge.get('page_number', {})
+        if pn.get('show'):
+            add_text_box(slide,
+                pn.get('x', 9.5), pn.get('y', 7.5),
+                pn.get('w', 0.8), pn.get('h', 0.25),
+                str(slide_spec.get('slide_number', '')),
+                pn.get('font_family', 'Arial'),
+                pn.get('font_size', 8),
+                False, pn.get('color', '#AAAAAA'),
+                'right', 'middle')
 
 
 def build_slide(prs, slide_spec, blank_layout, use_template=False,
@@ -2308,179 +2728,73 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
     # PATH 2 & 3 — CONTENT SLIDES
     # ════════════════════════════════════════════════════════════════════════
 
-    # Title & subtitle: placeholders in template mode, text boxes in scratch
+    # Title & subtitle: rendered here only in the legacy (no-blocks) path.
+    # When blocks[] is present, render_blocks dispatches title/subtitle blocks
+    # via render_block_title — rendering them here too would double-write.
     # title_shrink_in: how much the title placeholder was compacted (inches).
-    # Zone artifacts are positioned by Agent 5 assuming the full placeholder height,
+    # Legacy zone artifacts are positioned assuming the full placeholder height,
     # so we shift their y-coords up by this amount to close the resulting gap.
+    # (Not applied when using blocks[] — blocks have absolute pre-computed coords.)
     title_shrink_in = 0.0
-    if use_template:
-        if tb.get('text'):
-            title_shrink_in = place_in_placeholder(slide, 0, tb['text'], tb, bt) or 0.0
-        if sb.get('text'):
-            place_in_placeholder(slide, 1, sb['text'], sb, bt)
+    _has_blocks = bool(slide_spec.get('blocks'))
+    if not _has_blocks:
+        if use_template:
+            if tb.get('text'):
+                title_shrink_in = place_in_placeholder(slide, 0, tb['text'], tb, bt) or 0.0
+            if sb.get('text'):
+                place_in_placeholder(slide, 1, sb['text'], sb, bt)
+        else:
+            if tb.get('text'):
+                add_text_box(slide,
+                    tb.get('x', 0.4), tb.get('y', 0.15),
+                    tb.get('w', 9.0), tb.get('h', 0.8),
+                    tb['text'],
+                    tb.get('font_family', bt.get('title_font_family', 'Arial')),
+                    tb.get('font_size', 20),
+                    tb.get('font_weight', 'bold') in ('bold', 'semibold'),
+                    tb.get('color', bt.get('title_color', '#1A3C8F')),
+                    tb.get('align', 'left'), 'top')
+                # Scratch mode: shrink title box to actual text height so blank space
+                # below the title doesn't inflate the visual gap to the content zone.
+                try:
+                    _tf = slide.shapes[-1].text_frame
+                    _tf.auto_size = MSO_AUTO_SIZE.SHAPE_TO_FIT_TEXT
+                    _tf.vertical_anchor = MSO_ANCHOR.TOP
+                except Exception:
+                    pass
+            if sb.get('text'):
+                add_text_box(slide,
+                    sb.get('x', 0.4), sb.get('y', 1.0),
+                    sb.get('w', 9.0), sb.get('h', 0.5),
+                    sb['text'],
+                    sb.get('font_family', bt.get('body_font_family', 'Arial')),
+                    sb.get('font_size', 14),
+                    sb.get('font_weight', 'semibold') in ('bold', 'semibold'),
+                    sb.get('color', bt.get('body_color', '#333333')),
+                    sb.get('align', 'left'), 'middle')
+
+    # ════════════════════════════════════════════════════════════════════════
+    # BLOCKS PATH (new) vs LEGACY ZONES PATH (backward compat)
+    # When slide_spec has a 'blocks' array (produced by flattenToBlocks in
+    # agent5.js), use the pure render_blocks dispatcher.  Title/subtitle/
+    # global_elements are already included in blocks[], so we do NOT call
+    # place_in_placeholder / add_text_box for them separately here.
+    #
+    # When 'blocks' is absent (old specs without flattenToBlocks), fall back
+    # to the legacy zones loop via _legacy_render_zones.
+    # ════════════════════════════════════════════════════════════════════════
+    if _has_blocks:
+        # New blocks path — title, subtitle, artifacts, and global_elements are
+        # all pre-flattened into blocks[] by flattenToBlocks() in agent5.js.
+        # render_block_title handles placeholder vs free-textbox internally.
+        render_blocks(slide, slide_spec, bt, use_template)
     else:
-        if tb.get('text'):
-            add_text_box(slide,
-                tb.get('x', 0.4), tb.get('y', 0.15),
-                tb.get('w', 9.0), tb.get('h', 0.8),
-                tb['text'],
-                tb.get('font_family', bt.get('title_font_family', 'Arial')),
-                tb.get('font_size', 20),
-                tb.get('font_weight', 'bold') in ('bold', 'semibold'),
-                tb.get('color', bt.get('title_color', '#1A3C8F')),
-                tb.get('align', 'left'), 'top')
-            # Scratch mode: shrink title box to actual text height so blank space
-            # below the title doesn't inflate the visual gap to the content zone.
-            try:
-                _tf = slide.shapes[-1].text_frame
-                _tf.auto_size = MSO_AUTO_SIZE.SHAPE_TO_FIT_TEXT
-                _tf.vertical_anchor = MSO_ANCHOR.TOP
-            except Exception:
-                pass
-        if sb.get('text'):
-            add_text_box(slide,
-                sb.get('x', 0.4), sb.get('y', 1.0),
-                sb.get('w', 9.0), sb.get('h', 0.5),
-                sb['text'],
-                sb.get('font_family', bt.get('body_font_family', 'Arial')),
-                sb.get('font_size', 14),
-                sb.get('font_weight', 'semibold') in ('bold', 'semibold'),
-                sb.get('color', bt.get('body_color', '#333333')),
-                sb.get('align', 'left'), 'middle')
-
-    # Zones → Artifacts
-    # If the title placeholder was compacted, shift all artifact y-coords up so
-    # content tracks the actual title bottom rather than the spec's assumed height.
-    _zones = slide_spec.get('zones', [])
-    if title_shrink_in > 0.02:
-        for _z in _zones:
-            for _a in (_z.get('artifacts') or []):
-                if _a.get('y') is not None:
-                    _a['y'] = round(max(0.0, _a['y'] - title_shrink_in), 4)
-                if _a.get('header_block') and _a['header_block'].get('y') is not None:
-                    _a['header_block']['y'] = round(
-                        max(0.0, _a['header_block']['y'] - title_shrink_in), 4)
-
-    _layout_ph_bounds = _ph_bounds if (layout_mode and use_template) else {}
-    for zone_idx, zone in enumerate(_zones):
-        zone = normalize_zone_artifact_stack(zone)
-        # ── Fix: multi-artifact zone with null frame in layout mode ───────────
-        # normalize_zone_artifact_stack exits early when frame is null, leaving
-        # all artifact coordinates as None. In layout mode this causes every
-        # artifact to fall back to the same single placeholder slot, so the
-        # second artifact renders directly on top of the first.
-        # Solution: resolve the placeholder frame for this zone, use it as a
-        # synthetic zone frame, then re-run stacking to assign proper sub-bounds.
-        _zone_arts_check = zone.get('artifacts', [])
-        if (layout_mode
-                and len(_zone_arts_check) >= 2
-                and all(a.get('x') is None for a in _zone_arts_check)
-                and _content_ph_frames):
-            _slot = min(zone_idx, len(_content_ph_frames) - 1)
-            _phf  = _content_ph_frames[_slot]
-            _synth_zone = {
-                **zone,
-                'frame': {
-                    'x': _phf['x'], 'y': _phf['y'],
-                    'w': _phf['w'], 'h': _phf['h'],
-                    'padding': {'top': 0.0, 'right': 0.0, 'bottom': 0.0, 'left': 0.0}
-                }
-            }
-            zone = normalize_zone_artifact_stack(_synth_zone)
-        # ─────────────────────────────────────────────────────────────────────
-        # In layout mode, each zone may have a paired header placeholder
-        hdr_ph_idx = zone.get('header_ph_idx') if layout_mode else None
-        zone_artifacts = zone.get('artifacts', [])
-        for art_idx, artifact in enumerate(zone_artifacts):
-            ph_frame = None
-            if layout_mode:
-                ph_idx_spec = artifact.get('placeholder_idx')
-                # Workflow artifacts store their bounds in 'container', not top-level x/y/w/h.
-                # If a valid container is present, treat it as having explicit bounds so we
-                # never override it with a placeholder frame (which could be full-slide width).
-                _wf_has_container = (
-                    str(artifact.get('type', '')).lower() == 'workflow'
-                    and isinstance(artifact.get('container'), dict)
-                    and all(artifact.get('container', {}).get(k) is not None for k in ('x', 'y', 'w', 'h'))
-                )
-                # Only apply placeholder bounds when:
-                # 1. The artifact has a placeholder_idx set
-                # 2. AND the artifact's own x/y/w/h are null/missing (Agent 5 deferred to layout)
-                # 3. AND the zone has exactly 1 artifact (1:1 mapping to placeholder slot)
-                # 4. AND the artifact is not a workflow with explicit container bounds
-                # For multi-artifact zones, Agent 5's explicit coordinates are authoritative.
-                needs_bounds = (
-                    ph_idx_spec is not None
-                    and len(zone_artifacts) == 1
-                    and artifact.get('x') is None
-                    and not _wf_has_container
-                )
-                if needs_bounds and ph_idx_spec in _layout_ph_bounds:
-                    ph_frame = _layout_ph_bounds[ph_idx_spec]
-                # Always try the content-area fallback when coordinates are still missing —
-                # this covers cases where placeholder_idx was specified but the named layout
-                # does not contain that index (e.g. a different template was loaded).
-                if ph_frame is None and artifact.get('x') is None and not _wf_has_container and _content_ph_frames:
-                    fallback_slot = zone_idx if len(zone_artifacts) == 1 else (zone_idx + art_idx)
-                    fallback_slot = min(fallback_slot, len(_content_ph_frames) - 1)
-                    ph_frame = _content_ph_frames[fallback_slot]
-
-            # Zone-frame fallback — last resort for scratch mode (use_template=False) and
-            # for template/layout-mode cases where neither _layout_ph_bounds nor
-            # _content_ph_frames could provide positioning (placeholder index mismatch,
-            # or template has no large-enough content placeholder).
-            # normalize_zone_artifact_stack only stacks multi-artifact zones; for single-
-            # artifact zones the zone frame is never applied to the artifact itself.
-            if ph_frame is None and artifact.get('x') is None and not _wf_has_container:
-                _zf = zone.get('frame') or {}
-                if all(_zf.get(k) is not None for k in ('x', 'y', 'w', 'h')):
-                    _zp = _zf.get('padding') or {}
-                    _zl = float(_zp.get('left', 0) or 0)
-                    _zt = float(_zp.get('top',  0) or 0)
-                    _zr = float(_zp.get('right', 0) or 0)
-                    _zb = float(_zp.get('bottom', 0) or 0)
-                    ph_frame = {
-                        'x': float(_zf['x']) + _zl,
-                        'y': float(_zf['y']) + _zt,
-                        'w': max(0.2, float(_zf['w']) - _zl - _zr),
-                        'h': max(0.2, float(_zf['h']) - _zt - _zb),
-                    }
-
-            render_artifact(slide, artifact, bt, ph_frame=ph_frame, header_ph_idx=hdr_ph_idx, header_style=slide_header_style,
-                            slide_w=float(cvs.get('width_in') or 13.33),
-                            slide_h=float(cvs.get('height_in') or 7.5))
-
-    # ── Global elements (scratch only) ────────────────────────────────────────
-    if not use_template:
-        ge = slide_spec.get('global_elements', {})
-
-        logo = ge.get('logo', {})
-        if logo.get('show') and logo.get('image_base64'):
-            add_image_box(slide, logo['image_base64'],
-                logo.get('x', 0.0), logo.get('y', 0.0),
-                logo.get('w', 1.2), logo.get('h', 0.4))
-
-        footer = ge.get('footer', {})
-        if footer.get('show'):
-            add_text_box(slide,
-                footer.get('x', 0.4), footer.get('y', 7.5),
-                footer.get('w', 5),   footer.get('h', 0.25),
-                'Confidential',
-                footer.get('font_family', 'Arial'),
-                footer.get('font_size', 8),
-                False, footer.get('color', '#AAAAAA'),
-                footer.get('align', 'left'), 'middle')
-
-        pn = ge.get('page_number', {})
-        if pn.get('show'):
-            add_text_box(slide,
-                pn.get('x', 9.5), pn.get('y', 7.5),
-                pn.get('w', 0.8), pn.get('h', 0.25),
-                str(slide_spec.get('slide_number', '')),
-                pn.get('font_family', 'Arial'),
-                pn.get('font_size', 8),
-                False, pn.get('color', '#AAAAAA'),
-                'right', 'middle')
+        # Legacy zones path — backward compat for specs without blocks[]
+        _legacy_render_zones(
+            slide, slide_spec, bt, use_template, layout_mode,
+            _ph_bounds, _content_ph_frames, slide_header_style,
+            title_shrink_in, cvs
+        )
 
     if use_template:
         _remove_empty_placeholders(slide)

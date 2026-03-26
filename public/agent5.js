@@ -1,12 +1,11 @@
 // ─── AGENT 5 — SLIDE LAYOUT & VISUAL DESIGN ENGINE ───────────────────────────
 // Input:  state.slideManifest   — output from Agent 4
 //         state.brandRulebook   — brand guideline JSON from Agent 2
-//         state.outline         — presentation brief from Agent 3
 //
 // Output: designedSpec — flat JSON array, one render-ready object per slide
 //
-// Architecture: Claude API call per batch of 4 slides.
-// Claude receives the Agent 4 manifest + brand guideline + brief and returns
+// Architecture: Claude API call per batch of 3 slides.
+// Claude receives the Agent 4 manifest + brand guideline and returns
 // a precise layout spec: canvas, brand_tokens, title_block, subtitle_block,
 // zones (with fully positioned artifacts), and global_elements.
 //
@@ -56,6 +55,9 @@ You ARE responsible for:
 - alignment and spacing
 
 Your output must be directly usable by a PPT rendering engine.
+The renderer is NOT a designer.
+You must decide every render-critical detail yourself.
+Do not leave spacing, fitting, alignment, or artifact internals for Agent 6.
 
 ═══════════════════════════
 COORDINATE SYSTEM
@@ -596,6 +598,11 @@ PIE CHART CRITICAL: a pie has ONE series but MULTIPLE segments (one per category
   segments, cycle through it (palette[i % palette.length]).
 
 ═══════════════════════════
+CHART MICRO-LAYOUT OWNERSHIP:
+- You must decide legend_position, data_label_size, and category_label_rotation in the spec
+- You must decide all series colors, line widths, marker choices, and label colors
+- Do NOT leave chart readability choices for the renderer
+
 3. CARDS
 ═══════════════════════════
 
@@ -734,6 +741,10 @@ Workflow coordinate rules:
   For top_to_bottom: start at bottom-center, end at top-center
 
 ═══════════════════════════
+WORKFLOW MICRO-LAYOUT OWNERSHIP:
+- Reserve explicit whitespace for external value / description bands so labels do not collide with nodes or connectors
+- You must decide the final node sizes, connector paths, node padding, and external text gaps
+
 5. TABLE
 ═══════════════════════════
 
@@ -786,6 +797,10 @@ Table styling rules:
 - table_style.cell_padding: 0.05–0.08" (enforced by renderer; set as a hint here)
 
 ═══════════════════════════
+TABLE MICRO-LAYOUT OWNERSHIP:
+- You must output final column_widths, header_row_height, row_heights, column_types, and column_alignments
+- The renderer must not infer table density, alignment, or spacing
+
 ARTIFACT HEADER
 ═══════════════════════════
 
@@ -863,6 +878,10 @@ QUALITY RULES
 - primary zones visually dominant
 
 ═══════════════════════════
+RENDER OWNERSHIP:
+- Agent 5 owns every render-critical detail for every inch of the slide canvas
+- Agent 6 is only allowed to render what Agent 5 decided
+
 OUTPUT RULE
 ═══════════════════════════
 
@@ -1010,6 +1029,9 @@ async function designSlideBatch(batchManifest, brand, brief, batchNum) {
     '\n- cards: must have card_style, card_frames[] with x/y/w/h per card' +
     '\n- insight_text (standard mode): must have insight_mode:"standard", style, heading_style, body_style' +
     '\n- insight_text (grouped mode):  must have insight_mode:"grouped", heading_style, group_layout, group_header_style, group_bullet_box_style, bullet_style, group_gap_in, header_to_box_gap_in' +
+    '\n- charts: include final legend_position, data_label_size, category_label_rotation, and series styling' +
+    '\n- workflows: include final node geometry, connection paths, node_inner_padding, and external_label_gap' +
+    '\n- tables: include final column_widths, column_types, column_alignments, header_row_height, row_heights, and cell_padding' +
     '\n- Return a valid JSON array of exactly ' + batchManifest.length + ' slide objects'
 
   const raw    = await callClaude(AGENT5_SYSTEM, [{ role: 'user', content: prompt }], 6000)
@@ -1052,22 +1074,202 @@ function validateDesignedSlide(slide) {
       if (!a.type)                                     issues.push(p + ': missing type')
       if (a.type === 'chart'    && !a.chart_style)     issues.push(p + ': chart missing chart_style')
       if (a.type === 'chart'    && !a.series_style)    issues.push(p + ': chart missing series_style')
+      if (a.type === 'chart'    && a.chart_style && a.chart_style.legend_position == null) issues.push(p + ': chart missing legend_position')
+      if (a.type === 'chart'    && a.chart_style && a.chart_style.data_label_size == null) issues.push(p + ': chart missing data_label_size')
+      if (a.type === 'chart'    && a.chart_style && a.chart_style.category_label_rotation == null) issues.push(p + ': chart missing category_label_rotation')
       if (a.type === 'workflow' && !a.nodes?.length)   issues.push(p + ': workflow missing nodes')
       if (a.type === 'workflow' && !a.workflow_style)  issues.push(p + ': workflow missing workflow_style')
+      if (a.type === 'workflow' && a.workflow_style && a.workflow_style.node_inner_padding == null) issues.push(p + ': workflow missing node_inner_padding')
+      if (a.type === 'workflow' && a.workflow_style && a.workflow_style.external_label_gap == null) issues.push(p + ': workflow missing external_label_gap')
+      if (a.type === 'workflow' && (a.connections || []).some(c => !Array.isArray(c.path) || c.path.length < 2)) issues.push(p + ': workflow connection missing path')
       if (a.type === 'table'    && !a.table_style)     issues.push(p + ': table missing table_style')
       if (a.type === 'table'    && !a.column_widths)   issues.push(p + ': table missing column_widths')
+      if (a.type === 'table'    && !a.row_heights)     issues.push(p + ': table missing row_heights')
+      if (a.type === 'table'    && a.header_row_height == null) issues.push(p + ': table missing header_row_height')
+      if (a.type === 'table'    && !a.column_types)    issues.push(p + ': table missing column_types')
+      if (a.type === 'table'    && !a.column_alignments) issues.push(p + ': table missing column_alignments')
+      if (a.type === 'table'    && a.table_style && a.table_style.cell_padding == null) issues.push(p + ': table missing cell_padding')
       if (a.type === 'cards'    && !a.card_frames?.length) issues.push(p + ': cards missing card_frames')
       if (a.type === 'cards'    && !a.card_style)      issues.push(p + ': cards missing card_style')
+      if (a.type === 'cards'    && !a.cards_layout)    issues.push(p + ': cards missing cards_layout')
+      if (a.type === 'cards'    && !a.container)       issues.push(p + ': cards missing container')
       if (a.type === 'insight_text' && !a.heading_style) issues.push(p + ': insight_text missing heading_style')
       if (a.type === 'insight_text' && a.insight_mode === 'grouped' && !a.group_header_style) issues.push(p + ': grouped insight_text missing group_header_style')
       if (a.type === 'insight_text' && a.insight_mode === 'grouped' && !a.group_bullet_box_style) issues.push(p + ': grouped insight_text missing group_bullet_box_style')
       if (a.type === 'insight_text' && a.insight_mode === 'grouped' && !a.bullet_style) issues.push(p + ': grouped insight_text missing bullet_style')
+      if (a.type === 'insight_text' && a.insight_mode === 'grouped' && a.group_gap_in == null) issues.push(p + ': grouped insight_text missing group_gap_in')
+      if (a.type === 'insight_text' && a.insight_mode === 'grouped' && a.header_to_box_gap_in == null) issues.push(p + ': grouped insight_text missing header_to_box_gap_in')
       if (a.type === 'insight_text' && (!a.insight_mode || a.insight_mode === 'standard') && !a.body_style) issues.push(p + ': insight_text missing body_style')
+      if (a.type === 'insight_text' && (!a.insight_mode || a.insight_mode === 'standard') && a.body_style && a.body_style.list_style == null) issues.push(p + ': insight_text missing list_style')
+      if (a.type === 'insight_text' && (!a.insight_mode || a.insight_mode === 'standard') && a.body_style && a.body_style.line_spacing == null) issues.push(p + ': insight_text missing line_spacing')
+      if (a.type === 'insight_text' && (!a.insight_mode || a.insight_mode === 'standard') && a.body_style && a.body_style.indent_inches == null) issues.push(p + ': insight_text missing indent_inches')
+      if (a.type === 'insight_text' && (!a.insight_mode || a.insight_mode === 'standard') && a.body_style && a.body_style.space_before_pt == null) issues.push(p + ': insight_text missing space_before_pt')
     })
   })
 
   if (slide.global_elements?.logo?.show && !slide.global_elements.logo.image_base64) {
     issues.push('logo missing image_base64')
+  }
+
+  return issues
+}
+
+function rectsOverlap(a, b, gap = 0) {
+  if (!a || !b) return false
+  const ax1 = +a.x || 0
+  const ay1 = +a.y || 0
+  const ax2 = ax1 + (+a.w || 0)
+  const ay2 = ay1 + (+a.h || 0)
+  const bx1 = +b.x || 0
+  const by1 = +b.y || 0
+  const bx2 = bx1 + (+b.w || 0)
+  const by2 = by1 + (+b.h || 0)
+  return ax1 < bx2 - gap && ax2 > bx1 + gap && ay1 < by2 - gap && ay2 > by1 + gap
+}
+
+function rectArea(r) {
+  return Math.max(0, +r.w || 0) * Math.max(0, +r.h || 0)
+}
+
+function validateRenderCompleteness(slide) {
+  const issues = []
+  const canvas = slide.canvas || {}
+  const slideBounds = {
+    x: 0,
+    y: 0,
+    w: +canvas.width_in || 0,
+    h: +canvas.height_in || 0
+  }
+  const margin = canvas.margin || {}
+  const contentBounds = {
+    x: +margin.left || 0,
+    y: +margin.top || 0,
+    w: Math.max(0, (+canvas.width_in || 0) - (+margin.left || 0) - (+margin.right || 0)),
+    h: Math.max(0, (+canvas.height_in || 0) - (+margin.top || 0) - (+margin.bottom || 0))
+  }
+
+  if (slide.slide_type === 'content') {
+    if (!Array.isArray(slide.blocks) || slide.blocks.length === 0) issues.push('no blocks')
+  }
+
+  ;(slide.blocks || []).forEach((b, bi) => {
+    const p = 'block' + bi
+    if (!b.block_type) issues.push(p + ': missing block_type')
+    if (!['image'].includes(b.block_type)) {
+      for (const key of ['x', 'y', 'w', 'h']) {
+        if (b[key] == null) issues.push(p + ': missing ' + key)
+      }
+    }
+    if (b.x != null && b.y != null && b.w != null && b.h != null) {
+      if (b.x < -0.01 || b.y < -0.01 ||
+          b.x + b.w > slideBounds.w + 0.01 ||
+          b.y + b.h > slideBounds.h + 0.01) {
+        issues.push(p + ': outside canvas')
+      }
+    }
+    if (b.block_type === 'chart') {
+      if (!b.chart_style) issues.push(p + ': chart block missing chart_style')
+      if (!b.series_style?.length) issues.push(p + ': chart block missing series_style')
+      if (b.legend_position == null) issues.push(p + ': chart block missing legend_position')
+      if (b.data_label_size == null) issues.push(p + ': chart block missing data_label_size')
+      if (b.category_label_rotation == null) issues.push(p + ': chart block missing category_label_rotation')
+    }
+    if (b.block_type === 'table') {
+      if (!b.column_widths?.length) issues.push(p + ': table block missing column_widths')
+      if (!b.row_heights?.length) issues.push(p + ': table block missing row_heights')
+      if (!b.column_types?.length) issues.push(p + ': table block missing column_types')
+      if (!b.column_alignments?.length) issues.push(p + ': table block missing column_alignments')
+      if (b.header_row_height == null) issues.push(p + ': table block missing header_row_height')
+    }
+    if (b.block_type === 'workflow') {
+      if (!b.nodes?.length) issues.push(p + ': workflow block missing nodes')
+      if ((b.connections || []).some(c => !Array.isArray(c.path) || c.path.length < 2)) issues.push(p + ': workflow block missing connection path')
+      if (!b.workflow_style) issues.push(p + ': workflow block missing workflow_style')
+    }
+  })
+
+  const zoneFrames = (slide.zones || []).map((z, zi) => ({ ...z.frame, _idx: zi })).filter(z => z.x != null && z.y != null && z.w != null && z.h != null)
+  for (let i = 0; i < zoneFrames.length; i++) {
+    for (let j = i + 1; j < zoneFrames.length; j++) {
+      if (rectsOverlap(zoneFrames[i], zoneFrames[j], 0.02)) {
+        issues.push('zones overlap: z' + zoneFrames[i]._idx + ' & z' + zoneFrames[j]._idx)
+      }
+    }
+  }
+
+  let occupiedArea = 0
+  ;(slide.zones || []).forEach((zone, zi) => {
+    const inner = getZoneInnerBounds(zone)
+    const arts = zone.artifacts || []
+    const artRects = []
+    ;(arts || []).forEach((a, ai) => {
+      const p = 'z' + zi + '.a' + ai
+      if (a.x != null && a.y != null && a.w != null && a.h != null) {
+        const ar = { x: a.x, y: a.y, w: a.w, h: a.h, _id: p }
+        artRects.push(ar)
+        occupiedArea += rectArea(ar)
+        if (!slide.layout_mode) {
+          const fits =
+            ar.x >= inner.x - 0.01 &&
+            ar.y >= inner.y - 0.01 &&
+            ar.x + ar.w <= inner.x + inner.w + 0.01 &&
+            ar.y + ar.h <= inner.y + inner.h + 0.01
+          if (!fits) issues.push(p + ': outside zone bounds')
+        }
+      }
+
+      if (a.type === 'cards') {
+        const frames = a.card_frames || []
+        const cards = a.cards || []
+        if (frames.length !== cards.length) issues.push(p + ': card_frames/cards length mismatch')
+        if (frames.length > 1) {
+          const ref = frames[0] || {}
+          frames.forEach((fr, fi) => {
+            if (Math.abs((fr.w || 0) - (ref.w || 0)) > 0.03 || Math.abs((fr.h || 0) - (ref.h || 0)) > 0.03) {
+              issues.push(p + ': unequal card frame sizes')
+            }
+            if (fr.x == null || fr.y == null || fr.w == null || fr.h == null) {
+              issues.push(p + '.card' + fi + ': incomplete frame')
+            }
+          })
+        }
+        for (let i = 0; i < frames.length; i++) {
+          for (let j = i + 1; j < frames.length; j++) {
+            if (rectsOverlap(frames[i], frames[j], 0.02)) {
+              issues.push(p + ': overlapping card frames')
+              break
+            }
+          }
+        }
+      }
+
+      if (a.type === 'workflow') {
+        const nodes = a.nodes || []
+        for (let i = 0; i < nodes.length; i++) {
+          for (let j = i + 1; j < nodes.length; j++) {
+            if (rectsOverlap(nodes[i], nodes[j], 0.02)) {
+              issues.push(p + ': overlapping workflow nodes')
+              break
+            }
+          }
+        }
+      }
+    })
+
+    for (let i = 0; i < artRects.length; i++) {
+      for (let j = i + 1; j < artRects.length; j++) {
+        if (rectsOverlap(artRects[i], artRects[j], 0.02)) {
+          issues.push('artifact overlap: ' + artRects[i]._id + ' & ' + artRects[j]._id)
+        }
+      }
+    }
+  })
+
+  if (slide.slide_type === 'content' && contentBounds.w > 0 && contentBounds.h > 0) {
+    const contentArea = contentBounds.w * contentBounds.h
+    const fillRatio = occupiedArea / Math.max(contentArea, 0.01)
+    if (fillRatio < 0.28) issues.push('content under-utilised: ' + fillRatio.toFixed(2))
+    if (fillRatio > 0.92) issues.push('content over-packed: ' + fillRatio.toFixed(2))
   }
 
   return issues
@@ -1325,6 +1527,9 @@ CRITICAL — all artifacts must be FULLY specified:
 - cards: include card_style{}, card_frames[] with x/y/w/h per card
 - insight_text standard: include insight_mode:"standard", style{}, heading_style{}, body_style{}
 - insight_text grouped:  include insight_mode:"grouped", heading_style{}, group_layout, group_header_style{}, group_bullet_box_style{}, bullet_style{}, group_gap_in, header_to_box_gap_in
+- charts: include final legend_position, data_label_size, category_label_rotation, and series styling
+- workflows: include final node geometry, connection paths, node_inner_padding, and external_label_gap
+- tables: include final column_widths, column_types, column_alignments, header_row_height, row_heights, and cell_padding
 
 All coordinates in decimal inches, 2 decimal places.
 Return ONLY a valid JSON object. No explanation. No markdown.`
@@ -1516,6 +1721,758 @@ function buildMinimalSafeSlide(manifestSlide, tokens) {
 //   table        : title, headers[], rows[][], highlight_rows[], note
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// ─── computeArtifactInternals ────────────────────────────────────────────────
+// Post-processes merged zones and fills computed layout/sizing fields on each
+// artifact IN PLACE, so generate_pptx.py can act as a pure renderer.
+// Called after mergeContentIntoZones (and applyLayoutZoneFrames if used).
+// ─────────────────────────────────────────────────────────────────────────────
+function computeArtifactInternals(zones, canvas) {
+  const round2 = x => Math.round(x * 100) / 100
+
+  for (const zone of (zones || [])) {
+    const artifacts = zone.artifacts || []
+    const frame = zone.frame || {}
+
+    // ── 1. Multi-artifact zone stacking ──────────────────────────────────────
+    if (artifacts.length >= 2) {
+      const needsCompute = artifacts.some(a => a.h == null)
+      if (needsCompute) {
+        const zx = frame.x || 0
+        const zy = frame.y || 0
+        const zw = frame.w || 0
+        const zh = frame.h || 0
+        const gap = 0.12
+        const splitHint = zone.split_hint  // e.g. [60, 40] or null
+
+        let primaryFrac, secondaryFrac
+        if (splitHint && Array.isArray(splitHint) && splitHint.length >= 2) {
+          const total = splitHint[0] + splitHint[1]
+          primaryFrac   = splitHint[0] / total
+          secondaryFrac = splitHint[1] / total
+        } else {
+          primaryFrac   = 0.60
+          secondaryFrac = 0.40
+        }
+
+        const availH = zh - gap
+        const primaryH   = round2(availH * primaryFrac)
+        const secondaryH = round2(availH * secondaryFrac)
+
+        for (let i = 0; i < artifacts.length; i++) {
+          const art = artifacts[i]
+          if (i === 0) {
+            art.x = round2(zx)
+            art.y = round2(zy)
+            art.w = round2(zw)
+            art.h = primaryH
+          } else {
+            // For 3+ artifacts divide the secondary band equally
+            const remaining = artifacts.length - 1
+            const eachH = round2((secondaryH - Math.max(0, remaining - 1) * gap) / Math.max(remaining, 1))
+            art.x = round2(zx)
+            art.y = round2(zy + primaryH + gap + (i - 1) * (eachH + gap))
+            art.w = round2(zw)
+            art.h = eachH
+          }
+        }
+      }
+    }
+
+    // ── Per-artifact computed fields ──────────────────────────────────────────
+    for (const art of artifacts) {
+      const artType = art.type
+
+      // ── 2. Chart: _computed sub-object ─────────────────────────────────────
+      if (artType === 'chart') {
+        if (!art._computed) art._computed = {}
+        const computed = art._computed
+        const canvasW = (canvas && canvas.width_in) ? canvas.width_in : 10
+
+        // legend_position
+        if (computed.legend_position == null) {
+          if (art.show_legend) {
+            computed.legend_position = ((art.w || 0) / canvasW) > 0.55 ? 'right' : 'top'
+          } else {
+            computed.legend_position = 'none'
+          }
+        }
+
+        // data_label_size
+        if (computed.data_label_size == null) {
+          const cs = art.chart_style || {}
+          const base_size = cs.data_label_size || 9
+          const n_cats = (art.categories || []).length || 1
+          const density = Math.min(art.w || 0, art.h || 0) / n_cats
+          const scale = Math.max(0.55, Math.min(1.0, density / 0.6))
+          const computedSize = Math.round(base_size * scale)
+          computed.data_label_size = Math.max(computedSize, Math.round(base_size * 0.55))
+        }
+
+        // category_label_rotation
+        if (computed.category_label_rotation == null) {
+          computed.category_label_rotation = (art.categories || []).length > 6 ? -45 : 0
+        }
+      }
+
+      // ── 3. Table: column and row specs ─────────────────────────────────────
+      if (artType === 'table') {
+        const headers = art.headers || []
+        const rows    = art.rows    || []
+        const nCols   = headers.length
+
+        if (nCols > 0) {
+          const artW = art.w || 6
+
+          // column_widths
+          if (!art.column_widths || art.column_widths.length === 0) {
+            const weights = []
+            for (let c = 0; c < nCols; c++) {
+              let maxLen = (headers[c] || '').length
+              for (const row of rows) {
+                if (c < row.length) maxLen = Math.max(maxLen, String(row[c] || '').length)
+              }
+              weights.push(Math.max(maxLen, 1))
+            }
+            const totalWeight = weights.reduce((s, w) => s + w, 0) || 1
+            const colWidths = weights.map(w => round2(artW * w / totalWeight))
+            // Fix rounding remainder on last column
+            const widthSum = colWidths.reduce((s, w) => s + w, 0)
+            colWidths[nCols - 1] = round2(colWidths[nCols - 1] + (artW - widthSum))
+            art.column_widths = colWidths
+          }
+
+          // column_types
+          if (!art.column_types) {
+            const numPat = /^[\d,\.\%₹\$\-\+]+$/
+            const types = []
+            for (let c = 0; c < nCols; c++) {
+              if (c === 0) {
+                types.push('text')
+              } else {
+                const hits = rows.filter(row => c < row.length && numPat.test(String(row[c] || '').trim())).length
+                types.push((hits / Math.max(rows.length, 1)) > 0.5 ? 'numeric' : 'text')
+              }
+            }
+            art.column_types = types
+          }
+
+          // column_alignments
+          if (!art.column_alignments) {
+            art.column_alignments = (art.column_types || []).map(t => t === 'numeric' ? 'right' : 'left')
+          }
+
+          // row_heights + header_row_height
+          if (!art.row_heights) {
+            const artH = art.h || 2
+            const available_h = artH - 0.35
+            const n_data_rows = rows.length
+            const row_h = Math.max(0.32, available_h / Math.max(n_data_rows, 1))
+            art.row_heights = Array(n_data_rows).fill(round2(row_h))
+            art.header_row_height = 0.35
+          }
+        }
+      }
+
+      // ── 4. Cards: pre-compute card_frames ──────────────────────────────────
+      if (artType === 'cards') {
+        if (!art.card_frames || art.card_frames.length === 0) {
+          const cards  = art.cards  || []
+          const layout = (art.layout || 'grid').toLowerCase()
+          const cs     = art.card_style || {}
+          const gap    = cs.gap              || 0.12
+          const count  = cards.length
+          const ax     = art.x || 0
+          const ay     = art.y || 0
+          const aw     = art.w || 0
+          const ah     = art.h || 0
+
+          const frames = []
+          if (layout === 'row') {
+            const card_w = round2((aw - gap * (count - 1)) / Math.max(count, 1))
+            for (let i = 0; i < count; i++) {
+              frames.push({ x: round2(ax + i * (card_w + gap)), y: round2(ay), w: card_w, h: round2(ah) })
+            }
+          } else if (layout === 'column') {
+            const card_h = round2((ah - gap * (count - 1)) / Math.max(count, 1))
+            for (let i = 0; i < count; i++) {
+              frames.push({ x: round2(ax), y: round2(ay + i * (card_h + gap)), w: round2(aw), h: card_h })
+            }
+          } else {
+            // grid or default
+            const cols        = count > 1 ? 2 : 1
+            const rows_count  = Math.ceil(count / cols)
+            const card_w      = round2((aw - gap * (cols - 1)) / Math.max(cols, 1))
+            const card_h      = round2((ah - gap * (rows_count - 1)) / Math.max(rows_count, 1))
+            for (let i = 0; i < count; i++) {
+              frames.push({
+                x: round2(ax + (i % cols) * (card_w + gap)),
+                y: round2(ay + Math.floor(i / cols) * (card_h + gap)),
+                w: card_w,
+                h: card_h
+              })
+            }
+          }
+          art.card_frames = frames
+        }
+      }
+
+      // ── 5. insight_text (standard): font scaling ───────────────────────────
+      if (artType === 'insight_text' && art.insight_mode !== 'grouped') {
+        const bs = art.body_style
+        if (bs && bs.font_size != null) {
+          const points      = art.points || []
+          const n_points    = points.length
+          if (n_points > 0) {
+            const artH        = art.h || 0
+            const body_h      = artH - 0.40 - 0.10 - 0.08
+            const spec_fs     = bs.font_size
+            const line_spacing  = bs.line_spacing    || 1.3
+            const space_before  = bs.space_before_pt || 6
+            const line_h_in   = spec_fs * line_spacing / 72
+            const space_in    = space_before / 72
+            const total_h     = n_points * line_h_in + (n_points - 1) * space_in
+
+            if (total_h > body_h * 1.05) {
+              const scaled_fs = Math.max(7, Math.floor(spec_fs * body_h / total_h))
+              bs.font_size = scaled_fs
+              if (bs.space_before_pt != null) {
+                bs.space_before_pt = Math.round(bs.space_before_pt * scaled_fs / spec_fs)
+              }
+            }
+          }
+        }
+      }
+    } // end per-artifact loop
+  } // end zones loop
+
+  return zones
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BLOCK FLATTENER
+// Converts the final processed slide spec into a flat, ordered blocks[] array.
+// Each block is self-contained: block_type + x/y/w/h + type-specific fields.
+// Called after computeArtifactInternals in normaliseDesignedSlide.
+// generate_pptx.py reads blocks[] and dispatches each to a typed renderer.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function _artifactToBlocks(art, blocks, bt, r2) {
+  const ax = art.x || 0
+  const ay = art.y || 0
+  const aw = art.w || 0
+  const ah = art.h || 0
+
+  // ── Artifact header band (if present) ────────────────────────────────────
+  // header_block sits above the artifact body, already has its own x/y/w/h
+  const hb          = art.header_block || null
+  let   content_y   = ay   // top of the body area (after header_block)
+
+  if (hb && hb.text) {
+    const hx  = hb.x  != null ? hb.x  : ax
+    const hy  = hb.y  != null ? hb.y  : ay
+    const hw  = hb.w  != null ? hb.w  : aw
+    const hh  = hb.h  != null ? hb.h  : 0.30
+    const hfs = hb.font_size || 11
+    content_y = r2(hy + hh + 0.04)  // small gap below header band
+
+    const headerStyle = hb.style || 'underline'
+    if (headerStyle === 'brand_fill') {
+      // Filled header band
+      blocks.push({
+        block_type:    'rect',
+        x: hx, y: hy, w: hw, h: hh,
+        fill_color:    hb.fill_color   || bt.primary_color || '#1A3C8F',
+        border_color:  null,
+        border_width:  0,
+        corner_radius: hb.corner_radius || 0
+      })
+      blocks.push({
+        block_type:  'text_box',
+        x: r2(hx + 0.08), y: hy, w: r2(hw - 0.16), h: hh,
+        text:        hb.text,
+        font_family: hb.font_family || bt.title_font_family || 'Arial',
+        font_size:   hfs,
+        bold:        true,
+        color:       hb.text_color || '#FFFFFF',
+        align:       'left',
+        valign:      'middle'
+      })
+    } else {
+      // Underline header
+      blocks.push({
+        block_type:  'text_box',
+        x: hx, y: hy, w: hw, h: hh,
+        text:        hb.text,
+        font_family: hb.font_family || bt.title_font_family || 'Arial',
+        font_size:   hfs,
+        bold:        true,
+        color:       hb.color || bt.primary_color || '#1A3C8F',
+        align:       'left',
+        valign:      'middle'
+      })
+      blocks.push({
+        block_type: 'rule',
+        x: hx, y: r2(hy + hh), w: hw, h: 0.03,
+        color:      hb.rule_color || bt.primary_color || '#1A3C8F'
+      })
+    }
+  }
+
+  // ── Artifact body ─────────────────────────────────────────────────────────
+  switch (art.type) {
+
+    case 'chart': {
+      const computed = art._computed || {}
+      blocks.push({
+        block_type:              'chart',
+        x: ax, y: content_y, w: aw, h: r2(ay + ah - content_y),
+        chart_type:              art.chart_type,
+        chart_header:            art.chart_header || '',
+        chart_title:             art.chart_title  || '',
+        categories:              art.categories   || [],
+        series:                  art.series       || [],
+        dual_axis:               art.dual_axis    || false,
+        secondary_series:        art.secondary_series || [],
+        show_data_labels:        art.show_data_labels !== false,
+        show_legend:             !!art.show_legend,
+        x_label:                 art.x_label || '',
+        y_label:                 art.y_label || '',
+        chart_style:             art.chart_style   || {},
+        series_style:            art.series_style  || [],
+        brand_tokens:            { primary_color: bt.primary_color, chart_palette: bt.chart_palette },
+        // Pre-computed by computeArtifactInternals — renderer reads these directly
+        legend_position:         computed.legend_position        || 'none',
+        data_label_size:         computed.data_label_size        || 9,
+        category_label_rotation: computed.category_label_rotation || 0
+      })
+      break
+    }
+
+    case 'insight_text': {
+      if (art.insight_mode === 'grouped') {
+        _groupedInsightToBlocks(art, content_y, blocks, bt, r2)
+      } else {
+        _standardInsightToBlocks(art, content_y, blocks, r2)
+      }
+      break
+    }
+
+    case 'table': {
+      blocks.push({
+        block_type:         'table',
+        x: ax, y: content_y, w: aw, h: r2(ay + ah - content_y),
+        headers:            art.headers            || [],
+        rows:               art.rows               || [],
+        column_widths:      art.column_widths       || [],
+        column_types:       art.column_types        || [],
+        column_alignments:  art.column_alignments   || [],
+        row_heights:        art.row_heights         || [],
+        header_row_height:  art.header_row_height   || 0.35,
+        table_style:        art.table_style         || {}
+      })
+      break
+    }
+
+    case 'cards': {
+      _cardsToBlocks(art, content_y, blocks, bt, r2)
+      break
+    }
+
+    case 'workflow': {
+      blocks.push({
+        block_type:     'workflow',
+        x: ax, y: content_y, w: aw, h: r2(ay + ah - content_y),
+        nodes:          art.nodes       || [],
+        connections:    art.connections || [],
+        workflow_style: art.workflow_style || {},
+        flow_direction: art.flow_direction || '',
+        workflow_type:  art.workflow_type  || ''
+      })
+      break
+    }
+
+    default:
+      break
+  }
+}
+
+function _standardInsightToBlocks(art, content_y, blocks, r2) {
+  const ax = art.x || 0
+  const ay = art.y || 0
+  const aw = art.w || 0
+  const ah = art.h || 0
+  const st = art.body_style || {}
+
+  const body_y = content_y
+  const body_h = r2(ay + ah - body_y)
+  const sty    = art.style || {}   // fill/border live in art.style per schema
+
+  // Container rect (fill/border)
+  const hasFill   = !!sty.fill_color
+  const hasBorder = !!(sty.border_color && sty.border_width)
+  if (hasFill || hasBorder) {
+    blocks.push({
+      block_type:    'rect',
+      x: ax, y: body_y, w: aw, h: body_h,
+      fill_color:    sty.fill_color    || null,
+      border_color:  sty.border_color  || null,
+      border_width:  sty.border_width  || 0.75,
+      corner_radius: sty.corner_radius || 0
+    })
+  }
+
+  // Bullet list body
+  blocks.push({
+    block_type:   'bullet_list',
+    x: ax, y: body_y, w: aw, h: body_h,
+    points:       art.points || [],
+    body_style:   st,
+    sentiment:    art.sentiment || 'neutral'
+  })
+}
+
+function _groupedInsightToBlocks(art, content_y, blocks, bt, r2) {
+  const ax      = art.x || 0
+  const ay      = art.y || 0
+  const aw      = art.w || 0
+  const ah      = art.h || 0
+  const groups  = art.groups || []
+  const n       = groups.length
+  if (n === 0) return
+
+  const ghs     = art.group_header_style    || {}
+  const gbs     = art.group_bullet_box_style || {}
+  const bsty    = art.bullet_style          || {}
+  const g_gap   = art.group_gap_in          || 0.08
+  const hb_gap  = art.header_to_box_gap_in  || 0.05
+  const gLayout = art.group_layout          || 'rows'
+  const isBadge = ghs.shape === 'circle_badge'
+
+  const h_fill  = ghs.fill_color   || bt.primary_color || '#1A3C8F'
+  const h_cr    = ghs.corner_radius || 4
+
+  const total_content_h = r2(ay + ah - content_y)
+
+  if (gLayout === 'rows') {
+    const h_w         = ghs.w || 1.2
+    const box_x       = r2(ax + h_w + hb_gap)
+    const box_w       = r2(aw - h_w - hb_gap)
+    const total_bullets = Math.max(1, groups.reduce((s, g) => s + (g.bullets || []).length, 0))
+    const total_rh    = Math.max(0.2, total_content_h - (n - 1) * g_gap)
+
+    let cur_y = content_y
+    for (let gi = 0; gi < groups.length; gi++) {
+      const g        = groups[gi]
+      const nbullets = Math.max(1, (g.bullets || []).length)
+      const row_h    = r2(Math.max(0.25, total_rh * (nbullets / total_bullets)))
+
+      if (isBadge) {
+        // circle_badge: circle centered vertically in the header column
+        const dia      = ghs.h || 0.3
+        const badge_y  = r2(cur_y + (row_h - dia) / 2)
+        blocks.push({
+          block_type:  'circle',
+          x: ax, y: badge_y, w: dia, h: dia,
+          fill_color:  h_fill,
+          text:        String(gi + 1),
+          font_family: ghs.font_family || bt.title_font_family || 'Arial',
+          font_size:   ghs.font_size   || 10,
+          font_color:  ghs.text_color  || '#FFFFFF'
+        })
+      } else {
+        // rounded_rect: fills full h_w × row_h
+        blocks.push({
+          block_type: 'rect',
+          x: ax, y: r2(cur_y), w: h_w, h: row_h,
+          fill_color: h_fill, border_color: null, border_width: 0, corner_radius: h_cr
+        })
+        blocks.push({
+          block_type:  'text_box',
+          x: r2(ax + 0.06), y: r2(cur_y), w: r2(h_w - 0.12), h: row_h,
+          text:        String(g.header || ''),
+          font_family: ghs.font_family || bt.title_font_family || 'Arial',
+          font_size:   ghs.font_size   || 10,
+          bold:        true,
+          color:       ghs.text_color  || '#FFFFFF',
+          align:       'center',
+          valign:      'middle'
+        })
+      }
+      // Bullet box — rect (border only)
+      if (gbs.fill_color || gbs.border_color) {
+        blocks.push({
+          block_type:    'rect',
+          x: box_x, y: r2(cur_y), w: box_w, h: row_h,
+          fill_color:    gbs.fill_color   || null,
+          border_color:  gbs.border_color || null,
+          border_width:  gbs.border_width || 0.75,
+          corner_radius: gbs.corner_radius || 4
+        })
+      }
+      // Bullet box — bullet list
+      blocks.push({
+        block_type:  'bullet_list',
+        x: box_x, y: r2(cur_y), w: box_w, h: row_h,
+        points:      g.bullets || [],
+        body_style:  bsty,
+        padding:     gbs.padding || {},
+        sentiment:   art.sentiment || 'neutral'
+      })
+
+      cur_y = r2(cur_y + row_h + g_gap)
+    }
+
+  } else {
+    // columns layout
+    const col_w  = r2((aw - (n - 1) * g_gap) / Math.max(n, 1))
+    const h_h    = ghs.h || 0.28
+    const box_h  = r2(total_content_h - h_h - hb_gap)
+
+    let cur_x = ax
+    for (let gi = 0; gi < groups.length; gi++) {
+      const g = groups[gi]
+
+      if (isBadge) {
+        // circle_badge: circle centered horizontally in col_w
+        const dia     = h_h
+        const badge_x = r2(cur_x + (col_w - dia) / 2)
+        blocks.push({
+          block_type:  'circle',
+          x: badge_x, y: content_y, w: dia, h: dia,
+          fill_color:  h_fill,
+          text:        String(gi + 1),
+          font_family: ghs.font_family || bt.title_font_family || 'Arial',
+          font_size:   ghs.font_size   || 10,
+          font_color:  ghs.text_color  || '#FFFFFF'
+        })
+      } else {
+        // rounded_rect: spans full col_w as a header bar
+        blocks.push({
+          block_type: 'rect',
+          x: r2(cur_x), y: content_y, w: col_w, h: h_h,
+          fill_color: h_fill, border_color: null, border_width: 0, corner_radius: h_cr
+        })
+        blocks.push({
+          block_type:  'text_box',
+          x: r2(cur_x + 0.05), y: content_y, w: r2(col_w - 0.10), h: h_h,
+          text:        String(g.header || ''),
+          font_family: ghs.font_family || bt.title_font_family || 'Arial',
+          font_size:   ghs.font_size   || 10,
+          bold:        true,
+          color:       ghs.text_color  || '#FFFFFF',
+          align:       'center',
+          valign:      'middle'
+        })
+      }
+      const bullet_y = r2(content_y + h_h + hb_gap)
+      // Bullet box — rect
+      if (gbs.fill_color || gbs.border_color) {
+        blocks.push({
+          block_type:    'rect',
+          x: r2(cur_x), y: bullet_y, w: col_w, h: box_h,
+          fill_color:    gbs.fill_color   || null,
+          border_color:  gbs.border_color || null,
+          border_width:  gbs.border_width || 0.75,
+          corner_radius: gbs.corner_radius || 4
+        })
+      }
+      // Bullet box — bullets
+      blocks.push({
+        block_type: 'bullet_list',
+        x: r2(cur_x), y: bullet_y, w: col_w, h: box_h,
+        points:     g.bullets || [],
+        body_style: bsty,
+        padding:    gbs.padding || {},
+        sentiment:  art.sentiment || 'neutral'
+      })
+
+      cur_x = r2(cur_x + col_w + g_gap)
+    }
+  }
+}
+
+function _cardsToBlocks(art, content_y, blocks, bt, r2) {
+  const cards  = art.cards  || []
+  const frames = art.card_frames || []   // pre-computed by computeArtifactInternals
+  const cs     = art.card_style || {}
+  const pad    = cs.internal_padding || 0.12
+
+  for (let i = 0; i < cards.length; i++) {
+    const card = cards[i]
+    const fr   = frames[i] || { x: art.x || 0, y: content_y, w: art.w || 0, h: art.h || 0 }
+    const fx   = fr.x, fy = fr.y, fw = fr.w, fh = fr.h
+
+    // Card background rect
+    blocks.push({
+      block_type:    'rect',
+      x: fx, y: fy, w: fw, h: fh,
+      fill_color:    cs.fill_color    || '#F5F5F5',
+      border_color:  cs.border_color  || '#DDDDDD',
+      border_width:  cs.border_width  || 0.75,
+      corner_radius: cs.corner_radius || 4
+    })
+
+    // Accent strip (top colour bar)
+    if (cs.accent_color || bt.primary_color) {
+      const accent_h = 0.055
+      blocks.push({
+        block_type:    'rect',
+        x: fx, y: fy, w: fw, h: accent_h,
+        fill_color:    cs.accent_color || bt.primary_color || '#1A3C8F',
+        border_color:  null, border_width: 0,
+        corner_radius: cs.corner_radius || 4
+      })
+    }
+
+    // Card text sections (title / subtitle / body)
+    const accent_h  = (cs.accent_color || bt.primary_color) ? 0.055 : 0
+    const inner_y   = r2(fy + accent_h + pad)
+    const inner_h   = r2(fh - accent_h - 2 * pad)
+    const title_h   = r2(inner_h * 0.22)
+    const sub_h     = r2(inner_h * 0.38)
+    const body_h    = r2(inner_h - title_h - sub_h - 0.06)
+
+    if (card.title) {
+      blocks.push({
+        block_type: 'text_box',
+        x: r2(fx + pad), y: inner_y, w: r2(fw - 2 * pad), h: title_h,
+        text:       card.title,
+        font_family: (cs.title_style || {}).font_family || bt.title_font_family || 'Arial',
+        font_size:   (cs.title_style || {}).font_size   || 13,
+        bold:        true,
+        color:       (cs.title_style || {}).color       || bt.title_color || '#1A3C8F',
+        align:       'left', valign: 'top'
+      })
+    }
+    if (card.subtitle) {
+      blocks.push({
+        block_type: 'text_box',
+        x: r2(fx + pad), y: r2(inner_y + title_h), w: r2(fw - 2 * pad), h: sub_h,
+        text:       card.subtitle,
+        font_family: (cs.subtitle_style || {}).font_family || bt.body_font_family || 'Arial',
+        font_size:   (cs.subtitle_style || {}).font_size   || 10,
+        bold:        false,
+        color:       (cs.subtitle_style || {}).color       || '#555555',
+        align:       'left', valign: 'middle'
+      })
+    }
+    if (card.body) {
+      blocks.push({
+        block_type: 'text_box',
+        x: r2(fx + pad), y: r2(inner_y + title_h + sub_h + 0.03), w: r2(fw - 2 * pad), h: body_h,
+        text:       card.body,
+        font_family: (cs.body_style || {}).font_family || bt.body_font_family || 'Arial',
+        font_size:   (cs.body_style || {}).font_size   || 9,
+        bold:        false,
+        color:       (cs.body_style || {}).color       || '#333333',
+        align:       'left', valign: 'top'
+      })
+    }
+  }
+}
+
+function flattenToBlocks(slideSpec, brandTokens) {
+  const bt     = brandTokens || {}
+  const blocks = []
+  const r2     = x => Math.round(x * 100) / 100
+
+  // ── 1. Title block ────────────────────────────────────────────────────────
+  const tb = slideSpec.title_block || {}
+  if (tb.text) {
+    blocks.push({
+      block_type:  'title',
+      x:           tb.x           != null ? tb.x           : 0.4,
+      y:           tb.y           != null ? tb.y           : 0.15,
+      w:           tb.w           != null ? tb.w           : 9.2,
+      h:           tb.h           != null ? tb.h           : 0.7,
+      text:        tb.text,
+      font_family: tb.font_family || bt.title_font_family || 'Arial',
+      font_size:   tb.font_size   || 20,
+      bold:        ['bold','semibold'].includes(String(tb.font_weight || 'bold').toLowerCase()),
+      color:       tb.color       || bt.title_color || '#1A3C8F',
+      align:       tb.align       || 'left',
+      valign:      'top'
+    })
+  }
+
+  // ── 2. Subtitle block ─────────────────────────────────────────────────────
+  const sb = slideSpec.subtitle_block || {}
+  if (sb.text) {
+    blocks.push({
+      block_type:  'subtitle',
+      x:           sb.x           != null ? sb.x           : 0.4,
+      y:           sb.y           != null ? sb.y           : 0.9,
+      w:           sb.w           != null ? sb.w           : 9.2,
+      h:           sb.h           != null ? sb.h           : 0.45,
+      text:        sb.text,
+      font_family: sb.font_family || bt.body_font_family || 'Arial',
+      font_size:   sb.font_size   || 14,
+      bold:        ['bold','semibold'].includes(String(sb.font_weight || '').toLowerCase()),
+      color:       sb.color       || bt.body_color || '#333333',
+      align:       sb.align       || 'left',
+      valign:      'middle'
+    })
+  }
+
+  // ── 3. Zones → Artifacts ──────────────────────────────────────────────────
+  for (const zone of (slideSpec.zones || [])) {
+    for (const art of (zone.artifacts || [])) {
+      _artifactToBlocks(art, blocks, bt, r2)
+    }
+  }
+
+  // ── 4. Global elements ────────────────────────────────────────────────────
+  const ge = slideSpec.global_elements || {}
+
+  if (ge.logo) {
+    const lg = ge.logo
+    blocks.push({
+      block_type: 'image',
+      image_role: 'logo',
+      x: lg.x != null ? lg.x : 0.2,
+      y: lg.y != null ? lg.y : 0.05,
+      w: lg.w || 1.2,
+      h: lg.h || 0.4
+    })
+  }
+  if (ge.footer && ge.footer.text) {
+    const ft = ge.footer
+    blocks.push({
+      block_type:  'footer',
+      x:           ft.x != null ? ft.x : 0.4,
+      y:           ft.y != null ? ft.y : 7.3,
+      w:           ft.w || 5.0,
+      h:           ft.h || 0.22,
+      text:        ft.text,
+      font_family: ft.font_family || bt.body_font_family || 'Arial',
+      font_size:   ft.font_size   || 8,
+      color:       ft.color       || '#AAAAAA',
+      align:       ft.align       || 'left',
+      valign:      'middle'
+    })
+  }
+  if (ge.page_number && ge.page_number.text) {
+    const pn = ge.page_number
+    blocks.push({
+      block_type:  'page_number',
+      x:           pn.x != null ? pn.x : 9.4,
+      y:           pn.y != null ? pn.y : 7.3,
+      w:           pn.w || 0.8,
+      h:           pn.h || 0.22,
+      text:        pn.text,
+      font_family: pn.font_family || bt.body_font_family || 'Arial',
+      font_size:   pn.font_size   || 8,
+      color:       pn.color       || '#AAAAAA',
+      align:       'right',
+      valign:      'middle'
+    })
+  }
+
+  return blocks
+}
+
+
 function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
   if (!designedZones || !manifestZones) return designedZones || []
 
@@ -1563,16 +2520,58 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
           const agentHasGrouped = dArt.insight_mode === 'grouped' && !!dArt.group_header_style
           const f = agentHasGrouped ? ((dArt.bullet_style || {}).font_size || 10) : 10
 
+          // ── Content-aware header dimension calculation ───────────────────────
+          // Estimate the minimum w (rows) or h (columns) needed to render each
+          // group header text without character-level wrapping.
+          // Uses the same approximation the renderer will use: avg char width ≈
+          // font_size × 0.58 / 72 inches. Target: each header fits in ≤ 2 lines.
+          const hFontSize   = 10   // header font size (pts)
+          const charWIn     = hFontSize * 0.58 / 72   // avg char width in inches
+          const lineHIn     = hFontSize * 1.4  / 72   // line height in inches
+          const headerTexts = (mGroups || []).map(g => String(g.header || ''))
+
+          // rows layout: fix header WIDTH so longest header fits in ≤ 2 lines
+          const _minRowHeaderW = (() => {
+            const maxLen = Math.max(...headerTexts.map(t => t.length), 1)
+            const minW   = Math.ceil(maxLen / 2) * charWIn + 0.12  // 2-line target
+            return Math.min(minW, artW * 0.35)   // cap at 35% of artifact width
+          })()
+
+          // columns layout: fix header HEIGHT so longest header (at col_w) fits
+          const _minColHeaderH = (() => {
+            const colW        = artW / Math.max(n, 1)   // approximate col width
+            const charsPerLn  = Math.max(1, (colW - 0.10) / charWIn)
+            const maxLines    = Math.max(...headerTexts.map(t =>
+              Math.ceil(t.length / charsPerLn)
+            ), 1)
+            return maxLines * lineHIn + 0.08   // 0.08" top+bottom padding
+          })()
+
           const group_header_style = dArt.group_header_style || {
             shape:        'rounded_rect',
             fill_color:   primary,
             text_color:   '#FFFFFF',
             font_family:  titleFont,
-            font_size:    10,
+            font_size:    hFontSize,
             font_weight:  'bold',
             corner_radius: 4,
-            w: gLayout === 'rows' ? r2(Math.min(1.5, artW * 0.30)) : artW,
-            h: r2(Math.max(10 * 1.8 / 72, artH * 0.06))
+            w: gLayout === 'rows'
+              ? r2(Math.max(_minRowHeaderW, Math.min(1.5, artW * 0.30)))
+              : artW,
+            h: gLayout === 'columns'
+              ? r2(Math.max(_minColHeaderH, hFontSize * 1.8 / 72, artH * 0.06))
+              : r2(Math.max(hFontSize * 1.8 / 72, artH * 0.06))
+          }
+
+          // If Agent 5 already set group_header_style but w/h may still be too small,
+          // enforce the content-based floor on the existing values too.
+          if (dArt.group_header_style) {
+            if (gLayout === 'rows' && (dArt.group_header_style.w || 0) < _minRowHeaderW) {
+              group_header_style.w = r2(_minRowHeaderW)
+            }
+            if (gLayout === 'columns' && (dArt.group_header_style.h || 0) < _minColHeaderH) {
+              group_header_style.h = r2(_minColHeaderH)
+            }
           }
 
           const group_bullet_box_style = dArt.group_bullet_box_style || {
@@ -1810,6 +2809,21 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
     ? applyLayoutZoneFrames(mergedZones, layoutName, brand)
     : mergedZones
 
+  // Post-process: fill computed layout/sizing fields (stacking, chart, table, cards, font scaling)
+  // so that generate_pptx.py can act as a pure renderer reading pre-computed values.
+  computeArtifactInternals(finalZones, branded.canvas || {})
+
+  // Flatten to blocks[] — ordered, self-contained render units.
+  // generate_pptx.py reads these directly when present; zones path is legacy fallback.
+  branded.blocks = flattenToBlocks(
+    { ...branded, zones: finalZones },
+    branded.brand_tokens || {}
+  )
+  const renderIssues = validateRenderCompleteness({ ...branded, zones: finalZones })
+  if (renderIssues.length > 0) {
+    console.warn('Agent 5 -- S' + (manifestSlide.slide_number || '?') + ' render issues:', renderIssues.join('; '))
+  }
+
   // Log merge summary
   const contentCounts = { insight_text: 0, chart: 0, cards: 0, workflow: 0, table: 0 }
   finalZones.forEach(z => (z.artifacts || []).forEach(a => {
@@ -1844,7 +2858,8 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
       narrative_weight: z.narrative_weight,
       artifact_types:   (z.artifacts || []).map(a => a.type)
     })),
-    _validation_issues: issues.length > 0 ? issues : undefined
+    _validation_issues: issues.length > 0 ? issues : undefined,
+    _render_validation_issues: renderIssues.length > 0 ? renderIssues : undefined
   }
 }
 
