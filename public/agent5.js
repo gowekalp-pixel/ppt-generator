@@ -2213,14 +2213,20 @@ function computeArtifactInternals(zones, canvas) {
 
     // ── 1. Multi-artifact zone stacking ──────────────────────────────────────
     if (artifacts.length >= 2) {
-      const needsCompute = artifacts.some(a => a.h == null)
+      const needsCompute = artifacts.some(a => a.h == null || a.w == null || a.x == null || a.y == null)
       if (needsCompute) {
         const zx = frame.x || 0
         const zy = frame.y || 0
         const zw = frame.w || 0
         const zh = frame.h || 0
         const gap = 0.12
-        const splitHint = zone.split_hint  // e.g. [60, 40] or null
+        const splitHint =
+          (Array.isArray(zone.split_hint) ? zone.split_hint : null) ||
+          (Array.isArray((zone.layout_hint || {}).split_hint) ? (zone.layout_hint || {}).split_hint : null)
+        const arrangement =
+          zone.artifact_arrangement ||
+          (zone.layout_hint || {}).artifact_arrangement ||
+          'vertical'
 
         let primaryFrac, secondaryFrac
         if (splitHint && Array.isArray(splitHint) && splitHint.length >= 2) {
@@ -2232,25 +2238,62 @@ function computeArtifactInternals(zones, canvas) {
           secondaryFrac = 0.40
         }
 
-        const availH = zh - gap
-        const primaryH   = round2(availH * primaryFrac)
-        const secondaryH = round2(availH * secondaryFrac)
+        if (artifacts.length >= 2) {
+          const firstType = String((artifacts[0]?.type || '')).toLowerCase()
+          const secondType = String((artifacts[1]?.type || '')).toLowerCase()
+          if (firstType === 'cards' && secondType !== 'cards') {
+            primaryFrac = Math.min(primaryFrac, 0.40)
+            secondaryFrac = 1 - primaryFrac
+          } else if (secondType === 'cards' && firstType !== 'cards') {
+            secondaryFrac = Math.min(secondaryFrac, 0.40)
+            primaryFrac = 1 - secondaryFrac
+          } else if (firstType === 'cards' && secondType === 'cards') {
+            primaryFrac = Math.min(primaryFrac, 0.40)
+            secondaryFrac = Math.min(secondaryFrac, 0.40)
+          }
+        }
 
-        for (let i = 0; i < artifacts.length; i++) {
-          const art = artifacts[i]
-          if (i === 0) {
-            art.x = round2(zx)
-            art.y = round2(zy)
-            art.w = round2(zw)
-            art.h = primaryH
-          } else {
-            // For 3+ artifacts divide the secondary band equally
-            const remaining = artifacts.length - 1
-            const eachH = round2((secondaryH - Math.max(0, remaining - 1) * gap) / Math.max(remaining, 1))
-            art.x = round2(zx)
-            art.y = round2(zy + primaryH + gap + (i - 1) * (eachH + gap))
-            art.w = round2(zw)
-            art.h = eachH
+        if (arrangement === 'horizontal') {
+          const availW = zw - gap
+          const primaryW = round2(availW * primaryFrac)
+          const secondaryW = round2(availW * secondaryFrac)
+
+          for (let i = 0; i < artifacts.length; i++) {
+            const art = artifacts[i]
+            if (i === 0) {
+              art.x = round2(zx)
+              art.y = round2(zy)
+              art.w = primaryW
+              art.h = round2(zh)
+            } else {
+              const remaining = artifacts.length - 1
+              const eachW = round2((secondaryW - Math.max(0, remaining - 1) * gap) / Math.max(remaining, 1))
+              art.x = round2(zx + primaryW + gap + (i - 1) * (eachW + gap))
+              art.y = round2(zy)
+              art.w = eachW
+              art.h = round2(zh)
+            }
+          }
+        } else {
+          const availH = zh - gap
+          const primaryH   = round2(availH * primaryFrac)
+          const secondaryH = round2(availH * secondaryFrac)
+
+          for (let i = 0; i < artifacts.length; i++) {
+            const art = artifacts[i]
+            if (i === 0) {
+              art.x = round2(zx)
+              art.y = round2(zy)
+              art.w = round2(zw)
+              art.h = primaryH
+            } else {
+              const remaining = artifacts.length - 1
+              const eachH = round2((secondaryH - Math.max(0, remaining - 1) * gap) / Math.max(remaining, 1))
+              art.x = round2(zx)
+              art.y = round2(zy + primaryH + gap + (i - 1) * (eachH + gap))
+              art.w = round2(zw)
+              art.h = eachH
+            }
           }
         }
       }
@@ -4188,7 +4231,23 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
       return dArt
     })
 
-    return { ...dZone, artifacts: mergedArtifacts }
+    return {
+      ...dZone,
+      layout_hint: dZone.layout_hint || mZone.layout_hint || null,
+      artifact_arrangement:
+        dZone.artifact_arrangement ||
+        (dZone.layout_hint || {}).artifact_arrangement ||
+        mZone.artifact_arrangement ||
+        (mZone.layout_hint || {}).artifact_arrangement ||
+        null,
+      split_hint:
+        (Array.isArray(dZone.split_hint) ? dZone.split_hint : null) ||
+        (Array.isArray((dZone.layout_hint || {}).split_hint) ? (dZone.layout_hint || {}).split_hint : null) ||
+        (Array.isArray(mZone.split_hint) ? mZone.split_hint : null) ||
+        (Array.isArray((mZone.layout_hint || {}).split_hint) ? (mZone.layout_hint || {}).split_hint : null) ||
+        null,
+      artifacts: mergedArtifacts
+    }
   })
 }
 
@@ -4513,4 +4572,3 @@ async function runAgent5(state) {
 
   return allDesigned
 }
-

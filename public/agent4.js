@@ -642,25 +642,38 @@ PHASE 5 — LAYOUT SELECTION
 
   5a. Count how many CONTENT brand layouts are provided in the prompt.
 
-  LAYOUT MODE (>= 5 content layouts provided):
+    LAYOUT MODE (>= 5 content layouts provided):
     Do NOT use layout_hint.split for zone geometry. Set layout_hint.split = "full" for all zones.
-    Select selected_layout_name using this matrix:
+    Select selected_layout_name using BOTH:
+    1. number of zones
+    2. number and type of artifacts inside those zones
+    Never choose layout based on zone count alone.
+
+    FIRST evaluate the effective content structure:
+    - 1 zone + 1 artifact      → single wide content area
+    - 1 zone + 2 artifacts     → decide horizontal vs vertical split based on artifact pair
+    - 2 zones + 1 artifact each → classic 2-column or 2-row arrangement
+    - 2 zones + 4 artifacts total → prefer 2x2 / four-block grid
+    - 3 peer artifacts         → prefer 3-across only if the artifacts are actually peer blocks
+    - 4 peer artifacts         → prefer 2x2 or four-block grid
 
     LAYOUT SELECTION MATRIX:
-    Zone config / Artifact requirement          → Layout name pattern to select
+    Zone + artifact config                      → Layout name pattern to select
     -------------------------------------------------------------------------------
-    1 zone, insight_text dominant               → "Body text" or "1 Across"
-    1 zone, wide chart or wide workflow         → "1 Across" (widest layout)
-    2 zones side-by-side                        → "2 Across" or "2 on 1" / "1 on 2"
-    2 zones: chart (left) + insight (right)     → "2 Across" or "1 left 2 right"
-    3 zones horizontal                          → "3 Across" or "3 on 1"
+    1 zone, 1 wide artifact                     → "Body text" or "1 Across"
+    1 zone, 2 artifacts stacked                 → "Body text" or "1 Across" (stacked inside)
+    1 zone, 2 peer artifacts side-by-side       → "2 Across" or "1 on 1"
+    2 zones, 1 artifact each                    → "2 Across" or "1 on 1" / "1 on 2"
+    2 zones, 4 artifacts total                  → "2 on 2" or "4 Block"
+    3 peer artifacts                            → "3 Across" or "3 Column"
     3 zones: top-wide + bottom-split            → "1 on 2" or "1 on 3"
-    4 zones grid                                → "2 on 2" or "3 on 3" or "4 Across"
-    cards (4-card full-width)                   → "3 Across" or "4 Across"
+    4 peer artifacts                            → "2 on 2" or "4 Block" or "4 Across"
+    cards (4-card full-width)                   → "2 on 2" or "4 Block" or "4 Across"
     cards (3-card)                              → "3 Across"
     workflow left_to_right (wide)               → widest single-column layout
     workflow top_down_branching                 → "1 on 2" or "2 on 1"
-    recommendation / roadmap                    → "3 Across" or widest layout
+    prioritization / matrix / driver_tree       → widest single-column layout
+    recommendation / roadmap                    → layout must match artifact count and reading flow, not just archetype name
 
     OVERRIDE RULES (check AFTER initial layout selection — apply if triggered):
     A. LEFT-TO-RIGHT WORKFLOW OVERRIDE: If any artifact is a workflow with flow_direction = "left_to_right" or "timeline"
@@ -681,7 +694,25 @@ PHASE 5 — LAYOUT SELECTION
 
   SCRATCH MODE (fewer than 5 content layouts):
     Set selected_layout_name = "".
-    Use layout_hint.split values derived from Phase 4 zone architecture.
+    Use layout_hint.split values derived from BOTH:
+    1. zone structure
+    2. artifact count and artifact type inside each zone
+    Never choose splits from zone count alone.
+
+    SCRATCH SPLIT RULES:
+    - 1 zone + 1 artifact               → full
+    - 1 zone + 2 artifacts, side-by-side pair
+      (chart+insight_text, cards+insight_text, chart+cards, table+insight_text)
+      → full zone, with internal horizontal composition
+    - 1 zone + 2 artifacts, stacked pair
+      (workflow+insight_text, chart+table)
+      → full zone, with internal vertical composition
+    - 2 zones + 1 artifact each         → left_50+right_50 or left_60+right_40
+    - 2 zones + 4 artifacts total       → top_50+bottom_50 or tl+tr+bl+br depending on peer structure
+    - reasoning artifacts (matrix / driver_tree / prioritization)
+      → primary zone MUST be full-width
+      → any companion insight_text goes above or below, never beside
+    - wide workflow / wide chart        → full-width primary zone
 
     ALLOWED SPLIT COMBINATIONS:
     1 zone:  full
@@ -1059,8 +1090,9 @@ CARDS — STRICT USAGE RULES
 ═══════════════════════════
 
 1. NO CARD-ONLY SLIDES (CRITICAL)
-   A slide CANNOT contain only cards unless slide_archetype = "summary" OR "dashboard".
-   For all other archetypes, cards MUST be accompanied by at least one of:
+   A slide CANNOT contain only cards.
+   This rule applies to ALL archetypes, including "summary" and "dashboard".
+   Cards MUST be accompanied by at least one of:
    chart | workflow | table | insight_text
    If violated → replace cards with chart OR add a supporting artifact.
 
@@ -1092,7 +1124,7 @@ CARDS — STRICT USAGE RULES
 
 7. CARD + SUPPORTING ARTIFACT PATTERN
    Correct:  cards (top) + chart (bottom) | chart (left) + cards (right) | cards + insight_text
-   Incorrect: cards alone explaining analysis
+   Incorrect: cards alone explaining analysis | dashboard made only of cards
 
 ═══════════════════════════
 AUTO-UPGRADE RULE (CRITICAL)
@@ -1362,6 +1394,11 @@ STORYTELLING RULES
    ALL other archetypes (trend, comparison, breakdown, driver_analysis, process, dashboard, proof, roadmap)
    MUST include at least one non-text artifact: chart, cards, workflow, table, matrix, driver_tree, or prioritization.
    If no data exists for a chart, fall back to cards, workflow, matrix, driver_tree, or prioritization as appropriate — never default to text-only.
+
+7. Avoid cards-only slides:
+   NO content slide may use cards as the sole artifact set.
+   Even for summary/dashboard slides, cards must be paired with chart, workflow, table, or insight_text.
+   If a draft slide resolves to only cards, rerun artifact selection and upgrade the slide before emitting JSON.
 
 ═══════════════════════════
 PRE-OUTPUT QUALITY GATES
@@ -1831,7 +1868,13 @@ function normaliseZone(z) {
     message_objective:z.message_objective|| '',
     narrative_weight: z.narrative_weight || 'primary',
     artifacts:        (z.artifacts || []).map(normaliseArtifact).filter(Boolean),
-    layout_hint:      { split: (z.layout_hint || {}).split || 'full' }
+    layout_hint:      {
+      split: (z.layout_hint || {}).split || 'full',
+      artifact_arrangement: (z.layout_hint || {}).artifact_arrangement || z.artifact_arrangement || null,
+      split_hint: Array.isArray((z.layout_hint || {}).split_hint) ? (z.layout_hint || {}).split_hint : (Array.isArray(z.split_hint) ? z.split_hint : null)
+    },
+    artifact_arrangement: (z.layout_hint || {}).artifact_arrangement || z.artifact_arrangement || null,
+    split_hint: Array.isArray((z.layout_hint || {}).split_hint) ? (z.layout_hint || {}).split_hint : (Array.isArray(z.split_hint) ? z.split_hint : null)
   }
 }
 
@@ -2000,6 +2043,107 @@ INSTRUCTIONS:
 
 function pickBestLayout(slide, layoutNames) {
   const zoneCount = (slide.zones || []).length || 1
+  const zones = slide.zones || []
+  const artifacts = zones.flatMap(z => z.artifacts || [])
+  const artifactTypes = artifacts.map(a => (a.type || '').toLowerCase())
+  const artifactCount = artifacts.length || 1
+  const singleFullZone = zones.length === 1 && (((zones[0].layout_hint || {}).split || 'full') === 'full')
+  const hasReasoningArtifact = artifactTypes.some(t => ['matrix', 'driver_tree', 'prioritization'].includes(t))
+  const hasGroupedInsightOnly = artifactTypes.length > 0 && artifactTypes.every(t => t === 'insight_text')
+  const hasWideWorkflow = artifacts.some(a => {
+    const t = (a.type || '').toLowerCase()
+    const dir = (a.flow_direction || '').toLowerCase()
+    return t === 'workflow' && (dir === 'left_to_right' || dir === 'timeline')
+  })
+  const hasTallWorkflow = artifacts.some(a => {
+    const t = (a.type || '').toLowerCase()
+    const dir = (a.flow_direction || '').toLowerCase()
+    return t === 'workflow' && (dir === 'top_to_bottom' || dir === 'top_down_branching')
+  })
+  const hasWideChart = artifacts.some(a => {
+    const t = (a.type || '').toLowerCase()
+    const cats = Array.isArray(a.categories) ? a.categories.length : 0
+    return t === 'chart' && cats > 6
+  })
+  const hasTallHorizontalBar = artifacts.some(a => {
+    const t = (a.type || '').toLowerCase()
+    const chartType = (a.chart_type || '').toLowerCase()
+    const cats = Array.isArray(a.categories) ? a.categories.length : 0
+    return t === 'chart' && chartType === 'horizontal_bar' && cats > 6
+  })
+  const isOneZoneTwoArtifacts = zoneCount === 1 && artifactCount === 2
+  const isTwoZoneFourArtifacts = zoneCount === 2 && artifactCount === 4
+
+  const findByPatterns = (patterns) => {
+    for (const pat of patterns) {
+      const hit = layoutNames.find(n => pat.test(n))
+      if (hit) return hit
+    }
+    return ''
+  }
+
+  if (hasWideWorkflow || hasReasoningArtifact || hasWideChart) {
+    const hit = findByPatterns([
+      /body.?text|1\s*across|single|1\s*col/i,
+      /title\s+and\s+content/i
+    ])
+    if (hit) return hit
+  }
+
+  if (hasTallWorkflow || hasTallHorizontalBar) {
+    const hit = findByPatterns([
+      /2\s*across|1.?on.?1|left.?right|2.?col/i,
+      /body.?text|1\s*across|single|1\s*col/i
+    ])
+    if (hit) return hit
+  }
+
+  if (singleFullZone && hasGroupedInsightOnly) {
+    const hit = findByPatterns([
+      /body.?text|1\s*across|single|1\s*col/i,
+      /2\s*column|2\s*col/i
+    ])
+    if (hit) return hit
+  }
+
+  if (isTwoZoneFourArtifacts) {
+    const hit = findByPatterns([
+      /2.?on.?2|4\s*block|four|grid/i,
+      /4\s*across/i
+    ])
+    if (hit) return hit
+  }
+
+  if (isOneZoneTwoArtifacts) {
+    const pair = artifactTypes.slice().sort().join('+')
+    const horizontalPairs = new Set([
+      'chart+insight_text',
+      'cards+insight_text',
+      'chart+cards',
+      'table+insight_text'
+    ])
+    const verticalPairs = new Set([
+      'workflow+insight_text',
+      'chart+table'
+    ])
+
+    if (horizontalPairs.has(pair)) {
+      const hit = findByPatterns([
+        /2\s*across|1.?on.?1|left.?right|2.?col/i,
+        /body.?text|1\s*across|single|1\s*col/i
+      ])
+      if (hit) return hit
+    }
+
+    if (verticalPairs.has(pair)) {
+      const hit = findByPatterns([
+        /body.?text|1\s*across|single|1\s*col/i,
+        /1.?on.?2|1.?on.?3/i
+      ])
+      if (hit) return hit
+    }
+  }
+
   // Ordered preference patterns per zone count (matched against layout names)
   const byCount = {
     1: [/1\s*across|body.?text|single|1\s*col/i],
@@ -2012,7 +2156,191 @@ function pickBestLayout(slide, layoutNames) {
     const hit = layoutNames.find(n => pat.test(n))
     if (hit) return hit
   }
-  return layoutNames[0] || ''
+  return ''
+}
+
+function layoutConflictsWithSlide(slide, layoutName) {
+  if (!layoutName) return true
+  const name = String(layoutName).toLowerCase()
+  const zones = slide.zones || []
+  const artifacts = zones.flatMap(z => z.artifacts || [])
+  const artifactTypes = artifacts.map(a => (a.type || '').toLowerCase())
+  const artifactCount = artifacts.length
+  const singleFullZone = zones.length === 1 && (((zones[0]?.layout_hint || {}).split || 'full') === 'full')
+  const isTwoZoneFourArtifacts = zones.length === 2 && artifactCount === 4
+
+  if (singleFullZone && artifactTypes.some(t => ['matrix', 'driver_tree', 'prioritization'].includes(t))) {
+    if (/3\s*column|3\s*col|4\s*block|2.?on.?2|3\s*across|4\s*across/i.test(name)) return true
+  }
+
+  if (singleFullZone && artifactCount === 2 && /3\s*column|3\s*col|4\s*block|2.?on.?2|3\s*across|4\s*across/i.test(name)) {
+    return true
+  }
+
+  if (singleFullZone && artifactTypes.every(t => t === 'insight_text')) {
+    if (/3\s*column|3\s*col|4\s*block|2.?on.?2|3\s*across|4\s*across/i.test(name)) return true
+  }
+
+  if (isTwoZoneFourArtifacts && /3\s*column|3\s*col|1.?on.?2|2.?on.?1/i.test(name)) {
+    return true
+  }
+
+  return false
+}
+
+function hasCompatibleLayout(slide, layoutNames) {
+  return !!pickBestLayout(slide, layoutNames)
+}
+
+function artifactDominanceScoreForScratch(artifact) {
+  const type = String((artifact || {}).type || '').toLowerCase()
+  const sentiment = String((artifact || {}).sentiment || '').toLowerCase()
+  const pointCount = Array.isArray(artifact?.points) ? artifact.points.length : 0
+  if (['matrix', 'driver_tree', 'prioritization'].includes(type)) return 100
+  if (type === 'workflow') return 92
+  if (type === 'chart') return 88
+  if (type === 'table') return 76
+  if (type === 'insight_text') return 72 + Math.min(pointCount, 5) * 2 + (sentiment === 'warning' ? 4 : 0)
+  if (type === 'cards') return 46
+  return 60
+}
+
+function zoneDominanceScoreForScratch(zone) {
+  const weight = String(zone?.narrative_weight || '').toLowerCase()
+  const role = String(zone?.zone_role || '').toLowerCase()
+  const artifacts = zone?.artifacts || []
+  let score = weight === 'primary' ? 100 : weight === 'secondary' ? 72 : 60
+  if (/primary|proof|recommendation|summary/.test(role)) score += 8
+  if (/implication|supporting/.test(role)) score -= 4
+  score += Math.max(...artifacts.map(artifactDominanceScoreForScratch), 0) * 0.2
+  return score
+}
+
+function applyArtifactArrangementForScratch(zone, dominantShare = 60) {
+  const artifacts = zone?.artifacts || []
+  if (artifacts.length < 2) return zone
+
+  const scored = artifacts.map((art, idx) => ({
+    idx,
+    art,
+    score: artifactDominanceScoreForScratch(art)
+  }))
+  scored.sort((a, b) => b.score - a.score)
+
+  const dominantIdx = scored[0]?.idx ?? 0
+  const secondaryShare = 100 - dominantShare
+  let firstShare = dominantIdx === 0 ? dominantShare : secondaryShare
+  let secondShare = 100 - firstShare
+
+  const firstType = String((artifacts[0] || {}).type || '').toLowerCase()
+  const secondType = String((artifacts[1] || {}).type || '').toLowerCase()
+
+  if (firstType === 'cards') firstShare = Math.min(firstShare, 40)
+  if (secondType === 'cards') secondShare = Math.min(secondShare, 40)
+
+  if (firstType === 'cards' && secondType !== 'cards') secondShare = 100 - firstShare
+  if (secondType === 'cards' && firstType !== 'cards') firstShare = 100 - secondShare
+  if (firstType === 'cards' && secondType === 'cards') {
+    firstShare = Math.min(firstShare, 40)
+    secondShare = Math.min(secondShare, 40)
+  }
+
+  return {
+    ...zone,
+    artifact_arrangement: 'vertical',
+    split_hint: [firstShare, secondShare],
+    layout_hint: {
+      ...(zone.layout_hint || {}),
+      artifact_arrangement: 'vertical',
+      split_hint: [firstShare, secondShare]
+    }
+  }
+}
+
+function assignScratchSplits(slide) {
+  if (slide.slide_type !== 'content') return slide
+  const zones = (slide.zones || []).map(z => ({
+    ...z,
+    layout_hint: {
+      ...(z.layout_hint || {}),
+      split: ((z.layout_hint || {}).split || 'full'),
+      artifact_arrangement: (z.layout_hint || {}).artifact_arrangement || z.artifact_arrangement || null,
+      split_hint: Array.isArray((z.layout_hint || {}).split_hint) ? (z.layout_hint || {}).split_hint : (Array.isArray(z.split_hint) ? z.split_hint : null)
+    }
+  }))
+  if (!zones.length) return slide
+
+  const zoneArtifactTypes = zones.map(z => (z.artifacts || []).map(a => (a.type || '').toLowerCase()))
+  const allArtifacts = zoneArtifactTypes.flat()
+  const artifactCount = allArtifacts.length
+  const hasReasoning = allArtifacts.some(t => ['matrix', 'driver_tree', 'prioritization'].includes(t))
+  const hasWideWorkflow = zones.some(z => (z.artifacts || []).some(a => {
+    const t = (a.type || '').toLowerCase()
+    const dir = (a.flow_direction || '').toLowerCase()
+    return t === 'workflow' && (dir === 'left_to_right' || dir === 'timeline')
+  }))
+  const hasWideChart = zones.some(z => (z.artifacts || []).some(a => {
+    const t = (a.type || '').toLowerCase()
+    const cats = Array.isArray(a.categories) ? a.categories.length : 0
+    return t === 'chart' && cats > 6
+  }))
+
+  if (zones.length === 1) {
+    zones[0] = applyArtifactArrangementForScratch({ ...zones[0], layout_hint: { ...(zones[0].layout_hint || {}), split: 'full' } }, 60)
+  } else if (zones.length === 2 && artifactCount === 4) {
+    const zoneScores = zones.map((z, idx) => ({ idx, score: zoneDominanceScoreForScratch(z) }))
+    zoneScores.sort((a, b) => b.score - a.score)
+    const dominantIdx = zoneScores[0]?.idx ?? 0
+    const supportingIdx = dominantIdx === 0 ? 1 : 0
+
+    zones[dominantIdx] = applyArtifactArrangementForScratch({
+      ...zones[dominantIdx],
+      layout_hint: { ...(zones[dominantIdx].layout_hint || {}), split: 'left_60' }
+    }, 60)
+    zones[supportingIdx] = applyArtifactArrangementForScratch({
+      ...zones[supportingIdx],
+      layout_hint: { ...(zones[supportingIdx].layout_hint || {}), split: 'right_40' }
+    }, 40)
+  } else if (zones.length === 2) {
+    if (hasReasoning || hasWideWorkflow || hasWideChart) {
+      const zoneScores = zones.map((z, idx) => ({ idx, score: zoneDominanceScoreForScratch(z) }))
+      zoneScores.sort((a, b) => b.score - a.score)
+      const dominantIdx = zoneScores[0]?.idx ?? 0
+      const secondaryIdx = dominantIdx === 0 ? 1 : 0
+      zones[dominantIdx] = applyArtifactArrangementForScratch({
+        ...zones[dominantIdx],
+        layout_hint: { ...(zones[dominantIdx].layout_hint || {}), split: 'top_60' }
+      }, 60)
+      zones[secondaryIdx] = applyArtifactArrangementForScratch({
+        ...zones[secondaryIdx],
+        layout_hint: { ...(zones[secondaryIdx].layout_hint || {}), split: 'bottom_40' }
+      }, 40)
+    } else {
+      const zoneScores = zones.map((z, idx) => ({ idx, score: zoneDominanceScoreForScratch(z) }))
+      zoneScores.sort((a, b) => b.score - a.score)
+      const dominantIdx = zoneScores[0]?.idx ?? 0
+      const secondaryIdx = dominantIdx === 0 ? 1 : 0
+      zones[dominantIdx] = applyArtifactArrangementForScratch({
+        ...zones[dominantIdx],
+        layout_hint: { ...(zones[dominantIdx].layout_hint || {}), split: 'left_60' }
+      }, 60)
+      zones[secondaryIdx] = applyArtifactArrangementForScratch({
+        ...zones[secondaryIdx],
+        layout_hint: { ...(zones[secondaryIdx].layout_hint || {}), split: 'right_40' }
+      }, 40)
+    }
+  } else if (zones.length === 3) {
+    zones[0] = applyArtifactArrangementForScratch({ ...zones[0], layout_hint: { ...(zones[0].layout_hint || {}), split: 'top_left_50' } }, 60)
+    zones[1] = applyArtifactArrangementForScratch({ ...zones[1], layout_hint: { ...(zones[1].layout_hint || {}), split: 'top_right_50' } }, 60)
+    zones[2] = applyArtifactArrangementForScratch({ ...zones[2], layout_hint: { ...(zones[2].layout_hint || {}), split: 'bottom_full' } }, 60)
+  } else if (zones.length >= 4) {
+    const splits = ['tl', 'tr', 'bl', 'br']
+    zones.forEach((z, i) => {
+      zones[i] = applyArtifactArrangementForScratch({ ...z, layout_hint: { ...(z.layout_hint || {}), split: splits[i] || 'full' } }, 60)
+    })
+  }
+
+  return { ...slide, selected_layout_name: '', zones }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2138,13 +2466,19 @@ async function runAgent4(state) {
   const hasLayouts = layoutNames.length >= 5
   if (hasLayouts) {
     allSlides = allSlides.map(s => {
-      if (s.slide_type === 'content' && (!s.selected_layout_name || _isNonContent({ name: s.selected_layout_name }))) {
+      if (s.slide_type === 'content' && !hasCompatibleLayout(s, layoutNames)) {
+        console.log('  No compatible layout for slide', s.slide_number, '→ using scratch splits')
+        return assignScratchSplits(s)
+      }
+      if (s.slide_type === 'content' && (!s.selected_layout_name || _isNonContent({ name: s.selected_layout_name }) || layoutConflictsWithSlide(s, s.selected_layout_name))) {
         const assigned = pickBestLayout(s, layoutNames)
         console.log('  Auto-assigned layout for slide', s.slide_number, '→', assigned)
         return { ...s, selected_layout_name: assigned }
       }
       return s
     })
+  } else {
+    allSlides = allSlides.map(assignScratchSplits)
   }
 
   // Validate and repair
@@ -2175,13 +2509,19 @@ async function runAgent4(state) {
   // Second enforcement pass: repaired slides may still be missing selected_layout_name
   if (hasLayouts) {
     allSlides = allSlides.map(s => {
-      if (s.slide_type === 'content' && (!s.selected_layout_name || _isNonContent({ name: s.selected_layout_name }))) {
+      if (s.slide_type === 'content' && !hasCompatibleLayout(s, layoutNames)) {
+        console.log('  Post-repair: no compatible layout for slide', s.slide_number, '→ using scratch splits')
+        return assignScratchSplits(s)
+      }
+      if (s.slide_type === 'content' && (!s.selected_layout_name || _isNonContent({ name: s.selected_layout_name }) || layoutConflictsWithSlide(s, s.selected_layout_name))) {
         const assigned = pickBestLayout(s, layoutNames)
         console.log('  Post-repair layout assignment for slide', s.slide_number, '→', assigned)
         return { ...s, selected_layout_name: assigned }
       }
       return s
     })
+  } else {
+    allSlides = allSlides.map(assignScratchSplits)
   }
 
   // Summary log
