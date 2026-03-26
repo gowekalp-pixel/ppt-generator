@@ -246,10 +246,26 @@ global_elements is optional — include when appropriate.
 TITLE / SUBTITLE SIZING
 ═══════════════════════════
 
+Font sizes:
 - title slides: 24–34 pt
 - divider slides: 22–30 pt
 - content slides: 16–22 pt
 - subtitle is 9–16 pt smaller than title
+
+TITLE BLOCK HEIGHT (scratch mode only — in template/layout mode omit x/y/w/h):
+Compute h from actual line count — do NOT use a generous fixed height:
+
+  chars_per_line ≈ (title_block.w × 72) / (font_size_pt × 0.52)
+  n_lines = ceil(title_char_count / chars_per_line)
+  title_block.h = n_lines × (font_size_pt × 1.35 / 72) + 0.12
+
+  Example: 90-char title, 20pt, w=12.5"
+    chars_per_line = (12.5 × 72) / (20 × 0.52) = 900 / 10.4 ≈ 86
+    n_lines = ceil(90 / 86) = 2
+    h = 2 × (20 × 1.35 / 72) + 0.12 = 2 × 0.375 + 0.12 = 0.87"
+
+  CRITICAL: zone frame y must start at title_block.y + title_block.h + 0.08" (minimum gap)
+  Never add extra buffer to title_block.h — the renderer compacts it automatically.
 
 ═══════════════════════════
 ZONES
@@ -562,10 +578,11 @@ HEADER DEDUPLICATION:
 - Only use chart_title for a subtitle-style annotation inside the chart plot area when it adds
   information beyond what the zone header already says.
 
-LEGEND POSITION (auto-computed by renderer from frame size, but follow these intent rules):
-- Chart w > 6" (horizontally stretched) → legend on right
-- Chart h > 4.5" AND w ≤ 6" (vertically stretched) → legend on top
-- All other cases → legend on right
+LEGEND POSITION (computed by renderer from chart-to-slide ratio — do not specify in spec):
+- chart.w > 60% of slide width                       → legend RIGHT
+- chart.h > 60% of slide height (and width ≤ 60%)   → legend TOP
+- All other cases: pie chart → legend RIGHT; all other chart types → legend TOP
+- Legend font size is automatically capped at chart_header font size — do not set legend_font_size above heading_style.font_size
 
 PIE CHART CRITICAL: a pie has ONE series but MULTIPLE segments (one per category).
   The renderer colors each segment from series_style[i]. You MUST output one series_style
@@ -1374,13 +1391,18 @@ function buildMinimalSafeSlide(manifestSlide, tokens) {
   const cw  = r2(w - 0.80)
   const ch  = r2(h - ct - 0.40)
 
-  // Pull real key_message points from the manifest zones if available
+  // Pull real content from manifest insight_text artifacts — prefer groups over points
+  let manifestGroups = null
   const manifestPoints = []
   ;(manifestSlide.zones || []).forEach(z =>
     (z.artifacts || []).forEach(a => {
-      if (a.type === 'insight_text') (a.points || []).forEach(p => manifestPoints.push(p))
+      if (a.type === 'insight_text') {
+        if (a.groups && a.groups.length > 0 && !manifestGroups) manifestGroups = a.groups
+        ;(a.points || []).forEach(p => manifestPoints.push(p))
+      }
     })
   )
+  const isGrouped = !!manifestGroups
   const bodyPoints = manifestPoints.length > 0
     ? manifestPoints.slice(0, 4)
     : [manifestSlide.key_message || 'See source document for details']
@@ -1433,13 +1455,27 @@ function buildMinimalSafeSlide(manifestSlide, tokens) {
         x: 0.40, y: ct, w: cw, h: ch,
         padding: { top: 0.10, right: 0.10, bottom: 0.10, left: 0.10 }
       },
-      artifacts: [{
+      artifacts: [isGrouped ? {
         type: 'insight_text',
+        insight_mode: 'grouped',
+        x: 0.50, y: r2(ct + 0.10), w: r2(cw - 0.20), h: r2(ch - 0.20),
+        style:         { fill_color: null, border_color: null, border_width: 0, corner_radius: 0 },
+        heading_style: { font_family: titleFont, font_size: 12, font_weight: 'bold', color: primary },
+        group_layout:  ch > (cw - 0.20) ? 'rows' : 'columns',
+        group_header_style:    { shape: 'rounded_rect', fill_color: primary, text_color: '#FFFFFF', font_family: titleFont, font_size: 10, font_weight: 'bold', corner_radius: 0.04, w: 1.40, h: r2(Math.max(10 * 1.8 / 72, (ch - 0.20) * 0.06)) },
+        group_bullet_box_style:{ fill_color: null, border_color: '#CCCCCC', border_width: 0.75, corner_radius: 0.04, padding: { top: 0.08, right: 0.10, bottom: 0.08, left: 0.10 } },
+        bullet_style:  { font_family: bodyFont, font_size: 10, font_weight: 'regular', color: '#111111', line_spacing: 1.35, indent_inches: 0.10, space_before_pt: 3, char: '▶' },
+        group_gap_in: r2(Math.max((ch - 0.20) * 0.015, 0.05)),
+        header_to_box_gap_in: r2(Math.max(10 * 0.5 / 72, 0.03)),
+        groups:    manifestGroups,
+        sentiment: 'neutral'
+      } : {
+        type: 'insight_text',
+        insight_mode: 'standard',
         x: 0.50, y: r2(ct + 0.10), w: r2(cw - 0.20), h: r2(ch - 0.20),
         style:         { fill_color: null, border_color: primary + '33', border_width: 0.5, corner_radius: 3 },
         heading_style: { font_family: titleFont, font_size: 12, font_weight: 'bold', color: primary },
-        body_style:    { font_family: bodyFont, font_size: 11, font_weight: 'regular', color: '#111111', line_spacing: 1.4, bullet_indent: 0.15 },
-        // Pass actual points through for Agent 6 to render
+        body_style:    { font_family: bodyFont, font_size: 11, font_weight: 'regular', color: '#111111', line_spacing: 1.4, indent_inches: 0.15, list_style: 'bullet', space_before_pt: 5, vertical_distribution: 'spread' },
         heading: 'Key Insight',
         points:  bodyPoints,
         sentiment: 'neutral'
@@ -1471,7 +1507,7 @@ function buildMinimalSafeSlide(manifestSlide, tokens) {
 // produce the same number of artifacts per zone in the same order).
 //
 // Content fields injected per artifact type:
-//   insight_text : heading, points[], sentiment
+//   insight_text : heading, insight_header, insight_mode, points[] (standard), groups[] (grouped), sentiment
 //   chart        : chart_type, chart_title, chart_insight, x_label, y_label,
 //                  categories[], series[], show_data_labels, show_legend
 //   cards        : cards[] (title, subtitle, body, sentiment per card)
@@ -1497,11 +1533,18 @@ function mergeContentIntoZones(designedZones, manifestZones) {
       const t = dArt.type
 
       if (t === 'insight_text') {
+        // Determine mode from manifest — manifest is authoritative for content structure
+        const mGroups = mArt.groups && mArt.groups.length > 0 ? mArt.groups : null
+        const mPoints = mArt.points && mArt.points.length > 0 ? mArt.points : null
+        const resolvedMode = mArt.insight_mode
+          || (mGroups ? 'grouped' : mPoints ? 'standard' : dArt.insight_mode || 'standard')
         return {
           ...dArt,
-          heading:        mArt.heading        || mArt.insight_header || dArt.heading   || 'Key Insight',
+          insight_mode:   resolvedMode,
+          heading:        mArt.heading        || mArt.insight_header || dArt.heading        || 'Key Insight',
           insight_header: mArt.insight_header || mArt.heading        || dArt.insight_header || 'Key Insight',
-          points:         mArt.points         || dArt.points         || [],
+          points:         mPoints             || dArt.points         || [],
+          groups:         mGroups             || dArt.groups         || undefined,
           sentiment:      mArt.sentiment      || dArt.sentiment      || 'neutral'
         }
       }

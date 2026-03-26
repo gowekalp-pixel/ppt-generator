@@ -295,7 +295,7 @@ function safeParseJSON(raw, fallback) {
       ;(z.artifacts || []).forEach(a => {
         const t = a.type
         const hasContent =
-          (t === 'insight_text' && (a.points || []).length > 0) ||
+          (t === 'insight_text' && ((a.points || []).length > 0 || (a.groups || []).length > 0)) ||
           (t === 'chart'        && (a.categories || []).length > 0) ||
           (t === 'cards'        && (a.cards || []).length > 0) ||
           (t === 'workflow'     && (a.nodes || []).some(n => n.label && n.label !== n.id)) ||
@@ -561,11 +561,21 @@ function safeParseJSON(raw, fallback) {
           let hasContent = false
 
           if (t === 'insight_text') {
-            const pts = a.points || []
-            hasContent = pts.length > 0
-            preview = hasContent
-              ? pts.length + ' point' + (pts.length > 1 ? 's' : '') + ' — "' + String(pts[0] || '').slice(0, 45) + (pts[0]?.length > 45 ? '…' : '') + '"'
-              : 'no points'
+            const iMode = a.insight_mode || (a.groups ? 'grouped' : 'standard')
+            if (iMode === 'grouped') {
+              const grps = a.groups || []
+              hasContent = grps.length > 0
+              const totalBullets = grps.reduce((s, g) => s + (g.bullets || []).length, 0)
+              preview = hasContent
+                ? grps.length + ' group' + (grps.length > 1 ? 's' : '') + ', ' + totalBullets + ' bullets [' + (a.group_layout || '?') + '] — "' + String((grps[0] || {}).header || '').slice(0, 35) + '"'
+                : 'no groups'
+            } else {
+              const pts = a.points || []
+              hasContent = pts.length > 0
+              preview = hasContent
+                ? pts.length + ' point' + (pts.length > 1 ? 's' : '') + ' — "' + String(pts[0] || '').slice(0, 45) + (pts[0]?.length > 45 ? '…' : '') + '"'
+                : 'no points'
+            }
           }
           else if (t === 'chart') {
             const cats = a.categories || []
@@ -793,58 +803,148 @@ function safeParseJSON(raw, fallback) {
       const aw = art.w * SCALE, ah = art.h * SCALE
       const st = art.style || {}
       const hs = art.heading_style || {}
-      const bs = art.body_style    || {}
+      const iMode = art.insight_mode || (art.groups ? 'grouped' : 'standard')
 
-      // Background fill + border
+      // Artifact-level background
       if (st.fill_color) {
         ctx.fillStyle = st.fill_color
-        if (st.corner_radius > 0) { roundRect(ctx, ax, ay, aw, ah, st.corner_radius * SCALE/72); ctx.fill() }
-        else { ctx.fillRect(ax, ay, aw, ah) }
-      }
-      if (st.border_color && st.border_width > 0) {
-        ctx.strokeStyle = st.border_color; ctx.lineWidth = st.border_width
-        if (st.corner_radius > 0) { roundRect(ctx, ax, ay, aw, ah, st.corner_radius * SCALE/72); ctx.stroke() }
-        else ctx.strokeRect(ax, ay, aw, ah)
+        ctx.fillRect(ax, ay, aw, ah)
       }
 
-      // Left accent bar
-      ctx.fillStyle = hs.color || zoneColor
-      ctx.fillRect(ax, ay, 3, ah)
+      const pad = 10
+      const hfs = Math.max(8, (hs.font_size || 11) * SCALE / 72)
 
-      const pad  = 10
-      const hfs  = Math.max(8, (hs.font_size || 11) * SCALE / 72)
-      const bfs  = Math.max(7, (bs.font_size  || 10) * SCALE / 72)
-      const lh   = bfs * (bs.line_spacing || 1.5)
-
-      // Heading — use actual heading field
-      ctx.fillStyle = hs.color || zoneColor
-      ctx.font      = 'bold ' + hfs + 'px ' + (hs.font_family || 'Arial')
-      ctx.textAlign = 'left'
-      ctx.fillText(art.heading || 'Key Insight', ax + pad + 4, ay + pad + hfs)
-
-      // Separator line under heading
-      ctx.strokeStyle = (hs.color || zoneColor) + '44'; ctx.lineWidth = 0.5
-      ctx.beginPath(); ctx.moveTo(ax + pad + 4, ay + pad + hfs + 4)
-      ctx.lineTo(ax + aw - pad, ay + pad + hfs + 4); ctx.stroke()
-
-      // Body points — use actual points[] from artifact
-      const points = art.points || []
-      ctx.fillStyle = bs.color || '#111111'
-      ctx.font      = bfs + 'px ' + (bs.font_family || 'Arial')
-      let lineY = ay + pad + hfs + 6 + lh
-      points.slice(0, 5).forEach(pt => {
-        if (lineY + lh > ay + ah - 4) return
-        // bullet
+      // Artifact-level heading (insight_header)
+      let contentY = ay + pad
+      if (art.heading || art.insight_header) {
         ctx.fillStyle = hs.color || zoneColor
-        ctx.fillRect(ax + pad + 4, lineY - bfs * 0.35, 4, 4)
-        // text — truncate to fit width
-        ctx.fillStyle = bs.color || '#111111'
-        const maxW = aw - pad * 2 - 14
-        let txt = String(pt || '')
-        while (txt.length > 4 && ctx.measureText(txt).width > maxW) txt = txt.slice(0, -4) + '...'
-        ctx.fillText(txt, ax + pad + 12, lineY)
-        lineY += lh
-      })
+        ctx.font = 'bold ' + hfs + 'px ' + (hs.font_family || 'Arial')
+        ctx.textAlign = 'left'
+        ctx.fillText(art.heading || art.insight_header || '', ax + 4, contentY + hfs)
+        ctx.strokeStyle = (hs.color || zoneColor) + '44'; ctx.lineWidth = 0.5
+        ctx.beginPath(); ctx.moveTo(ax + 4, contentY + hfs + 3); ctx.lineTo(ax + aw - 4, contentY + hfs + 3); ctx.stroke()
+        contentY += hfs + 8
+      }
+
+      // ── STANDARD MODE: flat bullet list ───────────────────────────────────
+      if (iMode === 'standard') {
+        const bs  = art.body_style || {}
+        const bfs = Math.max(7, (bs.font_size || 10) * SCALE / 72)
+        const lh  = bfs * (bs.line_spacing || 1.5)
+        ctx.fillStyle = hs.color || zoneColor
+        ctx.fillRect(ax, ay, 3, ah)   // left accent bar
+        const points = art.points || []
+        ctx.font = bfs + 'px ' + (bs.font_family || 'Arial')
+        let lineY = contentY + lh
+        points.slice(0, 5).forEach(pt => {
+          if (lineY + lh > ay + ah - 4) return
+          ctx.fillStyle = hs.color || zoneColor
+          ctx.fillRect(ax + pad + 4, lineY - bfs * 0.35, 4, 4)
+          ctx.fillStyle = bs.color || '#111111'
+          const maxW = aw - pad * 2 - 14
+          let txt = String(pt || '')
+          while (txt.length > 4 && ctx.measureText(txt).width > maxW) txt = txt.slice(0, -4) + '...'
+          ctx.fillText(txt, ax + pad + 12, lineY)
+          lineY += lh
+        })
+
+      // ── GROUPED MODE: group headers + bullet boxes ─────────────────────────
+      } else {
+        const groups     = art.groups || []
+        const ghs        = art.group_header_style  || {}
+        const gbs        = art.group_bullet_box_style || {}
+        const bsty       = art.bullet_style        || {}
+        const gapPx      = (art.group_gap_in       || 0.10) * SCALE
+        const hbGapPx    = (art.header_to_box_gap_in || 0.05) * SCALE
+        const headerFill = ghs.fill_color  || zoneColor
+        const headerText = ghs.text_color  || '#111111'
+        const boxBorder  = gbs.border_color || '#CCCCCC'
+        const bfs        = Math.max(7, (bsty.font_size || 10) * SCALE / 72)
+        const lh         = bfs * (bsty.line_spacing || 1.4)
+        const gLayout    = art.group_layout || 'columns'
+        const n          = groups.length || 1
+        const padV       = Math.max(4, (gbs.padding?.top    || 0.08) * SCALE)
+        const padH       = Math.max(4, (gbs.padding?.left   || 0.10) * SCALE)
+        const headerH    = (ghs.h || 0.38) * SCALE
+        const usedH      = contentY - ay
+        const totalBullets = groups.reduce((s, g) => s + (g.bullets || []).length, 0) || 1
+
+        if (gLayout === 'columns') {
+          const colW = (aw - (n - 1) * gapPx) / n
+          const boxH = ah - usedH - headerH - hbGapPx
+          groups.forEach((g, i) => {
+            const cx = ax + i * (colW + gapPx)
+            // group header bar
+            ctx.fillStyle = headerFill
+            roundRect(ctx, cx, contentY, colW, headerH, 3); ctx.fill()
+            ctx.fillStyle = headerText
+            ctx.font = 'bold ' + Math.max(7, bfs * 0.95) + 'px Arial'
+            ctx.textAlign = 'center'
+            let hTxt = String(g.header || '')
+            while (hTxt.length > 3 && ctx.measureText(hTxt).width > colW - 8) hTxt = hTxt.slice(0, -4) + '…'
+            ctx.fillText(hTxt, cx + colW / 2, contentY + headerH * 0.65)
+            // bullet box
+            const by = contentY + headerH + hbGapPx
+            ctx.strokeStyle = boxBorder; ctx.lineWidth = 0.8
+            ctx.fillStyle = gbs.fill_color || '#FAFAFA'
+            roundRect(ctx, cx, by, colW, boxH, 3); ctx.fill(); ctx.stroke()
+            // bullets
+            ctx.fillStyle = bsty.color || '#111111'
+            ctx.font = bfs + 'px Arial'; ctx.textAlign = 'left'
+            let lineY = by + padV + lh
+            ;(g.bullets || []).slice(0, 6).forEach(pt => {
+              if (lineY + lh > by + boxH - 2) return
+              ctx.fillStyle = headerFill
+              ctx.fillRect(cx + padH, lineY - bfs * 0.35, 3, 3)
+              ctx.fillStyle = bsty.color || '#111111'
+              const maxW = colW - padH * 2 - 10
+              let txt = String(pt || '')
+              while (txt.length > 3 && ctx.measureText(txt).width > maxW) txt = txt.slice(0, -4) + '…'
+              ctx.fillText(txt, cx + padH + 7, lineY)
+              lineY += lh
+            })
+          })
+        } else {
+          // rows layout — row heights proportional to bullet count
+          const totalRowH = ah - usedH - (n - 1) * gapPx
+          const headerW   = (ghs.w || 1.2) * SCALE
+          let curY = contentY
+          groups.forEach((g, i) => {
+            const rowH = Math.max(headerH + hbGapPx + lh + padV, totalRowH * ((g.bullets || []).length / totalBullets))
+            const boxX = ax + headerW + hbGapPx
+            const boxW = aw - headerW - hbGapPx
+            // group header block (left side)
+            ctx.fillStyle = headerFill
+            roundRect(ctx, ax, curY, headerW, rowH, 3); ctx.fill()
+            ctx.fillStyle = headerText
+            ctx.font = 'bold ' + Math.max(7, bfs * 0.9) + 'px Arial'
+            ctx.textAlign = 'center'
+            let hTxt = String(g.header || '')
+            while (hTxt.length > 3 && ctx.measureText(hTxt).width > headerW - 8) hTxt = hTxt.slice(0, -4) + '…'
+            ctx.fillText(hTxt, ax + headerW / 2, curY + rowH / 2 + bfs * 0.35)
+            // bullet box (right side)
+            ctx.strokeStyle = boxBorder; ctx.lineWidth = 0.8
+            ctx.fillStyle = gbs.fill_color || '#FAFAFA'
+            roundRect(ctx, boxX, curY, boxW, rowH, 3); ctx.fill(); ctx.stroke()
+            // bullets
+            ctx.fillStyle = bsty.color || '#111111'
+            ctx.font = bfs + 'px Arial'; ctx.textAlign = 'left'
+            let lineY = curY + padV + lh
+            ;(g.bullets || []).slice(0, 6).forEach(pt => {
+              if (lineY + lh > curY + rowH - 2) return
+              ctx.fillStyle = headerFill
+              ctx.fillRect(boxX + padH, lineY - bfs * 0.35, 3, 3)
+              ctx.fillStyle = bsty.color || '#111111'
+              const maxW = boxW - padH * 2 - 10
+              let txt = String(pt || '')
+              while (txt.length > 3 && ctx.measureText(txt).width > maxW) txt = txt.slice(0, -4) + '…'
+              ctx.fillText(txt, boxX + padH + 7, lineY)
+              lineY += lh
+            })
+            curY += rowH + gapPx
+          })
+        }
+      }
     }
 
     // ── chart ───────────────────────────────────────────────────────────────

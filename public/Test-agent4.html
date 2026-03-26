@@ -506,9 +506,20 @@
     }
 
     else if (t === 'insight_text') {
-      header = `<span class="ah-type atype-insight_text">INSIGHT</span><span class="ah-detail">${a.heading||'Key Insight'}</span>`
-      body = `<div class="insight-heading ${a.sentiment||'neutral'}">${a.heading||'Key Insight'}</div>
-        <ul class="insight-points">${(a.points||[]).slice(0,4).map(p=>`<li>${p}</li>`).join('')}</ul>`
+      const iMode = a.insight_mode || (a.groups ? 'grouped' : 'standard')
+      const modeLabel = iMode === 'grouped' ? 'GROUPED' : 'INSIGHT'
+      header = `<span class="ah-type atype-insight_text">${modeLabel}</span><span class="ah-detail">${a.insight_header||a.heading||'Key Insight'}</span>`
+      if (iMode === 'grouped') {
+        const groupLayout = a.group_layout || 'rows'
+        const groupsHtml = (a.groups||[]).slice(0,4).map(g =>
+          `<li><strong>${g.header||''}</strong>: ${(g.bullets||[]).slice(0,3).join(' · ')}</li>`
+        ).join('')
+        body = `<div class="insight-heading ${a.sentiment||'neutral'}">${a.insight_header||a.heading||'Key Insight'} <em style="font-size:10px;opacity:0.7">(${groupLayout})</em></div>
+          <ul class="insight-points">${groupsHtml}</ul>`
+      } else {
+        body = `<div class="insight-heading ${a.sentiment||'neutral'}">${a.insight_header||a.heading||'Key Insight'}</div>
+          <ul class="insight-points">${(a.points||[]).slice(0,4).map(p=>`<li>${p}</li>`).join('')}</ul>`
+      }
     }
 
     else if (t === 'cards') {

@@ -748,20 +748,21 @@ NOTE: Use either "points" (STANDARD mode) or "groups" (LARGE mode) — never bot
 
 STEP 1 — CLASSIFY INSIGHT SIZE
 
-If ANY of the following is true:
-- insight_text zone MIN_HEIGHT ≥ 60% of slide content area
-- OR insight_text zone MIN_WIDTH ≥ 60% of slide content area
-- OR zone containing insight_text is PRIMARY and visually dominant (no co-equal chart/workflow)
+LARGE INSIGHT — use STRUCTURED MODE (groups) — if ANY of:
+A. insight_text zone height ≥ 60% of slide content area height
+B. insight_text zone width  ≥ 60% of slide content area width
+C. zone is PRIMARY and visually dominant (no co-equal chart/workflow)
+D. insight has ≥ 4 bullet points regardless of zone size
 
-→ classify as: LARGE INSIGHT → use STRUCTURED MODE (groups)
+STANDARD INSIGHT — use BULLET MODE (points) — only if ALL of:
+- zone height < 60% of slide content area
+- zone width  < 60% of slide content area
+- zone is clearly secondary (paired with dominant chart/workflow)
+- bullet point count ≤ 3
 
-Else:
-→ classify as: STANDARD INSIGHT → use BULLET MODE (points)
-
-DO NOT use STRUCTURED MODE if:
-- insight_text is supporting (≤ 40% area)
-- insight is paired with a dominant chart or workflow
-- insight is clearly secondary in narrative weight
+RULE PRIORITY: A, B, C, D override the standard conditions.
+If height ≥ 60% OR width ≥ 60% OR bullets ≥ 4 → always LARGE, even when paired with a chart.
+"Paired with a chart" alone is NOT sufficient to force STANDARD mode.
 
 ---
 
@@ -819,6 +820,12 @@ CONTENT INTEGRITY RULES (strict — applies to both modes):
 VISUAL INTENT:
 - LARGE INSIGHT → user scans group headers first, then reads bullets
 - STANDARD INSIGHT → user reads flat list top-to-bottom
+
+GROUPING GUIDANCE when insight is paired alongside a chart (side-by-side layout):
+- Prefer "rows" group_layout — stacks groups vertically within the insight zone
+- Groups should reflect the narrative categories of the insight (e.g. exposure facts, risk implications, actions)
+- Aim for 2–3 groups with 2–3 bullets each — keeps the zone balanced with the chart
+- Do NOT use "columns" layout in a narrow side zone (< 45% slide width) — insufficient horizontal space
 
 ═══════════════════════════
 ARTIFACT 2: chart

@@ -334,10 +334,45 @@ def find_layout_by_name(prs, name):
     return None
 
 
+def _compact_title_placeholder(slide, title_ph, text, font_size):
+    """Shrink the title placeholder to fit its actual wrapped text height,
+    then move all content placeholders up and expand them to reclaim the freed space.
+    This eliminates the blank gap between a short title and the content area."""
+    try:
+        ph_w_in  = title_ph.width  / 914400.0   # EMU → inches
+        n_lines  = estimate_wrapped_lines(text, max(0.5, ph_w_in), font_size)
+        line_h   = (float(font_size) * 1.35) / 72.0   # inches per line incl. leading
+        new_h_in = max(0.25, n_lines * line_h + 0.12)  # small top/bottom padding
+
+        old_h_emu     = title_ph.height
+        new_h_emu     = int(new_h_in * 914400)
+        shrink_emu    = old_h_emu - new_h_emu         # positive = placeholder got shorter
+        old_bottom    = title_ph.top + old_h_emu
+
+        if shrink_emu <= int(0.05 * 914400):          # less than 0.05" — not worth moving
+            return
+
+        title_ph.height = new_h_emu
+
+        # Move every non-title placeholder that sits at or below the old title bottom
+        # upward by the full shrink amount and expand its height to keep the same bottom.
+        threshold = old_bottom - int(0.3 * 914400)    # allow 0.3" tolerance
+        for ph in slide.placeholders:
+            if ph.placeholder_format.idx == 0:
+                continue
+            if ph.top >= threshold:
+                ph.top    = max(0, ph.top - shrink_emu)
+                ph.height = ph.height + shrink_emu
+    except Exception as e:
+        print('_compact_title_placeholder error:', e)
+
+
 def place_in_placeholder(slide, ph_idx, text, style_spec, bt):
     """
     Write text into the placeholder at ph_idx on the slide.
     Falls back to a free-form text box if the placeholder is not found.
+    For the title placeholder (idx 0), the placeholder is compacted to the actual
+    text height so no blank gap appears between the title and the content area.
     """
     if not text:
         return
@@ -349,6 +384,7 @@ def place_in_placeholder(slide, ph_idx, text, style_spec, bt):
             if ph.placeholder_format.idx == ph_idx:
                 tf = ph.text_frame
                 tf.clear()
+                tf.word_wrap = True
                 p   = tf.paragraphs[0]
                 run = p.add_run()
                 run.text = str(text)
@@ -360,6 +396,8 @@ def place_in_placeholder(slide, ph_idx, text, style_spec, bt):
                 set_font(run, font_family, font_size, bold, False, color_hex)
                 align_map = {'left': PP_ALIGN.LEFT, 'center': PP_ALIGN.CENTER, 'right': PP_ALIGN.RIGHT}
                 p.alignment = align_map.get(align, PP_ALIGN.LEFT)
+                if ph_idx == 0:
+                    _compact_title_placeholder(slide, ph, text, font_size)
                 return
     except Exception as e:
         print(f'place_in_placeholder({ph_idx}) lookup error:', e)
@@ -673,7 +711,7 @@ def _apply_dual_axis(chart, secondary_series_names):
     etree.SubElement(sec_val_ax, nsmap.qn('c:crossBetween')).set('val', 'between')
 
 
-def render_chart(slide, artifact, bt, suppress_heading=False):
+def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, slide_h=7.5):
     """Render a chart artifact using python-pptx native charts.
 
     suppress_heading — when True the artifact heading was already written to a layout
@@ -776,12 +814,11 @@ def render_chart(slide, artifact, bt, suppress_heading=False):
     # Legend placement — driven by rendered chart footprint on the slide.
     # XL_LEGEND_POSITION: BOTTOM=3  RIGHT=4  TOP=1  LEFT=2
     # Rules:
-    #   a) chart width  > 60% of slide width  → RIGHT
-    #   b) else if chart height > 60% of slide height → TOP
+    #   a) chart width  > 60% of actual slide width  → RIGHT
+    #   b) else if chart height > 60% of actual slide height → TOP
     #   c) else pie charts → RIGHT; other charts → TOP
-    SLIDE_W, SLIDE_H = 10.0, 7.5
-    chart_w_ratio = (float(w) / SLIDE_W) if SLIDE_W > 0 else 0.0
-    chart_h_ratio = (float(h) / SLIDE_H) if SLIDE_H > 0 else 0.0
+    chart_w_ratio = (float(w) / float(slide_w)) if slide_w > 0 else 0.0
+    chart_h_ratio = (float(h) / float(slide_h)) if slide_h > 0 else 0.0
     if chart_w_ratio > 0.60:
         legend_pos = 4   # RIGHT
     elif chart_h_ratio > 0.60:
@@ -1702,7 +1739,7 @@ def _write_heading_to_header_ph(slide, heading_text, header_ph_idx, bt, header_s
     return None
 
 
-def render_artifact(slide, artifact, bt, ph_frame=None, header_ph_idx=None, header_style='underline'):
+def render_artifact(slide, artifact, bt, ph_frame=None, header_ph_idx=None, header_style='underline', slide_w=13.33, slide_h=7.5):
     """
     Dispatch to the correct renderer based on artifact type.
 
@@ -1806,7 +1843,8 @@ def render_artifact(slide, artifact, bt, ph_frame=None, header_ph_idx=None, head
         if   t == 'insight_text': render_insight_text(slide, artifact, bt,
                                                        suppress_heading=suppress_internal_heading)
         elif t == 'chart':        render_chart(slide, artifact, bt,
-                                               suppress_heading=suppress_internal_heading)
+                                               suppress_heading=suppress_internal_heading,
+                                               slide_w=slide_w, slide_h=slide_h)
         elif t == 'cards':        render_cards(slide, artifact, bt)
         elif t == 'workflow':     render_workflow(slide, artifact, bt)
         elif t == 'table':        render_table(slide, artifact, bt)
@@ -2147,7 +2185,15 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
                 tb.get('font_size', 20),
                 tb.get('font_weight', 'bold') in ('bold', 'semibold'),
                 tb.get('color', bt.get('title_color', '#1A3C8F')),
-                tb.get('align', 'left'), 'middle')
+                tb.get('align', 'left'), 'top')
+            # Scratch mode: shrink title box to actual text height so blank space
+            # below the title doesn't inflate the visual gap to the content zone.
+            try:
+                _tf = slide.shapes[-1].text_frame
+                _tf.auto_size = MSO_AUTO_SIZE.SHAPE_TO_FIT_TEXT
+                _tf.vertical_anchor = MSO_ANCHOR.TOP
+            except Exception:
+                pass
         if sb.get('text'):
             add_text_box(slide,
                 sb.get('x', 0.4), sb.get('y', 1.0),
@@ -2245,7 +2291,9 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
                         'h': max(0.2, float(_zf['h']) - _zt - _zb),
                     }
 
-            render_artifact(slide, artifact, bt, ph_frame=ph_frame, header_ph_idx=hdr_ph_idx, header_style=slide_header_style)
+            render_artifact(slide, artifact, bt, ph_frame=ph_frame, header_ph_idx=hdr_ph_idx, header_style=slide_header_style,
+                            slide_w=float(cvs.get('width_in') or 13.33),
+                            slide_h=float(cvs.get('height_in') or 7.5))
 
     # ── Global elements (scratch only) ────────────────────────────────────────
     if not use_template:
