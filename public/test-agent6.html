@@ -113,8 +113,8 @@
   <div class="card">
     <div class="card-title">Agent 5 Designed Spec JSON — Step 2</div>
 
-    <div class="hint">Paste the full JSON array from Agent 5 output (each slide has canvas, blocks[], zones, brand_tokens)</div>
-    <textarea id="spec-input" placeholder='[ { "slide_number": 1, "slide_type": "title", "canvas": { "width_in": 11.02, ... }, "blocks": [...], "zones": [], ... }, ... ]'></textarea>
+    <div class="hint">Paste the full JSON array from Agent 5 output (each slide has canvas, blocks[], and brand_tokens).</div>
+    <textarea id="spec-input" placeholder='[ { "slide_number": 1, "slide_type": "title", "canvas": { "width_in": 11.02, ... }, "blocks": [...], "brand_tokens": {...} }, ... ]'></textarea>
 
     <div class="upload-zone" id="zone-spec">
       <input type="file" accept=".json" onchange="loadSpecFile(this)">
@@ -227,14 +227,14 @@
 
     // Block type counts from blocks[] (primary render contract)
     const blockCounts = {}
-    const artTypeCounts = {}  // artifact types from zones[] for display alongside
+    const artTypeCounts = {}  // structural artifact types from zones_summary when present
     spec.forEach(s => {
       ;(s.blocks || []).forEach(b => {
         const bt = b.block_type || 'unknown'
         blockCounts[bt] = (blockCounts[bt] || 0) + 1
       })
-      ;(s.zones || []).forEach(z =>
-        (z.artifacts || []).forEach(a => { artTypeCounts[a.type] = (artTypeCounts[a.type] || 0) + 1 })
+      ;(s.zones_summary || []).forEach(z =>
+        (z.artifact_types || []).forEach(t => { artTypeCounts[t] = (artTypeCounts[t] || 0) + 1 })
       )
     })
 
@@ -255,7 +255,7 @@
     document.getElementById('sum-grid').innerHTML +=
       `<div style="grid-column:1/-1;">` +
       (blockBar ? `<div style="margin-bottom:4px;font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.05em;">blocks[]</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;">${blockBar}</div>` : '') +
-      (artBar   ? `<div style="margin-bottom:4px;font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.05em;">artifacts (zones)</div><div style="display:flex;gap:4px;flex-wrap:wrap;">${artBar}</div>` : '') +
+      (artBar   ? `<div style="margin-bottom:4px;font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.05em;">artifacts (summary)</div><div style="display:flex;gap:4px;flex-wrap:wrap;">${artBar}</div>` : '') +
       `</div>`
 
     // Slide list — show block count per slide; prefer blocks[], fall back to artifact types
@@ -274,11 +274,11 @@
           .map(b => b.block_type)
           .filter(t => ['chart','table','workflow','bullet_list','circle'].includes(t))
         )]
-        const artTypes = [...new Set((s.zones || []).flatMap(z => (z.artifacts || []).map(a => a.type)))]
+        const artTypes = [...new Set((s.zones_summary || []).flatMap(z => z.artifact_types || []))]
         pillsHtml = artTypes.map(t => `<span class="ap ap-${t}">${t}</span>`).join('')
           + `<span style="font-size:9px;background:#f0fdf4;color:#166534;padding:1px 5px;border-radius:10px;font-weight:600;">${slideBlocks.length} blocks</span>`
       } else {
-        const arts = (s.zones || []).flatMap(z => (z.artifacts || []).map(a => a.type))
+        const arts = (s.zones_summary || []).flatMap(z => z.artifact_types || [])
         pillsHtml = [...new Set(arts)].map(t => `<span class="ap ap-${t}">${t}</span>`).join('')
       }
 

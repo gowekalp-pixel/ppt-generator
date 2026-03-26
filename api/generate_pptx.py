@@ -61,11 +61,60 @@ def renderer_fallback_allowed(spec):
     """Whether Agent 6 is allowed to make design-time fallback decisions."""
     if not isinstance(spec, dict):
         return False
+    policy = spec.get('fallback_policy') or {}
     return bool(
         spec.get('allow_renderer_fallback') or
         spec.get('allow_renderer_fit') or
-        spec.get('allow_renderer_layout_fallback')
+        spec.get('allow_renderer_layout_fallback') or
+        (isinstance(policy, dict) and (
+            policy.get('allow_renderer_fallback') or
+            policy.get('allow_renderer_fit') or
+            policy.get('allow_renderer_layout_fallback')
+        ))
     )
+
+
+def fallback_policy_mode(spec, artifact_type=None, artifact_subtype=None):
+    """Subtype-aware fallback mode supplied by Agent 5 block metadata."""
+    if not isinstance(spec, dict):
+        return None
+    policy = spec.get('fallback_policy') or {}
+    if not isinstance(policy, dict) or not renderer_fallback_allowed(spec):
+        return None
+    p_type = policy.get('artifact_type')
+    p_subtype = policy.get('artifact_subtype')
+    if artifact_type and p_type and p_type != artifact_type:
+        return None
+    if artifact_subtype and p_subtype and p_subtype != artifact_subtype:
+        return None
+    return policy.get('fallback_mode') or 'subtype_default'
+
+
+def apply_block_render_metadata(artifact, block, default_type=None, default_subtype=None):
+    """Copy Agent 5 block-level render metadata onto artifact dicts used by legacy renderers."""
+    artifact = dict(artifact or {})
+    if not isinstance(block, dict):
+        return artifact
+    artifact_type = block.get('artifact_type') or artifact.get('artifact_type') or default_type
+    artifact_subtype = block.get('artifact_subtype') or artifact.get('artifact_subtype') or default_subtype
+    if artifact_type:
+        artifact['artifact_type'] = artifact_type
+    if artifact_subtype:
+        artifact['artifact_subtype'] = artifact_subtype
+    if block.get('artifact_header_text') is not None:
+        artifact['artifact_header_text'] = block.get('artifact_header_text')
+    if block.get('block_role') is not None:
+        artifact['block_role'] = block.get('block_role')
+    policy = block.get('fallback_policy')
+    if isinstance(policy, dict):
+        artifact['fallback_policy'] = dict(policy)
+        if policy.get('allow_renderer_fallback'):
+            artifact['allow_renderer_fallback'] = True
+        if policy.get('allow_renderer_fit'):
+            artifact['allow_renderer_fit'] = True
+        if policy.get('allow_renderer_layout_fallback'):
+            artifact['allow_renderer_layout_fallback'] = True
+    return artifact
 CHART_HEADER_GAP = 0.11
 OPTICAL_NUDGE = 0.02
 
@@ -891,6 +940,9 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
     _computed_legend_pos   = art_computed.get('legend_position', None)
     _computed_label_size   = art_computed.get('data_label_size', None)
     _computed_cat_rotation = art_computed.get('category_label_rotation', None)
+    chart_subtype = artifact.get('artifact_subtype') or chart_type_str
+    chart_fallback_mode = fallback_policy_mode(artifact, 'chart', chart_subtype)
+    allow_chart_fallback = bool(chart_fallback_mode)
 
     # Adaptive data label size — always a proportion of header_font_size.
     # A density factor (0.0–1.0) scales down the ratio when categories are
@@ -898,7 +950,7 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
     # Use Agent 5 pre-computed value when available, else fall back to heuristic.
     if _computed_label_size is not None:
         max_chart_label_size = int(_computed_label_size)
-    else:
+    elif allow_chart_fallback:
         _n_cat   = max(1, len(categories))
         _chart_w = float(w or 5)
         _chart_h = float(h or 3)
@@ -916,6 +968,8 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
             round(header_font_size * 0.55),
             round(header_font_size * 0.75 * _density)
         )
+    else:
+        max_chart_label_size = int(cs.get('label_font_size') or header_font_size or 9)
 
     # Map chart type string to XL_CHART_TYPE
     chart_type_map = {
@@ -976,7 +1030,7 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
     _legend_pos_map = {'right': 4, 'top': 1, 'bottom': 3, 'left': 2, 'none': None}
     if _computed_legend_pos is not None and _computed_legend_pos in _legend_pos_map:
         legend_pos = _legend_pos_map[_computed_legend_pos]
-    else:
+    elif allow_chart_fallback:
         # Heuristic:
         #   a) chart width  > 60% of actual slide width  → RIGHT
         #   b) else if chart height > 60% of actual slide height → TOP
@@ -991,6 +1045,8 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
             legend_pos = 4   # RIGHT
         else:
             legend_pos = 1   # TOP
+    else:
+        legend_pos = _legend_pos_map.get(cs.get('legend_position', 'none'))
 
     # If _computed says 'none', treat as no legend regardless of show_legend flag
     _effective_show_legend = show_legend and (legend_pos is not None)
@@ -999,17 +1055,22 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
         try:
             chart.legend.position = legend_pos
             chart.legend.include_in_layout = True   # keep legend inside chart frame, not floating
-            legend_font_size = min(int(cs.get('legend_font_size', header_font_size) or header_font_size), header_font_size)
+            legend_font_size = int(cs.get('legend_font_size', header_font_size) or header_font_size)
+            if allow_chart_fallback:
+                legend_font_size = min(legend_font_size, header_font_size)
             chart.legend.font.size = Pt(max(7, legend_font_size))
             chart.legend.font.color.rgb = hex_to_rgb(cs.get('legend_color', bt.get('body_color', '#000000')))
         except Exception:
             pass
 
-    # Remove gridlines for a cleaner chart surface.
+    # Gridlines are controlled by Agent 5 on the normal path; fallback may suppress them.
     try:
         if hasattr(chart, 'value_axis') and chart.value_axis is not None:
-            chart.value_axis.has_major_gridlines = False
-            chart.value_axis.has_minor_gridlines = False
+            if cs.get('show_gridlines') is True:
+                chart.value_axis.has_major_gridlines = True
+            else:
+                chart.value_axis.has_major_gridlines = False
+                chart.value_axis.has_minor_gridlines = False
     except Exception:
         pass
 
@@ -1019,11 +1080,12 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
             color_hex = None
             if si < len(series_styles):
                 color_hex = series_styles[si].get('fill_color')
-            if not color_hex:
+            if not color_hex and allow_chart_fallback:
                 color_hex = chart_palette[si % len(chart_palette)]
             try:
-                ser_obj.format.fill.solid()
-                ser_obj.format.fill.fore_color.rgb = hex_to_rgb(color_hex)
+                if color_hex:
+                    ser_obj.format.fill.solid()
+                    ser_obj.format.fill.fore_color.rgb = hex_to_rgb(color_hex)
             except Exception:
                 pass
             if show_labels:
@@ -1037,9 +1099,11 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
                             pass
                     else:
                         ser_obj.data_labels.show_value = True
-                    lbl_color = (series_styles[si].get('data_label_color', '#000000')
-                                 if si < len(series_styles) else '#000000')
-                    _lbl_size = min(max_chart_label_size, header_font_size)
+                    lbl_color = (series_styles[si].get('data_label_color')
+                                 if si < len(series_styles) else None)
+                    if not lbl_color:
+                        lbl_color = '#000000' if allow_chart_fallback else bt.get('body_color', '#000000')
+                    _lbl_size = min(max_chart_label_size, header_font_size) if allow_chart_fallback else max_chart_label_size
                     _lbl_pt = Pt(_lbl_size)
                     _lbl_rgb = hex_to_rgb(lbl_color)
                     # Set at series level first — this is the reliable path in python-pptx
@@ -1066,16 +1130,20 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
             for ser_obj in chart.series:
                 for pi, point_obj in enumerate(ser_obj.points):
                     c_hex = (series_styles[pi].get('fill_color')
-                             if pi < len(series_styles) else None) or \
-                            chart_palette[pi % len(chart_palette)]
-                    point_obj.format.fill.solid()
-                    point_obj.format.fill.fore_color.rgb = hex_to_rgb(c_hex)
+                             if pi < len(series_styles) else None)
+                    if not c_hex and allow_chart_fallback:
+                        c_hex = chart_palette[pi % len(chart_palette)]
+                    if c_hex:
+                        point_obj.format.fill.solid()
+                        point_obj.format.fill.fore_color.rgb = hex_to_rgb(c_hex)
         except Exception:
             pass
 
     # Axis font sizes + category label rotation for many categories
     try:
-        ax_font_size = min(cs.get('axis_font_size', 9), max_chart_label_size)
+        ax_font_size = cs.get('axis_font_size', 9)
+        if allow_chart_fallback:
+            ax_font_size = min(ax_font_size, max_chart_label_size)
         ax_color     = cs.get('axis_color', '#000000')
         for ax in (chart.category_axis, chart.value_axis):
             try:
@@ -1086,15 +1154,17 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
 
         # Rotate category labels — prefer Agent 5 pre-computed rotation; fall back to heuristic.
         n_cats = len(categories)
-        _apply_rotation = (
-            _computed_cat_rotation == -45
-            if _computed_cat_rotation is not None
-            else (chart_type_str in ('bar', 'line', 'clustered_bar') and n_cats > 6)
-        )
-        if _apply_rotation:
+        if _computed_cat_rotation is not None:
+            rotation_deg = float(_computed_cat_rotation)
+        elif allow_chart_fallback and chart_type_str in ('bar', 'line', 'clustered_bar') and n_cats > 6:
+            rotation_deg = -45.0
+        else:
+            rotation_deg = None
+        if rotation_deg is not None:
             try:
                 # -2700000 EMU = -270 degrees = 45° slanted (OOXML uses 1/60000 degree units * -1)
                 # rotation: -45 degrees = -2700000 in OOXML tickLblSkip/txPr
+                rotation_emu = str(int(rotation_deg * 60000))
                 cat_ax = chart.category_axis
                 txPr = cat_ax.tick_labels._txPr
                 if txPr is None:
@@ -1103,7 +1173,7 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
                         cat_ax.tick_labels._element,
                         nsmap.qn('c:txPr')
                     )
-                    etree.SubElement(txPr_elem, nsmap.qn('a:bodyPr')).set('rot', '-2700000')
+                    etree.SubElement(txPr_elem, nsmap.qn('a:bodyPr')).set('rot', rotation_emu)
                     etree.SubElement(txPr_elem, nsmap.qn('a:lstStyle'))
                     p = etree.SubElement(txPr_elem, nsmap.qn('a:p'))
                     pr = etree.SubElement(p, nsmap.qn('a:pPr'))
@@ -1111,7 +1181,7 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
                 else:
                     bodyPr = txPr.find(nsmap.qn('a:bodyPr'))
                     if bodyPr is not None:
-                        bodyPr.set('rot', '-2700000')
+                        bodyPr.set('rot', rotation_emu)
             except Exception:
                 pass
     except Exception:
@@ -1694,6 +1764,10 @@ def render_table(slide, artifact, bt):
     col_ws  = artifact.get('column_widths', [])
     row_hs  = artifact.get('row_heights', [])
     hl_rows = artifact.get('highlight_rows', [])
+    pre_col_xs = artifact.get('column_x_positions', [])
+    pre_row_ys = artifact.get('row_y_positions', [])
+    header_cell_frames = artifact.get('header_cell_frames', [])
+    body_cell_frames = artifact.get('body_cell_frames', [])
 
     if not headers:
         add_text_box(slide, x, y, w, h, 'Table (no headers)', 'Arial', 10,
@@ -1735,10 +1809,18 @@ def render_table(slide, artifact, bt):
     pre_row_hs      = artifact.get('row_heights', [])
     pre_hdr_h       = artifact.get('header_row_height', None)
 
-    if pre_col_ws and len(pre_col_ws) == n_cols:
+    if header_cell_frames and len(header_cell_frames) == n_cols:
+        norm_col_ws = [float(cf.get('w', 0)) for cf in header_cell_frames]
+    elif pre_col_ws and len(pre_col_ws) == n_cols:
         norm_col_ws = list(pre_col_ws)
     else:
         norm_col_ws = _auto_col_widths()
+
+    if header_cell_frames and len(header_cell_frames) == n_cols:
+        x = float(header_cell_frames[0].get('x', x))
+        y = float(header_cell_frames[0].get('y', y))
+        if pre_col_xs and len(pre_col_xs) == n_cols:
+            x = float(pre_col_xs[0])
 
     if pre_hdr_h is not None and pre_row_hs and len(pre_row_hs) == len(data_rows):
         # Build full row heights list: [header_h, data_row_h...]
@@ -1746,11 +1828,24 @@ def render_table(slide, artifact, bt):
         row_total = sum(norm_row_hs)
         if row_total > h:
             norm_row_hs = [rh * (h / row_total) for rh in norm_row_hs]
+    elif header_cell_frames and body_cell_frames:
+        header_h = float(header_cell_frames[0].get('h', pre_hdr_h or 0.35))
+        body_hs = []
+        for row_frames in body_cell_frames:
+            if row_frames:
+                body_hs.append(float(row_frames[0].get('h', 0)))
+        norm_row_hs = [header_h] + body_hs
     else:
         norm_row_hs = [max(TABLE_MIN_ROW_HEIGHT, rh) for rh in _norm_sizes(row_hs, n_rows, h)]
         row_total = sum(norm_row_hs)
         if row_total > h:
             norm_row_hs = [rh * (h / row_total) for rh in norm_row_hs]
+
+    if pre_row_ys and len(pre_row_ys) >= 1:
+        y = float(pre_row_ys[0])
+
+    w = sum(norm_col_ws) if norm_col_ws else w
+    h = sum(norm_row_hs) if norm_row_hs else h
 
     try:
         table_shape = slide.shapes.add_table(n_rows, n_cols, inches(x), inches(y), inches(w), inches(h))
@@ -1777,7 +1872,7 @@ def render_table(slide, artifact, bt):
         b_size  = ts.get('body_font_size', 10)
         hl_fill = ts.get('highlight_fill_color')
         grid_c  = ts.get('grid_color', '#CCCCCC')
-        cell_p  = max(0.08, min(0.10, ts.get('cell_padding', CELL_PADDING) or CELL_PADDING))
+        cell_p  = float(ts.get('cell_padding', CELL_PADDING) or CELL_PADDING)
 
         # Detect which columns are numeric (right-align) vs text (left-align).
         # Use Agent 5 pre-computed column_types/alignments when available.
@@ -1869,7 +1964,12 @@ def render_table(slide, artifact, bt):
                     # Numeric columns → right-align; text columns → left-align.
                     # Prefer Agent 5 pre-computed alignments when available.
                     if pre_col_aligns and ci < len(pre_col_aligns):
-                        align = PP_ALIGN.RIGHT if pre_col_aligns[ci] == 'right' else PP_ALIGN.LEFT
+                        if pre_col_aligns[ci] == 'right':
+                            align = PP_ALIGN.RIGHT
+                        elif pre_col_aligns[ci] == 'center':
+                            align = PP_ALIGN.CENTER
+                        else:
+                            align = PP_ALIGN.LEFT
                     else:
                         align = PP_ALIGN.RIGHT if col_is_numeric[ci] else PP_ALIGN.LEFT
                     cell.text_frame.paragraphs[0].alignment = align
@@ -2361,6 +2461,7 @@ def render_block_bullet_list(slide, block, bt):
         if not bs.get('padding_bottom'): bs['padding_bottom'] = 0.08
         if not bs.get('padding_left'):   bs['padding_left']   = 0.10
         if not bs.get('padding_right'):  bs['padding_right']  = 0.10
+    artifact = apply_block_render_metadata(artifact, block, default_type='insight_text', default_subtype='standard')
     render_insight_text(slide, artifact, bt, suppress_heading=True)
 
 
@@ -2369,6 +2470,11 @@ def render_block_chart(slide, block, bt):
     # Build artifact dict compatible with render_chart
     artifact = dict(block)
     artifact['type'] = 'chart'
+    if not artifact.get('chart_type') and block.get('artifact_subtype'):
+        artifact['chart_type'] = block.get('artifact_subtype')
+    if not artifact.get('chart_header') and block.get('artifact_header_text'):
+        artifact['chart_header'] = block.get('artifact_header_text')
+    artifact = apply_block_render_metadata(artifact, block, default_type='chart', default_subtype=artifact.get('chart_type'))
     # Map pre-computed fields into _computed sub-dict for backward compat
     artifact['_computed'] = {
         'legend_position':         block.get('legend_position', 'none'),
@@ -2385,6 +2491,9 @@ def render_block_table(slide, block, bt):
     """Render a table block."""
     artifact = dict(block)
     artifact['type'] = 'table'
+    if not artifact.get('table_header') and block.get('artifact_header_text'):
+        artifact['table_header'] = block.get('artifact_header_text')
+    artifact = apply_block_render_metadata(artifact, block, default_type='table', default_subtype=block.get('artifact_subtype') or 'standard')
     render_table(slide, artifact, bt)
 
 
@@ -2392,6 +2501,9 @@ def render_block_workflow(slide, block, bt):
     """Render a workflow block."""
     artifact = dict(block)
     artifact['type'] = 'workflow'
+    if not artifact.get('workflow_header') and block.get('artifact_header_text'):
+        artifact['workflow_header'] = block.get('artifact_header_text')
+    artifact = apply_block_render_metadata(artifact, block, default_type='workflow', default_subtype=block.get('artifact_subtype') or artifact.get('workflow_type'))
     render_workflow(slide, artifact, bt)
 
 

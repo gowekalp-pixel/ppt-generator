@@ -9,7 +9,7 @@ const state = {
   brandRulebook: null,   // Agent 2
   outline:       null,   // Agent 3
   slideManifest: null,   // Agent 4 — zones, artifacts, archetypes
-  designedSpec:  null,   // Agent 5 — positioned elements[]
+  designedSpec:  null,   // Agent 5 — final blocks-first slide specs
   reviewedSpec:  null,   // Agent 5.1 — partner-reviewed final spec
   reviewReport:  null,   // Agent 5.1 — structured critique
   finalSpec:     null,   // alias → reviewedSpec (consumed by Agent 6)
@@ -165,15 +165,15 @@ async function runPipeline() {
     setProgress(55)
 
     // ── AGENT 5 — Layout & Design Engine ────────────────────────────────────────
-    // Calls Claude in batches — produces canvas/zones/artifacts schema per slide
+    // Calls Claude in batches and emits final blocks-first slide specs
     // Content from Agent 4 manifest is merged in automatically
     setStep(5, 'active')
     state.designedSpec = await runAgent5(state)
-    const totalZones = state.designedSpec.reduce((s, sl) => s + (sl.zones || []).length, 0)
+    const totalBlocks = state.designedSpec.reduce((s, sl) => s + ((sl.blocks || []).length), 0)
     const totalArts  = state.designedSpec.reduce((s, sl) =>
-      s + (sl.zones || []).reduce((m, z) => m + (z.artifacts || []).length, 0), 0)
+      s + ((sl.zones_summary || []).reduce((m, z) => m + ((z.artifact_types || []).length), 0)), 0)
     console.log('Agent 5 — Designed Spec:', state.designedSpec.length, 'slides |',
-      totalZones, 'zones |', totalArts, 'artifacts')
+      totalBlocks, 'blocks |', totalArts, 'artifacts')
     setStep(5, 'done')
     setProgress(72)
 

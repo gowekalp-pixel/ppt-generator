@@ -5,8 +5,8 @@
 //
 // No Claude API call. Pure POST to backend → decode base64 → download.
 // Schema expected: canvas, brand_tokens, title_block, subtitle_block,
-//                  blocks[] as the primary render contract.
-//                  zones[].artifacts[] remains as backward-compatible metadata.
+//                  and blocks[] as the render contract.
+//                  zones[] is legacy-only and should not be required from Agent 5.
 //
 // ─── RENDERING CONTRACT: insight_text ────────────────────────────────────────
 //
@@ -150,16 +150,9 @@ async function generatePPTX() {
 
   // ── Schema validation ─────────────────────────────────────────────────────
   const firstSlide   = state.finalSpec[0]
-  const hasNewSchema = !!(
-    firstSlide &&
-    firstSlide.canvas &&
-    (
-      Array.isArray(firstSlide.blocks) ||
-      firstSlide.zones !== undefined
-    )
-  )
+  const hasNewSchema = !!(firstSlide && firstSlide.canvas && Array.isArray(firstSlide.blocks))
   if (!hasNewSchema) {
-    alert('Spec schema mismatch. Expected canvas plus blocks[] from Agent 5 (zones[] accepted only as legacy metadata). Please re-run the pipeline.')
+    alert('Spec schema mismatch. Expected canvas plus blocks[] from Agent 5. Please re-run the pipeline.')
     return
   }
 

@@ -400,7 +400,7 @@ async function runAgent51(state) {
           ? (rebuilt.find(r => r.slide_number === slideNum) || rebuilt[i] || null)
           : null
 
-        if (match && match.canvas && (match.zones || []).length > 0) {
+        if (match && match.canvas && Array.isArray(match.blocks) && match.blocks.length > 0) {
           const normalized = typeof normaliseDesignedSlide === 'function'
             ? normaliseDesignedSlide(match, mSlide, brand)
             : match

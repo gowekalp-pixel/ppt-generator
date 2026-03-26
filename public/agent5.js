@@ -769,7 +769,18 @@ WORKFLOW MICRO-LAYOUT OWNERSHIP:
     "cell_padding": number
   },
   "column_widths": [number],
+  "column_x_positions": [number],
+  "header_row_height": number,
   "row_heights": [number],
+  "row_y_positions": [number],
+  "header_cell_frames": [
+    { "col_index": number, "x": number, "y": number, "w": number, "h": number }
+  ],
+  "body_cell_frames": [
+    [
+      { "row_index": number, "col_index": number, "x": number, "y": number, "w": number, "h": number }
+    ]
+  ],
   "header_block": null or {
     "text": "string — the table_header value from Agent 4",
     "x": number, "y": number, "w": number, "h": number,
@@ -781,6 +792,7 @@ WORKFLOW MICRO-LAYOUT OWNERSHIP:
 
 Table styling rules:
 - column_widths must sum exactly to table width (w field)
+- column_x_positions must identify the exact x-start of each column within the table frame
 - body font min 9pt; header font min 10pt
 - Column width heuristics (distribute table.w proportionally):
     Numeric columns (values, %, ₹): narrower — typically 0.80–1.20" each
@@ -791,13 +803,14 @@ Table styling rules:
     Numeric / currency / percent columns: right-align
     Header row: center-align all columns
 - row_heights: all data rows equal height (0.30–0.40"); header row slightly taller (0.35–0.45")
+- row_y_positions must identify the exact y-start of header row and each data row within the table frame
 - Zebra striping: set body_alt_fill_color to a very light tint of brand secondary (e.g., "#F7F8FA") for alternating rows
 - highlight_rows: apply highlight_fill_color from brand accent to the highlight_rows indices from Agent 4
 - table_style.cell_padding: 0.05–0.08" (enforced by renderer; set as a hint here)
 
 ═══════════════════════════
 TABLE MICRO-LAYOUT OWNERSHIP:
-- You must output final column_widths, header_row_height, row_heights, column_types, and column_alignments
+- You must output final column_widths, column_x_positions, header_row_height, row_heights, row_y_positions, column_types, column_alignments, header_cell_frames, and body_cell_frames
 - The renderer must not infer table density, alignment, or spacing
 
 ARTIFACT HEADER
@@ -1017,13 +1030,13 @@ async function designSlideBatch(batchManifest, brand, batchNum) {
     '\n- FULLY specify all artifacts including all style sub-objects' +
     '\n- chart: must have chart_style and series_style[]' +
     '\n- workflow: must have workflow_style, nodes[] with x/y/w/h, connections[] with path[]' +
-    '\n- table: must have table_style, column_widths[], row_heights[]' +
+    '\n- table: must have table_style, column_widths[], column_x_positions[], header_row_height, row_heights[], row_y_positions[], header_cell_frames[], body_cell_frames[]' +
     '\n- cards: must have card_style, card_frames[] with x/y/w/h per card' +
     '\n- insight_text (standard mode): must have insight_mode:"standard", style, heading_style, body_style' +
     '\n- insight_text (grouped mode):  must have insight_mode:"grouped", heading_style, group_layout, group_header_style, group_bullet_box_style, bullet_style, group_gap_in, header_to_box_gap_in' +
     '\n- charts: include final legend_position, data_label_size, category_label_rotation, and series styling' +
     '\n- workflows: include final node geometry, connection paths, node_inner_padding, and external_label_gap' +
-    '\n- tables: include final column_widths, column_types, column_alignments, header_row_height, row_heights, and cell_padding' +
+    '\n- tables: include final column_widths, column_x_positions, column_types, column_alignments, header_row_height, row_heights, row_y_positions, header_cell_frames, body_cell_frames, and cell_padding' +
     '\n- Return a valid JSON array of exactly ' + batchManifest.length + ' slide objects'
 
   const raw    = await callClaude(AGENT5_SYSTEM, [{ role: 'user', content: prompt }], 6000)
@@ -1076,10 +1089,14 @@ function validateDesignedSlide(slide) {
       if (a.type === 'workflow' && (a.connections || []).some(c => !Array.isArray(c.path) || c.path.length < 2)) issues.push(p + ': workflow connection missing path')
       if (a.type === 'table'    && !a.table_style)     issues.push(p + ': table missing table_style')
       if (a.type === 'table'    && !a.column_widths)   issues.push(p + ': table missing column_widths')
+      if (a.type === 'table'    && !a.column_x_positions) issues.push(p + ': table missing column_x_positions')
       if (a.type === 'table'    && !a.row_heights)     issues.push(p + ': table missing row_heights')
       if (a.type === 'table'    && a.header_row_height == null) issues.push(p + ': table missing header_row_height')
+      if (a.type === 'table'    && !a.row_y_positions) issues.push(p + ': table missing row_y_positions')
       if (a.type === 'table'    && !a.column_types)    issues.push(p + ': table missing column_types')
       if (a.type === 'table'    && !a.column_alignments) issues.push(p + ': table missing column_alignments')
+      if (a.type === 'table'    && !a.header_cell_frames) issues.push(p + ': table missing header_cell_frames')
+      if (a.type === 'table'    && !a.body_cell_frames) issues.push(p + ': table missing body_cell_frames')
       if (a.type === 'table'    && a.table_style && a.table_style.cell_padding == null) issues.push(p + ': table missing cell_padding')
       if (a.type === 'cards'    && !a.card_frames?.length) issues.push(p + ': cards missing card_frames')
       if (a.type === 'cards'    && !a.card_style)      issues.push(p + ': cards missing card_style')
@@ -1159,6 +1176,12 @@ function validateRenderCompleteness(slide) {
         issues.push(p + ': outside canvas')
       }
     }
+    if (['title', 'subtitle', 'footer', 'page_number', 'image', 'chart', 'table', 'workflow', 'bullet_list', 'rect', 'text_box', 'rule', 'circle'].includes(b.block_type)) {
+      if (!b.artifact_type) issues.push(p + ': missing artifact_type')
+      if (!b.artifact_subtype) issues.push(p + ': missing artifact_subtype')
+      if (!b.fallback_policy) issues.push(p + ': missing fallback_policy')
+      if (!b.block_role) issues.push(p + ': missing block_role')
+    }
     if (b.block_type === 'chart') {
       if (!b.chart_style) issues.push(p + ': chart block missing chart_style')
       if (!b.series_style?.length) issues.push(p + ': chart block missing series_style')
@@ -1168,10 +1191,18 @@ function validateRenderCompleteness(slide) {
     }
     if (b.block_type === 'table') {
       if (!b.column_widths?.length) issues.push(p + ': table block missing column_widths')
+      if (!b.column_x_positions?.length) issues.push(p + ': table block missing column_x_positions')
       if (!b.row_heights?.length) issues.push(p + ': table block missing row_heights')
+      if (!b.row_y_positions?.length) issues.push(p + ': table block missing row_y_positions')
       if (!b.column_types?.length) issues.push(p + ': table block missing column_types')
       if (!b.column_alignments?.length) issues.push(p + ': table block missing column_alignments')
       if (b.header_row_height == null) issues.push(p + ': table block missing header_row_height')
+      if (!b.header_cell_frames?.length) issues.push(p + ': table block missing header_cell_frames')
+      if (!b.body_cell_frames?.length) issues.push(p + ': table block missing body_cell_frames')
+      if (b.headers?.length && b.column_widths?.length && b.headers.length !== b.column_widths.length) issues.push(p + ': headers/column_widths length mismatch')
+      if (b.headers?.length && b.column_x_positions?.length && b.headers.length !== b.column_x_positions.length) issues.push(p + ': headers/column_x_positions length mismatch')
+      if (b.rows?.length && b.row_heights?.length && b.rows.length !== b.row_heights.length) issues.push(p + ': rows/row_heights length mismatch')
+      if (b.rows?.length && b.body_cell_frames?.length && b.rows.length !== b.body_cell_frames.length) issues.push(p + ': rows/body_cell_frames length mismatch')
     }
     if (b.block_type === 'workflow') {
       if (!b.nodes?.length) issues.push(p + ': workflow block missing nodes')
@@ -1515,13 +1546,13 @@ Return a single valid JSON object (not an array) matching the full slide schema.
 CRITICAL — all artifacts must be FULLY specified:
 - chart: include chart_style{} AND series_style[]
 - workflow: include workflow_style{}, nodes[] with x/y/w/h, connections[] with path[]
-- table: include table_style{}, column_widths[], row_heights[]
+- table: include table_style{}, column_widths[], column_x_positions[], header_row_height, row_heights[], row_y_positions[], header_cell_frames[], body_cell_frames[]
 - cards: include card_style{}, card_frames[] with x/y/w/h per card
 - insight_text standard: include insight_mode:"standard", style{}, heading_style{}, body_style{}
 - insight_text grouped:  include insight_mode:"grouped", heading_style{}, group_layout, group_header_style{}, group_bullet_box_style{}, bullet_style{}, group_gap_in, header_to_box_gap_in
 - charts: include final legend_position, data_label_size, category_label_rotation, and series styling
 - workflows: include final node geometry, connection paths, node_inner_padding, and external_label_gap
-- tables: include final column_widths, column_types, column_alignments, header_row_height, row_heights, and cell_padding
+- tables: include final column_widths, column_x_positions, column_types, column_alignments, header_row_height, row_heights, row_y_positions, header_cell_frames, body_cell_frames, and cell_padding
 
 All coordinates in decimal inches, 2 decimal places.
 Return ONLY a valid JSON object. No explanation. No markdown.`
@@ -1858,6 +1889,47 @@ function computeArtifactInternals(zones, canvas) {
             art.row_heights = Array(n_data_rows).fill(round2(row_h))
             art.header_row_height = 0.35
           }
+
+          // Explicit table grid geometry for Agent 6.
+          const tableX = art.x || 0
+          const tableY = art.y || 0
+          const colWs = art.column_widths || []
+          const dataRowHs = art.row_heights || []
+          const headerH = art.header_row_height != null ? art.header_row_height : 0.35
+
+          let curX = tableX
+          art.column_x_positions = colWs.map(cw => {
+            const x = round2(curX)
+            curX += (+cw || 0)
+            return x
+          })
+
+          let curY = tableY
+          art.row_y_positions = [round2(curY)]
+          curY += (+headerH || 0)
+          for (const rh of dataRowHs) {
+            art.row_y_positions.push(round2(curY))
+            curY += (+rh || 0)
+          }
+
+          art.header_cell_frames = colWs.map((cw, ci) => ({
+            col_index: ci,
+            x: round2(art.column_x_positions[ci] || tableX),
+            y: round2(tableY),
+            w: round2(+cw || 0),
+            h: round2(+headerH || 0)
+          }))
+
+          art.body_cell_frames = dataRowHs.map((rh, ri) =>
+            colWs.map((cw, ci) => ({
+              row_index: ri,
+              col_index: ci,
+              x: round2(art.column_x_positions[ci] || tableX),
+              y: round2(art.row_y_positions[ri + 1] || tableY),
+              w: round2(+cw || 0),
+              h: round2(+rh || 0)
+            }))
+          )
         }
       }
 
@@ -1945,11 +2017,67 @@ function computeArtifactInternals(zones, canvas) {
 // generate_pptx.py reads blocks[] and dispatches each to a typed renderer.
 // ═══════════════════════════════════════════════════════════════════════════════
 
+function resolveArtifactSubtype(art) {
+  if (!art || typeof art !== 'object') return 'generic'
+  switch (art.type) {
+    case 'chart':        return art.chart_type || 'generic'
+    case 'insight_text': return art.insight_mode || 'standard'
+    case 'workflow':     return art.workflow_type || art.flow_direction || 'workflow'
+    case 'cards':        return art.cards_layout || 'cards'
+    case 'table':        return art.table_subtype || 'standard'
+    default:             return art.type || 'generic'
+  }
+}
+
+function resolveArtifactHeaderText(art) {
+  if (!art || typeof art !== 'object') return ''
+  return ((art.header_block || {}).text ||
+    art.insight_header ||
+    art.chart_header ||
+    art.table_header ||
+    art.workflow_header ||
+    art.heading ||
+    '')
+}
+
+function buildBlockFallbackPolicy(art, blockRole) {
+  const artifactType = art?.type || 'generic'
+  const artifactSubtype = resolveArtifactSubtype(art)
+  return {
+    allow_renderer_fallback: true,
+    fallback_mode: 'subtype_default',
+    trigger: 'missing_or_invalid_spec',
+    artifact_type: artifactType,
+    artifact_subtype: artifactSubtype,
+    block_role: blockRole || 'artifact_body',
+    fallback_key: artifactType + ':' + artifactSubtype
+  }
+}
+
+function decorateArtifactBlocks(blocks, startIdx, endIdx, art, blockRole) {
+  if (!art || startIdx >= endIdx) return
+  const artifactType = art.type || 'generic'
+  const artifactSubtype = resolveArtifactSubtype(art)
+  const artifactHeaderText = resolveArtifactHeaderText(art)
+  const fallbackPolicy = buildBlockFallbackPolicy(art, blockRole)
+  for (let i = startIdx; i < endIdx; i++) {
+    blocks[i] = {
+      ...blocks[i],
+      artifact_type: blocks[i].artifact_type || artifactType,
+      artifact_subtype: blocks[i].artifact_subtype || artifactSubtype,
+      artifact_header_text: blocks[i].artifact_header_text != null ? blocks[i].artifact_header_text : artifactHeaderText,
+      block_role: blocks[i].block_role || blockRole,
+      fallback_policy: blocks[i].fallback_policy || fallbackPolicy
+    }
+  }
+}
+
 function _artifactToBlocks(art, blocks, bt, r2) {
   const ax = art.x || 0
   const ay = art.y || 0
   const aw = art.w || 0
   const ah = art.h || 0
+  const blockStart = blocks.length
 
   // ── Artifact header band (if present) ────────────────────────────────────
   // header_block sits above the artifact body, already has its own x/y/w/h
@@ -2008,6 +2136,7 @@ function _artifactToBlocks(art, blocks, bt, r2) {
   }
 
   // ── Artifact body ─────────────────────────────────────────────────────────
+  const headerEnd = blocks.length
   switch (art.type) {
 
     case 'chart': {
@@ -2047,16 +2176,60 @@ function _artifactToBlocks(art, blocks, bt, r2) {
     }
 
     case 'table': {
+      const tableY = content_y
+      const tableH = r2(ay + ah - content_y)
+      const colWs = art.column_widths || []
+      const dataRowHs = art.row_heights || []
+      const headerH = art.header_row_height || 0.35
+
+      let curX = ax
+      const columnXPositions = colWs.map(cw => {
+        const x = r2(curX)
+        curX += (+cw || 0)
+        return x
+      })
+
+      let curY = tableY
+      const rowYPositions = [r2(curY)]
+      curY += (+headerH || 0)
+      for (const rh of dataRowHs) {
+        rowYPositions.push(r2(curY))
+        curY += (+rh || 0)
+      }
+
+      const headerCellFrames = colWs.map((cw, ci) => ({
+        col_index: ci,
+        x: r2(columnXPositions[ci] || ax),
+        y: r2(tableY),
+        w: r2(+cw || 0),
+        h: r2(+headerH || 0)
+      }))
+
+      const bodyCellFrames = dataRowHs.map((rh, ri) =>
+        colWs.map((cw, ci) => ({
+          row_index: ri,
+          col_index: ci,
+          x: r2(columnXPositions[ci] || ax),
+          y: r2(rowYPositions[ri + 1] || tableY),
+          w: r2(+cw || 0),
+          h: r2(+rh || 0)
+        }))
+      )
+
       blocks.push({
         block_type:         'table',
-        x: ax, y: content_y, w: aw, h: r2(ay + ah - content_y),
+        x: ax, y: tableY, w: aw, h: tableH,
         headers:            art.headers            || [],
         rows:               art.rows               || [],
-        column_widths:      art.column_widths       || [],
+        column_widths:      colWs,
+        column_x_positions: columnXPositions,
         column_types:       art.column_types        || [],
         column_alignments:  art.column_alignments   || [],
-        row_heights:        art.row_heights         || [],
-        header_row_height:  art.header_row_height   || 0.35,
+        row_heights:        dataRowHs,
+        header_row_height:  headerH,
+        row_y_positions:    rowYPositions,
+        header_cell_frames: headerCellFrames,
+        body_cell_frames:   bodyCellFrames,
         table_style:        art.table_style         || {}
       })
       break
@@ -2083,6 +2256,8 @@ function _artifactToBlocks(art, blocks, bt, r2) {
     default:
       break
   }
+  decorateArtifactBlocks(blocks, blockStart, headerEnd, art, 'artifact_header')
+  decorateArtifactBlocks(blocks, headerEnd, blocks.length, art, 'artifact_body')
 }
 
 function _standardInsightToBlocks(art, content_y, blocks, r2) {
@@ -2370,6 +2545,18 @@ function flattenToBlocks(slideSpec, brandTokens) {
   if (tb.text) {
     blocks.push({
       block_type:  'title',
+      artifact_type: 'slide',
+      artifact_subtype: 'title',
+      block_role: 'slide_header',
+      artifact_header_text: tb.text,
+      fallback_policy: {
+        allow_renderer_fallback: false,
+        fallback_mode: 'none',
+        artifact_type: 'slide',
+        artifact_subtype: 'title',
+        block_role: 'slide_header',
+        fallback_key: 'slide:title'
+      },
       x:           tb.x           != null ? tb.x           : 0.4,
       y:           tb.y           != null ? tb.y           : 0.15,
       w:           tb.w           != null ? tb.w           : 9.2,
@@ -2389,6 +2576,18 @@ function flattenToBlocks(slideSpec, brandTokens) {
   if (sb.text) {
     blocks.push({
       block_type:  'subtitle',
+      artifact_type: 'slide',
+      artifact_subtype: 'subtitle',
+      block_role: 'slide_subheader',
+      artifact_header_text: sb.text,
+      fallback_policy: {
+        allow_renderer_fallback: false,
+        fallback_mode: 'none',
+        artifact_type: 'slide',
+        artifact_subtype: 'subtitle',
+        block_role: 'slide_subheader',
+        fallback_key: 'slide:subtitle'
+      },
       x:           sb.x           != null ? sb.x           : 0.4,
       y:           sb.y           != null ? sb.y           : 0.9,
       w:           sb.w           != null ? sb.w           : 9.2,
@@ -2417,6 +2616,18 @@ function flattenToBlocks(slideSpec, brandTokens) {
     const lg = ge.logo
     blocks.push({
       block_type: 'image',
+      artifact_type: 'global_element',
+      artifact_subtype: 'logo',
+      block_role: 'global_element',
+      artifact_header_text: '',
+      fallback_policy: {
+        allow_renderer_fallback: false,
+        fallback_mode: 'none',
+        artifact_type: 'global_element',
+        artifact_subtype: 'logo',
+        block_role: 'global_element',
+        fallback_key: 'global_element:logo'
+      },
       image_role: 'logo',
       x: lg.x != null ? lg.x : 0.2,
       y: lg.y != null ? lg.y : 0.05,
@@ -2428,6 +2639,18 @@ function flattenToBlocks(slideSpec, brandTokens) {
     const ft = ge.footer
     blocks.push({
       block_type:  'footer',
+      artifact_type: 'global_element',
+      artifact_subtype: 'footer',
+      block_role: 'global_element',
+      artifact_header_text: ft.text,
+      fallback_policy: {
+        allow_renderer_fallback: false,
+        fallback_mode: 'none',
+        artifact_type: 'global_element',
+        artifact_subtype: 'footer',
+        block_role: 'global_element',
+        fallback_key: 'global_element:footer'
+      },
       x:           ft.x != null ? ft.x : 0.4,
       y:           ft.y != null ? ft.y : 7.3,
       w:           ft.w || 5.0,
@@ -2444,6 +2667,18 @@ function flattenToBlocks(slideSpec, brandTokens) {
     const pn = ge.page_number
     blocks.push({
       block_type:  'page_number',
+      artifact_type: 'global_element',
+      artifact_subtype: 'page_number',
+      block_role: 'global_element',
+      artifact_header_text: pn.text || '',
+      fallback_policy: {
+        allow_renderer_fallback: false,
+        fallback_mode: 'none',
+        artifact_type: 'global_element',
+        artifact_subtype: 'page_number',
+        block_role: 'global_element',
+        fallback_key: 'global_element:page_number'
+      },
       x:           pn.x != null ? pn.x : 9.4,
       y:           pn.y != null ? pn.y : 7.3,
       w:           pn.w || 0.8,
@@ -2759,11 +2994,50 @@ function applyLayoutZoneFrames(zones, layoutName, brand) {
       x: ca.x_in, y: ca.y_in, w: ca.w_in, h: ca.h_in,
       padding: { top: 0.08, right: 0.08, bottom: 0.08, left: 0.08 }
     }
+    const inner = {
+      x: r2(frame.x + frame.padding.left),
+      y: r2(frame.y + frame.padding.top),
+      w: r2(Math.max(0.1, frame.w - frame.padding.left - frame.padding.right)),
+      h: r2(Math.max(0.1, frame.h - frame.padding.top - frame.padding.bottom))
+    }
     // Find paired header placeholder: same x-column as content area, positioned just above it
     const headerPh = headerPhs.find(p =>
       Math.abs((p.x_in || 0) - (ca.x_in || 0)) < 0.15 && (p.y_in || 0) < (ca.y_in || 0)
     )
-    const artifacts = (zone.artifacts || []).map(a => ({ ...a, placeholder_idx: ca.idx }))
+    const zoneArtifacts = zone.artifacts || []
+    const singleArtifact = zoneArtifacts.length === 1
+    const artifacts = zoneArtifacts.map(a => {
+      const base = { ...a, placeholder_idx: ca.idx }
+      if (!singleArtifact) {
+        // Force downstream stacking to recompute within the resolved placeholder frame.
+        return {
+          ...base,
+          x: null, y: null, w: null, h: null
+        }
+      }
+
+      const rebound = {
+        ...base,
+        x: inner.x,
+        y: inner.y,
+        w: inner.w,
+        h: inner.h
+      }
+
+      // Layout-dependent internals must be recomputed against the actual placeholder frame.
+      if (rebound.type === 'cards') {
+        rebound.container = { x: inner.x, y: inner.y, w: inner.w, h: inner.h }
+        rebound.card_frames = []
+      } else if (rebound.type === 'workflow') {
+        rebound.container = { x: inner.x, y: inner.y, w: inner.w, h: inner.h }
+      } else if (rebound.type === 'table') {
+        rebound.column_widths = []
+        rebound.row_heights = []
+        rebound.header_row_height = null
+      }
+
+      return rebound
+    })
     return {
       ...zone,
       frame,
@@ -2820,15 +3094,16 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
   console.log('  S' + manifestSlide.slide_number + ' merged content:',
     Object.entries(contentCounts).filter(([,n]) => n > 0).map(([t,n]) => t + ':' + n).join(' ') || 'none')
 
+  const { zones: _ignoredZones, ...brandedWithoutZones } = branded
+
   return {
-    ...branded,
-    zones: finalZones,
+    ...brandedWithoutZones,
     // Always override with manifest ground truth (Claude may drift on slide_number etc.)
     slide_number:          manifestSlide.slide_number,
     slide_type:            manifestSlide.slide_type            || designed.slide_type,
     slide_archetype:       manifestSlide.slide_archetype       || designed.slide_archetype || 'summary',
     // Layout mode fields — ground truth from Agent 4 manifest
-    layout_mode:           designed.layout_mode                || false,
+    layout_mode:           isLayoutMode,
     selected_layout_name:  manifestSlide.selected_layout_name  || designed.selected_layout_name || '',
     section_name:          manifestSlide.section_name          || '',
     section_type:          manifestSlide.section_type          || '',
@@ -2839,8 +3114,8 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
     visual_flow_hint: manifestSlide.visual_flow_hint || '',
     speaker_note:     manifestSlide.speaker_note     || '',
     layout_name:      inferLayoutName(manifestSlide, brand),
-    // Condensed zone summary for Agent 5.1 review
-    zones_summary:    mergedZones.map(z => ({
+    // Condensed structural summary for Agent 5.1 review/debug; final render contract is blocks[].
+    zones_summary:    finalZones.map(z => ({
       zone_id:          z.zone_id,
       zone_role:        z.zone_role,
       narrative_weight: z.narrative_weight,
@@ -2979,8 +3254,8 @@ async function runAgent5(state) {
   const withFallback  = allDesigned.filter(s => s._fallback)
   const typeCounts    = {}
   allDesigned.forEach(s =>
-    (s.zones || []).forEach(z =>
-      (z.artifacts || []).forEach(a => { typeCounts[a.type] = (typeCounts[a.type] || 0) + 1 })
+    (s.zones_summary || []).forEach(z =>
+      (z.artifact_types || []).forEach(t => { typeCounts[t] = (typeCounts[t] || 0) + 1 })
     )
   )
 

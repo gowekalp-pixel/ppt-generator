@@ -143,7 +143,7 @@
     <div class="two-up">
       <div>
         <div class="hint">Agent 5 — Designed Spec JSON (full array)</div>
-        <textarea id="spec-input" class="tall" placeholder='[ { "slide_number": 1, "slide_type": "title", "canvas": {...}, "title_block": {...}, "zones": [...] } ]'></textarea>
+        <textarea id="spec-input" class="tall" placeholder='[ { "slide_number": 1, "slide_type": "title", "canvas": {...}, "title_block": {...}, "blocks": [...] } ]'></textarea>
         <div class="upload-zone" id="zone-spec">
           <input type="file" accept=".json" onchange="loadJSON('spec', this)">
           <div class="uz">Or upload <span>designed-spec.json</span></div>
@@ -520,12 +520,12 @@ function safeParseJSON(raw, fallback) {
     }
 
     // Zones summary
-    const zones = slide.zones || []
+    const zones = slide.zones_summary || []
     if (zones.length > 0) {
       html += `<div class="insp-section">
-        <div class="insp-title">Zones (${zones.length})</div>`
+        <div class="insp-title">Structure (${zones.length})</div>`
       zones.forEach(z => {
-        const artTypes = (z.artifacts || []).map(a => a.type).join(', ')
+        const artTypes = (z.artifact_types || z.artifacts || []).map(a => a.type || a).join(', ')
         html += `<div style="background:white;border-radius:5px;padding:6px 8px;margin-bottom:5px;border-left:3px solid #e5e7eb;font-size:11px;">
           <div style="font-weight:700;color:#374151;">${z.zone_id || '—'} · ${(z.zone_role||'').replace(/_/g,' ')}</div>
           <div style="color:#888;margin-top:2px;">${artTypes || 'no artifacts'}</div>
@@ -571,7 +571,11 @@ function safeParseJSON(raw, fallback) {
       ctx.fillRect(0, 0, 4, H)
     }
 
-    // Zone frames
+    if (Array.isArray(slide.blocks) && slide.blocks.length > 0) {
+      drawBlockPreview51(ctx, slide.blocks, SCALE, primary)
+    }
+
+    // Legacy zone frames
     ;(slide.zones || []).forEach((zone, zi) => {
       const f = zone.frame || {}
       if (!f.x && !f.y && !f.w && !f.h) return
@@ -709,6 +713,51 @@ function safeParseJSON(raw, fallback) {
         ctx.fillRect(ax, ay + 14 + ri * 12, aw, 12)
       })
     }
+  }
+
+  function drawBlockPreview51(ctx, blocks, SCALE, primary) {
+    blocks.forEach(block => {
+      const x = (block.x || 0) * SCALE
+      const y = (block.y || 0) * SCALE
+      const w = (block.w || 0) * SCALE
+      const h = (block.h || 0) * SCALE
+      const t = block.block_type || ''
+
+      if (t === 'rect') {
+        ctx.fillStyle = block.fill_color || '#F3F4F6'
+        roundRect51(ctx, x, y, w, h, Math.min(block.corner_radius || 0, 6)); ctx.fill()
+        if (block.border_color && (block.border_width || 0) > 0) {
+          ctx.strokeStyle = block.border_color
+          ctx.lineWidth = Math.max(0.5, (block.border_width || 1))
+          roundRect51(ctx, x, y, w, h, Math.min(block.corner_radius || 0, 6)); ctx.stroke()
+        }
+      } else if (t === 'rule') {
+        ctx.fillStyle = block.color || primary
+        ctx.fillRect(x, y, w, Math.max(2, h))
+      } else if (t === 'text_box' || t === 'title' || t === 'subtitle') {
+        ctx.fillStyle = block.color || primary
+        const fs = Math.max(8, ((block.font_size || 11) * SCALE / 72))
+        ctx.font = ((block.bold || block.font_weight === 'bold') ? 'bold ' : '') + fs + 'px ' + (block.font_family || 'Arial')
+        ctx.textAlign = block.align === 'center' ? 'center' : 'left'
+        const tx = block.align === 'center' ? x + w / 2 : x + 2
+        ctx.fillText(String(block.text || '').slice(0, 80), tx, y + Math.min(h - 2, fs))
+      } else if (t === 'bullet_list') {
+        ctx.fillStyle = '#FFFBEB'
+        ctx.fillRect(x, y, w, h)
+        ctx.fillStyle = primary
+        ctx.fillRect(x, y, 3, h)
+      } else if (t === 'chart' || t === 'table' || t === 'workflow' || t === 'image') {
+        ctx.fillStyle = '#F3F4F6'
+        ctx.fillRect(x, y, w, h)
+        ctx.strokeStyle = primary + '66'
+        ctx.lineWidth = 1
+        ctx.strokeRect(x, y, w, h)
+        ctx.fillStyle = primary
+        ctx.font = 'bold 8px Arial'
+        ctx.textAlign = 'center'
+        ctx.fillText(t.toUpperCase(), x + w / 2, y + h / 2)
+      }
+    })
   }
 
   function roundRect51(ctx, x, y, w, h, r) {
