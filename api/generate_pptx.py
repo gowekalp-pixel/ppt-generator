@@ -936,6 +936,179 @@ def _apply_dual_axis(chart, secondary_series_names):
     etree.SubElement(sec_val_ax, nsmap.qn('c:crossBetween')).set('val', 'between')
 
 
+def _estimate_legend_text_width(label, font_size_pt):
+    text = str(label or '')
+    return max(0.40, min(2.20, len(text) * max(font_size_pt, 8) * 0.0105))
+
+
+def _chart_legend_entries(chart_type_str, categories, series_data, series_styles, chart_palette, allow_fallback):
+    entries = []
+    if chart_type_str == 'pie':
+        for i, category in enumerate(categories or []):
+            style = series_styles[i] if i < len(series_styles) else {}
+            color = style.get('fill_color')
+            if not color and allow_fallback:
+                color = chart_palette[i % len(chart_palette)]
+            entries.append({
+                'label': str(category or ''),
+                'color': color or '#666666',
+            })
+        return entries
+
+    for i, series in enumerate(series_data or []):
+        style = series_styles[i] if i < len(series_styles) else {}
+        color = style.get('fill_color')
+        if not color and allow_fallback:
+            color = chart_palette[i % len(chart_palette)]
+        entries.append({
+            'label': str(series.get('name') or ('Series ' + str(i + 1))),
+            'color': color or '#666666',
+        })
+    return entries
+
+
+def _compute_chart_legend_layout(x, y, w, h, legend_position, legend_entries, font_size_pt):
+    if not legend_entries or legend_position not in ('top', 'right'):
+        return ((x, y, w, h), None)
+
+    swatch = 0.14
+    text_gap = 0.06
+    item_gap_x = 0.18
+    row_gap = 0.06
+    line_h = max(0.20, font_size_pt * 0.022)
+    pad_x = 0.04
+    pad_y = 0.03
+
+    if legend_position == 'top':
+        rows = []
+        current = []
+        used_w = 0.0
+        max_row_w = max(0.5, w - 0.04)
+        for entry in legend_entries:
+            item_w = swatch + text_gap + _estimate_legend_text_width(entry['label'], font_size_pt)
+            proposed = item_w if not current else used_w + item_gap_x + item_w
+            if current and proposed > max_row_w:
+                rows.append(current)
+                current = [dict(entry, item_w=item_w)]
+                used_w = item_w
+            else:
+                current.append(dict(entry, item_w=item_w))
+                used_w = proposed
+        if current:
+            rows.append(current)
+
+        legend_h = pad_y * 2 + len(rows) * line_h + max(0, len(rows) - 1) * row_gap
+        legend_h = min(max(legend_h, 0.28), h * 0.28)
+        chart_y = y + legend_h + 0.05
+        chart_h = max(1.0, h - legend_h - 0.05)
+        legend_box = {
+            'position': 'top',
+            'x': x,
+            'y': y,
+            'w': w,
+            'h': legend_h,
+            'rows': rows,
+            'line_h': line_h,
+            'pad_x': pad_x,
+            'pad_y': pad_y,
+            'swatch': swatch,
+            'text_gap': text_gap,
+            'item_gap_x': item_gap_x,
+            'row_gap': row_gap,
+        }
+        return ((x, chart_y, w, chart_h), legend_box)
+
+    max_item_w = 0.0
+    items = []
+    for entry in legend_entries:
+        item_w = swatch + text_gap + _estimate_legend_text_width(entry['label'], font_size_pt)
+        max_item_w = max(max_item_w, item_w)
+        items.append(dict(entry, item_w=item_w))
+    legend_w = min(max(max_item_w + pad_x * 2, 1.05), w * 0.38)
+    chart_w = max(1.0, w - legend_w - 0.08)
+    legend_box = {
+        'position': 'right',
+        'x': x + chart_w + 0.08,
+        'y': y,
+        'w': legend_w,
+        'h': h,
+        'items': items,
+        'line_h': line_h,
+        'pad_x': pad_x,
+        'pad_y': pad_y,
+        'swatch': swatch,
+        'text_gap': text_gap,
+        'item_gap_x': item_gap_x,
+        'row_gap': row_gap,
+    }
+    return ((x, y, chart_w, h), legend_box)
+
+
+def _render_custom_chart_legend(slide, legend_box, font_family, font_size_pt, color_hex):
+    if not legend_box:
+        return
+
+    if legend_box.get('position') == 'top':
+        cur_y = legend_box['y'] + legend_box['pad_y']
+        for row in legend_box.get('rows', []):
+            row_w = sum(item['item_w'] for item in row) + max(0, len(row) - 1) * legend_box['item_gap_x']
+            cur_x = legend_box['x'] + max(legend_box['pad_x'], (legend_box['w'] - row_w) / 2.0)
+            for item in row:
+                add_filled_rect(
+                    slide,
+                    cur_x,
+                    cur_y + max(0.0, (legend_box['line_h'] - legend_box['swatch']) / 2.0),
+                    legend_box['swatch'],
+                    legend_box['swatch'],
+                    fill_hex=item['color']
+                )
+                add_text_box(
+                    slide,
+                    cur_x + legend_box['swatch'] + legend_box['text_gap'],
+                    cur_y,
+                    max(0.35, item['item_w'] - legend_box['swatch'] - legend_box['text_gap']),
+                    legend_box['line_h'],
+                    item['label'],
+                    font_family=font_family,
+                    font_size=font_size_pt,
+                    bold=False,
+                    color_hex=color_hex,
+                    align='left',
+                    valign='middle',
+                    wrap=False
+                )
+                cur_x += item['item_w'] + legend_box['item_gap_x']
+            cur_y += legend_box['line_h'] + legend_box['row_gap']
+        return
+
+    cur_y = legend_box['y'] + legend_box['pad_y']
+    for item in legend_box.get('items', []):
+        add_filled_rect(
+            slide,
+            legend_box['x'] + legend_box['pad_x'],
+            cur_y + max(0.0, (legend_box['line_h'] - legend_box['swatch']) / 2.0),
+            legend_box['swatch'],
+            legend_box['swatch'],
+            fill_hex=item['color']
+        )
+        add_text_box(
+            slide,
+            legend_box['x'] + legend_box['pad_x'] + legend_box['swatch'] + legend_box['text_gap'],
+            cur_y,
+            max(0.35, legend_box['w'] - (legend_box['pad_x'] * 2) - legend_box['swatch'] - legend_box['text_gap']),
+            legend_box['line_h'],
+            item['label'],
+            font_family=font_family,
+            font_size=font_size_pt,
+            bold=False,
+            color_hex=color_hex,
+            align='left',
+            valign='middle',
+            wrap=True
+        )
+        cur_y += legend_box['line_h'] + legend_box['row_gap']
+
+
 def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, slide_h=7.5):
     """Render a chart artifact using python-pptx native charts.
 
@@ -1015,6 +1188,39 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
                      False, '#888888', 'center', 'middle')
         return
 
+    _legend_pos_map = {'right': 4, 'top': 1, 'bottom': 3, 'left': 2, 'none': None}
+    if _computed_legend_pos is not None and _computed_legend_pos in _legend_pos_map:
+        resolved_legend_position = _computed_legend_pos
+        legend_pos = _legend_pos_map[_computed_legend_pos]
+    elif allow_chart_fallback:
+        chart_w_ratio = (float(w) / float(slide_w)) if slide_w > 0 else 0.0
+        chart_h_ratio = (float(h) / float(slide_h)) if slide_h > 0 else 0.0
+        if chart_h_ratio > 0.60:
+            resolved_legend_position = 'top'
+            legend_pos = 1
+        elif chart_w_ratio > 0.60:
+            resolved_legend_position = 'right'
+            legend_pos = 4
+        elif chart_type_str == 'pie':
+            resolved_legend_position = 'right'
+            legend_pos = 4
+        else:
+            resolved_legend_position = 'top'
+            legend_pos = 1
+    else:
+        resolved_legend_position = str(cs.get('legend_position', 'none') or 'none').lower()
+        legend_pos = _legend_pos_map.get(resolved_legend_position)
+
+    _effective_show_legend = show_legend and (legend_pos is not None)
+    legend_font_size = int(cs.get('legend_font_size', header_font_size) or header_font_size)
+    legend_font_size = min(legend_font_size, max(8, header_font_size - 1), 9)
+    legend_entries = _chart_legend_entries(
+        chart_type_str, categories, series_data, series_styles, chart_palette, allow_chart_fallback
+    ) if _effective_show_legend else []
+    (chart_x, chart_y, chart_w, chart_h), custom_legend_box = _compute_chart_legend_layout(
+        float(x), float(y), float(w), float(h), resolved_legend_position, legend_entries, legend_font_size
+    )
+
     # Build ChartData
     cd = ChartData()
     cd.categories = [str(c) for c in categories]
@@ -1026,7 +1232,7 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
 
     # Add chart
     chart = slide.shapes.add_chart(
-        xl_type, inches(x), inches(y), inches(w), inches(h), cd
+        xl_type, inches(chart_x), inches(chart_y), inches(chart_w), inches(chart_h), cd
     ).chart
 
     # Apply dual-axis layout (barChart primary + lineChart secondary with right Y axis)
@@ -1076,17 +1282,7 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
 
     # If _computed says 'none', treat as no legend regardless of show_legend flag
     _effective_show_legend = show_legend and (legend_pos is not None)
-    chart.has_legend = _effective_show_legend
-    if _effective_show_legend and chart.has_legend:
-        try:
-            chart.legend.position = legend_pos
-            chart.legend.include_in_layout = True   # keep legend inside chart frame, not floating
-            legend_font_size = int(cs.get('legend_font_size', header_font_size) or header_font_size)
-            legend_font_size = min(legend_font_size, max(8, header_font_size - 1), 9)
-            chart.legend.font.size = Pt(max(7, legend_font_size))
-            chart.legend.font.color.rgb = hex_to_rgb(cs.get('legend_color', bt.get('body_color', '#000000')))
-        except Exception:
-            pass
+    chart.has_legend = False
 
     # Gridlines are always suppressed.
     try:
@@ -1095,6 +1291,15 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
             chart.value_axis.has_minor_gridlines = False
     except Exception:
         pass
+
+    if _effective_show_legend and custom_legend_box:
+        _render_custom_chart_legend(
+            slide,
+            custom_legend_box,
+            cs.get('legend_font_family', bt.get('body_font_family', 'Arial')),
+            legend_font_size,
+            cs.get('legend_color', bt.get('body_color', '#000000'))
+        )
 
     # Series colors + data labels
     try:
