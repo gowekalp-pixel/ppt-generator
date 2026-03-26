@@ -2218,6 +2218,25 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
   for (const zone of (zones || [])) {
     const artifacts = zone.artifacts || []
     const frame = zone.frame || {}
+    if (artifacts.length === 1 && isValidFrame(frame)) {
+      const art = artifacts[0]
+      const pad = frame.padding || { top: 0.08, right: 0.08, bottom: 0.08, left: 0.08 }
+      const inner = {
+        x: round2((frame.x || 0) + (pad.left || 0)),
+        y: round2((frame.y || 0) + (pad.top || 0)),
+        w: round2(Math.max(0.1, (frame.w || 0) - (pad.left || 0) - (pad.right || 0))),
+        h: round2(Math.max(0.1, (frame.h || 0) - (pad.top || 0) - (pad.bottom || 0)))
+      }
+      if (art.x == null || art.y == null || art.w == null || art.h == null || art.w <= 0 || art.h <= 0) {
+        art.x = inner.x
+        art.y = inner.y
+        art.w = inner.w
+        art.h = inner.h
+      }
+      if (art.type === 'workflow' || art.type === 'cards') {
+        art.container = { x: inner.x, y: inner.y, w: inner.w, h: inner.h }
+      }
+    }
 
     // ── 1. Multi-artifact zone stacking ──────────────────────────────────────
     if (artifacts.length >= 2) {
@@ -4364,7 +4383,8 @@ function applyLayoutZoneFrames(zones, layoutName, brand) {
       return (a.x_in || 0) - (b.x_in || 0)
     })
 
-  if (contentAreas.length === 0) return zones
+  if (contentAreas.length === 0) return null
+  if (contentAreas.length < Math.max((zones || []).length, 1)) return null
 
   // Small body placeholders (h ≤ 0.5") are header labels, not content areas
   const headerPhs = (layout.placeholders || [])
@@ -4372,6 +4392,7 @@ function applyLayoutZoneFrames(zones, layoutName, brand) {
 
   return zones.map((zone, zi) => {
     const ca = contentAreas[zi] || contentAreas[contentAreas.length - 1]
+    if (!ca || (ca.w_in || 0) <= 0.1 || (ca.h_in || 0) <= 0.1) return null
     const frame = {
       x: ca.x_in, y: ca.y_in, w: ca.w_in, h: ca.h_in,
       padding: { top: 0.08, right: 0.08, bottom: 0.08, left: 0.08 }
@@ -4426,6 +4447,130 @@ function applyLayoutZoneFrames(zones, layoutName, brand) {
       header_ph_idx: headerPh ? headerPh.idx : null,
       artifacts
     }
+  }).filter(Boolean)
+}
+
+function isValidFrame(rect) {
+  return !!rect
+    && Number.isFinite(+rect.x)
+    && Number.isFinite(+rect.y)
+    && Number.isFinite(+rect.w)
+    && Number.isFinite(+rect.h)
+    && (+rect.w) > 0.05
+    && (+rect.h) > 0.05
+}
+
+function zonesHaveValidFrames(zones) {
+  return Array.isArray(zones) && zones.length > 0 && zones.every(zone => {
+    if (!isValidFrame(zone.frame)) return false
+    return (zone.artifacts || []).every(art => {
+      if ((zone.artifacts || []).length > 1) return true
+      return isValidFrame({ x: art.x, y: art.y, w: art.w, h: art.h })
+    })
+  })
+}
+
+function deriveScratchContentBounds(slideSpec) {
+  const canvas = slideSpec.canvas || {}
+  const margin = canvas.margin || {}
+  const width = +canvas.width_in || 10
+  const height = +canvas.height_in || 7.5
+  const left = +margin.left || 0.4
+  const right = +margin.right || 0.4
+  const topMargin = +margin.top || 0.15
+  const bottom = +margin.bottom || 0.3
+  const tb = slideSpec.title_block || {}
+  const sb = slideSpec.subtitle_block || {}
+  const titleBottom = tb.text ? ((+tb.y || topMargin) + (+tb.h || 0.6)) : topMargin
+  const subtitleBottom = sb.text ? ((+sb.y || titleBottom) + (+sb.h || 0.35)) : titleBottom
+  const top = Math.max(topMargin, subtitleBottom + 0.16)
+  return {
+    x: left,
+    y: top,
+    w: Math.max(0.5, width - left - right),
+    h: Math.max(0.5, height - top - bottom)
+  }
+}
+
+function chooseScratchSplitOrientation(zones) {
+  if (!Array.isArray(zones) || zones.length !== 2) return 'vertical'
+  const primaryType = (((zones[0]?.artifacts || [])[0] || {}).type || '').toLowerCase()
+  const secondaryType = (((zones[1]?.artifacts || [])[0] || {}).type || '').toLowerCase()
+  if (['workflow', 'prioritization', 'matrix', 'driver_tree'].includes(primaryType)) return 'vertical'
+  if (primaryType === 'chart' && secondaryType === 'insight_text') return 'horizontal'
+  return 'vertical'
+}
+
+function buildScratchZoneFrames(zones, slideSpec) {
+  if (!Array.isArray(zones) || zones.length === 0) return zones
+  const r2 = x => Math.round(x * 100) / 100
+  const bounds = deriveScratchContentBounds(slideSpec)
+  const gap = 0.18
+  const framed = zones.map(z => ({ ...z, artifacts: (z.artifacts || []).map(a => ({ ...a })) }))
+
+  if (framed.length === 1) {
+    framed[0].frame = {
+      x: r2(bounds.x), y: r2(bounds.y), w: r2(bounds.w), h: r2(bounds.h),
+      padding: { top: 0.08, right: 0.08, bottom: 0.08, left: 0.08 }
+    }
+    return framed
+  }
+
+  if (framed.length === 2) {
+    const orientation = chooseScratchSplitOrientation(framed)
+    const primaryFrac = String((framed[0].narrative_weight || '')).toLowerCase() === 'primary' ? 0.58 : 0.50
+    if (orientation === 'horizontal') {
+      const availW = bounds.w - gap
+      const leftW = r2(availW * primaryFrac)
+      framed[0].frame = {
+        x: r2(bounds.x), y: r2(bounds.y), w: leftW, h: r2(bounds.h),
+        padding: { top: 0.08, right: 0.08, bottom: 0.08, left: 0.08 }
+      }
+      framed[1].frame = {
+        x: r2(bounds.x + leftW + gap), y: r2(bounds.y), w: r2(availW - leftW), h: r2(bounds.h),
+        padding: { top: 0.08, right: 0.08, bottom: 0.08, left: 0.08 }
+      }
+    } else {
+      const availH = bounds.h - gap
+      const topH = r2(availH * primaryFrac)
+      framed[0].frame = {
+        x: r2(bounds.x), y: r2(bounds.y), w: r2(bounds.w), h: topH,
+        padding: { top: 0.08, right: 0.08, bottom: 0.08, left: 0.08 }
+      }
+      framed[1].frame = {
+        x: r2(bounds.x), y: r2(bounds.y + topH + gap), w: r2(bounds.w), h: r2(availH - topH),
+        padding: { top: 0.08, right: 0.08, bottom: 0.08, left: 0.08 }
+      }
+    }
+    return framed
+  }
+
+  const eachH = r2((bounds.h - gap * (framed.length - 1)) / framed.length)
+  framed.forEach((zone, zi) => {
+    zone.frame = {
+      x: r2(bounds.x),
+      y: r2(bounds.y + zi * (eachH + gap)),
+      w: r2(bounds.w),
+      h: eachH,
+      padding: { top: 0.08, right: 0.08, bottom: 0.08, left: 0.08 }
+    }
+  })
+  return framed
+}
+
+function sanitizeBlocks(blocks, slideSpec) {
+  const r2 = x => Math.round(x * 100) / 100
+  const bounds = deriveScratchContentBounds(slideSpec)
+  return (blocks || []).filter(Boolean).map(block => {
+    if (block.x == null) block.x = bounds.x
+    if (block.y == null) block.y = bounds.y
+    if (block.w == null || block.w <= 0) block.w = Math.max(0.4, bounds.w)
+    if (block.h == null || block.h <= 0) block.h = Math.max(0.12, Math.min(0.8, bounds.h * 0.25))
+    block.x = r2(Math.max(0, +block.x || 0))
+    block.y = r2(Math.max(0, +block.y || 0))
+    block.w = r2(Math.max(0.1, +block.w || 0.1))
+    block.h = r2(Math.max(0.1, +block.h || 0.1))
+    return block
   })
 }
 
@@ -4452,9 +4597,13 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
   const brandedWithLayoutTitle = isLayoutMode && layoutName
     ? applyLayoutTitleFrames(branded, layoutName, brand)
     : branded
-  const finalZones = isLayoutMode && layoutName
+  let finalZones = isLayoutMode && layoutName
     ? applyLayoutZoneFrames(mergedZones, layoutName, brand)
     : mergedZones
+  if (!zonesHaveValidFrames(finalZones) || (Array.isArray(finalZones) && finalZones.length !== mergedZones.length)) {
+    console.warn('Agent 5 -- S' + (manifestSlide.slide_number || '?') + ' switching to scratch framing for invalid/incompatible layout:', layoutName)
+    finalZones = buildScratchZoneFrames(mergedZones, brandedWithLayoutTitle)
+  }
 
   // Post-process: fill computed layout/sizing fields (stacking, chart, table, cards, font scaling)
   // so that generate_pptx.py can act as a pure renderer reading pre-computed values.
@@ -4463,10 +4612,10 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
 
   // Flatten to blocks[] — ordered, self-contained render units.
   // generate_pptx.py reads these directly when present; zones path is legacy fallback.
-  brandedWithLayoutTitle.blocks = flattenToBlocks(
+  brandedWithLayoutTitle.blocks = sanitizeBlocks(flattenToBlocks(
     { ...brandedWithLayoutTitle, zones: finalZones },
     brandedWithLayoutTitle.brand_tokens || {}
-  )
+  ), brandedWithLayoutTitle)
   const renderIssues = validateRenderCompleteness({ ...brandedWithLayoutTitle, zones: finalZones })
   if (renderIssues.length > 0) {
     console.warn('Agent 5 -- S' + (manifestSlide.slide_number || '?') + ' render issues:', renderIssues.join('; '))
