@@ -516,7 +516,7 @@ GEOMETRY — rows layout (renderer uses these formulas):
     "legend_font_family": "string",
     "legend_font_size": number,
     "legend_color": "hex",
-    "show_gridlines": true,
+    "show_gridlines": false,
     "show_border": false,
     "border_color": null,
     "background_color": null
@@ -545,6 +545,7 @@ Chart rules:
 - primary series uses primary brand color
 - minimum axis font size: 8pt
 - if chart + table in zone: chart takes 60–75% of zone width
+- show_gridlines must always be false; no chart should display gridlines
 
 DUAL AXIS — MANDATORY:
 - If two or more series have DIFFERENT units (e.g. one is a count/number, another is ₹/currency/%, etc.)
@@ -1937,7 +1938,7 @@ function computeArtifactInternals(zones, canvas) {
       if (artType === 'cards') {
         if (!art.card_frames || art.card_frames.length === 0) {
           const cards  = art.cards  || []
-          const layout = (art.layout || 'grid').toLowerCase()
+          const requestedLayout = String(art.cards_layout || art.layout || '').toLowerCase()
           const cs     = art.card_style || {}
           const gap    = cs.gap              || 0.12
           const count  = cards.length
@@ -1945,6 +1946,16 @@ function computeArtifactInternals(zones, canvas) {
           const ay     = art.y || 0
           const aw     = art.w || 0
           const ah     = art.h || 0
+          const aspect = ah > 0 ? aw / ah : 1
+
+          let layout = requestedLayout
+          if (!['row', 'column', 'grid'].includes(layout)) {
+            if (count <= 1) layout = 'row'
+            else if (count === 2) layout = aspect >= 1 ? 'row' : 'column'
+            else if (count === 3) layout = aspect >= 1 ? 'row' : 'column'
+            else if (count === 4) layout = 'grid'
+            else layout = aspect >= 1.15 ? 'row' : 'grid'
+          }
 
           const frames = []
           if (layout === 'row') {
@@ -1972,6 +1983,7 @@ function computeArtifactInternals(zones, canvas) {
               })
             }
           }
+          art.cards_layout = layout
           art.card_frames = frames
         }
       }
@@ -2459,6 +2471,9 @@ function _cardsToBlocks(art, content_y, blocks, bt, r2) {
   const cards  = art.cards  || []
   const frames = art.card_frames || []   // pre-computed by computeArtifactInternals
   const cs     = art.card_style || {}
+  const ts     = art.title_style || {}
+  const subs   = art.subtitle_style || {}
+  const bs     = art.body_style || {}
   const pad    = cs.internal_padding || 0.12
 
   for (let i = 0; i < cards.length; i++) {
@@ -2492,43 +2507,46 @@ function _cardsToBlocks(art, content_y, blocks, bt, r2) {
     const accent_h  = (cs.accent_color || bt.primary_color) ? 0.055 : 0
     const inner_y   = r2(fy + accent_h + pad)
     const inner_h   = r2(fh - accent_h - 2 * pad)
-    const title_h   = r2(inner_h * 0.22)
-    const sub_h     = r2(inner_h * 0.38)
-    const body_h    = r2(inner_h - title_h - sub_h - 0.06)
+    const title_h   = r2(inner_h * 0.20)
+    const sub_h     = r2(inner_h * 0.42)
+    const body_h    = r2(Math.max(0.18, inner_h - title_h - sub_h - 0.08))
+    const titleY    = inner_y
+    const subtitleY = r2(titleY + title_h + 0.03)
+    const bodyY     = r2(subtitleY + sub_h + 0.05)
 
     if (card.title) {
       blocks.push({
         block_type: 'text_box',
         x: r2(fx + pad), y: inner_y, w: r2(fw - 2 * pad), h: title_h,
         text:       card.title,
-        font_family: (cs.title_style || {}).font_family || bt.title_font_family || 'Arial',
-        font_size:   (cs.title_style || {}).font_size   || 13,
+        font_family: ts.font_family || bt.title_font_family || 'Arial',
+        font_size:   ts.font_size   || 12,
         bold:        true,
-        color:       (cs.title_style || {}).color       || bt.title_color || '#1A3C8F',
+        color:       ts.color || bt.title_color || '#1A3C8F',
         align:       'left', valign: 'top'
       })
     }
     if (card.subtitle) {
       blocks.push({
         block_type: 'text_box',
-        x: r2(fx + pad), y: r2(inner_y + title_h), w: r2(fw - 2 * pad), h: sub_h,
+        x: r2(fx + pad), y: subtitleY, w: r2(fw - 2 * pad), h: sub_h,
         text:       card.subtitle,
-        font_family: (cs.subtitle_style || {}).font_family || bt.body_font_family || 'Arial',
-        font_size:   (cs.subtitle_style || {}).font_size   || 10,
-        bold:        false,
-        color:       (cs.subtitle_style || {}).color       || '#555555',
+        font_family: subs.font_family || bt.body_font_family || 'Arial',
+        font_size:   subs.font_size   || 22,
+        bold:        true,
+        color:       subs.color || bt.primary_color || '#1A3C8F',
         align:       'left', valign: 'middle'
       })
     }
     if (card.body) {
       blocks.push({
         block_type: 'text_box',
-        x: r2(fx + pad), y: r2(inner_y + title_h + sub_h + 0.03), w: r2(fw - 2 * pad), h: body_h,
+        x: r2(fx + pad), y: bodyY, w: r2(fw - 2 * pad), h: body_h,
         text:       card.body,
-        font_family: (cs.body_style || {}).font_family || bt.body_font_family || 'Arial',
-        font_size:   (cs.body_style || {}).font_size   || 9,
+        font_family: bs.font_family || bt.body_font_family || 'Arial',
+        font_size:   bs.font_size   || 9,
         bold:        false,
-        color:       (cs.body_style || {}).color       || '#333333',
+        color:       bs.color || '#333333',
         align:       'left', valign: 'top'
       })
     }
@@ -3094,7 +3112,12 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
   console.log('  S' + manifestSlide.slide_number + ' merged content:',
     Object.entries(contentCounts).filter(([,n]) => n > 0).map(([t,n]) => t + ':' + n).join(' ') || 'none')
 
-  const { zones: _ignoredZones, ...brandedWithoutZones } = branded
+  const {
+    zones: _ignoredZones,
+    title_block: _ignoredTitleBlock,
+    subtitle_block: _ignoredSubtitleBlock,
+    ...brandedWithoutZones
+  } = branded
 
   return {
     ...brandedWithoutZones,

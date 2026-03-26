@@ -4,8 +4,7 @@
 // Output: downloadable .pptx via /api/generate-pptx (Python serverless)
 //
 // No Claude API call. Pure POST to backend → decode base64 → download.
-// Schema expected: canvas, brand_tokens, title_block, subtitle_block,
-//                  and blocks[] as the render contract.
+// Schema expected: canvas, brand_tokens, and blocks[] as the render contract.
 //                  zones[] is legacy-only and should not be required from Agent 5.
 //
 // ─── RENDERING CONTRACT: insight_text ────────────────────────────────────────
@@ -177,7 +176,7 @@ async function generatePPTX() {
     statusEl.textContent   = '⏳ python-pptx building ' + slideCount + ' slides on server...'
 
     const payload = {
-      finalSpec:     sanitiseTitleBlocks(state.finalSpec),
+      finalSpec:     state.finalSpec,
       brandRulebook: state.brandRulebook,
       templateB64:   useTemplate ? state.brandB64 : null
     }

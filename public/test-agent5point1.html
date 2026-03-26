@@ -143,7 +143,7 @@
     <div class="two-up">
       <div>
         <div class="hint">Agent 5 — Designed Spec JSON (full array)</div>
-        <textarea id="spec-input" class="tall" placeholder='[ { "slide_number": 1, "slide_type": "title", "canvas": {...}, "title_block": {...}, "blocks": [...] } ]'></textarea>
+        <textarea id="spec-input" class="tall" placeholder='[ { "slide_number": 1, "slide_type": "title", "canvas": {...}, "blocks": [ { "block_type": "title", "artifact_type": "slide", "artifact_subtype": "title", ... } ] } ]'></textarea>
         <div class="upload-zone" id="zone-spec">
           <input type="file" accept=".json" onchange="loadJSON('spec', this)">
           <div class="uz">Or upload <span>designed-spec.json</span></div>
@@ -597,39 +597,6 @@ function safeParseJSON(raw, fallback) {
         drawArtifactPreview(ctx, art, SCALE, primary, bt)
       })
     })
-
-    // Title block
-    if (slide.title_block) {
-      const tb = slide.title_block
-      const tx = tb.x * SCALE, ty = tb.y * SCALE
-      const tw = tb.w * SCALE
-      const fs = Math.max(8, (tb.font_size || 18) * SCALE / 72)
-      ctx.fillStyle = tb.color || primary
-      ctx.font = 'bold ' + fs + 'px ' + (tb.font_family || 'Arial')
-      ctx.textAlign = 'left'
-      // Word wrap
-      const words = (tb.text || '').split(' ')
-      let line = '', lineY = ty + fs
-      for (const w of words) {
-        const test = line + w + ' '
-        if (ctx.measureText(test).width > tw - 4 && line) {
-          ctx.fillText(line.trim(), tx, lineY); line = w + ' '; lineY += fs * 1.25
-          if (lineY > ty + (tb.h || 2) * SCALE) break
-        } else line = test
-      }
-      ctx.fillText(line.trim(), tx, lineY)
-    }
-
-    // Subtitle block
-    if (slide.subtitle_block) {
-      const sb = slide.subtitle_block
-      if (sb.x && sb.y) {
-        ctx.fillStyle = sb.color || '#555555'
-        ctx.font = (sb.font_size || 11) * SCALE / 72 + 'px ' + (sb.font_family || 'Arial')
-        ctx.textAlign = 'left'
-        ctx.fillText((sb.text || '').slice(0, 80), sb.x * SCALE, (sb.y + (sb.h || 0.3) * 0.7) * SCALE)
-      }
-    }
 
     // Partner review overlay — red bar if flagged
     if ((slide.partner_review || {}).flagged) {

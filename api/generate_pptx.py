@@ -597,9 +597,16 @@ def render_insight_text(slide, artifact, bt, suppress_heading=False):
         vert_dist    = bs.get('vertical_distribution', '')
         space_bef_pt = max(1, int(bs.get('space_before_pt', 4)))
         allow_fit_fallback = renderer_fallback_allowed(bs) or bs.get('font_size') is None
+        rounded_inset = 0.04 if float(cr or 0) >= 4 else 0.0
+        pad_top = float(bs.get('padding_top', max(INSIGHT_TOP_PADDING, 0.10 + rounded_inset)))
+        pad_bottom = float(bs.get('padding_bottom', max(INSIGHT_BOTTOM_PADDING, 0.10 + rounded_inset)))
+        pad_left = float(bs.get('padding_left', 0.12 + rounded_inset))
+        pad_right = float(bs.get('padding_right', 0.10 + rounded_inset))
 
-        body_h = max(0.1, h - (content_y - y) - INSIGHT_BOTTOM_PADDING)
-        text_w = max(0.5, w - indent_in - INSIGHT_RIGHT_PADDING - BULLET_HANG)
+        body_y = content_y + pad_top
+        body_h = max(0.1, h - (body_y - y) - pad_bottom)
+        para_left_in = max(BULLET_HANG, indent_in)
+        text_w = max(0.5, w - pad_left - pad_right - para_left_in)
 
         # Estimate wrapped line count per point at a given font size
         def _wrapped_lines(text, font_pt, avail_w_in):
@@ -625,7 +632,12 @@ def render_insight_text(slide, artifact, bt, suppress_heading=False):
         def _total_h(font_pt, gap_pt):
             lh = (font_pt / 72.0) * 1.30   # line height with leading
             gh = gap_pt / 72.0
-            return sum(_wrapped_lines(p, font_pt, text_w) * lh + gh for p in points)
+            total = 0
+            for idx, point in enumerate(points):
+                total += _wrapped_lines(point, font_pt, text_w) * lh
+                if idx > 0:
+                    total += gh
+            return total
 
         if allow_fit_fallback:
             total_h_est = _total_h(b_size, space_bef_pt)
@@ -645,16 +657,17 @@ def render_insight_text(slide, artifact, bt, suppress_heading=False):
             if total_lines > 12:
                 b_size = max(7, b_size - 1)
                 space_bef_pt = max(2, space_bef_pt - 1)
-            available_per_slot = body_h / max(len(points), 1)
-            used_per_slot      = _total_h(b_size, space_bef_pt) / max(len(points), 1)
-            slack_pt           = (available_per_slot - used_per_slot) * 72
-            if vert_dist == 'spread' and slack_pt > 4:
-                space_bef_pt = min(space_bef_pt + int(slack_pt * 0.5), 20)
 
             # Keep heading/body proportionate only on guarded fallback
             if _h_params:
                 spec_body          = bs.get('font_size', 10)
                 _h_params['size']  = max(10, round(_h_params['size'] * (b_size / max(spec_body, 1))))
+
+        if vert_dist == 'spread' and len(points) > 1:
+            used_h = _total_h(b_size, space_bef_pt)
+            slack_pt = max(0, int(round((body_h - used_h) * 72)))
+            if slack_pt > 0:
+                space_bef_pt = min(48, space_bef_pt + max(1, int(slack_pt / max(len(points) - 1, 1))))
 
     # Render heading now (font size finalised)
     if _h_params:
@@ -812,17 +825,27 @@ def render_insight_text(slide, artifact, bt, suppress_heading=False):
 
     if points:
         _hang_emu = int(Emu(inches(BULLET_HANG)))
+        _mar_left_emu = int(Emu(inches(para_left_in)))
 
         # ALWAYS use a single text box for all points.
         # For "spread" distribution: use larger space_before on each paragraph so
         # points fill the available height — this keeps the text in one container
         # so the renderer can auto-fit the font if needed.
         txBox = slide.shapes.add_textbox(
-            inches(x + indent_in), inches(content_y),
-            inches(w - indent_in - INSIGHT_RIGHT_PADDING), inches(body_h)
+            inches(x + pad_left), inches(body_y),
+            inches(w - pad_left - pad_right), inches(body_h)
         )
         tf = txBox.text_frame
-        enable_text_fit(tf)
+        if allow_fit_fallback:
+            enable_text_fit(tf)
+        try:
+            tf.word_wrap = True
+            tf.margin_left = 0
+            tf.margin_right = 0
+            tf.margin_top = 0
+            tf.margin_bottom = 0
+        except Exception:
+            pass
 
         for i, point in enumerate(points):
             if i == 0:
@@ -834,6 +857,7 @@ def render_insight_text(slide, artifact, bt, suppress_heading=False):
                 p_obj.space_before = pt(space_bef_pt)
             pPr = p_obj._p.get_or_add_pPr()
             _set_bullet(pPr, _bullet_char(point, i), _hang_emu)
+            pPr.set('marL', str(_mar_left_emu))
             run = p_obj.add_run()
             run.text = _strip_marker(point)
             set_font(run, b_font, b_size, False, False, b_color)
@@ -1063,14 +1087,11 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
         except Exception:
             pass
 
-    # Gridlines are controlled by Agent 5 on the normal path; fallback may suppress them.
+    # Gridlines are always suppressed.
     try:
         if hasattr(chart, 'value_axis') and chart.value_axis is not None:
-            if cs.get('show_gridlines') is True:
-                chart.value_axis.has_major_gridlines = True
-            else:
-                chart.value_axis.has_major_gridlines = False
-                chart.value_axis.has_minor_gridlines = False
+            chart.value_axis.has_major_gridlines = False
+            chart.value_axis.has_minor_gridlines = False
     except Exception:
         pass
 
@@ -2331,20 +2352,16 @@ def render_block_title(slide, block, bt, use_template):
     text = block.get('text', '')
     if not text:
         return
-    ph_idx = 0 if block.get('block_type') == 'title' else 1
-    if use_template:
-        place_in_placeholder(slide, ph_idx, text, block, bt)
-    else:
-        add_text_box(slide,
-            block.get('x', 0.4), block.get('y', 0.15),
-            block.get('w', 9.2),  block.get('h', 0.7),
-            text,
-            block.get('font_family', bt.get('title_font_family', 'Arial')),
-            block.get('font_size', 20),
-            block.get('bold', True),
-            block.get('color', bt.get('title_color', '#1A3C8F')),
-            block.get('align', 'left'),
-            block.get('valign', 'top'))
+    add_text_box(slide,
+        block.get('x', 0.4), block.get('y', 0.15),
+        block.get('w', 9.2),  block.get('h', 0.7),
+        text,
+        block.get('font_family', bt.get('title_font_family', 'Arial')),
+        block.get('font_size', 20),
+        block.get('bold', True),
+        block.get('color', bt.get('title_color', '#1A3C8F')),
+        block.get('align', 'left'),
+        block.get('valign', 'top'))
 
 
 def render_block_text_box(slide, block, bt):
@@ -2803,6 +2820,13 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
     # PATH 1 — TITLE & DIVIDER
     # Only write text content; the layout provides all visual decoration.
     # ════════════════════════════════════════════════════════════════════════
+    _has_blocks = bool(slide_spec.get('blocks'))
+    if slide_type in ('title', 'divider') and _has_blocks:
+        render_blocks(slide, slide_spec, bt, use_template)
+        if use_template:
+            _remove_empty_placeholders(slide)
+        _write_speaker_note(slide, slide_spec.get('speaker_note', ''))
+        return slide
     if slide_type in ('title', 'divider'):
         if use_template:
             if tb.get('text'):
@@ -2848,7 +2872,6 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
     # so we shift their y-coords up by this amount to close the resulting gap.
     # (Not applied when using blocks[] — blocks have absolute pre-computed coords.)
     title_shrink_in = 0.0
-    _has_blocks = bool(slide_spec.get('blocks'))
     if not _has_blocks:
         if use_template:
             if tb.get('text'):

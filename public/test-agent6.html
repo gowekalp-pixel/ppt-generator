@@ -285,7 +285,7 @@
       return `<div class="slide-row">
         <span class="sn">S${s.slide_number}</span>
         <span class="st-badge st-${s.slide_type}">${s.slide_type}</span>
-        <span class="slide-title-text">${(s.title || (s.title_block || {}).text || '—').slice(0, 60)}</span>
+        <span class="slide-title-text">${(s.title || (((s.blocks || []).find(b => b.block_role === 'slide_header' || (b.artifact_type === 'slide' && b.artifact_subtype === 'title')) || {}).text) || '—').slice(0, 60)}</span>
         ${layoutBadge}
         <div class="art-pills">${pillsHtml}</div>
       </div>`

@@ -912,6 +912,34 @@ Card content rules (CXO 3-second scan — every field must pass the test):
 - sentiment: set based on whether this metric is favourable (positive), unfavourable (negative), or ambiguous (neutral) in context
 - All cards in a zone must be PARALLEL in structure — same fields filled, same depth of detail
 
+Card arrangement intent (MANDATORY — decide this explicitly before retaining cards):
+1. Vertical stack
+   Use for 1–3 cards when there is narrative progression, ordered recommendations, or a constrained side band.
+2. Horizontal row
+   Use for 2–4 cards when cards are equal-weight KPIs and should be scanned left-to-right.
+3. Grid
+   Use for exactly 4 cards when the message is dashboard-like and all cards have equal weight.
+4. Anchor + supporting
+   Use only when one card is clearly primary and 2–3 supporting cards add context.
+   If this creates an unbalanced zone or weakens scanability, change layout OR change artifact.
+
+Card arrangement constraints (CRITICAL):
+- Cards must NOT be forced into a layout that compresses width below readability threshold
+- Cards must NOT create uneven card sizing
+- Cards must NOT break alignment symmetry unless using deliberate anchor + supporting composition
+- Cards must NOT compete visually with the slide's primary artifact
+- If any of the above occurs: change card layout OR change artifact
+
+Zone-sensitive card layout rules:
+- If cards are in a SECONDARY zone:
+  - They must occupy <=40% of slide width
+  - Prefer vertical stack, not horizontal spread
+  - Reduce count to max 2 if space is constrained
+- If cards are in a PRIMARY zone:
+  - They must occupy >=60% of slide width
+  - Prefer horizontal alignment for scan efficiency
+  - Use equal-sized cards unless deliberate anchor + supporting is justified
+
 ═══════════════════════════
 CARDS USAGE RESTRICTION (CRITICAL)
 ═══════════════════════════
