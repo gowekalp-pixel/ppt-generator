@@ -649,6 +649,13 @@ Card styling rules:
     negative → very light red/amber tint (e.g., "#FDF3F1") or brand warning light
     neutral  → brand fill (light grey or brand secondary light, e.g., "#F5F5F5")
   If brand_tokens defines sentiment colors, use those instead
+- card shape: square corners by default (corner_radius: 0). Do NOT use rounded pill cards.
+- accent treatment: use a vertical accent strip on the LEFT side of the card, not a top strip
+- when multiple cards exist in one artifact, vary accent-strip color using brand hierarchy:
+    card 1 → primary_color
+    card 2 → secondary_color
+    card 3+ → accent_colors in order
+  Only fall back to sentiment color when a single card stands alone or no brand sequence exists
 - title_style.font_size: SAME across all cards on the slide (pick one size, apply to all)
 - subtitle_style.font_size: SAME across all cards (this is the headline metric — make it the largest element, 18–26pt)
 - body_style.font_size: SAME across all cards (9–11pt)
@@ -1536,7 +1543,21 @@ function applyLayoutTitleFrames(slide, layoutName, brand) {
     || layouts.find(l => (l.name || '').toLowerCase().includes(layoutName.toLowerCase()))
   if (!layout) return slide
 
-  const titlePh = layout.title_placeholder || (layout.placeholders || []).find(p => p.type === 'title')
+  const placeholders = layout.placeholders || []
+  const isTitleType = p => {
+    const t = String(p?.type || '').toLowerCase()
+    return t === 'title' || t === 'center_title' || t === 'centertitle' || t === 'ctrtitle'
+  }
+  const titlePh = layout.title_placeholder
+    || placeholders.find(isTitleType)
+    || placeholders
+      .filter(p => String(p?.type || '').toLowerCase() !== 'body')
+      .sort((a, b) => {
+        const ay = a?.y_in ?? 99
+        const by = b?.y_in ?? 99
+        if (ay !== by) return ay - by
+        return (b?.w_in ?? 0) - (a?.w_in ?? 0)
+      })[0]
   if (!titlePh) return slide
 
   const out = JSON.parse(JSON.stringify(slide))
@@ -1868,19 +1889,31 @@ function computeArtifactInternals(zones, canvas) {
         if (!art._computed) art._computed = {}
         const computed = art._computed
         const canvasW = (canvas && canvas.width_in) ? canvas.width_in : 10
+        const canvasH = (canvas && canvas.height_in) ? canvas.height_in : 7.5
 
         // legend_position
         if (computed.legend_position == null) {
           if (art.show_legend) {
-            computed.legend_position = ((art.w || 0) / canvasW) > 0.55 ? 'right' : 'top'
+            const widthRatio = (art.w || 0) / Math.max(canvasW, 0.1)
+            const heightRatio = (art.h || 0) / Math.max(canvasH, 0.1)
+            if (heightRatio > 0.60) computed.legend_position = 'top'
+            else if (widthRatio > 0.60) computed.legend_position = 'right'
+            else computed.legend_position = (art.chart_type === 'pie') ? 'right' : 'top'
           } else {
             computed.legend_position = 'none'
           }
         }
 
+        const cs = art.chart_style || {}
+        const headerFs = ((art.header_block || {}).font_size) || cs.title_font_size || 11
+        const maxLegendFs = Math.max(8, Math.min(headerFs, 10))
+        art.chart_style = {
+          ...cs,
+          legend_font_size: Math.min(cs.legend_font_size || maxLegendFs, maxLegendFs)
+        }
+
         // data_label_size
         if (computed.data_label_size == null) {
-          const cs = art.chart_style || {}
           const base_size = cs.data_label_size || 9
           const n_cats = (art.categories || []).length || 1
           const density = Math.min(art.w || 0, art.h || 0) / n_cats
@@ -2168,6 +2201,42 @@ function estimateHeaderBlockHeight(text, widthIn, fontSizePt) {
   return Math.max(0.3, Math.round((textHeight + 0.06) * 100) / 100)
 }
 
+function normalizeArtifactHeaderBands(zones) {
+  const items = []
+  for (const zone of (zones || [])) {
+    for (const art of (zone.artifacts || [])) {
+      const hb = art && art.header_block
+      if (!hb || !hb.text) continue
+      const style = hb.style || 'underline'
+      if (style !== 'underline') continue
+      const hy = Number(hb.y != null ? hb.y : art.y)
+      const hw = Number(hb.w != null ? hb.w : art.w)
+      const hfs = Number(hb.font_size || 11)
+      if (!isFinite(hy) || !isFinite(hw)) continue
+      const estimatedH = estimateHeaderBlockHeight(hb.text, hw, hfs)
+      items.push({
+        art,
+        hb,
+        y: hy,
+        bottom: hy + Math.max(Number(hb.h || 0), estimatedH)
+      })
+    }
+  }
+  const groups = new Map()
+  for (const item of items) {
+    const key = String(Math.round(item.y * 8) / 8)
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key).push(item)
+  }
+  for (const group of groups.values()) {
+    if (group.length < 2) continue
+    const alignedBottom = Math.max(...group.map(g => g.bottom))
+    for (const g of group) {
+      g.hb.h = Math.round(Math.max(Number(g.hb.h || 0), alignedBottom - g.y) * 100) / 100
+    }
+  }
+}
+
 function decorateArtifactBlocks(blocks, startIdx, endIdx, art, blockRole) {
   if (!art || startIdx >= endIdx) return
   const artifactType = art.type || 'generic'
@@ -2240,7 +2309,7 @@ function _artifactToBlocks(art, blocks, bt, r2) {
         bold:        true,
         color:       hb.color || bt.primary_color || '#1A3C8F',
         align:       'left',
-        valign:      'middle'
+        valign:      'top'
       })
       blocks.push({
         block_type: 'rule',
@@ -2578,11 +2647,28 @@ function _cardsToBlocks(art, content_y, blocks, bt, r2) {
   const subs   = art.subtitle_style || {}
   const bs     = art.body_style || {}
   const pad    = cs.internal_padding || 0.12
+  const accentW = 0.07
+  const accentGap = 0.08
+  const sentimentAccent = {
+    positive: bt.secondary_color || '#2D8A4E',
+    negative: '#C0392B',
+    neutral: bt.primary_color || '#1A3C8F'
+  }
+  const paletteBase = [
+    bt.primary_color,
+    bt.secondary_color,
+    ...((bt.accent_colors || []).length ? bt.accent_colors : []),
+    ...((bt.chart_palette || []).length ? bt.chart_palette : [])
+  ].filter(Boolean)
+  const accentPalette = [...new Set(paletteBase)]
 
   for (let i = 0; i < cards.length; i++) {
     const card = cards[i]
     const fr   = frames[i] || { x: art.x || 0, y: content_y, w: art.w || 0, h: art.h || 0 }
     const fx   = fr.x, fy = fr.y, fw = fr.w, fh = fr.h
+    const accentColor = cards.length > 1
+      ? (accentPalette[i] || accentPalette[i % Math.max(accentPalette.length, 1)] || sentimentAccent[card.sentiment] || '#1A3C8F')
+      : (sentimentAccent[card.sentiment] || accentPalette[0] || '#1A3C8F')
 
     // Card background rect
     blocks.push({
@@ -2591,25 +2677,25 @@ function _cardsToBlocks(art, content_y, blocks, bt, r2) {
       fill_color:    cs.fill_color    || '#F5F5F5',
       border_color:  cs.border_color  || '#DDDDDD',
       border_width:  cs.border_width  || 0.75,
-      corner_radius: cs.corner_radius || 4
+      corner_radius: 0
     })
 
-    // Accent strip (top colour bar)
-    if (cs.accent_color || bt.primary_color) {
-      const accent_h = 0.055
+    // Accent strip (left colour rail)
+    if (accentColor) {
       blocks.push({
         block_type:    'rect',
-        x: fx, y: fy, w: fw, h: accent_h,
-        fill_color:    cs.accent_color || bt.primary_color || '#1A3C8F',
+        x: fx, y: fy, w: accentW, h: fh,
+        fill_color:    accentColor,
         border_color:  null, border_width: 0,
-        corner_radius: cs.corner_radius || 4
+        corner_radius: 0
       })
     }
 
     // Card text sections (title / subtitle / body)
-    const accent_h  = (cs.accent_color || bt.primary_color) ? 0.055 : 0
-    const inner_y   = r2(fy + accent_h + pad)
-    const inner_h   = r2(fh - accent_h - 2 * pad)
+    const inner_x   = r2(fx + pad + accentW + accentGap)
+    const inner_y   = r2(fy + pad)
+    const inner_w   = r2(Math.max(0.3, fw - (pad * 2) - accentW - accentGap))
+    const inner_h   = r2(fh - 2 * pad)
     const title_h   = r2(inner_h * 0.20)
     const sub_h     = r2(inner_h * 0.42)
     const body_h    = r2(Math.max(0.18, inner_h - title_h - sub_h - 0.08))
@@ -2620,31 +2706,31 @@ function _cardsToBlocks(art, content_y, blocks, bt, r2) {
     if (card.title) {
       blocks.push({
         block_type: 'text_box',
-        x: r2(fx + pad), y: inner_y, w: r2(fw - 2 * pad), h: title_h,
+        x: inner_x, y: inner_y, w: inner_w, h: title_h,
         text:       card.title,
         font_family: ts.font_family || bt.title_font_family || 'Arial',
         font_size:   ts.font_size   || 12,
         bold:        true,
-        color:       ts.color || bt.title_color || '#1A3C8F',
+        color:       ts.color || accentColor,
         align:       'left', valign: 'top'
       })
     }
     if (card.subtitle) {
       blocks.push({
         block_type: 'text_box',
-        x: r2(fx + pad), y: subtitleY, w: r2(fw - 2 * pad), h: sub_h,
+        x: inner_x, y: subtitleY, w: inner_w, h: sub_h,
         text:       card.subtitle,
         font_family: subs.font_family || bt.body_font_family || 'Arial',
         font_size:   subs.font_size   || 22,
         bold:        true,
-        color:       subs.color || bt.primary_color || '#1A3C8F',
+        color:       subs.color || '#111111',
         align:       'left', valign: 'middle'
       })
     }
     if (card.body) {
       blocks.push({
         block_type: 'text_box',
-        x: r2(fx + pad), y: bodyY, w: r2(fw - 2 * pad), h: body_h,
+        x: inner_x, y: bodyY, w: inner_w, h: body_h,
         text:       card.body,
         font_family: bs.font_family || bt.body_font_family || 'Arial',
         font_size:   bs.font_size   || 9,
@@ -3198,6 +3284,7 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
   // Post-process: fill computed layout/sizing fields (stacking, chart, table, cards, font scaling)
   // so that generate_pptx.py can act as a pure renderer reading pre-computed values.
   computeArtifactInternals(finalZones, branded.canvas || {})
+  normalizeArtifactHeaderBands(finalZones)
 
   // Flatten to blocks[] — ordered, self-contained render units.
   // generate_pptx.py reads these directly when present; zones path is legacy fallback.

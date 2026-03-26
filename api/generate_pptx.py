@@ -598,14 +598,16 @@ def render_insight_text(slide, artifact, bt, suppress_heading=False):
         space_bef_pt = max(1, int(bs.get('space_before_pt', 4)))
         allow_fit_fallback = renderer_fallback_allowed(bs) or bs.get('font_size') is None
         rounded_inset = 0.04 if float(cr or 0) >= 4 else 0.0
+        bullet_safe_inset = 0.08 + rounded_inset
         pad_top = float(bs.get('padding_top', max(INSIGHT_TOP_PADDING, 0.10 + rounded_inset)))
         pad_bottom = float(bs.get('padding_bottom', max(INSIGHT_BOTTOM_PADDING, 0.10 + rounded_inset)))
         pad_left = float(bs.get('padding_left', 0.12 + rounded_inset))
         pad_right = float(bs.get('padding_right', 0.10 + rounded_inset))
+        pad_left = max(pad_left, 0.14 + rounded_inset)
 
         body_y = content_y + pad_top
         body_h = max(0.1, h - (body_y - y) - pad_bottom)
-        para_left_in = max(BULLET_HANG, indent_in)
+        para_left_in = max(BULLET_HANG + bullet_safe_inset, indent_in + bullet_safe_inset)
         text_w = max(0.5, w - pad_left - pad_right - para_left_in)
 
         # Estimate wrapped line count per point at a given font size
@@ -1056,15 +1058,15 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
         legend_pos = _legend_pos_map[_computed_legend_pos]
     elif allow_chart_fallback:
         # Heuristic:
-        #   a) chart width  > 60% of actual slide width  → RIGHT
-        #   b) else if chart height > 60% of actual slide height → TOP
+        #   a) chart height > 60% of actual slide height → TOP
+        #   b) else if chart width  > 60% of actual slide width  → RIGHT
         #   c) else pie charts → RIGHT; other charts → TOP
         chart_w_ratio = (float(w) / float(slide_w)) if slide_w > 0 else 0.0
         chart_h_ratio = (float(h) / float(slide_h)) if slide_h > 0 else 0.0
-        if chart_w_ratio > 0.60:
-            legend_pos = 4   # RIGHT
-        elif chart_h_ratio > 0.60:
+        if chart_h_ratio > 0.60:
             legend_pos = 1   # TOP
+        elif chart_w_ratio > 0.60:
+            legend_pos = 4   # RIGHT
         elif chart_type_str == 'pie':
             legend_pos = 4   # RIGHT
         else:
@@ -1080,8 +1082,7 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
             chart.legend.position = legend_pos
             chart.legend.include_in_layout = True   # keep legend inside chart frame, not floating
             legend_font_size = int(cs.get('legend_font_size', header_font_size) or header_font_size)
-            if allow_chart_fallback:
-                legend_font_size = min(legend_font_size, header_font_size)
+            legend_font_size = min(legend_font_size, header_font_size)
             chart.legend.font.size = Pt(max(7, legend_font_size))
             chart.legend.font.color.rgb = hex_to_rgb(cs.get('legend_color', bt.get('body_color', '#000000')))
         except Exception:
@@ -1316,8 +1317,10 @@ def render_cards(slide, artifact, bt):
     fill_hex   = cs.get('fill_color', '#F5F5F5')
     border_hex = cs.get('border_color') or '#E0E0E0'
     border_w   = cs.get('border_width', 0.75)
-    corner_r   = cs.get('corner_radius', 4)
+    corner_r   = 0
     padding    = cs.get('internal_padding', CARD_INNER_PADDING)
+    accent_w   = 0.07
+    accent_gap = 0.08
 
     t_font  = ts.get('font_family', bt.get('title_font_family', 'Arial'))
     t_size  = ts.get('font_size', 10)
@@ -1338,6 +1341,15 @@ def render_cards(slide, artifact, bt):
         'negative': '#FDF3F1',   # very light red
         'neutral':  None,        # use card_style fill as-is
     }
+    _SENTIMENT_ACCENT = {
+        'positive': bt.get('secondary_color', '#2D8A4E'),
+        'negative': '#C0392B',
+        'neutral':  bt.get('primary_color', '#1A3C8F'),
+    }
+    accent_palette = []
+    for c in [bt.get('primary_color'), bt.get('secondary_color'), *(bt.get('accent_colors') or []), *(bt.get('chart_palette') or [])]:
+        if c and c not in accent_palette:
+            accent_palette.append(c)
 
     for fi, frame in enumerate(frames):
         fx = frame.get('x', 0)
@@ -1350,6 +1362,7 @@ def render_cards(slide, artifact, bt):
         # Derive per-card fill based on sentiment (if fill not explicitly set in card_style)
         sentiment  = card.get('sentiment', 'neutral')
         card_fill  = _SENTIMENT_FILL.get(sentiment) or fill_hex
+        accent = (accent_palette[fi] if len(cards) > 1 and fi < len(accent_palette) else None) or _SENTIMENT_ACCENT.get(sentiment) or t_color
 
         # Card background
         add_filled_rect(slide, fx, fy, fw, fh,
@@ -1358,19 +1371,14 @@ def render_cards(slide, artifact, bt):
                         border_pt=border_w,
                         corner_radius=corner_r)
 
-        # Top accent strip (4px) — color matches sentiment
-        _SENTIMENT_ACCENT = {
-            'positive': '#2D8A4E',   # green
-            'negative': '#C0392B',   # red
-            'neutral':  None,
-        }
-        accent = _SENTIMENT_ACCENT.get(sentiment) or ts.get('color', bt.get('primary_color', '#1A3C8F'))
-        accent_h = 0.055
-        add_filled_rect(slide, fx, fy, fw, accent_h, fill_hex=accent)
+        # Left accent strip — brand-sequenced when multiple cards share an artifact
+        add_filled_rect(slide, fx, fy, accent_w, fh, fill_hex=accent)
 
         # Proportional inner layout — works for any card height
-        inner_top = fy + accent_h + padding
-        inner_h   = fh - accent_h - 2 * padding
+        inner_left = fx + padding + accent_w + accent_gap
+        inner_top  = fy + padding
+        inner_w    = max(0.3, fw - padding * 2 - accent_w - accent_gap)
+        inner_h    = fh - 2 * padding
 
         card_title = card.get('title', '')
         card_sub   = card.get('subtitle', '')
@@ -1396,17 +1404,17 @@ def render_cards(slide, artifact, bt):
 
             title_y = inner_top
             if card_title and title_h > 0:
-                add_text_box(slide, fx + padding, title_y, fw - padding*2, title_h,
-                             str(card_title), t_font, actual_title_size, t_bold, t_color, 'left', 'top')
+                add_text_box(slide, inner_left, title_y, inner_w, title_h,
+                             str(card_title), t_font, actual_title_size, t_bold, ts.get('color', accent), 'left', 'top')
 
             if card_sub and sub_h > 0:
                 subtitle_y = inner_top + title_h + (TITLE_TO_SUBTITLE if card_title else 0)
-                add_text_box(slide, fx + padding, subtitle_y, fw - padding*2, sub_h,
-                             str(card_sub), su_font, actual_su_size, False, su_color, 'center', 'middle')
+                add_text_box(slide, inner_left, subtitle_y, inner_w, sub_h,
+                             str(card_sub), su_font, actual_su_size, True, su_color, 'left', 'middle')
 
             if body_text and body_h > 0.05:
                 body_y = fy + fh - padding - body_h
-                add_text_box(slide, fx + padding, body_y, fw - padding*2, body_h,
+                add_text_box(slide, inner_left, body_y, inner_w, body_h,
                              body_text, b_font, actual_body_size, False, b_color, 'left', 'bottom')
 
 
