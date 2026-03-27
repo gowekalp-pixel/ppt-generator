@@ -1226,6 +1226,16 @@ async function designSlideBatch(batchManifest, brand, batchNum) {
 
 function validateDesignedSlide(slide) {
   const issues = []
+  const supportedArtifactTypes = new Set([
+    'chart',
+    'insight_text',
+    'table',
+    'matrix',
+    'driver_tree',
+    'prioritization',
+    'cards',
+    'workflow'
+  ])
 
   if (!slide.canvas)            issues.push('missing canvas')
   if (!slide.brand_tokens)      issues.push('missing brand_tokens')
@@ -1243,6 +1253,7 @@ function validateDesignedSlide(slide) {
     ;(z.artifacts || []).forEach((a, ai) => {
       const p = 'z' + zi + '.a' + ai
       if (!a.type)                                     issues.push(p + ': missing type')
+      if (a.type && !supportedArtifactTypes.has(a.type)) issues.push(p + ': unsupported artifact type ' + a.type)
       if (a.type === 'chart'    && !a.chart_style)     issues.push(p + ': chart missing chart_style')
       if (a.type === 'chart'    && !a.series_style)    issues.push(p + ': chart missing series_style')
       if (a.type === 'chart'    && a.chart_style && a.chart_style.legend_position == null) issues.push(p + ': chart missing legend_position')
