@@ -1958,9 +1958,11 @@ function makeHeaderBlockFromManifestArtifact(artifact, bt) {
 function buildSafeArtifactShell(manifestArt, bt) {
   const t = manifestArt?.type || 'insight_text'
   const header_block = makeHeaderBlockFromManifestArtifact(manifestArt, bt)
+  const artifact_coverage_hint = manifestArt?.artifact_coverage_hint
   if (t === 'chart') {
     return {
       type: 'chart',
+      artifact_coverage_hint,
       x: null, y: null, w: null, h: null,
       chart_style: {
         title_font_family: bt.title_font_family || 'Arial',
@@ -1990,6 +1992,7 @@ function buildSafeArtifactShell(manifestArt, bt) {
   if (t === 'table') {
     return {
       type: 'table',
+      artifact_coverage_hint,
       x: null, y: null, w: null, h: null,
       table_style: {
         header_fill_color: bt.primary_color || '#0078AE',
@@ -2023,6 +2026,7 @@ function buildSafeArtifactShell(manifestArt, bt) {
     const manifestConns = Array.isArray(manifestArt?.connections) ? manifestArt.connections : []
     return {
       type: 'workflow',
+      artifact_coverage_hint,
       x: null, y: null, w: null, h: null,
       workflow_style: {
         node_fill_color: bt.primary_color || '#0078AE',
@@ -2059,6 +2063,7 @@ function buildSafeArtifactShell(manifestArt, bt) {
   if (t === 'cards') {
     return {
       type: 'cards',
+      artifact_coverage_hint,
       x: null, y: null, w: null, h: null,
       cards_layout: manifestArt.cards_layout || 'column',
       container: null,
@@ -2095,6 +2100,7 @@ function buildSafeArtifactShell(manifestArt, bt) {
   if (t === 'matrix') {
     return {
       type: 'matrix',
+      artifact_coverage_hint,
       x: null, y: null, w: null, h: null,
       matrix_style: {},
       header_block
@@ -2103,6 +2109,7 @@ function buildSafeArtifactShell(manifestArt, bt) {
   if (t === 'driver_tree') {
     return {
       type: 'driver_tree',
+      artifact_coverage_hint,
       x: null, y: null, w: null, h: null,
       tree_style: {},
       header_block
@@ -2111,6 +2118,7 @@ function buildSafeArtifactShell(manifestArt, bt) {
   if (t === 'prioritization') {
     return {
       type: 'prioritization',
+      artifact_coverage_hint,
       x: null, y: null, w: null, h: null,
       priority_style: {},
       header_block
@@ -2120,6 +2128,7 @@ function buildSafeArtifactShell(manifestArt, bt) {
   const grouped = !!(manifestArt?.groups && manifestArt.groups.length)
   return grouped ? {
     type: 'insight_text',
+    artifact_coverage_hint,
     insight_mode: 'grouped',
     x: null, y: null, w: null, h: null,
     style: { fill_color: null, border_color: null, border_width: 0, corner_radius: 0 },
@@ -2133,6 +2142,7 @@ function buildSafeArtifactShell(manifestArt, bt) {
     header_block
   } : {
     type: 'insight_text',
+    artifact_coverage_hint,
     insight_mode: 'standard',
     x: null, y: null, w: null, h: null,
     style: { fill_color: null, border_color: (bt.primary_color || '#0078AE') + '33', border_width: 0.5, corner_radius: 3 },
@@ -2310,80 +2320,64 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
         const zh = frame.h || 0
         const gap = 0.12
         const splitHint =
+          (Array.isArray(zone.artifact_split_hint) ? zone.artifact_split_hint : null) ||
           (Array.isArray(zone.split_hint) ? zone.split_hint : null) ||
           (Array.isArray((zone.layout_hint || {}).split_hint) ? (zone.layout_hint || {}).split_hint : null)
         const arrangement =
           zone.artifact_arrangement ||
           (zone.layout_hint || {}).artifact_arrangement ||
           'vertical'
-
-        let primaryFrac, secondaryFrac
-        if (splitHint && Array.isArray(splitHint) && splitHint.length >= 2) {
-          const total = splitHint[0] + splitHint[1]
-          primaryFrac   = splitHint[0] / total
-          secondaryFrac = splitHint[1] / total
-        } else {
-          primaryFrac   = 0.60
-          secondaryFrac = 0.40
-        }
-
-        if (artifacts.length >= 2) {
-          const firstType = String((artifacts[0]?.type || '')).toLowerCase()
-          const secondType = String((artifacts[1]?.type || '')).toLowerCase()
-          if (firstType === 'cards' && secondType !== 'cards') {
-            primaryFrac = Math.min(primaryFrac, 0.40)
-            secondaryFrac = 1 - primaryFrac
-          } else if (secondType === 'cards' && firstType !== 'cards') {
-            secondaryFrac = Math.min(secondaryFrac, 0.40)
-            primaryFrac = 1 - secondaryFrac
-          } else if (firstType === 'cards' && secondType === 'cards') {
-            primaryFrac = Math.min(primaryFrac, 0.40)
-            secondaryFrac = Math.min(secondaryFrac, 0.40)
+        let coverage = artifacts.map(a => {
+          const n = parseFloat(a?.artifact_coverage_hint)
+          return Number.isFinite(n) && n > 0 ? n : null
+        })
+        if (coverage.some(v => v == null)) {
+          if (splitHint && splitHint.length === artifacts.length) {
+            coverage = splitHint.map(v => {
+              const n = parseFloat(v)
+              return Number.isFinite(n) && n > 0 ? n : 0
+            })
+          } else if (splitHint && splitHint.length >= 2 && artifacts.length === 2) {
+            coverage = splitHint.slice(0, 2).map(v => {
+              const n = parseFloat(v)
+              return Number.isFinite(n) && n > 0 ? n : 0
+            })
+          } else {
+            coverage = artifacts.map((_, idx) => idx === 0 ? 60 : (40 / Math.max(artifacts.length - 1, 1)))
           }
         }
+        let totalCoverage = coverage.reduce((s, v) => s + (v || 0), 0)
+        if (totalCoverage <= 0) {
+          coverage = artifacts.map((_, idx) => idx === 0 ? 60 : (40 / Math.max(artifacts.length - 1, 1)))
+          totalCoverage = coverage.reduce((s, v) => s + (v || 0), 0)
+        }
+        const fracs = coverage.map(v => (v || 0) / totalCoverage)
+        const usableGap = gap * Math.max(artifacts.length - 1, 0)
 
         if (arrangement === 'horizontal') {
-          const availW = zw - gap
-          const primaryW = round2(availW * primaryFrac)
-          const secondaryW = round2(availW * secondaryFrac)
-
-          for (let i = 0; i < artifacts.length; i++) {
-            const art = artifacts[i]
-            if (i === 0) {
-              art.x = round2(zx)
-              art.y = round2(zy)
-              art.w = primaryW
-              art.h = round2(zh)
-            } else {
-              const remaining = artifacts.length - 1
-              const eachW = round2((secondaryW - Math.max(0, remaining - 1) * gap) / Math.max(remaining, 1))
-              art.x = round2(zx + primaryW + gap + (i - 1) * (eachW + gap))
-              art.y = round2(zy)
-              art.w = eachW
-              art.h = round2(zh)
-            }
-          }
+          const availW = Math.max(0.1, zw - usableGap)
+          let cursorX = zx
+          artifacts.forEach((art, i) => {
+            const isLast = i === artifacts.length - 1
+            const artW = isLast ? round2(zx + zw - cursorX) : round2(availW * fracs[i])
+            art.x = round2(cursorX)
+            art.y = round2(zy)
+            art.w = round2(Math.max(0.1, artW))
+            art.h = round2(zh)
+            cursorX = round2(cursorX + art.w + gap)
+          })
         } else {
-          const availH = zh - gap
-          const primaryH   = round2(availH * primaryFrac)
-          const secondaryH = round2(availH * secondaryFrac)
-
-          for (let i = 0; i < artifacts.length; i++) {
-            const art = artifacts[i]
-            if (i === 0) {
-              art.x = round2(zx)
-              art.y = round2(zy)
-              art.w = round2(zw)
-              art.h = primaryH
-            } else {
-              const remaining = artifacts.length - 1
-              const eachH = round2((secondaryH - Math.max(0, remaining - 1) * gap) / Math.max(remaining, 1))
-              art.x = round2(zx)
-              art.y = round2(zy + primaryH + gap + (i - 1) * (eachH + gap))
-              art.w = round2(zw)
-              art.h = eachH
-            }
-          }
+          const availH = Math.max(0.1, zh - usableGap)
+          let cursorY = zy
+          artifacts.forEach((art, i) => {
+            const isLast = i === artifacts.length - 1
+            const artH = isLast ? round2(zy + zh - cursorY) : round2(availH * fracs[i])
+            art.x = round2(zx)
+            art.y = round2(cursorY)
+            art.w = round2(zw)
+            art.h = round2(Math.max(0.1, artH))
+            cursorY = round2(cursorY + art.h + gap)
+          })
         }
       }
     }
@@ -4709,6 +4703,7 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
         }
         return {
           ...dArt,
+          artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
           insight_mode:   'standard',
           heading,
           insight_header,
@@ -4722,6 +4717,7 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
       if (t === 'chart') {
         return {
           ...dArt,
+          artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
           chart_type:       mArt.chart_type       || dArt.chart_type       || 'bar',
           chart_header:     mArt.chart_header     || dArt.chart_header     || '',
           chart_title:      mArt.chart_title      || dArt.chart_title      || '',
@@ -4740,6 +4736,7 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
       if (t === 'cards') {
         return {
           ...dArt,
+          artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
           cards: mArt.cards || dArt.cards || []
         }
       }
@@ -4793,6 +4790,7 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
 
         return {
           ...dArt,
+          artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
           workflow_type:    mArt.workflow_type    || dArt.workflow_type    || 'process_flow',
           workflow_header:  mArt.workflow_header  || dArt.workflow_header  || '',
           flow_direction:   mArt.flow_direction   || dArt.flow_direction   || 'left_to_right',
@@ -4806,6 +4804,7 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
       if (t === 'table') {
         return {
           ...dArt,
+          artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
           table_header:   mArt.table_header   || dArt.table_header   || '',
           title:          mArt.title          || dArt.title          || '',
           headers:        mArt.headers        || dArt.headers        || [],
@@ -4818,6 +4817,7 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
       if (t === 'matrix') {
         return {
           ...dArt,
+          artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
           matrix_type:   mArt.matrix_type   || dArt.matrix_type   || '2x2',
           matrix_header: mArt.matrix_header || dArt.matrix_header || '',
           x_axis:        mArt.x_axis        || dArt.x_axis        || { label: '', low_label: '', high_label: '' },
@@ -4830,6 +4830,7 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
       if (t === 'driver_tree') {
         return {
           ...dArt,
+          artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
           tree_header: mArt.tree_header || dArt.tree_header || '',
           root:        mArt.root        || dArt.root        || { label: '', value: '' },
           branches:    mArt.branches    || dArt.branches    || []
@@ -4839,6 +4840,7 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
       if (t === 'prioritization') {
         return {
           ...dArt,
+          artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
           priority_header: mArt.priority_header || dArt.priority_header || '',
           items: (mArt.items || dArt.items || []).map(it => ({
             rank: it.rank,
@@ -4856,6 +4858,12 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
 
     return {
       ...dZone,
+      zone_split:
+        dZone.zone_split ||
+        (dZone.layout_hint || {}).split ||
+        mZone.zone_split ||
+        (mZone.layout_hint || {}).split ||
+        'full',
       layout_hint: dZone.layout_hint || mZone.layout_hint || null,
       artifact_arrangement:
         dZone.artifact_arrangement ||
@@ -5019,6 +5027,16 @@ function chooseScratchSplitOrientation(zones) {
   return 'vertical'
 }
 
+function parseScratchSplitToken(split) {
+  const s = String(split || '').trim().toLowerCase()
+  const m = s.match(/^(left|right|top|bottom)_(\d{1,3})$/)
+  if (!m) return null
+  const side = m[1]
+  const pct = Math.max(1, Math.min(99, parseInt(m[2], 10) || 0))
+  const orientation = (side === 'left' || side === 'right') ? 'horizontal' : 'vertical'
+  return { side, pct, frac: pct / 100, orientation }
+}
+
 function buildScratchZoneFrames(zones, slideSpec) {
   if (!Array.isArray(zones) || zones.length === 0) return zones
   const r2 = x => Math.round(x * 100) / 100
@@ -5035,28 +5053,39 @@ function buildScratchZoneFrames(zones, slideSpec) {
   }
 
   if (framed.length === 2) {
-    const orientation = chooseScratchSplitOrientation(framed)
-    const primaryFrac = String((framed[0].narrative_weight || '')).toLowerCase() === 'primary' ? 0.58 : 0.50
+    const z0Split = parseScratchSplitToken(framed[0]?.zone_split || framed[0]?.layout_hint?.split || framed[0]?.split_hint)
+    const z1Split = parseScratchSplitToken(framed[1]?.zone_split || framed[1]?.layout_hint?.split || framed[1]?.split_hint)
+    const explicit = z0Split || z1Split
+    const orientation = explicit?.orientation || chooseScratchSplitOrientation(framed)
+    const primaryFrac = explicit?.frac || (String((framed[0].narrative_weight || '')).toLowerCase() === 'primary' ? 0.58 : 0.50)
     if (orientation === 'horizontal') {
       const availW = bounds.w - gap
-      const leftW = r2(availW * primaryFrac)
+      const leftFrac = explicit
+        ? (explicit.side === 'left' ? explicit.frac : 1 - explicit.frac)
+        : primaryFrac
+      const leftW = r2(availW * leftFrac)
+      const rightW = r2(availW - leftW)
       framed[0].frame = {
         x: r2(bounds.x), y: r2(bounds.y), w: leftW, h: r2(bounds.h),
         padding: { top: 0.08, right: 0.08, bottom: 0.08, left: 0.08 }
       }
       framed[1].frame = {
-        x: r2(bounds.x + leftW + gap), y: r2(bounds.y), w: r2(availW - leftW), h: r2(bounds.h),
+        x: r2(bounds.x + leftW + gap), y: r2(bounds.y), w: rightW, h: r2(bounds.h),
         padding: { top: 0.08, right: 0.08, bottom: 0.08, left: 0.08 }
       }
     } else {
       const availH = bounds.h - gap
-      const topH = r2(availH * primaryFrac)
+      const topFrac = explicit
+        ? (explicit.side === 'top' ? explicit.frac : 1 - explicit.frac)
+        : primaryFrac
+      const topH = r2(availH * topFrac)
+      const bottomH = r2(availH - topH)
       framed[0].frame = {
         x: r2(bounds.x), y: r2(bounds.y), w: r2(bounds.w), h: topH,
         padding: { top: 0.08, right: 0.08, bottom: 0.08, left: 0.08 }
       }
       framed[1].frame = {
-        x: r2(bounds.x), y: r2(bounds.y + topH + gap), w: r2(bounds.w), h: r2(availH - topH),
+        x: r2(bounds.x), y: r2(bounds.y + topH + gap), w: r2(bounds.w), h: bottomH,
         padding: { top: 0.08, right: 0.08, bottom: 0.08, left: 0.08 }
       }
     }
@@ -5259,6 +5288,7 @@ async function runAgent5(state) {
   console.log('  Batches:', batches.length, '(max', BATCH_SIZE, 'slides each)')
 
   const allDesigned = []
+  const manifestBySlide = new Map((manifest || []).map(s => [s.slide_number, s]))
 
   for (let b = 0; b < batches.length; b++) {
     if (b > 0) {
@@ -5358,5 +5388,13 @@ async function runAgent5(state) {
     '| with issues:', withIssues.length)
   console.log('  Artifact types:', JSON.stringify(typeCounts))
 
-  return allDesigned
+  const finalDesigned = allDesigned.map(slide => {
+    if (slide && Array.isArray(slide.blocks) && slide.blocks.length > 0) return slide
+    const manifestSlide = manifestBySlide.get(slide?.slide_number)
+    if (!manifestSlide) return slide
+    console.warn('Agent 5 -- S' + manifestSlide.slide_number + ' missing blocks at final handoff, forcing minimal safe render spec')
+    return buildMinimalSafeSlide(manifestSlide, tokens)
+  })
+
+  return finalDesigned
 }

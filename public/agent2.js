@@ -267,6 +267,21 @@ async function enrichAgent2InBatches(extracted) {
   }
 }
 
+function hasUsablePptxTemplateExtraction(extracted) {
+  const layouts = extracted?.slide_layouts || []
+  const masters = extracted?.slide_masters || []
+  if (!layouts.length || !masters.length) return false
+  const contentLike = layouts.filter(l => {
+    const t = String(l?.type || '').toLowerCase()
+    const n = String(l?.name || '').toLowerCase()
+    const ph = +l?.ph_count || 0
+    return !['title', 'sechead', 'blank'].includes(t) &&
+      !/thank[\s_-]*you|end[\s_-]*slide|closing[\s_-]*slide/i.test(n) &&
+      (ph > 0 || /content|topic|image|two|column|body/i.test(n))
+  })
+  return contentLike.length > 0
+}
+
 const AGENT2_VISION_SYSTEM = `You are an expert brand designer analyzing a brand guideline document.
 Extract ALL design rules and return as a single valid JSON object with these exact fields:
 {
@@ -295,10 +310,11 @@ Return ONLY valid JSON. No explanation. No markdown fences.`
 async function runAgent2(state, brandContent) {
   console.log('Agent 2 starting — file type:', state.brandExt)
 
+  const isPptTemplate = state.brandExt === 'pptx' || state.brandExt === 'ppt'
   let extracted = null
 
   // ── STEP A: Python extraction for PPTX files ──────────────────────────────
-  if (state.brandExt === 'pptx' || state.brandExt === 'ppt') {
+  if (isPptTemplate) {
     try {
       console.log('Agent 2 Step A — calling /api/extract-brand...')
 
@@ -318,8 +334,12 @@ async function runAgent2(state, brandContent) {
         console.log('Agent 2 Step A — extraction successful')
         console.log('  Colors:', Object.keys(extracted.all_colors || {}).length, 'found')
         console.log('  Layouts:', (extracted.slide_layouts || []).length, 'found')
+        console.log('  Masters:', (extracted.slide_masters || []).length, 'found')
         console.log('  Fonts:', JSON.stringify(extracted.raw_fonts))
         console.log('  Slide size:', extracted.slide_width_inches + '" x ' + extracted.slide_height_inches + '"')
+        if (!hasUsablePptxTemplateExtraction(extracted)) {
+          console.warn('Agent 2 Step A â€” PPTX extraction returned no usable content layouts')
+        }
       } else {
         console.warn('Agent 2 Step A — failed:', data.error)
       }
@@ -331,6 +351,9 @@ async function runAgent2(state, brandContent) {
 
   // ── STEP B: Claude enrichment if we have extracted data ───────────────────
   if (extracted) {
+    if (isPptTemplate && !hasUsablePptxTemplateExtraction(extracted)) {
+      throw new Error('PPTX extraction completed but did not return usable slide masters/content layouts. Check /api/extract-brand or run the app through vercel dev so the Python endpoint is available.')
+    }
     try {
       console.log('Agent 2 Step B — enriching with Claude...')
       const enriched = await enrichAgent2InBatches(extracted)
@@ -350,6 +373,10 @@ async function runAgent2(state, brandContent) {
   }
 
   // ── STEP C: Claude vision for PDF / image / fallback ─────────────────────
+  if (isPptTemplate) {
+    throw new Error('PPTX brand extraction failed or returned no usable slide masters/content layouts. Agent 2 will not fall back to vision for PPTX templates because that loses layout geometry.')
+  }
+
   console.log('Agent 2 Step C — using Claude vision...')
 
   let messages

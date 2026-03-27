@@ -809,12 +809,20 @@ Each zone object must contain:
   "message_objective": "string — one sentence: what this zone proves or communicates",
   "narrative_weight": "primary" | "secondary" | "supporting",
   "artifacts": [ ... ],
+  "zone_split": "full" | "left_50" | "right_50" | "left_60" | "right_40" | "left_40" | "right_60" |
+               "top_30" | "bottom_70" | "top_40" | "bottom_60" | "top_50" | "bottom_50" |
+               "top_left_50" | "top_right_50" | "bottom_full" |
+               "left_full_50" | "top_right_50_h" | "bottom_right_50_h" |
+               "tl" | "tr" | "bl" | "br",
+  "artifact_arrangement": "horizontal" | "vertical" | null,
   "layout_hint": {
     "split": "full" | "left_50" | "right_50" | "left_60" | "right_40" | "left_40" | "right_60" |
              "top_30" | "bottom_70" | "top_40" | "bottom_60" | "top_50" | "bottom_50" |
              "top_left_50" | "top_right_50" | "bottom_full" |
              "left_full_50" | "top_right_50_h" | "bottom_right_50_h" |
-             "tl" | "tr" | "bl" | "br"
+             "tl" | "tr" | "bl" | "br",
+    "artifact_arrangement": "horizontal" | "vertical" | null,
+    "split_hint": [60, 40] | [50, 50] | null
   }
 }
 
@@ -825,7 +833,12 @@ Zone rules:
 - no more than 2 primary zones per slide
 - every zone must support the slide key_message
 - every zone must communicate one coherent message objective
+- In Scratch Mode, zone_split is the PRIMARY zone geometry field and must be explicit for every zone.
+- In Scratch Mode, if a zone has 2+ artifacts, artifact_arrangement must be explicit.
+- In Scratch Mode, if a zone has 2+ artifacts, EACH artifact must have artifact_coverage_hint and the hints should sum to 100.
+- If a zone has 1 artifact, artifact_arrangement = null and artifact_coverage_hint may be omitted or set to 100.
 - layout_hint.split is used ONLY in Scratch Mode (fewer than 5 content layouts). In Layout Mode, set layout_hint.split = "full" for all zones.
+- layout_hint is retained as a backward-compatible mirror of zone_split / artifact_arrangement / artifact_split_hint.
 - NEVER assign title-slide, section-header, divider, blank, or thank-you layouts to content slides.
 
 ═══════════════════════════
@@ -1767,6 +1780,10 @@ function hasPlaceholderContent(slide) {
 function normaliseArtifact(a) {
   if (!a || !a.type) return null
   const t = a.type.toLowerCase()
+  if (a.artifact_coverage_hint != null) {
+    const n = parseFloat(a.artifact_coverage_hint)
+    a.artifact_coverage_hint = Number.isFinite(n) ? Math.max(1, Math.min(100, n)) : undefined
+  }
 
   if (t === 'chart') {
     if (!a.categories) a.categories = []
@@ -1873,19 +1890,24 @@ function normaliseArtifact(a) {
 
 function normaliseZone(z) {
   if (!z) return null
+  const zoneSplit = z.zone_split || (z.layout_hint || {}).split || 'full'
+  const artifactArrangement = (z.layout_hint || {}).artifact_arrangement || z.artifact_arrangement || null
+  const artifactSplitHint = Array.isArray(z.artifact_split_hint)
+    ? z.artifact_split_hint
+    : (Array.isArray((z.layout_hint || {}).split_hint) ? (z.layout_hint || {}).split_hint : (Array.isArray(z.split_hint) ? z.split_hint : null))
   return {
     zone_id:          z.zone_id          || 'z1',
     zone_role:        z.zone_role        || 'primary_proof',
     message_objective:z.message_objective|| '',
     narrative_weight: z.narrative_weight || 'primary',
     artifacts:        (z.artifacts || []).map(normaliseArtifact).filter(Boolean),
+    zone_split:       zoneSplit,
+    artifact_arrangement: artifactArrangement,
     layout_hint:      {
-      split: (z.layout_hint || {}).split || 'full',
-      artifact_arrangement: (z.layout_hint || {}).artifact_arrangement || z.artifact_arrangement || null,
-      split_hint: Array.isArray((z.layout_hint || {}).split_hint) ? (z.layout_hint || {}).split_hint : (Array.isArray(z.split_hint) ? z.split_hint : null)
-    },
-    artifact_arrangement: (z.layout_hint || {}).artifact_arrangement || z.artifact_arrangement || null,
-    split_hint: Array.isArray((z.layout_hint || {}).split_hint) ? (z.layout_hint || {}).split_hint : (Array.isArray(z.split_hint) ? z.split_hint : null)
+      split: zoneSplit,
+      artifact_arrangement: artifactArrangement,
+      split_hint: artifactSplitHint
+    }
   }
 }
 
@@ -1988,8 +2010,8 @@ Recommendations:   ${briefSummary.recommendations || '—'}
 
 AVAILABLE BRAND LAYOUTS (${layoutNames.length}): ${hasLayouts
   ? layoutNames.join(' | ')
-  : layoutNames.length > 0 ? layoutNames.join(' | ') + ' — too few layouts; use layout_hint splits for zone geometry'
-  : 'none — use layout_hint splits for zone geometry'}
+  : layoutNames.length > 0 ? layoutNames.join(' | ') + ' — too few layouts; use zone_split / artifact_arrangement plus per-artifact artifact_coverage_hint for scratch geometry'
+  : 'none — use zone_split / artifact_arrangement plus per-artifact artifact_coverage_hint for scratch geometry'}
 
 ${hasLayouts
   ? `*** LAYOUT MODE ACTIVE — ${layoutNames.length} content layouts provided ***
@@ -1998,7 +2020,7 @@ For EVERY content slide you write:
   2. Set layout_hint.split = "full" for ALL zones on that slide.
   3. Do NOT use split values like left_50, right_50, etc. — those are only for scratch mode.
 Title and divider slides: set selected_layout_name = "" (pipeline assigns their layouts).`
-  : '*** SCRATCH MODE — fewer than 5 content layouts; use layout_hint splits for zone geometry ***'}
+  : '*** SCRATCH MODE — fewer than 5 content layouts; use zone_split / artifact_arrangement plus per-artifact artifact_coverage_hint for geometry; mirror legacy hints only for compatibility ***'}
 
 SLIDES TO WRITE — batch ${batchNum} (${batchPlan.length} slides):
 ${JSON.stringify(batchPlan, null, 2)}
@@ -2009,6 +2031,8 @@ INSTRUCTIONS:
 - Title slides: zones = []
 - Divider slides: zones = []
 - Content slides: 1–4 zones, each with 1–2 artifacts
+- In Scratch Mode, zone_split must be explicit for every zone.
+- In Scratch Mode, if a zone has 2 artifacts, set artifact_arrangement and set artifact_coverage_hint on EACH artifact so the hints sum to 100.
 - Every chart: MUST have 3+ categories, matching values, no all-zeros; set chart_header to the one-line insight the chart proves
 - clustered_bar: MUST have exactly 2 series
 - Every insight_text: MUST have specific, data-driven points; set insight_header to one of: Key Insight | So What | Risk Alert | Action Required
@@ -2256,14 +2280,28 @@ function applyArtifactArrangementForScratch(zone, dominantShare = 60) {
     secondShare = Math.min(secondShare, 40)
   }
 
+  const coverage = artifacts.map((_, idx) => {
+    if (artifacts.length === 2) return idx === 0 ? firstShare : secondShare
+    if (idx === 0) return firstShare
+    const rem = Math.max(0, 100 - firstShare)
+    return rem / Math.max(artifacts.length - 1, 1)
+  })
+  const normalizedCoverage = coverage.map(v => Math.round(v * 100) / 100)
+  const artifactsWithCoverage = artifacts.map((art, idx) => ({
+    ...art,
+    artifact_coverage_hint: normalizedCoverage[idx]
+  }))
+
   return {
     ...zone,
+    artifacts: artifactsWithCoverage,
+    artifact_split_hint: artifacts.length === 2 ? [firstShare, secondShare] : normalizedCoverage,
     artifact_arrangement: 'vertical',
-    split_hint: [firstShare, secondShare],
+    split_hint: artifacts.length === 2 ? [firstShare, secondShare] : normalizedCoverage,
     layout_hint: {
       ...(zone.layout_hint || {}),
       artifact_arrangement: 'vertical',
-      split_hint: [firstShare, secondShare]
+      split_hint: artifacts.length === 2 ? [firstShare, secondShare] : normalizedCoverage
     }
   }
 }
@@ -2272,11 +2310,14 @@ function assignScratchSplits(slide) {
   if (slide.slide_type !== 'content') return slide
   const zones = (slide.zones || []).map(z => ({
     ...z,
+    zone_split: z.zone_split || ((z.layout_hint || {}).split || 'full'),
+    artifact_arrangement: (z.layout_hint || {}).artifact_arrangement || z.artifact_arrangement || null,
+    artifact_split_hint: Array.isArray(z.artifact_split_hint) ? z.artifact_split_hint : (Array.isArray((z.layout_hint || {}).split_hint) ? (z.layout_hint || {}).split_hint : (Array.isArray(z.split_hint) ? z.split_hint : null)),
     layout_hint: {
       ...(z.layout_hint || {}),
-      split: ((z.layout_hint || {}).split || 'full'),
+      split: z.zone_split || ((z.layout_hint || {}).split || 'full'),
       artifact_arrangement: (z.layout_hint || {}).artifact_arrangement || z.artifact_arrangement || null,
-      split_hint: Array.isArray((z.layout_hint || {}).split_hint) ? (z.layout_hint || {}).split_hint : (Array.isArray(z.split_hint) ? z.split_hint : null)
+      split_hint: Array.isArray(z.artifact_split_hint) ? z.artifact_split_hint : (Array.isArray((z.layout_hint || {}).split_hint) ? (z.layout_hint || {}).split_hint : (Array.isArray(z.split_hint) ? z.split_hint : null))
     }
   }))
   if (!zones.length) return slide
@@ -2297,7 +2338,7 @@ function assignScratchSplits(slide) {
   }))
 
   if (zones.length === 1) {
-    zones[0] = applyArtifactArrangementForScratch({ ...zones[0], layout_hint: { ...(zones[0].layout_hint || {}), split: 'full' } }, 60)
+    zones[0] = applyArtifactArrangementForScratch({ ...zones[0], zone_split: 'full', layout_hint: { ...(zones[0].layout_hint || {}), split: 'full' } }, 60)
   } else if (zones.length === 2 && artifactCount === 4) {
     const zoneScores = zones.map((z, idx) => ({ idx, score: zoneDominanceScoreForScratch(z) }))
     zoneScores.sort((a, b) => b.score - a.score)
@@ -2306,10 +2347,12 @@ function assignScratchSplits(slide) {
 
     zones[dominantIdx] = applyArtifactArrangementForScratch({
       ...zones[dominantIdx],
+      zone_split: 'left_60',
       layout_hint: { ...(zones[dominantIdx].layout_hint || {}), split: 'left_60' }
     }, 60)
     zones[supportingIdx] = applyArtifactArrangementForScratch({
       ...zones[supportingIdx],
+      zone_split: 'right_40',
       layout_hint: { ...(zones[supportingIdx].layout_hint || {}), split: 'right_40' }
     }, 40)
   } else if (zones.length === 2) {
@@ -2320,10 +2363,12 @@ function assignScratchSplits(slide) {
       const secondaryIdx = dominantIdx === 0 ? 1 : 0
       zones[dominantIdx] = applyArtifactArrangementForScratch({
         ...zones[dominantIdx],
+        zone_split: 'top_60',
         layout_hint: { ...(zones[dominantIdx].layout_hint || {}), split: 'top_60' }
       }, 60)
       zones[secondaryIdx] = applyArtifactArrangementForScratch({
         ...zones[secondaryIdx],
+        zone_split: 'bottom_40',
         layout_hint: { ...(zones[secondaryIdx].layout_hint || {}), split: 'bottom_40' }
       }, 40)
     } else {
@@ -2333,21 +2378,23 @@ function assignScratchSplits(slide) {
       const secondaryIdx = dominantIdx === 0 ? 1 : 0
       zones[dominantIdx] = applyArtifactArrangementForScratch({
         ...zones[dominantIdx],
+        zone_split: 'left_60',
         layout_hint: { ...(zones[dominantIdx].layout_hint || {}), split: 'left_60' }
       }, 60)
       zones[secondaryIdx] = applyArtifactArrangementForScratch({
         ...zones[secondaryIdx],
+        zone_split: 'right_40',
         layout_hint: { ...(zones[secondaryIdx].layout_hint || {}), split: 'right_40' }
       }, 40)
     }
   } else if (zones.length === 3) {
-    zones[0] = applyArtifactArrangementForScratch({ ...zones[0], layout_hint: { ...(zones[0].layout_hint || {}), split: 'top_left_50' } }, 60)
-    zones[1] = applyArtifactArrangementForScratch({ ...zones[1], layout_hint: { ...(zones[1].layout_hint || {}), split: 'top_right_50' } }, 60)
-    zones[2] = applyArtifactArrangementForScratch({ ...zones[2], layout_hint: { ...(zones[2].layout_hint || {}), split: 'bottom_full' } }, 60)
+    zones[0] = applyArtifactArrangementForScratch({ ...zones[0], zone_split: 'top_left_50', layout_hint: { ...(zones[0].layout_hint || {}), split: 'top_left_50' } }, 60)
+    zones[1] = applyArtifactArrangementForScratch({ ...zones[1], zone_split: 'top_right_50', layout_hint: { ...(zones[1].layout_hint || {}), split: 'top_right_50' } }, 60)
+    zones[2] = applyArtifactArrangementForScratch({ ...zones[2], zone_split: 'bottom_full', layout_hint: { ...(zones[2].layout_hint || {}), split: 'bottom_full' } }, 60)
   } else if (zones.length >= 4) {
     const splits = ['tl', 'tr', 'bl', 'br']
     zones.forEach((z, i) => {
-      zones[i] = applyArtifactArrangementForScratch({ ...z, layout_hint: { ...(z.layout_hint || {}), split: splits[i] || 'full' } }, 60)
+      zones[i] = applyArtifactArrangementForScratch({ ...z, zone_split: splits[i] || 'full', layout_hint: { ...(z.layout_hint || {}), split: splits[i] || 'full' } }, 60)
     })
   }
 
@@ -2385,7 +2432,8 @@ Fix rules:
 - Prioritization: fully populate ranked action items; ensure priority_header is set
 - If matrix / driver_tree / prioritization is present, keep it only in the PRIMARY zone and pair it only with insight_text
 - selected_layout_name: choose from available layouts; set to "" if none available
-- layout_hint.split: ${layoutNames && layoutNames.length >= 5 ? 'set to "full" (Agent 5 uses selected_layout_name for positioning)' : 'keep existing split values'}
+- zone_split / artifact_arrangement / artifact_coverage_hint: ${layoutNames && layoutNames.length >= 5 ? 'set zone_split="full" for all zones; artifact arrangement only when a zone has 2 artifacts' : 'must be explicit for scratch composition; use artifact_coverage_hint on each artifact when a zone has 2+ artifacts'}
+- layout_hint.split: ${layoutNames && layoutNames.length >= 5 ? 'set to "full" (Agent 5 uses selected_layout_name for positioning)' : 'mirror zone_split into layout_hint.split for compatibility'}
 - Return ONLY a single JSON object for this one slide`
 
   const messages = [{

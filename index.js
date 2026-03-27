@@ -8,6 +8,16 @@ app.use(express.static('public'))
 // Wire Vercel serverless handlers as local Express routes
 const claudeHandler = require('./api/claude')
 app.post('/api/claude', claudeHandler)
+app.post('/api/extract-brand', (_req, res) => {
+  res.status(501).json({
+    error: 'The local Express dev server does not host /api/extract-brand. Run the app via `vercel dev` so the Python endpoint is available.'
+  })
+})
+app.post('/api/generate-pptx', (_req, res) => {
+  res.status(501).json({
+    error: 'The local Express dev server does not host /api/generate-pptx. Run the app via `vercel dev` so the Python endpoint is available.'
+  })
+})
 
 app.use((err, req, res, next) => {
   if (err && err.type === 'entity.too.large') {
