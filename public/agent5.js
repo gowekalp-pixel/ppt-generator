@@ -48,6 +48,7 @@ Your task is to convert each slide into an exact render-ready layout specificati
 
 You are NOT rewriting content.
 You are NOT changing business meaning.
+slide_archetype is descriptive metadata only. It must never override the explicit zones, artifact types, artifact subtypes, or selected_layout_name from Agent 4.
 
 You ARE responsible for:
 - spatial layout
@@ -1884,8 +1885,9 @@ async function buildFallbackDesign(manifestSlide, brand) {
     '\n\nBuild the best possible layout for this slide.' +
     '\nPreserve the title, key_message, zones structure and artifact content from the manifest.' +
     '\nCRITICAL: preserve the exact number of zones and the exact artifact types in each zone from the manifest.' +
+    '\nTreat slide_archetype as a weak summary label only. The explicit manifest structure is authoritative.' +
     '\nDo NOT collapse charts, tables, workflows, cards, matrix, driver_tree, or prioritization into generic insight_text unless the manifest itself uses insight_text.' +
-    '\nChoose the cleanest, most board-ready layout given the archetype: ' + (manifestSlide.slide_archetype || 'summary') +
+    '\nChoose the cleanest, most board-ready layout from the manifest structure itself: zone count, zone roles, artifact types, and selected_layout_name if present.' +
     '\nReturn a single JSON object for this one slide.'
 
   try {
@@ -5287,7 +5289,12 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
   // Layout mode: fill zone frames + artifact placeholder_idx from the layout's content_areas.
   // This runs after merge so Agent 4's artifact content is already in place.
   const layoutName = manifestSlide.selected_layout_name || designed.selected_layout_name || ''
-  const isLayoutMode = !!(designed.layout_mode || layoutName)
+  const manifestSlideType = String(manifestSlide.slide_type || designed.slide_type || '').toLowerCase()
+  const isTemplateNonContent = manifestSlideType === 'title' || manifestSlideType === 'divider'
+  // Content slides are layout-mode only when there is an actual named layout.
+  // Prevent impossible states like layout_mode:true with selected_layout_name:""
+  // which make Agent 5 previews diverge from Agent 6 rendering.
+  const isLayoutMode = isTemplateNonContent ? !!(designed.layout_mode || layoutName) : !!layoutName
   const brandedWithLayoutTitle = isLayoutMode && layoutName
     ? applyLayoutTitleFrames(branded, layoutName, brand)
     : branded
@@ -5392,7 +5399,6 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
 
 function inferLayoutName(manifestSlide, brand) {
   const st   = manifestSlide.slide_type      || 'content'
-  const arch = manifestSlide.slide_archetype || ''
   const _NON_CONTENT_TYPES = new Set(['title', 'sechead', 'blank'])
   const isNonContent = (l) => {
     const t = (l.type || '').toLowerCase()
@@ -5404,13 +5410,37 @@ function inferLayoutName(manifestSlide, brand) {
   const allLayouts = brand.slide_layouts || []
   const avail = st === 'content' ? allLayouts.filter(l => !isNonContent(l)) : allLayouts
   const find = (kws) => avail.find(l => kws.some(k => (l.name || '').toLowerCase().includes(k.toLowerCase())))
+  const zones = manifestSlide.zones || []
+  const artifacts = zones.flatMap(z => z.artifacts || [])
+  const artifactTypes = artifacts.map(a => String(a.type || '').toLowerCase())
+  const zoneCount = zones.length
+  const hasReasoning = artifactTypes.some(t => ['matrix', 'driver_tree', 'prioritization'].includes(t))
+  const hasWorkflow = artifactTypes.includes('workflow')
+  const hasWideWorkflow = artifacts.some(a => {
+    const t = String(a.type || '').toLowerCase()
+    const dir = String(a.flow_direction || '').toLowerCase()
+    return t === 'workflow' && (dir === 'left_to_right' || dir === 'timeline')
+  })
+  const hasChart = artifactTypes.includes('chart')
+  const hasCards = artifactTypes.includes('cards')
+  const hasOnlyInsight = artifactTypes.length > 0 && artifactTypes.every(t => t === 'insight_text')
+  const selectedLayout = String(manifestSlide.selected_layout_name || '').trim()
 
   if (st === 'title')   return (find(['Title Slide', 'title'])                     || {}).name || 'Title Slide'
   if (st === 'divider') return (find(['Section', 'Divider', 'section header'])     || {}).name || 'Section Divider'
-  if (['recommendation','process','roadmap'].includes(arch))
-    return (find(['3 Across','3 across','body text'])                              || {}).name || 'Body Text'
-  if (['dashboard','summary'].includes(arch))
-    return (find(['2 Across','1 Across','2 across','1 across'])                   || {}).name || '1 Across'
+  if (selectedLayout) return selectedLayout
+  if (hasReasoning)
+    return (find(['Body Text', '1 Across', 'body text', '1 across', 'single'])     || {}).name || 'Body Text'
+  if (hasWideWorkflow)
+    return (find(['Body Text', '1 Across', 'body text', '1 across'])               || {}).name || 'Body Text'
+  if (hasWorkflow && zoneCount >= 2)
+    return (find(['Body Text', '1 Across', 'body text', '1 across'])               || {}).name || 'Body Text'
+  if (zoneCount >= 3 && (hasChart || hasCards))
+    return (find(['1 Across', '2 Across', '1 across', '2 across'])                 || {}).name || '1 Across'
+  if (zoneCount === 2 && !hasOnlyInsight)
+    return (find(['2 Across', '2 across', '2 Column', '2 column', '1 on 1'])      || {}).name || '2 Across'
+  if (hasOnlyInsight)
+    return (find(['Body Text', '1 Across', 'body text', '1 across'])               || {}).name || 'Body Text'
   return (find(['1 Across','Body Text','1 across','body text','2 Column','2 column']) || {}).name || (avail[0] || {}).name || 'Body Text'
 }
 

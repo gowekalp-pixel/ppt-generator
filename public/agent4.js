@@ -43,9 +43,9 @@ Never skip phases. Never reverse the order.
 
 PHASE 1 — SLIDE INTENT LOCK
   1a. State the ONE claim this slide must prove (one sentence).
-  1b. Choose slide_archetype that best fits that claim.
-  1c. Write the insight-led title (conclusion, not topic).
-  1d. Write the key_message (exact takeaway for the audience).
+  1b. Write the insight-led title (conclusion, not topic).
+  1c. Write the key_message (exact takeaway for the audience).
+  1d. Treat slide_archetype as descriptive metadata only — it does NOT determine zones, artifacts, or layout.
 
 PHASE 1.5 — ZONE DERIVATION (MANDATORY)
   Before defining artifacts, you MUST explicitly derive the zone structure.
@@ -241,6 +241,7 @@ PHASE 1.5 — ZONE DERIVATION (MANDATORY)
 
   STRICT RULES:
   - Zones MUST come from message decomposition — NOT from layout
+  - Zones and artifacts are the primary contract. slide_archetype is only a summary label added AFTER the structure is decided.
   - Do NOT think about layout in this phase
   - Every zone must answer a clear question
   - At least one zone MUST be a "proof zone"
@@ -1621,6 +1622,38 @@ function inferArchetype(sectionType, slideIndex) {
   }
 }
 
+function inferArchetypeFromZones(slide, plan) {
+  const zones = slide?.zones || []
+  const artifacts = zones.flatMap(z => z.artifacts || []).map(a => String(a.type || '').toLowerCase())
+  const zoneCount = zones.length
+  const has = t => artifacts.includes(t)
+  const hasOnlyInsight = artifacts.length > 0 && artifacts.every(t => t === 'insight_text')
+  const hasCards = has('cards')
+  const hasWorkflow = has('workflow')
+  const hasChart = has('chart')
+  const hasTable = has('table')
+  const hasReasoning = artifacts.some(t => ['matrix', 'driver_tree', 'prioritization'].includes(t))
+
+  if (slide?.slide_type === 'title' || slide?.slide_type === 'divider') return 'summary'
+  if (hasReasoning) {
+    if (has('prioritization')) return 'recommendation'
+    if (has('driver_tree')) return 'driver_analysis'
+    if (has('matrix')) return 'comparison'
+  }
+  if (hasWorkflow) {
+    const workflowTypes = zones.flatMap(z => z.artifacts || []).filter(a => String(a.type || '').toLowerCase() === 'workflow')
+    const hasRoadmapLike = workflowTypes.some(a => /timeline|roadmap/i.test(String(a.workflow_type || '')) || /timeline/i.test(String(a.flow_direction || '')))
+    return hasRoadmapLike ? 'roadmap' : 'process'
+  }
+  if (hasChart && hasCards && zoneCount >= 3) return 'dashboard'
+  if (hasCards && !hasChart && !hasTable && !hasWorkflow && !hasReasoning) return 'summary'
+  if (hasChart && zoneCount >= 3) return 'dashboard'
+  if (hasChart && zoneCount === 2) return 'comparison'
+  if (hasTable) return 'proof'
+  if (hasOnlyInsight) return 'summary'
+  return slide?.slide_archetype || plan?.suggested_archetype || inferArchetype(plan?.section_type, plan?.slide_index_in_section || 0)
+}
+
 function compactList(arr, limit = 6, maxChars = 280) {
   const items = (arr || []).filter(Boolean).slice(0, limit).map(v => String(v).trim())
   const joined = items.join(' | ')
@@ -1745,6 +1778,24 @@ function validateReasoningArtifactUsage(slide) {
     if (arts.some(a => !reasoningTypes.has((a.type || '').toLowerCase()) && (a.type || '').toLowerCase() !== 'insight_text')) return false
   }
   return true
+}
+
+function enforceReasoningArtifactUsage(slide) {
+  const reasoningTypes = new Set(['matrix', 'driver_tree', 'prioritization'])
+  if (!slide || slide.slide_type !== 'content') return slide
+  const zones = (slide.zones || []).map(zone => {
+    const arts = zone.artifacts || []
+    const reasoningArts = arts.filter(a => reasoningTypes.has(String(a.type || '').toLowerCase()))
+    if (!reasoningArts.length) return zone
+    const primaryReasoning = reasoningArts[0]
+    const insightArts = arts.filter(a => String(a.type || '').toLowerCase() === 'insight_text')
+    return {
+      ...zone,
+      narrative_weight: 'primary',
+      artifacts: [primaryReasoning].concat(insightArts.slice(0, 1))
+    }
+  })
+  return { ...slide, zones }
 }
 
 function validateSlideArtifactMix(slide) {
@@ -1931,7 +1982,7 @@ function normaliseSlide(slide, plan) {
     zones = zones.slice(0, 4)
   }
 
-  return {
+  const normalized = {
     slide_number:                 slide.slide_number                 || plan.slide_number,
     section_name:                 slide.section_name                 || plan.section_name   || '',
     section_type:                 slide.section_type                 || plan.section_type   || '',
@@ -1945,6 +1996,11 @@ function normaliseSlide(slide, plan) {
     context_from_previous_slide:  slide.context_from_previous_slide  || '',
     zones:                        zones,
     speaker_note:                 slide.speaker_note                 || plan.purpose        || ''
+  }
+  const enforced = enforceReasoningArtifactUsage(normalized)
+  return {
+    ...enforced,
+    slide_archetype: inferArchetypeFromZones(enforced, plan)
   }
 }
 
@@ -2026,7 +2082,8 @@ SLIDES TO WRITE — batch ${batchNum} (${batchPlan.length} slides):
 ${JSON.stringify(batchPlan, null, 2)}
 
 INSTRUCTIONS:
-- For each slide, decide the archetype, write insight-led title, populate all zones with real artifacts
+- For each slide, first derive zones and artifacts from the message, then write the insight-led title and key_message
+- slide_archetype is a descriptive label only; it must summarize the final zone/artifact structure and must never drive artifact selection or layout choice
 - Pull all numbers from the attached source document — no invented figures
 - Title slides: zones = []
 - Divider slides: zones = []
@@ -2042,6 +2099,7 @@ INSTRUCTIONS:
 - Driver_tree: fully populate root and branches; set tree_header
 - Prioritization: fully populate ranked items sorted by importance; set priority_header
 - If matrix / driver_tree / prioritization is used, it must be in the PRIMARY zone and may be paired only with insight_text
+- If a slide uses matrix / driver_tree / prioritization, do NOT add cards, chart, workflow, or table anywhere else on that slide
 - Return ONLY a valid JSON array for these ${batchPlan.length} slides`
 
   const messages = [{
@@ -2422,6 +2480,7 @@ ${JSON.stringify(slide, null, 2)}
 Fix rules:
 - Replace all placeholder or empty content with real, specific data
 - Keep the same zones[] and artifact types — only fill in the content
+- Do NOT change the slide structure to fit slide_archetype; slide_archetype is metadata only
 - All numbers from the source document
 - Charts: 3+ categories, matching values, no all-zeros; ensure chart_header is set
 - insight_text: specific points with data; ensure insight_header is set
@@ -2431,6 +2490,7 @@ Fix rules:
 - Driver_tree: fully populate root and branches; ensure tree_header is set
 - Prioritization: fully populate ranked action items; ensure priority_header is set
 - If matrix / driver_tree / prioritization is present, keep it only in the PRIMARY zone and pair it only with insight_text
+- If a slide uses matrix / driver_tree / prioritization, do NOT add cards, chart, workflow, or table anywhere else on that slide
 - selected_layout_name: choose from available layouts; set to "" if none available
 - zone_split / artifact_arrangement / artifact_coverage_hint: ${layoutNames && layoutNames.length >= 5 ? 'set zone_split="full" for all zones; artifact arrangement only when a zone has 2 artifacts' : 'must be explicit for scratch composition; use artifact_coverage_hint on each artifact when a zone has 2+ artifacts'}
 - layout_hint.split: ${layoutNames && layoutNames.length >= 5 ? 'set to "full" (Agent 5 uses selected_layout_name for positioning)' : 'mirror zone_split into layout_hint.split for compatibility'}
