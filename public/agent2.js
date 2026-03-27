@@ -327,7 +327,16 @@ async function runAgent2(state, brandContent) {
         })
       })
 
-      const data = await res.json()
+      let data
+      try {
+        data = await res.json()
+      } catch (_) {
+        const raw = await res.text().catch(() => '')
+        const hint = /request entity too large|payload too large/i.test(raw)
+          ? 'Request payload too large for /api/extract-brand'
+          : ('Non-JSON response from /api/extract-brand: ' + (raw || ('status ' + res.status)).slice(0, 120))
+        throw new Error(hint)
+      }
 
       if (res.ok && data.success && data.extracted) {
         extracted = data.extracted
