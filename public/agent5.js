@@ -2684,7 +2684,17 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
           const ax     = art.x || 0
           const ay     = art.y || 0
           const aw     = art.w || 0
-          const ah     = art.h || 0
+          let ah       = art.h || 0
+          const slideArea = Math.max(1, (+canvas?.width_in || 13.33) * (+canvas?.height_in || 7.5))
+          const maxPerCardArea = slideArea * 0.15
+          if (count > 0 && count < 8) {
+            const currentPerCardArea = (aw * ah) / Math.max(count, 1)
+            if (currentPerCardArea > maxPerCardArea && aw > 0) {
+              const targetArtifactArea = maxPerCardArea * count
+              ah = round2(Math.max(1.10, Math.min(ah, targetArtifactArea / aw)))
+              art.h = ah
+            }
+          }
           const aspect = ah > 0 ? aw / ah : 1
           const minReadableCardWidth = 1.45
           const minReadableCardHeight = 1.10
