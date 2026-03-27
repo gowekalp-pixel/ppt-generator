@@ -2768,6 +2768,7 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
         const flow = String(art.flow_direction || '').toLowerCase()
         const wtype = String(art.workflow_type || '').toLowerCase()
         const isHorizontal = flow === 'left_to_right' || flow === 'horizontal' || wtype === 'timeline' || wtype === 'roadmap' || wtype === 'process_flow'
+        const isTopDownBranching = flow === 'top_down_branching' || flow === 'top_down' || flow === 'vertical' || wtype === 'decomposition' || wtype === 'hierarchy'
 
         if (nodes.length > 0 && isHorizontal) {
           const hasValues = nodes.some(n => String(n?.value || '').trim())
@@ -2835,6 +2836,86 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
               node_value_font_size: Math.max(7, Math.floor(valueFs * Math.max(widthRatio, 0.85)))
             }
           }
+        } else if (nodes.length > 0 && isTopDownBranching) {
+          const ax = art.x || 0
+          const ay = art.y || 0
+          const aw = art.w || 0
+          const ah = art.h || 0
+          const levels = [...new Set(nodes.map(n => Number.isFinite(+n?.level) ? +n.level : 1))].sort((a, b) => a - b)
+          const levelNodes = levels.map(level => nodes.filter(n => (Number.isFinite(+n?.level) ? +n.level : 1) === level))
+          const maxPerLevel = Math.max(...levelNodes.map(row => row.length), 1)
+          const topPad = 0.10
+          const bottomPad = nodes.some(n => String(n?.description || '').trim()) ? Math.min(0.95, Math.max(0.60, ah * 0.24)) : 0.16
+          const sidePad = Math.min(0.18, Math.max(0.10, aw * 0.03))
+          const rowGap = levels.length > 1 ? Math.max(0.24, Math.min(0.50, ah * 0.10)) : 0
+          const usableH = Math.max(0.8, ah - topPad - bottomPad - rowGap * Math.max(levels.length - 1, 0))
+          const nodeH = round2(Math.max(0.72, Math.min(1.00, usableH / Math.max(levels.length, 1))))
+          const rowYByLevel = new Map()
+          let curY = ay + topPad
+          levels.forEach(level => {
+            rowYByLevel.set(level, round2(curY))
+            curY += nodeH + rowGap
+          })
+
+          const titleFs = art.workflow_style.node_title_font_size || 10
+          const innerPad = art.workflow_style.node_inner_padding != null ? art.workflow_style.node_inner_padding : 0.08
+          const avgCharW = titleFs * 0.58 / 72
+          const longestLabel = Math.max(...nodes.map(n => String(n?.label || '').length), 8)
+          const targetLines = longestLabel > 16 ? 3 : 2
+          const minFitW = Math.max(0.92, Math.ceil(longestLabel / targetLines) * avgCharW + innerPad * 2 + 0.12)
+          const usableW = Math.max(1.0, aw - sidePad * 2)
+          const gapMin = maxPerLevel >= 4 ? 0.16 : 0.20
+          let nodeW = round2(Math.max(0.88, Math.min(2.40, (usableW - gapMin * Math.max(maxPerLevel - 1, 0)) / Math.max(maxPerLevel, 1))))
+          nodeW = round2(Math.max(nodeW, minFitW))
+          if (maxPerLevel > 1 && nodeW * maxPerLevel + gapMin * (maxPerLevel - 1) > usableW) {
+            nodeW = round2(Math.max(0.82, (usableW - gapMin * (maxPerLevel - 1)) / maxPerLevel))
+          }
+
+          const placedNodes = []
+          levels.forEach(level => {
+            const row = levelNodes.find(group => group[0] && (Number.isFinite(+group[0]?.level) ? +group[0].level : 1) === level) || []
+            const rowCount = Math.max(row.length, 1)
+            const totalRowW = rowCount * nodeW + Math.max(0, rowCount - 1) * gapMin
+            const startX = round2(ax + sidePad + Math.max(0, (usableW - totalRowW) / 2))
+            row.forEach((node, idx) => {
+              placedNodes.push({
+                ...node,
+                x: round2(startX + idx * (nodeW + gapMin)),
+                y: rowYByLevel.get(level),
+                w: nodeW,
+                h: nodeH
+              })
+            })
+          })
+          art.nodes = placedNodes
+
+          const placedById = new Map((art.nodes || []).map(n => [n.id, n]))
+          const originalConns = Array.isArray(art.connections) ? art.connections : []
+          art.connections = originalConns.map((conn, ci) => {
+            const fromNode = placedById.get(conn.from)
+            const toNode = placedById.get(conn.to)
+            if (!fromNode || !toNode) return {
+              ...conn,
+              type: conn.type || 'arrow',
+              path: Array.isArray(conn.path) ? conn.path : []
+            }
+            const startX = round2(fromNode.x + fromNode.w / 2)
+            const startY = round2(fromNode.y + fromNode.h)
+            const endX = round2(toNode.x + toNode.w / 2)
+            const endY = round2(toNode.y)
+            const midY = round2(startY + Math.max(0.10, (endY - startY) * 0.45))
+            return {
+              from: conn.from || fromNode.id || '',
+              to: conn.to || toNode.id || '',
+              type: conn.type || 'arrow',
+              path: [
+                { x: startX, y: startY },
+                { x: startX, y: midY },
+                { x: endX, y: midY },
+                { x: endX, y: endY }
+              ]
+            }
+          })
         }
       }
 

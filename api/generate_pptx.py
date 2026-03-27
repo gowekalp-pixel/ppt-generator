@@ -145,6 +145,51 @@ def find_blank_layout(prs):
         return prs.slide_layouts[0]
 
 
+def _is_non_content_layout(layout):
+    """True for title/divider/closing layouts that should not back content slides."""
+    try:
+        lname = (layout.name or '').lower().strip()
+    except Exception:
+        lname = ''
+    try:
+        ltype = (layout._element.get('type', '') or '').lower().strip()
+    except Exception:
+        ltype = ''
+    if ltype in ('title', 'sechead'):
+        return True
+    non_content_terms = (
+        'title slide',
+        'thank you',
+        'closing',
+        'end slide',
+        'divider',
+        'section header',
+    )
+    return any(term in lname for term in non_content_terms) or lname == 'section'
+
+
+def find_content_fallback_layout(prs):
+    """
+    Pick a neutral layout for content slides when Agent 5 is in scratch mode.
+    Never use title/divider/thank-you layouts as the base.
+    """
+    safe_layouts = [lyt for lyt in prs.slide_layouts if not _is_non_content_layout(lyt)]
+    if not safe_layouts:
+        return find_blank_layout(prs)
+
+    preferred_names = ('blank', 'content', 'body text', 'topic', 'title and content')
+    for pref in preferred_names:
+        for lyt in safe_layouts:
+            lname = (lyt.name or '').lower()
+            if pref in lname:
+                return lyt
+
+    try:
+        return min(safe_layouts, key=lambda l: len(list(l.placeholders)))
+    except Exception:
+        return safe_layouts[0]
+
+
 def load_template_prs(template_b64):
     """
     Decode a base64 PPTX template, strip all content slides, and return the
@@ -2955,6 +3000,10 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
             if named:
                 layout = named
                 print(f'  Slide {slide_spec.get("slide_number","?")}: layout="{named.name}"')
+        elif slide_type == 'content':
+            # Scratch-mode content slide: use a neutral content layout, never
+            # a title/divider/closing layout, even if it has the fewest placeholders.
+            layout = find_content_fallback_layout(prs) or blank_layout
 
         elif slide_type == 'title':
             # Use the explicit name from Agent 2's rulebook first (most reliable),
@@ -3218,7 +3267,10 @@ def build_presentation(final_spec, brand_rulebook, template_b64=None):
         prs.slide_height = Inches(h_in)
 
     blank_layout = find_blank_layout(prs)
+    content_fallback_layout = find_content_fallback_layout(prs)
     print(f'  Using fallback layout: "{blank_layout.name}" (use_template={use_template})')
+    if content_fallback_layout is not None:
+        print(f'  Content fallback layout: "{content_fallback_layout.name}"')
 
     # Extract explicit layout names from Agent 2 rulebook so build_slide can
     # select title / divider layouts reliably without keyword heuristics.
