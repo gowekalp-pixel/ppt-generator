@@ -559,6 +559,11 @@ PHASE 4 — ZONE ARCHITECTURE (apply rules R1–R8 in order; stop at first match
         the workflow — NEVER side-by-side. Use top_40+bottom_60 or top_50+bottom_50 splits.
       → In Layout Mode: select the WIDEST available single-column layout.
       → NEVER place any artifact to the left or right of a left_to_right workflow.
+      → HARD OVERRIDE: if the workflow has more than 3 nodes, it MUST use this full-width treatment even when it is not the primary artifact.
+      → HARD OVERRIDE: a 4+ node workflow may only be rendered as:
+        - left_to_right / timeline in a full-width zone, OR
+        - top_to_bottom in a full-height zone.
+        Never keep a 4+ node workflow in a side column.
 
       ⛔ VIOLATION SELF-CHECK (mandatory before finalising zones):
       Look at every zone you have defined so far.
@@ -577,6 +582,8 @@ PHASE 4 — ZONE ARCHITECTURE (apply rules R1–R8 in order; stop at first match
       → A second zone (insight_text or cards) is ALLOWED but MUST be placed to the LEFT or RIGHT
         of the workflow — NEVER stacked above/below. Use left_60+right_40 or left_50+right_50 splits.
       → NEVER stack a top_to_bottom workflow above or below another artifact.
+      → HARD OVERRIDE: if the workflow has more than 3 nodes and is vertical, it MUST own the full content height.
+      → HARD OVERRIDE: a 4+ node vertical workflow may have a companion only in a side column, never in a stacked band.
 
   R2c. WIDE CHART RULE
       If primary artifact is a chart with > 6 categories:
@@ -680,9 +687,11 @@ PHASE 5 — LAYOUT SELECTION
        → Override selected_layout_name to the WIDEST single-column layout available.
        → The selected layout primary content area must span >= 70% of slide width.
        → Any companion artifact (insight_text / cards) must occupy a STACKED band (above or below), never a side column.
+       → This override is MANDATORY for any workflow with more than 3 nodes.
     A2. TOP-TO-BOTTOM WORKFLOW OVERRIDE: If any artifact is a workflow with flow_direction = "top_to_bottom" or "top_down_branching"
        → Select a layout that provides a TALL primary column (>= 65% slide height).
        → Any companion artifact must occupy a SIDE column (left or right), never a stacked band.
+       → This override is MANDATORY for any workflow with more than 3 nodes when the chosen direction is vertical.
     B. WIDE CHART OVERRIDE: If any chart artifact has > 6 categories
        → Override selected_layout_name to the widest available single-column layout.
     C. FOUR-CARD OVERRIDE: If cards artifact has exactly 4 cards
@@ -1442,6 +1451,7 @@ GATE 3 — ARTIFACT VALIDITY
   [ ] WORKFLOW ZONE CHECK: Every left_to_right / timeline workflow is in a zone that spans the FULL HORIZONTAL WIDTH — no other zone is placed beside it (left/right)
   [ ] WORKFLOW ZONE CHECK: Any companion artifact to a left_to_right workflow is in a STACKED zone (above or below), never a side-by-side zone
   [ ] WORKFLOW ZONE CHECK: Every top_to_bottom / top_down_branching workflow is in a zone that spans the FULL VERTICAL HEIGHT — no other zone is stacked above or below it
+  [ ] WORKFLOW NODE COUNT CHECK: Any workflow with more than 3 nodes uses either full-width left_to_right/timeline OR full-height top_to_bottom — never a constrained side-column/two-column placement
 
 GATE 4 — ZONE SPATIAL COVERAGE (Scratch Mode only)
   [ ] All zone splits on each slide sum to 100% of content area
@@ -1459,6 +1469,7 @@ GATE 5 — LAYOUT CONSISTENCY (Layout Mode only)
   [ ] 4-card artifact -> Override Rule C applied
   [ ] Tall horizontal_bar -> Override Rule D applied
   [ ] WORKFLOW LAYOUT CHECK: Any left_to_right / timeline workflow → Override Rule A applied and widest single-column layout selected — if a multi-column layout was chosen, override it now
+  [ ] WORKFLOW LAYOUT CHECK: Any workflow with >3 nodes triggered the mandatory workflow override before finalizing selected_layout_name
 
 GATE 6 — SLIDE COHERENCE
   [ ] Every zone's message_objective directly supports the slide's key_message
