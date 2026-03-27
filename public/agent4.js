@@ -2055,6 +2055,18 @@ async function writeSlideBatch(batchPlan, brief, contentB64, batchNum, layoutNam
 
   const hasLayouts = layoutNames.length >= 5
   const briefSummary = buildBriefSummaryForAgent4(brief)
+  const compactBatchPlan = JSON.stringify((batchPlan || []).map(plan => ({
+    slide_number: plan.slide_number,
+    section_name: plan.section_name,
+    section_type: plan.section_type,
+    slide_type: plan.slide_type,
+    purpose: plan.purpose,
+    key_content: plan.key_content,
+    so_what: plan.so_what,
+    data_available: plan.data_available,
+    slide_index_in_section: plan.slide_index_in_section,
+    suggested_archetype: plan.suggested_archetype
+  })))
   const prompt = `PRESENTATION BRIEF:
 Document type:     ${briefSummary.document_type || '—'}
 Governing thought: ${briefSummary.governing_thought || '—'}
@@ -2079,7 +2091,7 @@ Title and divider slides: set selected_layout_name = "" (pipeline assigns their 
   : '*** SCRATCH MODE — fewer than 5 content layouts; use zone_split / artifact_arrangement plus per-artifact artifact_coverage_hint for geometry; mirror legacy hints only for compatibility ***'}
 
 SLIDES TO WRITE — batch ${batchNum} (${batchPlan.length} slides):
-${JSON.stringify(batchPlan, null, 2)}
+${compactBatchPlan}
 
 INSTRUCTIONS:
 - For each slide, first derive zones and artifacts from the message, then write the insight-led title and key_message
@@ -2554,9 +2566,10 @@ async function runAgent4(state) {
   const slidePlan = buildSlidePlan(brief, slideCount)
   console.log('  Slide plan:', slidePlan.length, 'slides')
 
-  // Batch size capped at 4 slides to stay within the 30k input-token/minute rate limit.
+  // Batch size capped at 3 slides to reduce model overload from the large Agent 4 system prompt
+  // plus the attached PDF and per-slide structure rules.
   // Each batch re-sends the source PDF, so we pause 65 s between batches to reset the window.
-  const BATCH_SIZE = 4
+  const BATCH_SIZE = 3
   const batches = []
   for (let i = 0; i < slidePlan.length; i += BATCH_SIZE) batches.push(slidePlan.slice(i, i + BATCH_SIZE))
 
@@ -2606,7 +2619,7 @@ async function runAgent4(state) {
 
   // Repair in groups of 2 — each repair re-sends the PDF so we observe the same
   // 30k TPM rate limit as the main batches.  Pause 65 s between groups.
-  const REPAIR_GROUP = 2
+  const REPAIR_GROUP = 1
   for (let ri = 0; ri < failed.length; ri += REPAIR_GROUP) {
     if (ri > 0) {
       console.log('Agent 4 — rate-limit pause 65 s before repair group', Math.floor(ri / REPAIR_GROUP) + 1)
