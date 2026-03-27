@@ -716,7 +716,7 @@ function safeParseJSON(raw, fallback) {
         ctx.fillRect(x, y, w, h)
         ctx.fillStyle = primary
         ctx.fillRect(x, y, 3, h)
-      } else if (t === 'chart' || t === 'table' || t === 'workflow' || t === 'image') {
+      } else if (t === 'chart' || t === 'table' || t === 'image') {
         ctx.fillStyle = '#F3F4F6'
         ctx.fillRect(x, y, w, h)
         ctx.strokeStyle = primary + '66'
@@ -726,6 +726,13 @@ function safeParseJSON(raw, fallback) {
         ctx.font = 'bold 8px Arial'
         ctx.textAlign = 'center'
         ctx.fillText(t.toUpperCase(), x + w / 2, y + h / 2)
+      } else if (t === 'line') {
+        ctx.strokeStyle = block.color || primary
+        ctx.lineWidth = Math.max(1, (block.line_width || 0.5))
+        ctx.beginPath()
+        ctx.moveTo((block.x1 || 0) * SCALE, (block.y1 || 0) * SCALE)
+        ctx.lineTo((block.x2 || 0) * SCALE, (block.y2 || 0) * SCALE)
+        ctx.stroke()
       }
     })
   }

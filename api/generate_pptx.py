@@ -2654,6 +2654,26 @@ def render_block_rule(slide, block, bt):
     add_filled_rect(slide, x, y, w, h, fill_hex=color)
 
 
+def render_block_line(slide, block, bt):
+    """Render a straight connector line between two endpoints."""
+    from pptx.enum.shapes import MSO_CONNECTOR
+    x1 = block.get('x1', block.get('x', 0))
+    y1 = block.get('y1', block.get('y', 0))
+    x2 = block.get('x2', x1)
+    y2 = block.get('y2', y1)
+    color = block.get('color') or bt.get('primary_color', '#1A3C8F')
+    width_pt = float(block.get('line_width', 0.5) or 0.5)
+    try:
+        line = slide.shapes.add_connector(
+            MSO_CONNECTOR.STRAIGHT,
+            inches(x1), inches(y1), inches(x2), inches(y2)
+        )
+        line.line.color.rgb = hex_to_rgb(color)
+        line.line.width = pt(width_pt)
+    except Exception:
+        pass
+
+
 def render_block_bullet_list(slide, block, bt):
     """Render a bullet_list block — calls existing render_insight_text logic."""
     # Build a minimal artifact dict that render_insight_text expects.
@@ -2772,6 +2792,8 @@ def render_blocks(slide, slide_spec, bt, use_template):
                 render_block_circle(slide, block, bt)
             elif btype == 'rule':
                 render_block_rule(slide, block, bt)
+            elif btype == 'line':
+                render_block_line(slide, block, bt)
             elif btype == 'bullet_list':
                 render_block_bullet_list(slide, block, bt)
             elif btype == 'chart':
@@ -3122,27 +3144,19 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
                     sb.get('align', 'left'), 'middle')
 
     # ════════════════════════════════════════════════════════════════════════
-    # BLOCKS PATH (new) vs LEGACY ZONES PATH (backward compat)
-    # When slide_spec has a 'blocks' array (produced by flattenToBlocks in
-    # agent5.js), use the pure render_blocks dispatcher.  Title/subtitle/
-    # global_elements are already included in blocks[], so we do NOT call
-    # place_in_placeholder / add_text_box for them separately here.
-    #
-    # When 'blocks' is absent (old specs without flattenToBlocks), fall back
-    # to the legacy zones loop via _legacy_render_zones.
+    # BLOCKS PATH ONLY
+    # Agent 5 is responsible for final geometry via flattenToBlocks().
+    # Agent 6 / generate_pptx.py must act as a pure renderer for content slides.
     # ════════════════════════════════════════════════════════════════════════
-    if _has_blocks:
-        # New blocks path — title, subtitle, artifacts, and global_elements are
-        # all pre-flattened into blocks[] by flattenToBlocks() in agent5.js.
-        # render_block_title handles placeholder vs free-textbox internally.
-        render_blocks(slide, slide_spec, bt, use_template)
-    else:
-        # Legacy zones path — backward compat for specs without blocks[]
-        _legacy_render_zones(
-            slide, slide_spec, bt, use_template, layout_mode,
-            _ph_bounds, _content_ph_frames, slide_header_style,
-            title_shrink_in, cvs
+    if not _has_blocks:
+        raise ValueError(
+            f"Content slide {slide_spec.get('slide_number', '?')} is missing finalized blocks[]. "
+            "Agent 5 must provide fully flattened render blocks for Agent 6."
         )
+
+    # Title, subtitle, artifacts, and global_elements are all pre-flattened
+    # into blocks[] by flattenToBlocks() in agent5.js.
+    render_blocks(slide, slide_spec, bt, use_template)
 
     if use_template:
         _remove_empty_placeholders(slide)

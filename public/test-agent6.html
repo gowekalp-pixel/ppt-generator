@@ -73,6 +73,9 @@
     .ap-matrix       { background: #e0f2fe; color: #0c4a6e; }
     .ap-driver_tree  { background: #ecfccb; color: #365314; }
     .ap-prioritization { background: #fce7f3; color: #9d174d; }
+    .ap-line         { background: #ede9fe; color: #5b21b6; }
+    .ap-rect         { background: #eff6ff; color: #1d4ed8; }
+    .ap-text-box     { background: #f8fafc; color: #334155; }
 
     /* Download card */
     .dl-card { display: none; background: #f0fdf4; border: 1.5px solid #22c55e; border-radius: 10px; padding: 16px 20px; margin-top: 14px; }
@@ -272,13 +275,14 @@
 
       let pillsHtml
       if (hasBlocks) {
-        // Show distinct artifact-level block types (chart/table/workflow/bullet_list/cards)
+        // Show distinct render block types that carry most of the visual contract
         const renderTypes = [...new Set(slideBlocks
           .map(b => b.block_type)
-          .filter(t => ['chart','table','workflow','bullet_list','circle'].includes(t))
+          .filter(t => ['chart','table','bullet_list','circle','rect','text_box','line'].includes(t))
         )]
         const artTypes = [...new Set((s.zones_summary || []).flatMap(z => z.artifact_types || []))]
         pillsHtml = artTypes.map(t => `<span class="ap ap-${t}">${t}</span>`).join('')
+          + renderTypes.map(t => `<span class="ap ap-${t.replace('_','-')}">${t}</span>`).join('')
           + `<span style="font-size:9px;background:#f0fdf4;color:#166534;padding:1px 5px;border-radius:10px;font-weight:600;">${slideBlocks.length} blocks</span>`
       } else {
         const arts = (s.zones_summary || []).flatMap(z => z.artifact_types || [])

@@ -5,7 +5,9 @@
 //
 // No Claude API call. Pure POST to backend → decode base64 → download.
 // Schema expected: canvas, brand_tokens, and blocks[] as the render contract.
-//                  zones[] is legacy-only and should not be required from Agent 5.
+//                  Blocks should align to PowerPoint primitives wherever possible
+//                  (text_box, rect, line, circle, rule, image) with native chart/table
+//                  blocks retained only where needed. zones[] is diagnostic-only.
 //
 // ─── RENDERING CONTRACT: insight_text ────────────────────────────────────────
 //

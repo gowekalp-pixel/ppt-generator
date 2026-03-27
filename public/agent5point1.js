@@ -124,11 +124,12 @@ Rules:
 - Compute all coordinates in decimal inches to 2 decimal places
 - FULLY specify every artifact's style sub-objects:
   chart: chart_style{} + series_style[]
-  workflow: workflow_style{} + nodes[] with x/y/w/h + connections[] with path[]
+  workflow: workflow_style{} + nodes[] with x/y/w/h + connections[] with path[]; final Agent 5 output must flatten workflow into primitive blocks (rect/text_box/line) for Agent 6
   table: table_style{} + column_widths[] + row_heights[]
   cards: card_style{} + card_frames[] with x/y/w/h
   insight_text standard: style{} + heading_style{} + body_style{}
   insight_text grouped:  heading_style{} + group_layout + group_header_style{} + group_bullet_box_style{} + bullet_style{} + group_gap_in + header_to_box_gap_in
+  charts in final blocks[]: keep native chart block for plot area but flatten legend into positioned rect/text_box blocks
 - Return ONLY a valid JSON array of exactly the requested slides. No markdown. No explanation.`
 
 

@@ -1353,11 +1353,14 @@ function validateRenderCompleteness(slide) {
         issues.push(p + ': outside canvas')
       }
     }
-    if (['title', 'subtitle', 'footer', 'page_number', 'image', 'chart', 'table', 'workflow', 'bullet_list', 'rect', 'text_box', 'rule', 'circle'].includes(b.block_type)) {
+    if (['title', 'subtitle', 'footer', 'page_number', 'image', 'chart', 'table', 'bullet_list', 'rect', 'text_box', 'rule', 'circle', 'line'].includes(b.block_type)) {
       if (!b.artifact_type) issues.push(p + ': missing artifact_type')
       if (!b.artifact_subtype) issues.push(p + ': missing artifact_subtype')
       if (!b.fallback_policy) issues.push(p + ': missing fallback_policy')
       if (!b.block_role) issues.push(p + ': missing block_role')
+    }
+    if (b.block_role && /^artifact_/.test(b.block_role) && !b.artifact_id) {
+      issues.push(p + ': missing artifact_id')
     }
     if (b.block_type === 'chart') {
       if (!b.chart_style) issues.push(p + ': chart block missing chart_style')
@@ -1380,13 +1383,30 @@ function validateRenderCompleteness(slide) {
       if (b.headers?.length && b.column_x_positions?.length && b.headers.length !== b.column_x_positions.length) issues.push(p + ': headers/column_x_positions length mismatch')
       if (b.rows?.length && b.row_heights?.length && b.rows.length !== b.row_heights.length) issues.push(p + ': rows/row_heights length mismatch')
       if (b.rows?.length && b.body_cell_frames?.length && b.rows.length !== b.body_cell_frames.length) issues.push(p + ': rows/body_cell_frames length mismatch')
+      if (b.table_fit_failed) issues.push(p + ': table block failed fit validation')
     }
-    if (b.block_type === 'workflow') {
-      if (!b.nodes?.length) issues.push(p + ': workflow block missing nodes')
-      if ((b.connections || []).some(c => !Array.isArray(c.path) || c.path.length < 2)) issues.push(p + ': workflow block missing connection path')
-      if (!b.workflow_style) issues.push(p + ': workflow block missing workflow_style')
+    if (b.block_type === 'line') {
+      if (b.x1 == null || b.y1 == null || b.x2 == null || b.y2 == null) issues.push(p + ': line block missing endpoints')
     }
   })
+
+  const overlapTypes = new Set(['rect', 'text_box', 'bullet_list', 'circle', 'chart', 'table'])
+  const artifactBlocks = (slide.blocks || []).filter(b =>
+    b &&
+    b.artifact_id &&
+    /^artifact_/.test(String(b.block_role || '')) &&
+    overlapTypes.has(String(b.block_type || ''))
+  )
+  for (let i = 0; i < artifactBlocks.length; i++) {
+    for (let j = i + 1; j < artifactBlocks.length; j++) {
+      const a = artifactBlocks[i]
+      const b = artifactBlocks[j]
+      if (a.artifact_id === b.artifact_id) continue
+      if (rectsOverlap(a, b, 0.01)) {
+        issues.push('artifact blocks overlap: ' + a.artifact_id + ' & ' + b.artifact_id)
+      }
+    }
+  }
 
   const zoneFrames = (slide.zones || []).map((z, zi) => ({ ...z.frame, _idx: zi })).filter(z => z.x != null && z.y != null && z.w != null && z.h != null)
   for (let i = 0; i < zoneFrames.length; i++) {
@@ -1895,7 +1915,7 @@ function makeHeaderBlockFromManifestArtifact(artifact, bt) {
   if (!text) return null
   return {
     text,
-    x: 0, y: 0, w: 1, h: 0.3,
+    x: null, y: null, w: null, h: 0.3,
     font_family: bt.title_font_family || 'Arial',
     font_size: 11,
     font_weight: 'semibold',
@@ -2380,16 +2400,64 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
 
         if (nCols > 0) {
           const artW = art.w || 6
+          const artH = art.h || 2
+          const ts = art.table_style || {}
+          const cellPadding = ts.cell_padding != null ? ts.cell_padding : 0.06
+          const isNumericLike = (value) => /^[\s₹$€£¥\-+]?[\d,\.]+[%KMBcr\s]*$/i.test(String(value == null ? '' : value).trim())
+          const countWrappedLines = (text, widthIn, fontSizePt) => {
+            const raw = String(text == null ? '' : text).trim()
+            if (!raw) return 1
+            const usableWidth = Math.max(0.18, widthIn - cellPadding * 2)
+            const charsPerLine = Math.max(4, Math.floor((usableWidth * 72) / (Math.max(7, fontSizePt) * 0.52)))
+            let lines = 0
+            for (const chunk of raw.split('\n')) {
+              const words = String(chunk || '').trim().split(/\s+/).filter(Boolean)
+              if (!words.length) {
+                lines += 1
+                continue
+              }
+              let lineLen = 0
+              let chunkLines = 1
+              for (const word of words) {
+                const nextLen = lineLen === 0 ? word.length : lineLen + 1 + word.length
+                if (nextLen <= charsPerLine) lineLen = nextLen
+                else {
+                  chunkLines += 1
+                  lineLen = word.length
+                }
+              }
+              lines += chunkLines
+            }
+            return Math.max(1, lines)
+          }
+          const lineHeightIn = (fontSizePt, factor) => (Math.max(7, fontSizePt) * factor) / 72
+          const widthWeightForColumn = (ci) => {
+            const headerLen = String(headers[ci] || '').length
+            let maxLen = headerLen
+            let avgLen = headerLen
+            let samples = 1
+            for (const row of rows) {
+              if (ci < row.length) {
+                const len = String(row[ci] || '').length
+                maxLen = Math.max(maxLen, len)
+                avgLen += len
+                samples += 1
+              }
+            }
+            avgLen = avgLen / Math.max(samples, 1)
+            const colType = (art.column_types || [])[ci]
+            const numericHits = rows.filter(row => ci < row.length && isNumericLike(row[ci])).length
+            const isNumeric = colType === 'numeric' || (rows.length > 0 && numericHits / Math.max(rows.length, 1) > 0.6 && ci > 0)
+            if (isNumeric) return Math.max(8, Math.min(20, avgLen * 0.7 + maxLen * 0.2))
+            const firstColBoost = ci === 0 ? 1.18 : 1.0
+            return Math.max(10, Math.min(42, (avgLen * 0.8 + maxLen * 0.45) * firstColBoost))
+          }
 
           // column_widths
           if (!art.column_widths || art.column_widths.length === 0) {
             const weights = []
             for (let c = 0; c < nCols; c++) {
-              let maxLen = (headers[c] || '').length
-              for (const row of rows) {
-                if (c < row.length) maxLen = Math.max(maxLen, String(row[c] || '').length)
-              }
-              weights.push(Math.max(maxLen, 1))
+              weights.push(widthWeightForColumn(c))
             }
             const totalWeight = weights.reduce((s, w) => s + w, 0) || 1
             const colWidths = weights.map(w => round2(artW * w / totalWeight))
@@ -2419,15 +2487,59 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
             art.column_alignments = (art.column_types || []).map(t => t === 'numeric' ? 'right' : 'left')
           }
 
-          // row_heights + header_row_height
-          if (!art.row_heights) {
-            const artH = art.h || 2
-            const available_h = artH - 0.35
-            const n_data_rows = rows.length
-            const row_h = Math.max(0.32, available_h / Math.max(n_data_rows, 1))
-            art.row_heights = Array(n_data_rows).fill(round2(row_h))
-            art.header_row_height = 0.35
+          // Content-aware font sizing + row heights
+          const colWidths = art.column_widths || []
+          let headerFs = ts.header_font_size || 10
+          let bodyFs = ts.body_font_size || 9
+          let headerRowHeight = 0.35
+          let rowHeights = []
+          let fitFound = false
+
+          for (let attempt = 0; attempt < 6; attempt++) {
+            const headerLines = headers.map((hdr, ci) => countWrappedLines(hdr, colWidths[ci] || (artW / Math.max(nCols, 1)), headerFs))
+            const maxHeaderLines = headerLines.reduce((m, v) => Math.max(m, v), 1)
+            headerRowHeight = round2(Math.max(0.35, maxHeaderLines * lineHeightIn(headerFs, 1.18) + cellPadding * 2 + 0.04))
+
+            rowHeights = rows.map(row => {
+              let maxLines = 1
+              for (let ci = 0; ci < nCols; ci++) {
+                const cellText = ci < row.length ? row[ci] : ''
+                const cellLines = countWrappedLines(cellText, colWidths[ci] || (artW / Math.max(nCols, 1)), bodyFs)
+                maxLines = Math.max(maxLines, cellLines)
+              }
+              return round2(Math.max(0.26, maxLines * lineHeightIn(bodyFs, 1.22) + cellPadding * 2 + 0.03))
+            })
+
+            const totalH = headerRowHeight + rowHeights.reduce((s, rh) => s + rh, 0)
+            if (totalH <= artH + 0.01) {
+              fitFound = true
+              break
+            }
+
+            if (bodyFs > 8) bodyFs -= 0.5
+            else if (headerFs > 8) headerFs -= 0.5
+            else break
           }
+
+          let finalEstimatedTotalH = headerRowHeight + rowHeights.reduce((s, rh) => s + rh, 0)
+          if (!fitFound) {
+            const totalH = finalEstimatedTotalH
+            if (totalH > artH && totalH > 0) {
+              const scale = artH / totalH
+              headerRowHeight = round2(Math.max(0.30, headerRowHeight * scale))
+              rowHeights = rowHeights.map(rh => round2(Math.max(0.24, rh * scale)))
+            }
+          }
+          finalEstimatedTotalH = headerRowHeight + rowHeights.reduce((s, rh) => s + rh, 0)
+          art._table_fit_failed = !fitFound && finalEstimatedTotalH > artH + 0.02
+          art.table_style = {
+            ...ts,
+            header_font_size: headerFs,
+            body_font_size: bodyFs,
+            cell_padding: cellPadding
+          }
+          art.row_heights = rowHeights
+          art.header_row_height = headerRowHeight
 
           // Explicit table grid geometry for Agent 6.
           const tableX = art.x || 0
@@ -2864,10 +2976,12 @@ function decorateArtifactBlocks(blocks, startIdx, endIdx, art, blockRole) {
   const artifactType = art.type || 'generic'
   const artifactSubtype = resolveArtifactSubtype(art)
   const artifactHeaderText = resolveArtifactHeaderText(art)
+  const artifactId = art._artifact_id || (artifactType + ':' + artifactSubtype + ':' + artifactHeaderText)
   const fallbackPolicy = buildBlockFallbackPolicy(art, blockRole)
   for (let i = startIdx; i < endIdx; i++) {
     blocks[i] = {
       ...blocks[i],
+      artifact_id: blocks[i].artifact_id || artifactId,
       artifact_type: blocks[i].artifact_type || artifactType,
       artifact_subtype: blocks[i].artifact_subtype || artifactSubtype,
       artifact_header_text: blocks[i].artifact_header_text != null ? blocks[i].artifact_header_text : artifactHeaderText,
@@ -3272,6 +3386,26 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
   const ah = r2((art.y || 0) + (art.h || 0) - content_y)
   if (!items.length || aw <= 0 || ah <= 0) return
 
+  const estimateTextHeight = (text, widthIn, fontSizePt, lineHeight = 1.25) => {
+    const textStr = String(text || '').trim()
+    if (!textStr) return 0
+    const usableWidth = Math.max(0.3, Number(widthIn) || 0.3)
+    const fontSize = Math.max(7, Number(fontSizePt) || 10)
+    const charsPerLine = Math.max(8, Math.floor((usableWidth * 72) / (fontSize * 0.52)))
+    const words = textStr.split(/\s+/).filter(Boolean)
+    let lines = 1
+    let lineLen = 0
+    for (const word of words) {
+      const nextLen = lineLen === 0 ? word.length : lineLen + 1 + word.length
+      if (nextLen <= charsPerLine) lineLen = nextLen
+      else {
+        lines += 1
+        lineLen = word.length
+      }
+    }
+    return lines * (fontSize * lineHeight / 72)
+  }
+
   const gap = ps.row_gap_in != null ? ps.row_gap_in : 0.16
   const rowH = r2((ah - gap * Math.max(0, items.length - 1)) / Math.max(items.length, 1))
   const rankSize = r2(Math.min(0.62, Math.max(0.42, rowH * 0.40)))
@@ -3279,6 +3413,9 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
   const rightPad = 0.14
   const rankPalette = ps.rank_palette || [bt.secondary_color || '#E0B324', bt.primary_color || '#0078AE']
   const qualifierPalette = ps.qualifier_value_palette || [bt.primary_color || '#0078AE']
+  const baseTitleFs = ps.title_font_size || 14
+  const baseDescFs = ps.description_font_size || 11
+  const baseQualifierFs = ps.qualifier_label_font_size || 10
 
   items.forEach((item, idx) => {
     const rowY = r2(ay + idx * (rowH + gap))
@@ -3286,13 +3423,36 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
     const rowW = aw
     const qualifiers = Array.isArray(item.qualifiers) ? item.qualifiers.slice(0, 2) : []
     const nonEmptyQualifiers = qualifiers.filter(q => String(q?.label || '').trim() || String(q?.value || '').trim())
-    const qualifierAreaW = nonEmptyQualifiers.length ? r2(Math.min(1.9, Math.max(1.45, aw * 0.26))) : 0
+    const qualifierTexts = nonEmptyQualifiers.map(q => {
+      const label = String(q.label || '').trim()
+      const value = String(q.value || '').trim()
+      return label && value ? (label + ': ' + value) : (label || value)
+    })
+    const longestQualifier = qualifierTexts.reduce((maxLen, text) => Math.max(maxLen, String(text || '').length), 0)
+    const qualifierAreaW = nonEmptyQualifiers.length
+      ? r2(Math.min(2.55, Math.max(1.55, aw * 0.28, longestQualifier * 0.055)))
+      : 0
     const rankX = r2(rowX + leftPad)
     const rankY = r2(rowY + (rowH - rankSize) / 2)
     const textX = r2(rankX + rankSize + 0.14)
     const textW = r2(Math.max(1.1, rowW - (textX - rowX) - qualifierAreaW - rightPad - (qualifierAreaW ? 0.14 : 0)))
     const qualifierX = qualifierAreaW ? r2(rowX + rowW - rightPad - qualifierAreaW) : 0
     const rankFill = rankPalette[idx % Math.max(rankPalette.length, 1)] || bt.primary_color || '#0078AE'
+    const titleText = String(item.title || '')
+    const descText = String(item.description || '')
+
+    let titleFs = baseTitleFs
+    while (titleFs > 10 && estimateTextHeight(titleText, textW, titleFs, 1.22) > Math.max(0.32, rowH * 0.42)) {
+      titleFs -= 1
+    }
+    const titleH = r2(Math.min(Math.max(0.26, estimateTextHeight(titleText, textW, titleFs, 1.22) + 0.04), Math.max(0.28, rowH * 0.46)))
+
+    let descFs = baseDescFs
+    const descY = r2(rowY + 0.12 + titleH)
+    const descH = r2(Math.max(0.22, rowH - (descY - rowY) - 0.12))
+    while (descFs > 9 && estimateTextHeight(descText, textW, descFs, 1.24) > descH) {
+      descFs -= 1
+    }
 
     blocks.push({
       block_type: 'rect',
@@ -3322,15 +3482,12 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
       valign: 'middle'
     })
 
-    const titleH = r2(Math.min(0.34, Math.max(0.24, rowH * 0.34)))
-    const descY = r2(rowY + 0.12 + titleH)
-    const descH = r2(Math.max(0.24, rowH - (descY - rowY) - 0.12))
     blocks.push({
       block_type: 'text_box',
       x: textX, y: r2(rowY + 0.1), w: textW, h: titleH,
-      text: item.title || '',
+      text: titleText,
       font_family: ps.title_font_family || bt.title_font_family || 'Arial',
-      font_size: ps.title_font_size || 14,
+      font_size: titleFs,
       bold: true,
       color: ps.title_color || '#1F2937',
       align: 'left',
@@ -3339,9 +3496,9 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
     blocks.push({
       block_type: 'text_box',
       x: textX, y: descY, w: textW, h: descH,
-      text: item.description || '',
+      text: descText,
       font_family: ps.description_font_family || bt.body_font_family || 'Arial',
-      font_size: ps.description_font_size || 11,
+      font_size: descFs,
       bold: false,
       color: ps.description_color || '#374151',
       align: 'left',
@@ -3351,10 +3508,19 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
     if (nonEmptyQualifiers.length) {
       const pillGap = 0.08
       const pillCount = nonEmptyQualifiers.length
-      const pillH = r2(Math.min(0.28, Math.max(0.2, (rowH - 0.18 - pillGap * Math.max(0, pillCount - 1)) / Math.max(pillCount, 1))))
+      let pillCursorY = r2(rowY + 0.12)
       nonEmptyQualifiers.forEach((q, qi) => {
-        const pillY = r2(rowY + 0.12 + qi * (pillH + pillGap))
         const valueColor = qualifierPalette[qi % Math.max(qualifierPalette.length, 1)] || bt.primary_color || '#0078AE'
+        const pillText = qualifierTexts[qi] || ''
+        let qualifierFs = baseQualifierFs
+        const pillTextW = Math.max(0.4, qualifierAreaW - 0.16)
+        while (qualifierFs > 8 && estimateTextHeight(pillText, pillTextW, qualifierFs, 1.2) > Math.max(0.42, rowH * 0.28)) {
+          qualifierFs -= 1
+        }
+        const pillH = r2(Math.max(0.28, estimateTextHeight(pillText, pillTextW, qualifierFs, 1.2) + 0.10))
+        const maxPillBottom = rowY + rowH - 0.08
+        const pillY = r2(Math.min(pillCursorY, Math.max(rowY + 0.12, maxPillBottom - pillH)))
+
         blocks.push({
           block_type: 'rect',
           x: qualifierX, y: pillY, w: qualifierAreaW, h: pillH,
@@ -3363,20 +3529,291 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
           border_width: 0,
           corner_radius: 4
         })
-        const label = String(q.label || '').trim()
-        const value = String(q.value || '').trim()
-        const pillText = label && value ? (label + ': ' + value) : (label || value)
         blocks.push({
           block_type: 'text_box',
           x: r2(qualifierX + 0.08), y: pillY, w: r2(qualifierAreaW - 0.16), h: pillH,
           text: pillText,
           font_family: ps.qualifier_label_font_family || bt.body_font_family || 'Arial',
-          font_size: ps.qualifier_label_font_size || 10,
+          font_size: qualifierFs,
           bold: false,
           color: ps.qualifier_text_color || '#1F2937',
           align: 'center',
           valign: 'middle'
         })
+        pillCursorY = r2(pillY + pillH + pillGap)
+      })
+    }
+  })
+}
+
+function _estimateLegendTextWidth(label, fontSizePt) {
+  const text = String(label || '')
+  return Math.max(0.40, Math.min(2.20, text.length * Math.max(fontSizePt, 8) * 0.0105))
+}
+
+function _chartLegendEntries(chartType, categories, seriesData, seriesStyles, palette, allowFallback) {
+  const entries = []
+  if (chartType === 'pie') {
+    ;(categories || []).forEach((category, i) => {
+      const style = i < (seriesStyles || []).length ? seriesStyles[i] : {}
+      let color = style.fill_color
+      if (!color && allowFallback) color = palette[i % Math.max(palette.length, 1)]
+      entries.push({ label: String(category || ''), color: color || '#666666' })
+    })
+    return entries
+  }
+  ;(seriesData || []).forEach((series, i) => {
+    const style = i < (seriesStyles || []).length ? seriesStyles[i] : {}
+    let color = style.fill_color
+    if (!color && allowFallback) color = palette[i % Math.max(palette.length, 1)]
+    entries.push({ label: String(series?.name || ('Series ' + (i + 1))), color: color || '#666666' })
+  })
+  return entries
+}
+
+function _computeChartLegendLayout(x, y, w, h, legendPosition, legendEntries, fontSizePt) {
+  if (!legendEntries.length || !['top', 'right'].includes(String(legendPosition || ''))) {
+    return { chartRect: { x, y, w, h }, legendBox: null }
+  }
+
+  const swatch = 0.14
+  const textGap = 0.06
+  const itemGapX = 0.18
+  const rowGap = 0.06
+  const lineH = Math.max(0.20, fontSizePt * 0.022)
+  const padX = 0.04
+  const padY = 0.03
+
+  if (legendPosition === 'top') {
+    const rows = []
+    let current = []
+    let usedW = 0
+    const maxRowW = Math.max(0.5, w - 0.04)
+
+    legendEntries.forEach(entry => {
+      const itemW = swatch + textGap + _estimateLegendTextWidth(entry.label, fontSizePt)
+      const proposed = current.length === 0 ? itemW : usedW + itemGapX + itemW
+      const item = { ...entry, item_w: itemW }
+      if (current.length && proposed > maxRowW) {
+        rows.push(current)
+        current = [item]
+        usedW = itemW
+      } else {
+        current.push(item)
+        usedW = proposed
+      }
+    })
+    if (current.length) rows.push(current)
+
+    const legendH = Math.min(Math.max(padY * 2 + rows.length * lineH + Math.max(0, rows.length - 1) * rowGap, 0.28), h * 0.28)
+    return {
+      chartRect: { x, y: r2(y + legendH + 0.05), w, h: r2(Math.max(1.0, h - legendH - 0.05)) },
+      legendBox: { position: 'top', x, y, w, h: legendH, rows, line_h: lineH, pad_x: padX, pad_y: padY, swatch, text_gap: textGap, item_gap_x: itemGapX, row_gap: rowGap }
+    }
+  }
+
+  const items = legendEntries.map(entry => {
+    const itemW = swatch + textGap + _estimateLegendTextWidth(entry.label, fontSizePt)
+    return { ...entry, item_w: itemW }
+  })
+  const maxItemW = items.reduce((maxW, item) => Math.max(maxW, item.item_w), 0)
+  const legendW = Math.min(Math.max(maxItemW + padX * 2, 1.05), w * 0.38)
+  const chartW = Math.max(1.0, w - legendW - 0.08)
+  return {
+    chartRect: { x, y, w: r2(chartW), h },
+    legendBox: { position: 'right', x: r2(x + chartW + 0.08), y, w: r2(legendW), h, items, line_h: lineH, pad_x: padX, pad_y: padY, swatch, text_gap: textGap, item_gap_x: itemGapX, row_gap: rowGap }
+  }
+}
+
+function _chartLegendToBlocks(legendBox, fontFamily, fontSizePt, colorHex, blocks, r2) {
+  if (!legendBox) return
+  if (legendBox.position === 'top') {
+    let curY = r2(legendBox.y + legendBox.pad_y)
+    ;(legendBox.rows || []).forEach(row => {
+      const rowW = row.reduce((sum, item) => sum + item.item_w, 0) + Math.max(0, row.length - 1) * legendBox.item_gap_x
+      let curX = r2(legendBox.x + Math.max(legendBox.pad_x, (legendBox.w - rowW) / 2))
+      row.forEach(item => {
+        blocks.push({
+          block_type: 'rect',
+          x: curX,
+          y: r2(curY + Math.max(0, (legendBox.line_h - legendBox.swatch) / 2)),
+          w: legendBox.swatch,
+          h: legendBox.swatch,
+          fill_color: item.color,
+          border_color: null,
+          border_width: 0,
+          corner_radius: 0
+        })
+        blocks.push({
+          block_type: 'text_box',
+          x: r2(curX + legendBox.swatch + legendBox.text_gap),
+          y: curY,
+          w: r2(Math.max(0.35, item.item_w - legendBox.swatch - legendBox.text_gap)),
+          h: legendBox.line_h,
+          text: item.label,
+          font_family: fontFamily,
+          font_size: fontSizePt,
+          bold: false,
+          color: colorHex,
+          align: 'left',
+          valign: 'middle'
+        })
+        curX = r2(curX + item.item_w + legendBox.item_gap_x)
+      })
+      curY = r2(curY + legendBox.line_h + legendBox.row_gap)
+    })
+    return
+  }
+
+  let curY = r2(legendBox.y + legendBox.pad_y)
+  ;(legendBox.items || []).forEach(item => {
+    blocks.push({
+      block_type: 'rect',
+      x: r2(legendBox.x + legendBox.pad_x),
+      y: r2(curY + Math.max(0, (legendBox.line_h - legendBox.swatch) / 2)),
+      w: legendBox.swatch,
+      h: legendBox.swatch,
+      fill_color: item.color,
+      border_color: null,
+      border_width: 0,
+      corner_radius: 0
+    })
+    blocks.push({
+      block_type: 'text_box',
+      x: r2(legendBox.x + legendBox.pad_x + legendBox.swatch + legendBox.text_gap),
+      y: curY,
+      w: r2(Math.max(0.35, legendBox.w - legendBox.pad_x * 2 - legendBox.swatch - legendBox.text_gap)),
+      h: legendBox.line_h,
+      text: item.label,
+      font_family: fontFamily,
+      font_size: fontSizePt,
+      bold: false,
+      color: colorHex,
+      align: 'left',
+      valign: 'middle'
+    })
+    curY = r2(curY + legendBox.line_h + legendBox.row_gap)
+  })
+}
+
+function _workflowToBlocks(art, content_y, blocks, bt, r2) {
+  const ws = art.workflow_style || {}
+  const nodes = Array.isArray(art.nodes) ? art.nodes : []
+  const conns = Array.isArray(art.connections) ? art.connections : []
+  if (!nodes.length) return
+
+  const titleFont = ws.node_title_font_family || bt.title_font_family || 'Arial'
+  const valueFont = ws.node_value_font_family || bt.body_font_family || 'Arial'
+  const labelColor = ws.node_title_color || '#FFFFFF'
+  const valueColor = ws.node_value_color || '#111111'
+  const nodeFill = ws.node_fill_color || bt.primary_color || '#0078AE'
+  const nodeBorder = ws.node_border_color || '#FFFFFF'
+  const nodeBorderWidth = ws.node_border_width != null ? ws.node_border_width : 1
+  const nodeCornerRadius = ws.node_corner_radius != null ? ws.node_corner_radius : 4
+  const connectorColor = ws.connector_color || bt.primary_color || '#0078AE'
+  const connectorWidth = ws.connector_width != null ? ws.connector_width : 0.5
+  const innerPad = ws.node_inner_padding != null ? ws.node_inner_padding : 0.08
+  const externalGap = ws.external_label_gap != null ? ws.external_label_gap : 0.08
+
+  const estimateTextHeight = (text, widthIn, fontSizePt, lineHeight = 1.2) => {
+    const textStr = String(text || '').trim()
+    if (!textStr) return 0
+    const usableWidth = Math.max(0.3, Number(widthIn) || 0.3)
+    const fontSize = Math.max(7, Number(fontSizePt) || 10)
+    const charsPerLine = Math.max(8, Math.floor((usableWidth * 72) / (fontSize * 0.52)))
+    const words = textStr.split(/\s+/).filter(Boolean)
+    let lines = 1
+    let lineLen = 0
+    for (const word of words) {
+      const nextLen = lineLen === 0 ? word.length : lineLen + 1 + word.length
+      if (nextLen <= charsPerLine) lineLen = nextLen
+      else {
+        lines += 1
+        lineLen = word.length
+      }
+    }
+    return lines * (fontSize * lineHeight / 72)
+  }
+
+  conns.forEach(conn => {
+    const path = Array.isArray(conn.path) ? conn.path : []
+    for (let i = 0; i < path.length - 1; i++) {
+      const p1 = path[i]
+      const p2 = path[i + 1]
+      if (p1?.x == null || p1?.y == null || p2?.x == null || p2?.y == null) continue
+      blocks.push({
+        block_type: 'line',
+        x1: r2(p1.x), y1: r2(p1.y), x2: r2(p2.x), y2: r2(p2.y),
+        x: r2(Math.min(p1.x, p2.x)),
+        y: r2(Math.min(p1.y, p2.y)),
+        w: r2(Math.max(Math.abs(p2.x - p1.x), 0.02)),
+        h: r2(Math.max(Math.abs(p2.y - p1.y), 0.02)),
+        color: connectorColor,
+        line_width: connectorWidth
+      })
+    }
+  })
+
+  nodes.forEach(node => {
+    const nx = r2(node.x || 0)
+    const ny = r2(node.y || content_y)
+    const nw = r2(node.w || 0.8)
+    const nh = r2(node.h || 0.6)
+    const titleText = String(node.label || node.title || node.id || '')
+    const valueText = String(node.value || '').trim()
+    const descText = String(node.description || '').trim()
+    const titleFs = ws.node_title_font_size || 10
+    const valueFs = ws.node_value_font_size || 9
+    const innerW = r2(Math.max(0.3, nw - innerPad * 2))
+    const titleH = r2(Math.max(0.18, estimateTextHeight(titleText, innerW, titleFs, 1.15) + 0.04))
+    const valueH = valueText ? r2(Math.max(0.16, estimateTextHeight(valueText, innerW, valueFs, 1.15) + 0.04)) : 0
+    const contentTop = r2(ny + innerPad)
+
+    blocks.push({
+      block_type: 'rect',
+      x: nx, y: ny, w: nw, h: nh,
+      fill_color: nodeFill,
+      border_color: nodeBorder,
+      border_width: nodeBorderWidth,
+      corner_radius: nodeCornerRadius
+    })
+    blocks.push({
+      block_type: 'text_box',
+      x: r2(nx + innerPad), y: contentTop, w: innerW, h: titleH,
+      text: titleText,
+      font_family: titleFont,
+      font_size: titleFs,
+      bold: true,
+      color: labelColor,
+      align: 'center',
+      valign: 'top'
+    })
+    if (valueText) {
+      blocks.push({
+        block_type: 'text_box',
+        x: r2(nx + innerPad), y: r2(contentTop + titleH), w: innerW, h: valueH,
+        text: valueText,
+        font_family: valueFont,
+        font_size: valueFs,
+        bold: false,
+        color: labelColor,
+        align: 'center',
+        valign: 'middle'
+      })
+    }
+    if (descText) {
+      const descY = r2(ny + nh + externalGap)
+      const descH = r2(Math.max(0.18, estimateTextHeight(descText, nw, valueFs, 1.18) + 0.04))
+      blocks.push({
+        block_type: 'text_box',
+        x: nx, y: descY, w: nw, h: descH,
+        text: descText,
+        font_family: valueFont,
+        font_size: valueFs,
+        bold: false,
+        color: valueColor,
+        align: 'center',
+        valign: 'top'
       })
     }
   })
@@ -3452,9 +3889,26 @@ function _artifactToBlocks(art, blocks, bt, r2) {
 
     case 'chart': {
       const computed = art._computed || {}
+      const chartStyle = art.chart_style || {}
+      const legendPos = computed.legend_position || chartStyle.legend_position || 'none'
+      const legendFontSize = chartStyle.legend_font_size || 9
+      const allowLegendFallback = (art.fallback_policy || {}).allow_renderer_fallback !== false
+      const legendEntries = art.show_legend
+        ? _chartLegendEntries(
+            art.chart_type,
+            art.categories || [],
+            art.series || [],
+            art.series_style || [],
+            bt.chart_palette || [],
+            allowLegendFallback
+          )
+        : []
+      const legendLayout = _computeChartLegendLayout(ax, content_y, aw, r2(ay + ah - content_y), legendPos, legendEntries, legendFontSize)
+      const chartRect = legendLayout.chartRect || { x: ax, y: content_y, w: aw, h: r2(ay + ah - content_y) }
+
       blocks.push({
         block_type:              'chart',
-        x: ax, y: content_y, w: aw, h: r2(ay + ah - content_y),
+        x: chartRect.x, y: chartRect.y, w: chartRect.w, h: chartRect.h,
         chart_type:              art.chart_type,
         chart_header:            art.chart_header || '',
         chart_title:             art.chart_title  || '',
@@ -3463,10 +3917,13 @@ function _artifactToBlocks(art, blocks, bt, r2) {
         dual_axis:               art.dual_axis    || false,
         secondary_series:        art.secondary_series || [],
         show_data_labels:        art.show_data_labels !== false,
-        show_legend:             !!art.show_legend,
+        show_legend:             false,
         x_label:                 art.x_label || '',
         y_label:                 art.y_label || '',
-        chart_style:             art.chart_style   || {},
+        chart_style:             {
+          ...chartStyle,
+          legend_position: 'none'
+        },
         series_style:            art.series_style  || [],
         brand_tokens:            { primary_color: bt.primary_color, chart_palette: bt.chart_palette },
         // Pre-computed by computeArtifactInternals — renderer reads these directly
@@ -3474,6 +3931,16 @@ function _artifactToBlocks(art, blocks, bt, r2) {
         data_label_size:         computed.data_label_size        || 9,
         category_label_rotation: computed.category_label_rotation || 0
       })
+      const legendStart = blocks.length
+      _chartLegendToBlocks(
+        legendLayout.legendBox,
+        chartStyle.legend_font_family || bt.body_font_family || 'Arial',
+        legendFontSize,
+        chartStyle.legend_color || bt.body_color || '#111111',
+        blocks,
+        r2
+      )
+      decorateArtifactBlocks(blocks, legendStart, blocks.length, art, 'artifact_body')
       break
     }
 
@@ -3541,7 +4008,8 @@ function _artifactToBlocks(art, blocks, bt, r2) {
         row_y_positions:    rowYPositions,
         header_cell_frames: headerCellFrames,
         body_cell_frames:   bodyCellFrames,
-        table_style:        art.table_style         || {}
+        table_style:        art.table_style         || {},
+        table_fit_failed:   !!art._table_fit_failed
       })
       break
     }
@@ -3567,15 +4035,7 @@ function _artifactToBlocks(art, blocks, bt, r2) {
     }
 
     case 'workflow': {
-      blocks.push({
-        block_type:     'workflow',
-        x: ax, y: content_y, w: aw, h: r2(ay + ah - content_y),
-        nodes:          art.nodes       || [],
-        connections:    art.connections || [],
-        workflow_style: art.workflow_style || {},
-        flow_direction: art.flow_direction || '',
-        workflow_type:  art.workflow_type  || ''
-      })
+      _workflowToBlocks(art, content_y, blocks, bt, r2)
       break
     }
 
@@ -4609,6 +5069,11 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
   // so that generate_pptx.py can act as a pure renderer reading pre-computed values.
   computeArtifactInternals(finalZones, branded.canvas || {}, branded.brand_tokens || {})
   normalizeArtifactHeaderBands(finalZones)
+  finalZones.forEach((zone, zi) => {
+    ;(zone.artifacts || []).forEach((art, ai) => {
+      if (!art._artifact_id) art._artifact_id = 's' + (manifestSlide.slide_number || '?') + '_z' + zi + '_a' + ai
+    })
+  })
 
   // Flatten to blocks[] — ordered, self-contained render units.
   // generate_pptx.py reads these directly when present; zones path is legacy fallback.
@@ -4619,6 +5084,22 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
   const renderIssues = validateRenderCompleteness({ ...brandedWithLayoutTitle, zones: finalZones })
   if (renderIssues.length > 0) {
     console.warn('Agent 5 -- S' + (manifestSlide.slide_number || '?') + ' render issues:', renderIssues.join('; '))
+  }
+  const criticalRenderIssues = renderIssues.filter(i =>
+    i.includes('workflow missing nodes') ||
+    i.includes('line block missing endpoints') ||
+    i.includes('missing chart_style') ||
+    i.includes('missing series_style') ||
+    i.includes('missing table_style') ||
+    i.includes('table block failed fit validation') ||
+    i.includes('missing card_frames') ||
+    i.includes('missing heading_style') ||
+    i.includes('missing body_style') ||
+    i.includes('artifact blocks overlap')
+  )
+  if (criticalRenderIssues.length > 0) {
+    console.warn('Agent 5 -- S' + (manifestSlide.slide_number || '?') + ' rejected after block flattening:', criticalRenderIssues.join('; '))
+    return null
   }
 
   // Log merge summary
@@ -4757,7 +5238,14 @@ async function runAgent5(state) {
 
       if (issues.length === 0) {
         // Fully valid — normalise and accept
-        allDesigned.push(normaliseDesignedSlide(match, mSlide, brand))
+        const normalized = normaliseDesignedSlide(match, mSlide, brand)
+        if (normalized) {
+          allDesigned.push(normalized)
+        } else {
+          console.warn('Agent 5 -- S' + mSlide.slide_number + ' rejected during normalization, running fallback')
+          const fb = await buildFallbackDesign(mSlide, brand)
+          allDesigned.push(normaliseDesignedSlide(fb, mSlide, brand) || buildMinimalSafeSlide(mSlide, tokens))
+        }
       } else {
         // Has issues — check if they're critical (missing zones/artifacts) or cosmetic
         const critical = issues.filter(i =>
@@ -4783,7 +5271,14 @@ async function runAgent5(state) {
         } else {
           // Minor issues (e.g. empty title) — accept Claude's work with warnings
           console.warn('Agent 5 -- S' + mSlide.slide_number + ' minor issues (accepting):', issues.join('; '))
-          allDesigned.push(normaliseDesignedSlide(match, mSlide, brand))
+          const normalized = normaliseDesignedSlide(match, mSlide, brand)
+          if (normalized) {
+            allDesigned.push(normalized)
+          } else {
+            console.warn('Agent 5 -- S' + mSlide.slide_number + ' failed render validation during normalization, running fallback')
+            const fb = await buildFallbackDesign(mSlide, brand)
+            allDesigned.push(normaliseDesignedSlide(fb, mSlide, brand) || buildMinimalSafeSlide(mSlide, tokens))
+          }
         }
       }
     }
