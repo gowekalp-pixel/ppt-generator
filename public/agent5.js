@@ -2193,7 +2193,7 @@ function buildMinimalSafeSlide(manifestSlide, tokens) {
       }))
     : []
 
-  return {
+  const fallbackSlide = {
     slide_number: manifestSlide.slide_number,
     slide_type: manifestSlide.slide_type || 'content',
     slide_archetype: manifestSlide.slide_archetype || 'summary',
@@ -2254,6 +2254,36 @@ function buildMinimalSafeSlide(manifestSlide, tokens) {
     speaker_note: manifestSlide.speaker_note || '',
     _fallback: true
   }
+
+  // Guarantee Agent 6's contract even on the deepest fallback path:
+  // every slide gets a canvas plus non-empty blocks[].
+  const framedZones = fallbackSlide.slide_type === 'content'
+    ? buildScratchZoneFrames(fallbackSlide.zones || [], fallbackSlide)
+    : (fallbackSlide.zones || [])
+
+  if (framedZones.length > 0) {
+    computeArtifactInternals(framedZones, fallbackSlide.canvas || {}, fallbackSlide.brand_tokens || {})
+    normalizeArtifactHeaderBands(framedZones)
+    framedZones.forEach((zone, zi) => {
+      ;(zone.artifacts || []).forEach((art, ai) => {
+        if (!art._artifact_id) art._artifact_id = 's' + (fallbackSlide.slide_number || '?') + '_z' + zi + '_a' + ai
+      })
+    })
+  }
+
+  fallbackSlide.zones = framedZones
+  fallbackSlide.blocks = sanitizeBlocks(flattenToBlocks(
+    fallbackSlide,
+    fallbackSlide.brand_tokens || {}
+  ), fallbackSlide)
+  fallbackSlide.zones_summary = framedZones.map(z => ({
+    zone_id: z.zone_id,
+    zone_role: z.zone_role,
+    narrative_weight: z.narrative_weight,
+    artifact_types: (z.artifacts || []).map(a => a.type)
+  }))
+
+  return fallbackSlide
 }
 
 // CONTENT MERGER
@@ -2392,6 +2422,7 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
         const computed = art._computed
         const canvasW = (canvas && canvas.width_in) ? canvas.width_in : 10
         const canvasH = (canvas && canvas.height_in) ? canvas.height_in : 7.5
+        const cs = art.chart_style || {}
 
         // legend_position
         if (art.show_legend) {
@@ -2404,13 +2435,8 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
           computed.legend_position = 'none'
         }
 
-        const cs = art.chart_style || {}
         const headerFs = ((art.header_block || {}).font_size) || cs.title_font_size || 11
         const maxLegendFs = Math.max(8, Math.min(headerFs - 1, 9))
-        art.chart_style = {
-          ...cs,
-          legend_font_size: Math.min(cs.legend_font_size || maxLegendFs, maxLegendFs)
-        }
 
         // data_label_size
         if (computed.data_label_size == null) {
@@ -2425,6 +2451,19 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
         // category_label_rotation
         if (computed.category_label_rotation == null) {
           computed.category_label_rotation = (art.categories || []).length > 6 ? -45 : 0
+        }
+
+        // Persist computed readability choices on the artifact itself so
+        // validation and downstream consumers see a complete chart spec.
+        art.legend_position = computed.legend_position
+        art.data_label_size = computed.data_label_size
+        art.category_label_rotation = computed.category_label_rotation
+        art.chart_style = {
+          ...cs,
+          legend_font_size: Math.min(cs.legend_font_size || maxLegendFs, maxLegendFs),
+          legend_position: computed.legend_position,
+          data_label_size: computed.data_label_size,
+          category_label_rotation: computed.category_label_rotation
         }
       }
 
@@ -2697,6 +2736,22 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
       if (artType === 'workflow') {
         const nodes = Array.isArray(art.nodes) ? art.nodes : []
         const ws = art.workflow_style || {}
+        art.workflow_style = {
+          node_fill_color: ws.node_fill_color || bt.primary_color || '#0078AE',
+          node_border_color: ws.node_border_color || '#FFFFFF',
+          node_border_width: ws.node_border_width != null ? ws.node_border_width : 1,
+          node_title_font_family: ws.node_title_font_family || bt.title_font_family || 'Arial',
+          node_title_font_size: ws.node_title_font_size || 10,
+          node_title_color: ws.node_title_color || '#FFFFFF',
+          node_value_font_family: ws.node_value_font_family || bt.body_font_family || 'Arial',
+          node_value_font_size: ws.node_value_font_size || 9,
+          node_value_color: ws.node_value_color || bt.body_color || '#111111',
+          node_inner_padding: ws.node_inner_padding != null ? ws.node_inner_padding : 0.08,
+          external_label_gap: ws.external_label_gap != null ? ws.external_label_gap : 0.08,
+          connector_color: ws.connector_color || bt.primary_color || '#0078AE',
+          connector_width: ws.connector_width != null ? ws.connector_width : 0.5,
+          node_corner_radius: ws.node_corner_radius != null ? ws.node_corner_radius : 4
+        }
         art.container = { x: art.x || 0, y: art.y || 0, w: art.w || 0, h: art.h || 0 }
 
         const flow = String(art.flow_direction || '').toLowerCase()
@@ -2718,8 +2773,8 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
           const padX = Math.min(0.18, Math.max(0.10, aw * 0.02))
           const topBand = hasValues ? 0.30 : 0.12
           const bottomBand = hasDescriptions ? Math.min(0.95, Math.max(0.60, ah * 0.26)) : 0.12
-          const titleFs = ws.node_title_font_size || 10
-          const innerPad = ws.node_inner_padding != null ? ws.node_inner_padding : 0.08
+          const titleFs = art.workflow_style.node_title_font_size || 10
+          const innerPad = art.workflow_style.node_inner_padding != null ? art.workflow_style.node_inner_padding : 0.08
           const avgCharW = titleFs * 0.58 / 72
           const longestLabel = Math.max(...nodes.map(n => String(n?.label || '').length), 8)
           const targetLines = longestLabel > 16 ? 3 : 2
@@ -2760,11 +2815,11 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
             }
           })
 
-          const valueFs = ws.node_value_font_size || 9
+          const valueFs = art.workflow_style.node_value_font_size || 9
           const widthRatio = nodeW / Math.max(minFitW, 1.2)
           if (widthRatio < 1) {
             art.workflow_style = {
-              ...ws,
+              ...art.workflow_style,
               node_title_font_size: Math.max(8, Math.floor(titleFs * Math.max(widthRatio, 0.88))),
               node_value_font_size: Math.max(7, Math.floor(valueFs * Math.max(widthRatio, 0.85)))
             }
@@ -5125,9 +5180,9 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
   if (!designed || typeof designed !== 'object') return null  // caller handles null -> fallback
 
   const branded = applyBrandGuidelineOverrides(designed, manifestSlide, brand)
-  const issues = validateDesignedSlide(branded)
-  if (issues.length > 0) {
-    console.warn('Agent 5 -- S' + (branded.slide_number || '?') + ' issues:', issues.join('; '))
+  const inputIssues = validateDesignedSlide(branded)
+  if (inputIssues.length > 0) {
+    console.warn('Agent 5 -- S' + (branded.slide_number || '?') + ' input issues:', inputIssues.join('; '))
   }
 
   // Merge Agent 4 content into Agent 5 layout zones
@@ -5161,6 +5216,14 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
       if (!art._artifact_id) art._artifact_id = 's' + (manifestSlide.slide_number || '?') + '_z' + zi + '_a' + ai
     })
   })
+
+  const finalArtifactIssues = validateDesignedSlide({
+    ...brandedWithLayoutTitle,
+    zones: finalZones
+  })
+  if (finalArtifactIssues.length > 0) {
+    console.warn('Agent 5 -- S' + (manifestSlide.slide_number || '?') + ' final spec issues:', finalArtifactIssues.join('; '))
+  }
 
   // Flatten to blocks[] — ordered, self-contained render units.
   // generate_pptx.py reads these directly when present; zones path is legacy fallback.
@@ -5229,7 +5292,8 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
       narrative_weight: z.narrative_weight,
       artifact_types:   (z.artifacts || []).map(a => a.type)
     })),
-    _validation_issues: issues.length > 0 ? issues : undefined,
+    _validation_issues: finalArtifactIssues.length > 0 ? finalArtifactIssues : undefined,
+    _source_validation_issues: inputIssues.length > 0 ? inputIssues : undefined,
     _render_validation_issues: renderIssues.length > 0 ? renderIssues : undefined
   }
 }
