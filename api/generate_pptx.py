@@ -475,7 +475,9 @@ def _compact_title_placeholder(slide, title_ph, text, font_size):
         return 0.0
 
 
-def place_in_placeholder(slide, ph_idx, text, style_spec, bt):
+def place_in_placeholder(slide, ph_idx, text, style_spec, bt,
+                         preserve_template_style=False,
+                         compact_title=True):
     """
     Write text into the placeholder at ph_idx on the slide.
     Falls back to a free-form text box if the placeholder is not found.
@@ -507,15 +509,17 @@ def place_in_placeholder(slide, ph_idx, text, style_spec, bt):
                 p   = tf.paragraphs[0]
                 run = p.add_run()
                 run.text = str(text)
-                font_family = style_spec.get('font_family') or bt.get('title_font_family', 'Arial')
-                font_size   = style_spec.get('font_size', 18 if ph_idx == 0 else 14)
-                bold        = style_spec.get('font_weight', '') in ('bold', 'semibold')
-                color_hex   = style_spec.get('color') or bt.get('title_color', '#111111')
-                align       = style_spec.get('align', 'left')
-                set_font(run, font_family, font_size, bold, False, color_hex)
-                align_map = {'left': PP_ALIGN.LEFT, 'center': PP_ALIGN.CENTER, 'right': PP_ALIGN.RIGHT}
-                p.alignment = align_map.get(align, PP_ALIGN.LEFT)
-                if ph_idx == 0:
+                if not preserve_template_style:
+                    font_family = style_spec.get('font_family') or bt.get('title_font_family', 'Arial')
+                    font_size   = style_spec.get('font_size', 18 if ph_idx == 0 else 14)
+                    bold        = style_spec.get('font_weight', '') in ('bold', 'semibold')
+                    color_hex   = style_spec.get('color') or bt.get('title_color', '#111111')
+                    align       = style_spec.get('align', 'left')
+                    set_font(run, font_family, font_size, bold, False, color_hex)
+                    align_map = {'left': PP_ALIGN.LEFT, 'center': PP_ALIGN.CENTER, 'right': PP_ALIGN.RIGHT}
+                    p.alignment = align_map.get(align, PP_ALIGN.LEFT)
+                if ph_idx == 0 and compact_title and not preserve_template_style:
+                    font_size = style_spec.get('font_size', 18 if ph_idx == 0 else 14)
                     return _compact_title_placeholder(slide, ph, text, font_size) or 0.0
                 return 0.0
     except Exception as e:
@@ -2987,8 +2991,12 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
     selected_layout_name = slide_spec.get('selected_layout_name', '')
     bt                   = slide_spec.get('brand_tokens', {})
     cvs                  = slide_spec.get('canvas', {})
-    tb                   = slide_spec.get('title_block') or {}
-    sb                   = slide_spec.get('subtitle_block') or {}
+    tb                   = dict(slide_spec.get('title_block') or {})
+    sb                   = dict(slide_spec.get('subtitle_block') or {})
+    if not tb.get('text') and slide_spec.get('title'):
+        tb['text'] = slide_spec.get('title')
+    if not sb.get('text') and slide_spec.get('subtitle'):
+        sb['text'] = slide_spec.get('subtitle')
     slide_header_style   = infer_slide_header_style(slide_spec)
 
     # ── Choose layout ────────────────────────────────────────────────────────
@@ -3114,9 +3122,17 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
     if slide_type in ('title', 'divider'):
         if use_template:
             if tb.get('text'):
-                place_in_placeholder(slide, 0, tb['text'], tb, bt)
+                place_in_placeholder(
+                    slide, 0, tb['text'], tb, bt,
+                    preserve_template_style=True,
+                    compact_title=False
+                )
             if sb.get('text'):
-                place_in_placeholder(slide, 1, sb['text'], sb, bt)
+                place_in_placeholder(
+                    slide, 1, sb['text'], sb, bt,
+                    preserve_template_style=True,
+                    compact_title=False
+                )
         else:
             # Scratch mode — free-form text boxes
             if tb.get('text'):
