@@ -71,6 +71,59 @@
 //   group_header_style.fill_color — use exactly as specified; do NOT substitute
 //   group_bullet_box_style.border_color — use exactly as specified; do NOT darken
 
+function slimBlockForRender(block) {
+  if (!block || typeof block !== 'object') return block
+  const out = {}
+  const keep = new Set([
+    'block_type',
+    'x', 'y', 'w', 'h', 'x1', 'y1', 'x2', 'y2',
+    'text', 'points', 'rows', 'headers', 'cells',
+    'font_family', 'font_size', 'bold', 'italic', 'underline', 'color', 'font_color',
+    'align', 'valign', 'fill_color', 'border_color', 'border_width', 'corner_radius',
+    'line_width', 'padding', 'body_style', 'heading_style', 'style',
+    'chart_type', 'chart_header', 'chart_title', 'categories', 'series', 'dual_axis', 'secondary_series',
+    'show_data_labels', 'show_legend', 'x_label', 'y_label', 'chart_style', 'series_style',
+    'legend_position', 'data_label_size', 'category_label_rotation',
+    'table_header', 'table_style', 'column_widths', 'column_x_positions', 'row_heights', 'row_y_positions',
+    'header_row_height', 'header_cell_frames', 'body_cell_frames', 'column_types', 'column_alignments',
+    'workflow_style', 'flow_direction', 'workflow_type', 'nodes', 'connections',
+    'artifact_id', 'artifact_type', 'artifact_subtype', 'artifact_header_text', 'block_role',
+    'fallback_policy', 'sentiment', 'image_b64', 'image_path', 'src'
+  ])
+  for (const [k, v] of Object.entries(block)) {
+    if (keep.has(k) && v !== undefined) out[k] = v
+  }
+  return out
+}
+
+function slimSlideForRender(slide) {
+  if (!slide || typeof slide !== 'object') return slide
+  const out = {}
+  const keep = new Set([
+    'slide_number', 'slide_type', 'slide_archetype',
+    'canvas', 'brand_tokens', 'global_elements',
+    'layout_mode', 'selected_layout_name',
+    'title', 'subtitle', 'speaker_note',
+    'blocks'
+  ])
+  for (const [k, v] of Object.entries(slide)) {
+    if (!keep.has(k) || v === undefined) continue
+    out[k] = (k === 'blocks' && Array.isArray(v)) ? v.map(slimBlockForRender) : v
+  }
+  return out
+}
+
+function slimBrandRulebookForRender(rulebook, finalSpec) {
+  const rb = rulebook || {}
+  return {
+    title_layout_name: rb.title_layout_name || '',
+    divider_layout_name: rb.divider_layout_name || '',
+    primary_colors: rb.primary_colors || [],
+    slide_width_inches: rb.slide_width_inches || finalSpec?.[0]?.canvas?.width_in || 10,
+    slide_height_inches: rb.slide_height_inches || finalSpec?.[0]?.canvas?.height_in || 7.5
+  }
+}
+
 // ─── TITLE BLOCK SANITISER ────────────────────────────────────────────────────
 // Agent 5 occasionally outputs title_block / subtitle_block coordinates that
 // push text off-canvas or produce a very narrow w — causing python-pptx to
@@ -179,9 +232,10 @@ async function generatePPTX() {
     progressEl.style.width = '30%'
     statusEl.textContent   = '⏳ python-pptx building ' + slideCount + ' slides on server...'
 
+    const renderSpec = Array.isArray(state.finalSpec) ? state.finalSpec.map(slimSlideForRender) : []
     const payload = {
-      finalSpec:     state.finalSpec,
-      brandRulebook: state.brandRulebook,
+      finalSpec:     renderSpec,
+      brandRulebook: slimBrandRulebookForRender(state.brandRulebook, renderSpec),
       templateB64:   useTemplate ? state.brandB64 : null
     }
 
