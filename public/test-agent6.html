@@ -156,6 +156,11 @@
   let parsedSpec     = null
   let templateB64    = null   // base64 of uploaded brand PPTX template
 
+  function estimateJsonBytes(obj) {
+    try { return new TextEncoder().encode(JSON.stringify(obj)).length }
+    catch(_) { return 0 }
+  }
+
   // ─── TEMPLATE FILE LOAD ─────────────────────────────────────────────────────
   function loadTemplateFile(input) {
     const file = input.files[0]
@@ -311,12 +316,6 @@
       tryParseSpec(document.getElementById('spec-input').value)
     }
 
-    if (!templateB64) {
-      errEl.textContent = 'Brand template required. Upload the brand PPTX master first (Step 1 above).'
-      errEl.classList.add('show')
-      return
-    }
-
     if (!parsedSpec || parsedSpec.length === 0) {
       errEl.textContent = 'No valid Agent 5 spec found. Paste or upload the JSON array first.'
       errEl.classList.add('show')
@@ -353,14 +352,29 @@
         : 'python-pptx building slides on server...')
 
       const renderSpec = Array.isArray(parsedSpec) ? parsedSpec.map(slimSlideForRender) : []
+      const basePayload = {
+        finalSpec:     renderSpec,
+        brandRulebook: slimBrandRulebookForRender(extractBrandRulebook(parsedSpec), renderSpec),
+        templateB64:   null
+      }
+      let payload = {
+        ...basePayload,
+        templateB64: templateB64 || null
+      }
+      const MAX_SAFE_BYTES = 4_000_000
+      const payloadBytes = estimateJsonBytes(payload)
+      if (templateB64 && payloadBytes > MAX_SAFE_BYTES) {
+        payload = basePayload
+        setProgress(24, 'Template omitted because request exceeded endpoint size limit. Rendering without brand master...')
+      }
+      if (estimateJsonBytes(payload) > MAX_SAFE_BYTES) {
+        throw new Error('Payload too large even after slimming. Try fewer slides.')
+      }
+
       const res = await fetch('/api/generate-pptx', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          finalSpec:     renderSpec,
-          brandRulebook: slimBrandRulebookForRender(extractBrandRulebook(parsedSpec), renderSpec),
-          templateB64:   templateB64 || null
-        })
+        body:    JSON.stringify(payload)
       })
 
       setProgress(70, 'Decoding response...')

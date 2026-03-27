@@ -124,6 +124,14 @@ function slimBrandRulebookForRender(rulebook, finalSpec) {
   }
 }
 
+function estimateJsonBytes(obj) {
+  try {
+    return new TextEncoder().encode(JSON.stringify(obj)).length
+  } catch (_) {
+    return 0
+  }
+}
+
 // ─── TITLE BLOCK SANITISER ────────────────────────────────────────────────────
 // Agent 5 occasionally outputs title_block / subtitle_block coordinates that
 // push text off-canvas or produce a very narrow w — causing python-pptx to
@@ -233,10 +241,27 @@ async function generatePPTX() {
     statusEl.textContent   = '⏳ python-pptx building ' + slideCount + ' slides on server...'
 
     const renderSpec = Array.isArray(state.finalSpec) ? state.finalSpec.map(slimSlideForRender) : []
-    const payload = {
+    const basePayload = {
       finalSpec:     renderSpec,
       brandRulebook: slimBrandRulebookForRender(state.brandRulebook, renderSpec),
-      templateB64:   useTemplate ? state.brandB64 : null
+      templateB64:   null
+    }
+    let payload = {
+      ...basePayload,
+      templateB64: useTemplate ? state.brandB64 : null
+    }
+
+    const MAX_SAFE_BYTES = 4_000_000
+    const payloadBytes = estimateJsonBytes(payload)
+    if (useTemplate && payloadBytes > MAX_SAFE_BYTES) {
+      console.warn('Agent 6 -- payload too large with template, retrying without template', payloadBytes)
+      payload = basePayload
+      statusEl.textContent = '⚠ Template omitted because request exceeded endpoint size limit. Rendering from blank theme instead...'
+    }
+
+    const slimBytes = estimateJsonBytes(payload)
+    if (slimBytes > MAX_SAFE_BYTES) {
+      throw new Error('Payload too large even after slimming. Try fewer slides or remove verbose content.')
     }
 
     const res = await fetch('/api/generate-pptx', {
@@ -306,7 +331,7 @@ async function generatePPTX() {
     } else if (msg.includes('500') || msg.includes('502')) {
       msg = 'Server error — python-pptx may be starting up. Wait 10 seconds and retry.'
     } else if (msg.includes('413')) {
-      msg = 'Payload too large — try fewer slides.'
+      msg = 'Payload too large — most likely the uploaded PPTX template or too many slides. Retry without template or with fewer slides.'
     }
     statusEl.textContent   = '❌ ' + msg
     progressEl.style.width = '0%'
