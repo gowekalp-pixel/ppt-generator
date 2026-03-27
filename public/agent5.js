@@ -1179,11 +1179,12 @@ async function designSlideBatch(batchManifest, brand, batchNum) {
         ? 'template_title_divider'
         : 'scratch_mode'
   }))
+  const compactManifest = JSON.stringify(annotatedManifest)
 
   const prompt =
     buildBrandBrief(brand) +
     '\n\nSLIDE BATCH ' + batchNum + ' (' + annotatedManifest.length + ' slides):\n' +
-    JSON.stringify(annotatedManifest, null, 2) +
+    compactManifest +
     '\n\nINSTRUCTIONS:' +
     '\n- Process ONLY these ' + batchManifest.length + ' slides' +
     '\n- Apply brand design tokens exactly' +
@@ -5464,9 +5465,10 @@ async function runAgent5(state) {
   console.log('  Slide size:', tokens.slide_width_inches + '" x ' + tokens.slide_height_inches + '"')
   console.log('  Title font:', (tokens.title_font || {}).family || 'default')
 
-  // Batch into groups of 3 — smaller batches mean more token headroom per slide,
+  // Batch into groups of 2 — this further reduces token pressure from the large
+  // render contract plus slide manifests, which has been causing avoidable fallbacks.
   // which is the primary cause of incomplete artifact specs
-  const BATCH_SIZE = 3
+  const BATCH_SIZE = 2
   const batches    = []
   for (let i = 0; i < manifest.length; i += BATCH_SIZE) {
     batches.push(manifest.slice(i, i + BATCH_SIZE))
@@ -5509,52 +5511,34 @@ async function runAgent5(state) {
       }
 
       const issues = validateDesignedSlide(match)
-
-      if (issues.length === 0) {
-        // Fully valid — normalise and accept
-        const normalized = normaliseDesignedSlide(match, mSlide, brand)
-        if (normalized) {
-          allDesigned.push(normalized)
-        } else {
-          console.warn('Agent 5 -- S' + mSlide.slide_number + ' rejected during normalization, running fallback')
-          const fb = await buildFallbackDesign(mSlide, brand)
-          allDesigned.push(normaliseDesignedSlide(fb, mSlide, brand) || buildMinimalSafeSlide(mSlide, tokens))
-        }
-      } else {
-        // Has issues — check if they're critical (missing zones/artifacts) or cosmetic
-        const critical = issues.filter(i =>
+      const normalized = normaliseDesignedSlide(match, mSlide, brand)
+      if (normalized) {
+        const finalIssues = []
+          .concat(normalized._validation_issues || [])
+          .concat(normalized._render_validation_issues || [])
+        const fatalFinal = finalIssues.filter(i =>
           i.includes('missing canvas') ||
           i.includes('missing brand_tokens') ||
           i.includes('no zones') ||
           i.includes('no artifacts') ||
-          i.includes('missing chart_style') ||
-          i.includes('missing series_style') ||
-          i.includes('missing workflow_style') ||
-          i.includes('missing nodes') ||
-          i.includes('missing table_style') ||
-          i.includes('missing card_frames') ||
-          i.includes('missing heading_style') ||
-          i.includes('missing body_style')
+          i.includes('no blocks')
         )
-
-        if (critical.length > 0) {
-          // Critical structural gaps — fallback Claude call for this slide
-          console.warn('Agent 5 -- S' + mSlide.slide_number + ' has critical issues, running fallback:', critical.join('; '))
-          const fb = await buildFallbackDesign(mSlide, brand)
-          allDesigned.push(normaliseDesignedSlide(fb, mSlide, brand) || buildMinimalSafeSlide(mSlide, tokens))
-        } else {
-          // Minor issues (e.g. empty title) — accept Claude's work with warnings
-          console.warn('Agent 5 -- S' + mSlide.slide_number + ' minor issues (accepting):', issues.join('; '))
-          const normalized = normaliseDesignedSlide(match, mSlide, brand)
-          if (normalized) {
-            allDesigned.push(normalized)
-          } else {
-            console.warn('Agent 5 -- S' + mSlide.slide_number + ' failed render validation during normalization, running fallback')
-            const fb = await buildFallbackDesign(mSlide, brand)
-            allDesigned.push(normaliseDesignedSlide(fb, mSlide, brand) || buildMinimalSafeSlide(mSlide, tokens))
+        if (fatalFinal.length === 0) {
+          if (issues.length > 0) {
+            console.warn('Agent 5 -- S' + mSlide.slide_number + ' repaired during normalization:', issues.join('; '))
           }
+          allDesigned.push(normalized)
+          continue
         }
+        console.warn('Agent 5 -- S' + mSlide.slide_number + ' still has fatal post-normalization issues, running fallback:', fatalFinal.join('; '))
+      } else if (issues.length > 0) {
+        console.warn('Agent 5 -- S' + mSlide.slide_number + ' rejected during normalization after issues:', issues.join('; '))
+      } else {
+        console.warn('Agent 5 -- S' + mSlide.slide_number + ' rejected during normalization, running fallback')
       }
+
+      const fb = await buildFallbackDesign(mSlide, brand)
+      allDesigned.push(normaliseDesignedSlide(fb, mSlide, brand) || buildMinimalSafeSlide(mSlide, tokens))
     }
   }
 
