@@ -1761,16 +1761,46 @@ function applyLayoutTitleFrames(slide, layoutName, brand) {
       return (a.x_in || 0) - (b.x_in || 0)
     })
   const topContentY = contentAreas.length ? Math.min(...contentAreas.map(p => p.y_in || 99)) : null
+  const estimateTextBlockHeight = (text, widthIn, fontSizePt, lineHeight = 1.3, minH = 0.32) => {
+    const textStr = String(text || '').trim()
+    if (!textStr) return minH
+    const usableWidth = Math.max(0.6, Number(widthIn) || 0.6)
+    const fontSize = Math.max(8, Number(fontSizePt) || 18)
+    const charsPerLine = Math.max(8, Math.floor((usableWidth * 72) / (fontSize * 0.52)))
+    const words = textStr.split(/\s+/).filter(Boolean)
+    let lines = 1
+    let lineLen = 0
+    for (const word of words) {
+      const nextLen = lineLen === 0 ? word.length : lineLen + 1 + word.length
+      if (nextLen <= charsPerLine) lineLen = nextLen
+      else {
+        lines += 1
+        lineLen = word.length
+      }
+    }
+    return r2(Math.max(minH, lines * (fontSize * lineHeight / 72) + 0.06))
+  }
 
   if (out.title_block) {
+    const titleX = r2(titlePh.x_in != null ? titlePh.x_in : out.title_block.x || 0.4)
+    const titleY = r2(titlePh.y_in != null ? titlePh.y_in : out.title_block.y || 0.15)
+    const titleW = r2(titlePh.w_in != null ? titlePh.w_in : out.title_block.w || 9.2)
+    const titleFs = Number(out.title_block.font_size || 18)
+    const estimatedTitleH = estimateTextBlockHeight(out.title_block.text, titleW, titleFs, 1.32, 0.34)
+    let titleH = r2(titlePh.h_in != null ? titlePh.h_in : out.title_block.h || 0.7)
+    if (topContentY != null) {
+      titleH = Math.min(titleH, Math.max(estimatedTitleH, topContentY - titleY - 0.08))
+    } else {
+      titleH = Math.min(titleH, estimatedTitleH)
+    }
     out.title_block = {
       ...out.title_block,
-      x: r2(titlePh.x_in != null ? titlePh.x_in : out.title_block.x || 0.4),
-      y: r2(titlePh.y_in != null ? titlePh.y_in : out.title_block.y || 0.15),
-      w: r2(titlePh.w_in != null ? titlePh.w_in : out.title_block.w || 9.2),
-      h: r2(titlePh.h_in != null ? titlePh.h_in : out.title_block.h || 0.7),
+      x: titleX,
+      y: titleY,
+      w: titleW,
+      h: titleH,
       align: out.title_block.align || 'left',
-      valign: out.title_block.valign || 'middle',
+      valign: out.title_block.valign || 'top',
       wrap: out.title_block.wrap !== false
     }
   }
@@ -1989,6 +2019,8 @@ function buildSafeArtifactShell(manifestArt, bt) {
     }
   }
   if (t === 'workflow') {
+    const manifestNodes = Array.isArray(manifestArt?.nodes) ? manifestArt.nodes : []
+    const manifestConns = Array.isArray(manifestArt?.connections) ? manifestArt.connections : []
     return {
       type: 'workflow',
       x: null, y: null, w: null, h: null,
@@ -2008,8 +2040,18 @@ function buildSafeArtifactShell(manifestArt, bt) {
         connector_width: 0.5,
         node_corner_radius: 4
       },
-      nodes: [],
-      connections: [],
+      nodes: manifestNodes.map((node, i) => ({
+        id: node?.id || `n${i + 1}`,
+        label: node?.label || '',
+        value: node?.value || '',
+        description: node?.description || '',
+        level: node?.level != null ? node.level : 1
+      })),
+      connections: manifestConns.map(conn => ({
+        from: conn?.from || '',
+        to: conn?.to || '',
+        type: conn?.type || 'arrow'
+      })),
       container: null,
       header_block
     }
@@ -3838,9 +3880,11 @@ function _artifactToBlocks(art, blocks, bt, r2) {
     const hfs = hb.font_size || 11
     const estimatedH = estimateHeaderBlockHeight(hb.text, hw, hfs)
     const hh  = Math.max(hb.h != null ? hb.h : 0.30, estimatedH)
-    content_y = r2(hy + hh + 0.04)  // small gap below header band
-
     const headerStyle = hb.style || 'underline'
+    const headerRuleH = 0.03
+    const headerGapBelow = 0.06
+    content_y = r2(hy + hh + (headerStyle === 'underline' ? (headerRuleH + headerGapBelow) : headerGapBelow))
+
     if (headerStyle === 'brand_fill') {
       // Filled header band
       blocks.push({
@@ -4705,33 +4749,47 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
         // Designed nodes have x/y/w/h; manifest nodes have the text content.
         const designedNodes   = dArt.nodes   || []
         const manifestNodes   = mArt.nodes   || []
-        const mergedNodes = designedNodes.map((dn, ni) => {
-          const mn = manifestNodes.find(n => n.id === dn.id) || manifestNodes[ni]
-          if (!mn) return dn
-          return {
-            ...dn,                        // keep x, y, w, h from Agent 5
-            label:       mn.label       || dn.label       || dn.id,
-            value:       mn.value       || dn.value       || '',
-            description: mn.description || dn.description || '',
-            level:       mn.level       !== undefined ? mn.level : (dn.level || 1)
-          }
-        })
+        const mergedNodes = designedNodes.length > 0
+          ? designedNodes.map((dn, ni) => {
+              const mn = manifestNodes.find(n => n.id === dn.id) || manifestNodes[ni]
+              if (!mn) return dn
+              return {
+                ...dn,                        // keep x, y, w, h from Agent 5
+                label:       mn.label       || dn.label       || dn.id,
+                value:       mn.value       || dn.value       || '',
+                description: mn.description || dn.description || '',
+                level:       mn.level       !== undefined ? mn.level : (dn.level || 1)
+              }
+            })
+          : manifestNodes.map((mn, ni) => ({
+              id:          mn.id || `n${ni + 1}`,
+              label:       mn.label || mn.id || `Step ${ni + 1}`,
+              value:       mn.value || '',
+              description: mn.description || '',
+              level:       mn.level !== undefined ? mn.level : 1
+            }))
 
         // Merge connection from/to/type from manifest into designed connections
         // Designed connections have path[] waypoints; manifest has from/to/type.
         const designedConns  = dArt.connections || []
         const manifestConns  = mArt.connections || []
-        const mergedConns = designedConns.map((dc, ci) => {
-          const mc = manifestConns[ci]
-                  || manifestConns.find(c => c.from === dc.from && c.to === dc.to)
-          if (!mc) return dc
-          return {
-            ...dc,                        // keep path[] from Agent 5
-            from: mc.from || dc.from,
-            to:   mc.to   || dc.to,
-            type: mc.type || dc.type || 'arrow'
-          }
-        })
+        const mergedConns = designedConns.length > 0
+          ? designedConns.map((dc, ci) => {
+              const mc = manifestConns[ci]
+                      || manifestConns.find(c => c.from === dc.from && c.to === dc.to)
+              if (!mc) return dc
+              return {
+                ...dc,                        // keep path[] from Agent 5
+                from: mc.from || dc.from,
+                to:   mc.to   || dc.to,
+                type: mc.type || dc.type || 'arrow'
+              }
+            })
+          : manifestConns.map((mc, ci) => ({
+              from: mc.from || mergedNodes[ci]?.id || '',
+              to:   mc.to   || mergedNodes[ci + 1]?.id || '',
+              type: mc.type || 'arrow'
+            }))
 
         return {
           ...dArt,
