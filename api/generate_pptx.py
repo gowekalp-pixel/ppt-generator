@@ -3105,7 +3105,7 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
     # Only write text content; the layout provides all visual decoration.
     # ════════════════════════════════════════════════════════════════════════
     _has_blocks = bool(slide_spec.get('blocks'))
-    if slide_type in ('title', 'divider') and _has_blocks:
+    if slide_type in ('title', 'divider') and _has_blocks and not use_template:
         render_blocks(slide, slide_spec, bt, use_template)
         if use_template:
             _remove_empty_placeholders(slide)
