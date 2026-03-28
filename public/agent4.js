@@ -2883,7 +2883,8 @@ function pruneAgent4SlideForOutput(slide) {
         artifact_split_hint: splitHint
       }
     }),
-    speaker_note: slide.speaker_note || ''
+    speaker_note: slide.speaker_note || '',
+    _was_repaired: slide._was_repaired || false
   }
 }
 
@@ -3061,12 +3062,15 @@ async function runAgent4(state) {
     const group = failed.slice(ri, ri + REPAIR_GROUP)
     for (const slide of group) {
       const repaired = await repairSlide(slide, brief, contentB64, layoutNames)
-      if (repaired) {
-        const idx = allSlides.findIndex(s => s.slide_number === slide.slide_number)
-        if (idx >= 0) {
-          allSlides[idx] = normaliseSlide(repaired, slidePlan.find(p => p.slide_number === slide.slide_number) || {})
-          console.log('  Repaired slide', slide.slide_number)
-        }
+      const idx = allSlides.findIndex(s => s.slide_number === slide.slide_number)
+      if (repaired && idx >= 0) {
+        const ns = normaliseSlide(repaired, slidePlan.find(p => p.slide_number === slide.slide_number) || {})
+        ns._was_repaired = true  // signals Agent 5 to process this slide solo to avoid token overflow
+        allSlides[idx] = ns
+        console.log('  Repaired slide', slide.slide_number)
+      } else if (idx >= 0) {
+        // Repair failed — mark anyway so Agent 5 treats it with extra care
+        allSlides[idx] = { ...allSlides[idx], _was_repaired: true }
       }
     }
   }

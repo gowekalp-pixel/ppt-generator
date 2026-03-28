@@ -566,7 +566,7 @@ def render_header_block(slide, header_block, bt, header_style='underline'):
     font_size = header_block.get('font_size', 11)
     text_h = estimate_header_block_height(text, w, font_size)
     rule_gap = 0.02
-    rule_h = 0.03
+    rule_h = 0.005
 
     if style == 'brand_fill':
         fill_color = header_block.get('accent_color') or primary

@@ -1170,8 +1170,9 @@ async function designSlideBatch(batchManifest, brand, batchNum) {
   const slideNums = batchManifest.map(s => s.slide_number)
   console.log('Agent 5 batch', batchNum, ':', slideNums.join(', '))
 
-  // Annotate each slide with its mode so Claude doesn't have to infer it
-  const annotatedManifest = batchManifest.map(s => ({
+  // Annotate each slide with its mode so Claude doesn't have to infer it.
+  // Strip internal pipeline flags (_was_repaired) — Claude doesn't need them.
+  const annotatedManifest = batchManifest.map(({ _was_repaired: _r, ...s }) => ({
     ...s,
     _mode: (brand.uses_template && s.selected_layout_name)
       ? 'layout_mode'
@@ -2844,8 +2845,20 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
           const railLeft = Math.max(ax, headerLeft)
           const railRight = Math.min(ax + aw, headerRight)
           const padX = Math.min(0.18, Math.max(0.10, aw * 0.02))
+
+          // Compute where the body area starts — after the header_block (if any).
+          // Value labels in horizontal flows are rendered ABOVE nodeY, so nodeY must be
+          // at least topBand inches below the body start, not below art.y.
+          let bodyStartY = ay
+          if (hb && hb.text) {
+            const hbH = Math.max(hb.h != null ? +hb.h : 0, estimateHeaderBlockHeight(hb.text, aw, hb.font_size || 11))
+            const hbRule = (hb.style === 'brand_fill') ? 0 : 0.005  // hairline rule
+            const hbGap  = 0.06
+            bodyStartY = round2(ay + hbH + hbRule + hbGap)
+          }
+          const effectiveBodyH = round2(ay + ah - bodyStartY)
           const topBand = hasValues ? 0.30 : 0.12
-          const bottomBand = hasDescriptions ? Math.min(0.95, Math.max(0.60, ah * 0.26)) : 0.12
+          const bottomBand = hasDescriptions ? Math.min(0.95, Math.max(0.60, effectiveBodyH * 0.26)) : 0.12
           const titleFs = art.workflow_style.node_title_font_size || 10
           const innerPad = art.workflow_style.node_inner_padding != null ? art.workflow_style.node_inner_padding : 0.08
           const avgCharW = titleFs * 0.58 / 72
@@ -2863,8 +2876,8 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
             gap = gapMin
           }
           nodeW = round2(Math.max(0.88, nodeW))
-          const nodeH = round2(Math.max(0.72, Math.min(1.00, ah - topBand - bottomBand - 0.18)))
-          const nodeY = round2(ay + topBand + 0.08)
+          const nodeH = round2(Math.max(0.55, Math.min(1.00, effectiveBodyH - topBand - bottomBand - 0.08)))
+          const nodeY = round2(bodyStartY + topBand + 0.04)
           const startX = nodes.length > 1 ? railLeft : round2(Math.max(ax + padX, railLeft + (alignmentSpan - nodeW) / 2))
 
           art.nodes = nodes.map((node, i) => ({
@@ -4179,7 +4192,7 @@ function _artifactToBlocks(art, blocks, bt, r2) {
     const estimatedH = estimateHeaderBlockHeight(hb.text, hw, hfs)
     const hh  = Math.max(hb.h != null ? hb.h : 0.30, estimatedH)
     const headerStyle = hb.style || 'underline'
-    const headerRuleH = 0.03
+    const headerRuleH = 0.005
     const headerGapBelow = 0.06
     content_y = r2(hy + hh + (headerStyle === 'underline' ? (headerRuleH + headerGapBelow) : headerGapBelow))
 
@@ -4219,7 +4232,7 @@ function _artifactToBlocks(art, blocks, bt, r2) {
       })
       blocks.push({
         block_type: 'rule',
-        x: hx, y: r2(hy + hh), w: hw, h: 0.03,
+        x: hx, y: r2(hy + hh), w: hw, h: 0.005,
         color:      hb.rule_color || bt.primary_color || '#1A3C8F'
       })
     }
@@ -5619,15 +5632,29 @@ async function runAgent5(state) {
   console.log('  Slide size:', tokens.slide_width_inches + '" x ' + tokens.slide_height_inches + '"')
   console.log('  Title font:', (tokens.title_font || {}).family || 'default')
 
-  // Batch into groups of 2 — this further reduces token pressure from the large
-  // render contract plus slide manifests, which has been causing avoidable fallbacks.
-  // which is the primary cause of incomplete artifact specs
+  // Batch into groups of 2.
+  // Exception: slides flagged _was_repaired by Agent 4 get their own solo batch (batch of 1)
+  // because they likely have complex content that was borderline in Agent 4 — grouping them
+  // with another slide risks token overflow and cascading fallbacks.
   const BATCH_SIZE = 2
   const batches    = []
-  for (let i = 0; i < manifest.length; i += BATCH_SIZE) {
-    batches.push(manifest.slice(i, i + BATCH_SIZE))
+  const repairedSlides = manifest.filter(s => s._was_repaired)
+  if (repairedSlides.length > 0) {
+    console.log('  Slides from Agent 4 repair (will be processed solo):', repairedSlides.map(s => s.slide_number).join(', '))
   }
-  console.log('  Batches:', batches.length, '(max', BATCH_SIZE, 'slides each)')
+  const regularSlides = manifest.filter(s => !s._was_repaired)
+  // Build regular batches
+  for (let i = 0; i < regularSlides.length; i += BATCH_SIZE) {
+    batches.push(regularSlides.slice(i, i + BATCH_SIZE))
+  }
+  // Insert repaired slides as solo batches, preserving overall slide order
+  for (const rs of repairedSlides) {
+    // Insert in the correct position by slide_number
+    let insertIdx = batches.findIndex(b => b.some(s => s.slide_number > rs.slide_number))
+    if (insertIdx === -1) insertIdx = batches.length
+    batches.splice(insertIdx, 0, [rs])
+  }
+  console.log('  Batches:', batches.length, '(max', BATCH_SIZE, 'slides each, repaired slides solo)')
 
   const allDesigned = []
   const manifestBySlide = new Map((manifest || []).map(s => [s.slide_number, s]))
