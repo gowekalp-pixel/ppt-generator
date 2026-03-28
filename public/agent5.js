@@ -33,7 +33,7 @@ You will receive:
 BATCH PROCESSING RULE
 ═══════════════════════════
 
-You will receive slides in batches of 4–5.
+You will receive slides in batches of 1–2.
 Process ONLY the slides in this batch.
 Return ONLY those slides in the JSON array.
 Do not infer slides before or after this batch.
@@ -794,20 +794,10 @@ WORKFLOW MICRO-LAYOUT OWNERSHIP:
     "cell_padding": number
   },
   "column_widths": [number],
-  "column_x_positions": [number],
   "column_types": ["label" | "numeric" | "currency" | "percent" | "categorical"],
   "column_alignments": ["left" | "center" | "right"],
   "header_row_height": number,
   "row_heights": [number],
-  "row_y_positions": [number],
-  "header_cell_frames": [
-    { "col_index": number, "x": number, "y": number, "w": number, "h": number }
-  ],
-  "body_cell_frames": [
-    [
-      { "row_index": number, "col_index": number, "x": number, "y": number, "w": number, "h": number }
-    ]
-  ],
   "header_block": null or {
     "text": "string — the table_header value from Agent 4",
     "x": number, "y": number, "w": number, "h": number,
@@ -819,7 +809,6 @@ WORKFLOW MICRO-LAYOUT OWNERSHIP:
 
 Table styling rules:
 - column_widths must sum exactly to table width (w field)
-- column_x_positions must identify the exact x-start of each column within the table frame
 - body font min 9pt; header font min 10pt
 - Column width heuristics (distribute table.w proportionally):
     Numeric columns (values, %, ₹): narrower — typically 0.80–1.20" each
@@ -830,14 +819,14 @@ Table styling rules:
     Numeric / currency / percent columns: right-align
     Header row: center-align all columns
 - row_heights: all data rows equal height (0.30–0.40"); header row slightly taller (0.35–0.45")
-- row_y_positions must identify the exact y-start of header row and each data row within the table frame
 - Zebra striping: set body_alt_fill_color to a very light tint of brand secondary (e.g., "#F7F8FA") for alternating rows
 - highlight_rows: apply highlight_fill_color from brand accent to the highlight_rows indices from Agent 4
 - table_style.cell_padding: 0.05–0.08" (enforced by renderer; set as a hint here)
 
 ═══════════════════════════
 TABLE MICRO-LAYOUT OWNERSHIP:
-- You must output final column_widths, column_x_positions, header_row_height, row_heights, row_y_positions, column_types, column_alignments, header_cell_frames, and body_cell_frames
+- You must output: column_widths, header_row_height, row_heights, column_types, and column_alignments
+- Cell positions and frames (column_x_positions, row_y_positions, header_cell_frames, body_cell_frames) are computed automatically from these values — do NOT output them
 - The renderer must not infer table density, alignment, or spacing
 
 6. MATRIX
@@ -1203,7 +1192,7 @@ async function designSlideBatch(batchManifest, brand, batchNum) {
     '\n- FULLY specify all artifacts including all style sub-objects' +
     '\n- chart: must have chart_style and series_style[]' +
     '\n- workflow: must have workflow_style, nodes[] with x/y/w/h, connections[] with path[]' +
-    '\n- table: must have table_style, column_widths[], column_x_positions[], header_row_height, row_heights[], row_y_positions[], header_cell_frames[], body_cell_frames[]' +
+    '\n- table: must have table_style, column_widths[], column_types[], column_alignments[], header_row_height, row_heights[] (cell positions/frames are computed automatically)' +
     '\n- cards: must have card_style, card_frames[] with x/y/w/h per card' +
     '\n- matrix: must have matrix_style plus semantic fields from Agent 4 (x_axis, y_axis, quadrants, points)' +
     '\n- driver_tree: must have tree_style plus semantic fields from Agent 4 (root, branches)' +
@@ -1212,7 +1201,7 @@ async function designSlideBatch(batchManifest, brand, batchNum) {
     '\n- insight_text (grouped mode):  must have insight_mode:"grouped", heading_style, group_layout, group_header_style, group_bullet_box_style, bullet_style, group_gap_in, header_to_box_gap_in' +
     '\n- charts: include final legend_position, data_label_size, category_label_rotation, and series styling' +
     '\n- workflows: include final node geometry, connection paths, node_inner_padding, and external_label_gap' +
-    '\n- tables: include final column_widths, column_x_positions, column_types, column_alignments, header_row_height, row_heights, row_y_positions, header_cell_frames, body_cell_frames, and cell_padding' +
+    '\n- tables: include column_widths, column_types, column_alignments, header_row_height, row_heights, and cell_padding (do NOT compute column_x_positions, row_y_positions, header_cell_frames, body_cell_frames — these are computed automatically)' +
     '\n- matrix: include final matrix_style and preserve semantic matrix content for block flattening' +
     '\n- driver_tree: include final tree_style and preserve root/branches for block flattening' +
     '\n- prioritization: include final priority_style and preserve ranked items/qualifiers for block flattening' +
@@ -1220,7 +1209,7 @@ async function designSlideBatch(batchManifest, brand, batchNum) {
     '\n- do NOT return blocks[]; return only the designed slide spec and artifact internals' +
     '\n- Return a valid JSON array of exactly ' + batchManifest.length + ' slide objects'
 
-  const raw    = await callClaude(AGENT5_SYSTEM, [{ role: 'user', content: prompt }], 6000)
+  const raw    = await callClaude(AGENT5_SYSTEM, [{ role: 'user', content: prompt }], 8000)
   const parsed = safeParseJSON(raw, null)
 
   if (!Array.isArray(parsed)) {
@@ -1282,14 +1271,9 @@ function validateDesignedSlide(slide) {
       if (a.type === 'workflow' && (a.connections || []).some(c => !Array.isArray(c.path) || c.path.length < 2)) issues.push(p + ': workflow connection missing path')
       if (a.type === 'table'    && !a.table_style)     issues.push(p + ': table missing table_style')
       if (a.type === 'table'    && !a.column_widths)   issues.push(p + ': table missing column_widths')
-      if (a.type === 'table'    && !a.column_x_positions) issues.push(p + ': table missing column_x_positions')
       if (a.type === 'table'    && !a.row_heights)     issues.push(p + ': table missing row_heights')
-      if (a.type === 'table'    && a.header_row_height == null) issues.push(p + ': table missing header_row_height')
-      if (a.type === 'table'    && !a.row_y_positions) issues.push(p + ': table missing row_y_positions')
       if (a.type === 'table'    && !a.column_types)    issues.push(p + ': table missing column_types')
       if (a.type === 'table'    && !a.column_alignments) issues.push(p + ': table missing column_alignments')
-      if (a.type === 'table'    && !a.header_cell_frames) issues.push(p + ': table missing header_cell_frames')
-      if (a.type === 'table'    && !a.body_cell_frames) issues.push(p + ': table missing body_cell_frames')
       if (a.type === 'table'    && a.table_style && a.table_style.cell_padding == null) issues.push(p + ': table missing cell_padding')
       if (a.type === 'cards'    && !a.card_frames?.length) issues.push(p + ': cards missing card_frames')
       if (a.type === 'cards'    && !a.card_style)      issues.push(p + ': cards missing card_style')
@@ -1904,7 +1888,7 @@ async function buildFallbackDesign(manifestSlide, brand) {
     '\nReturn a single JSON object for this one slide.'
 
   try {
-    const raw    = await callClaude(AGENT5_FALLBACK_SYSTEM, [{ role: 'user', content: prompt }], 3000)
+    const raw    = await callClaude(AGENT5_FALLBACK_SYSTEM, [{ role: 'user', content: prompt }], 5000)
     const parsed = safeParseJSON(raw, null)
 
     // Claude may return an array with one item or a bare object
@@ -1986,10 +1970,34 @@ function buildSafeArtifactShell(manifestArt, bt) {
   const header_block = makeHeaderBlockFromManifestArtifact(manifestArt, bt)
   const artifact_coverage_hint = manifestArt?.artifact_coverage_hint
   if (t === 'chart') {
+    const palette = bt.chart_palette || bt.accent_colors || ['#1A3C8F', '#E8A020', '#2E9E5B', '#C82333']
+    const chartType = manifestArt?.chart_type || 'bar'
+    const isPie = chartType === 'pie'
+    const seriesArr = Array.isArray(manifestArt?.series) ? manifestArt.series : []
+    const categories = Array.isArray(manifestArt?.categories) ? manifestArt.categories : []
+    const autoSeriesStyle = isPie
+      ? categories.map((cat, i) => ({
+          series_name: String(cat || ''), fill_color: palette[i % palette.length],
+          border_color: null, border_width: 0, data_label_color: '#FFFFFF', data_label_size: 9
+        }))
+      : (seriesArr.length > 0 ? seriesArr : [{ name: '' }]).map((s, i) => ({
+          series_name: s.name || '', fill_color: palette[i % palette.length],
+          border_color: null, border_width: 0, data_label_color: '#FFFFFF', data_label_size: 9
+        }))
     return {
       type: 'chart',
       artifact_coverage_hint,
       x: null, y: null, w: null, h: null,
+      chart_type:       chartType,
+      categories:       categories,
+      series:           seriesArr,
+      chart_title:      manifestArt?.chart_title  || '',
+      chart_header:     manifestArt?.chart_header || '',
+      chart_insight:    manifestArt?.chart_insight || '',
+      show_data_labels: manifestArt?.show_data_labels !== false,
+      show_legend:      !!(manifestArt?.show_legend),
+      x_label:          manifestArt?.x_label || '',
+      y_label:          manifestArt?.y_label || '',
       chart_style: {
         title_font_family: bt.title_font_family || 'Arial',
         title_font_size: 12,
@@ -2011,7 +2019,7 @@ function buildSafeArtifactShell(manifestArt, bt) {
         data_label_size: 9,
         category_label_rotation: 0
       },
-      series_style: [],
+      series_style: autoSeriesStyle,
       header_block
     }
   }
@@ -2020,6 +2028,11 @@ function buildSafeArtifactShell(manifestArt, bt) {
       type: 'table',
       artifact_coverage_hint,
       x: null, y: null, w: null, h: null,
+      table_header:    manifestArt?.table_header  || '',
+      headers:         Array.isArray(manifestArt?.headers)        ? manifestArt.headers        : [],
+      rows:            Array.isArray(manifestArt?.rows)           ? manifestArt.rows           : [],
+      highlight_rows:  Array.isArray(manifestArt?.highlight_rows) ? manifestArt.highlight_rows : [],
+      note:            manifestArt?.note || '',
       table_style: {
         header_fill_color: bt.primary_color || '#0078AE',
         header_text_color: '#FFFFFF',
@@ -2036,14 +2049,10 @@ function buildSafeArtifactShell(manifestArt, bt) {
         cell_padding: 0.06
       },
       column_widths: [],
-      column_x_positions: [],
       row_heights: [],
       header_row_height: null,
-      row_y_positions: [],
       column_types: [],
       column_alignments: [],
-      header_cell_frames: [],
-      body_cell_frames: [],
       header_block
     }
   }
@@ -2165,6 +2174,9 @@ function buildSafeArtifactShell(manifestArt, bt) {
     bullet_style: { font_family: bt.body_font_family || 'Arial', font_size: 10, font_weight: 'regular', color: bt.body_color || '#111111', line_spacing: 1.35, indent_inches: 0.1, space_before_pt: 3, char: '▶' },
     group_gap_in: 0.08,
     header_to_box_gap_in: 0.04,
+    heading: manifestArt?.heading || manifestArt?.insight_header || '',
+    groups: Array.isArray(manifestArt?.groups) ? manifestArt.groups : [],
+    sentiment: manifestArt?.sentiment || 'neutral',
     header_block
   } : {
     type: 'insight_text',
@@ -2175,6 +2187,8 @@ function buildSafeArtifactShell(manifestArt, bt) {
     heading_style: { font_family: bt.title_font_family || 'Arial', font_size: 12, font_weight: 'bold', color: bt.primary_color || '#0078AE' },
     body_style: { font_family: bt.body_font_family || 'Arial', font_size: 11, font_weight: 'regular', color: bt.body_color || '#111111', line_spacing: 1.4, indent_inches: 0.15, list_style: 'bullet', space_before_pt: 5, vertical_distribution: 'spread' },
     heading: manifestArt?.heading || manifestArt?.insight_header || 'Key Insight',
+    points: Array.isArray(manifestArt?.points) ? manifestArt.points : [],
+    sentiment: manifestArt?.sentiment || 'neutral',
     header_block
   }
 }
@@ -2487,6 +2501,30 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
           legend_position: computed.legend_position,
           data_label_size: computed.data_label_size,
           category_label_rotation: computed.category_label_rotation
+        }
+
+        // Auto-repair series_style if missing or empty — prevents criticalRenderIssues
+        if (!art.series_style || art.series_style.length === 0) {
+          const palette = bt.chart_palette || bt.accent_colors || ['#1A3C8F', '#E8A020', '#2E9E5B', '#C82333']
+          const isPie = art.chart_type === 'pie'
+          if (isPie) {
+            art.series_style = (art.categories || []).map((cat, i) => ({
+              series_name: String(cat || ''),
+              fill_color: palette[i % palette.length],
+              border_color: null, border_width: 0,
+              data_label_color: '#FFFFFF', data_label_size: art.chart_style.data_label_size || 9
+            }))
+          } else {
+            const seriesArr = art.series && art.series.length > 0
+              ? art.series
+              : [{ name: '' }]
+            art.series_style = seriesArr.map((s, i) => ({
+              series_name: s.name || '',
+              fill_color: palette[i % palette.length],
+              border_color: null, border_width: 0,
+              data_label_color: '#FFFFFF', data_label_size: art.chart_style.data_label_size || 9
+            }))
+          }
         }
       }
 
@@ -5462,7 +5500,6 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
     i.includes('missing chart_style') ||
     i.includes('missing series_style') ||
     i.includes('missing table_style') ||
-    i.includes('table block failed fit validation') ||
     i.includes('missing card_frames') ||
     i.includes('missing heading_style') ||
     i.includes('missing body_style') ||
@@ -5616,8 +5653,11 @@ async function runAgent5(state) {
     const result = await designSlideBatch(batch, brand, b + 1)
 
     if (!result) {
-      // Entire batch failed to parse — fall back per slide via Claude
-      console.warn('Agent 5 -- batch', b + 1, 'failed entirely, running per-slide fallbacks')
+      // Entire batch failed to parse — brief pause then fall back per slide via Claude.
+      // Without a pause, consecutive Claude calls after a truncation/rate-limit failure
+      // would immediately hit the same limit and produce minimal-safe-slides.
+      console.warn('Agent 5 -- batch', b + 1, 'failed entirely, pausing 5s before per-slide fallbacks')
+      await new Promise(r => setTimeout(r, 5000))
       for (const ms of batch) {
         const fb = await buildFallbackDesign(ms, brand)
         allDesigned.push(normaliseDesignedSlide(fb, ms, brand) || buildMinimalSafeSlide(ms, tokens))
