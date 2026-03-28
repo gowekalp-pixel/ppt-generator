@@ -151,7 +151,7 @@
 
   <div class="badge">Isolated Test — Agent 5 Only</div>
   <h1>Layout Design Engine Tester</h1>
-  <p class="subhead">Paste the Brand Rulebook (Agent 2 output) and Slide Manifest (Agent 4 output). Agent 5 calls Claude to produce render-ready layout specs: canvas dimensions, brand tokens, slide/title blocks inside blocks[], zones with fully specified artifacts, and a flat blocks[] array for the renderer.</p>
+  <p class="subhead">Paste the Brand Rulebook (Agent 2 output) and Slide Manifest (Agent 4 output). Agent 5 calls Claude to produce render-ready layout specs: canvas dimensions, brand tokens, title/subtitle blocks, zones with fully specified artifacts, and a flat blocks[] array. Workflow artifacts are flattened to rect/text_box/line blocks with flow-direction-aware external text bands: value above + description below for horizontal flows; description to the right for vertical (top_to_bottom/bottom_up) flows.</p>
 
   <!-- INPUTS -->
   <div class="card">
@@ -601,15 +601,37 @@ function safeParseJSON(raw, fallback) {
             const conns = a.connections || []
             const hasLabels = nodes.some(n => n.label && n.label !== n.id)
             hasContent = nodes.length > 0 && hasLabels
-            preview = nodes.length + ' nodes · ' + conns.length + ' connections'
-              + (hasLabels ? ' · ' + nodes.slice(0,2).map(n => n.label || n.id).join(' → ') : ' (no labels)')
+            const flowDir = a.flow_direction || '?'
+            const wType   = a.workflow_type  || ''
+            // Describe the external band rule that will apply
+            const flow = flowDir.toLowerCase()
+            const bandRule = (flow === 'left_to_right' || flow === 'horizontal')
+              ? 'value↑above · desc↓below'
+              : (flow === 'top_to_bottom' || flow === 'bottom_up')
+                ? 'desc→right'
+                : 'desc↓below'
+            const innerPad   = (a.workflow_style || {}).node_inner_padding
+            const extGap     = (a.workflow_style || {}).external_label_gap
+            const padInfo    = (innerPad != null || extGap != null)
+              ? ' [pad:' + (innerPad ?? '—') + ' gap:' + (extGap ?? '—') + ']'
+              : ''
+            preview = nodes.length + ' nodes · ' + conns.length + ' connections · ' + flowDir + ' (' + wType + ') · ' + bandRule + padInfo
+              + (hasLabels ? ' — ' + nodes.slice(0,2).map(n => n.label || n.id).join(' → ') : ' (no labels)')
           }
           else if (t === 'table') {
             const hdrs = a.headers || []
             const rows = a.rows    || []
             hasContent = hdrs.length > 0
+            const colTypes = a.column_types     || []
+            const colAligns = a.column_alignments || []
+            const colInfo = colTypes.length
+              ? ' [' + colTypes.slice(0,3).join(', ') + (colTypes.length > 3 ? '…' : '') + ']'
+              : ''
+            const alignInfo = colAligns.length
+              ? ' align:[' + colAligns.slice(0,3).join(', ') + (colAligns.length > 3 ? '…' : '') + ']'
+              : ''
             preview = hasContent
-              ? hdrs.length + ' cols · ' + rows.length + ' rows — [' + hdrs.slice(0,3).join(', ') + ']'
+              ? hdrs.length + ' cols · ' + rows.length + ' rows — [' + hdrs.slice(0,3).join(', ') + ']' + colInfo + alignInfo
               : 'no headers'
           }
 

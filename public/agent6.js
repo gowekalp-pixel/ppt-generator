@@ -5,9 +5,37 @@
 //
 // No Claude API call. Pure POST to backend → decode base64 → download.
 // Schema expected: canvas, brand_tokens, and blocks[] as the render contract.
-//                  Blocks should align to PowerPoint primitives wherever possible
+//                  blocks[] is the PRIMARY rendering path — Agent 5 flattens all
+//                  non-chart/table artifacts (insight_text, cards, workflow, matrix,
+//                  driver_tree, prioritization) into primitive render blocks.
 //                  (text_box, rect, line, circle, rule, image) with native chart/table
 //                  blocks retained only where needed. zones[] is diagnostic-only.
+//
+// ─── RENDERING CONTRACT: insight_text ────────────────────────────────────────
+//
+// ─── RENDERING CONTRACT: workflow ────────────────────────────────────────────
+//
+// Workflow blocks are emitted as primitive rect / text_box / line blocks by Agent 5:
+//
+// ── left_to_right / timeline ─────────────────────────────────────────────────
+//   Node box    → rect block
+//   Label       → text_box INSIDE the node, valign: "middle"
+//   Value       → text_box ABOVE the node (y = node.y - valueH - externalGap), valign: "bottom"
+//   Description → text_box BELOW the node (y = node.y + node.h + externalGap), valign: "top"
+//   Connectors  → line blocks (segment per path waypoint pair)
+//
+// ── top_to_bottom / bottom_up ────────────────────────────────────────────────
+//   Node box    → rect block (occupies ~40% of container width)
+//   Label       → text_box INSIDE the node, valign: "middle"
+//   Description → text_box to the RIGHT of the node (x = node.x + node.w + externalGap)
+//                 width = remaining container width; never place text above/below in vertical flows
+//   Connectors  → line blocks (bottom-center → top-center of adjacent nodes)
+//
+// ── top_down_branching / hierarchy ───────────────────────────────────────────
+//   Same as left_to_right for label/description band — description placed BELOW the node
+//
+// All coordinates (x, y, w, h) are pre-computed by Agent 5. The renderer writes
+// them as-is; no layout recalculation is needed in Agent 6 or generate_pptx.py.
 //
 // ─── RENDERING CONTRACT: insight_text ────────────────────────────────────────
 //
@@ -240,7 +268,51 @@ async function generatePPTX() {
     progressEl.style.width = '30%'
     statusEl.textContent   = '⏳ python-pptx building ' + slideCount + ' slides on server...'
 
-    const renderSpec = Array.isArray(state.finalSpec) ? state.finalSpec.map(slimSlideForRender) : []
+    let renderSpec = Array.isArray(state.finalSpec) ? state.finalSpec.map(slimSlideForRender) : []
+
+    // ── Layout-mode sanitisation ─────────────────────────────────────────────
+    // layout_mode and selected_layout_name are ONLY meaningful for content slides.
+    // Title / divider / thank-you slides use their dedicated master layouts
+    // (title_layout_name / divider_layout_name from the brand rulebook), so
+    // we strip any content-layout fields from them here to prevent the backend
+    // from accidentally applying a content layout to a title or divider slide.
+    //
+    // Additionally, if no PPTX template is loaded there are no named layouts at
+    // all — strip layout_mode from content slides too so the backend renders
+    // them in scratch/coordinate mode using the blocks[] coordinates from Agent 5.
+    const NON_CONTENT_TYPES = new Set(['title', 'divider', 'thank_you', 'thankyou', 'end'])
+    const strippedNoTemplate = []
+    const strippedNonContent = []
+    renderSpec = renderSpec.map(slide => {
+      const isNonContent = NON_CONTENT_TYPES.has((slide.slide_type || '').toLowerCase())
+      const hasLayoutFields = slide.layout_mode || slide.selected_layout_name
+
+      if (isNonContent && hasLayoutFields) {
+        // Title/divider/thank-you must never carry content-layout fields
+        strippedNonContent.push('S' + slide.slide_number + ' (' + slide.slide_type + ')')
+        const out = Object.assign({}, slide)
+        delete out.layout_mode
+        delete out.selected_layout_name
+        return out
+      }
+      if (!useTemplate && slide.slide_type === 'content' && slide.layout_mode) {
+        // No template loaded — named layout cannot be resolved
+        strippedNoTemplate.push('S' + slide.slide_number + ' (' + (slide.selected_layout_name || '?') + ')')
+        const out = Object.assign({}, slide)
+        delete out.layout_mode
+        delete out.selected_layout_name
+        return out
+      }
+      return slide
+    })
+    if (strippedNonContent.length > 0) {
+      console.log('Agent 6 — stripped layout_mode from non-content slides:', strippedNonContent.join(', '))
+    }
+    if (strippedNoTemplate.length > 0) {
+      console.log('Agent 6 — no template: cleared layout_mode on', strippedNoTemplate.length, 'content slide(s):', strippedNoTemplate.join(', '))
+      statusEl.textContent = '⚠ No brand template — layout_mode cleared on ' + strippedNoTemplate.length + ' content slide(s); rendering in scratch mode...'
+    }
+
     const basePayload = {
       finalSpec:     renderSpec,
       brandRulebook: slimBrandRulebookForRender(state.brandRulebook, renderSpec),

@@ -119,7 +119,7 @@
   <div class="card">
     <div class="card-title">Agent 5 Designed Spec JSON — Step 2</div>
 
-    <div class="hint">Paste the full JSON array from Agent 5 output (each slide has canvas, blocks[], and brand_tokens).</div>
+    <div class="hint">Paste the full JSON array from Agent 5 output (each slide has canvas, blocks[], and brand_tokens). blocks[] is the primary rendering contract — workflow artifacts are flattened to rect/text_box/line blocks with flow_direction already encoded; tables carry column_types and column_alignments; no layout recalculation is done here.</div>
     <textarea id="spec-input" placeholder='[ { "slide_number": 1, "slide_type": "title", "canvas": { "width_in": 11.02, ... }, "blocks": [...], "brand_tokens": {...} }, ... ]'></textarea>
 
     <div class="upload-zone" id="zone-spec">
@@ -351,7 +351,35 @@
         ? 'python-pptx building slides on brand master template...'
         : 'python-pptx building slides on server...')
 
-      const renderSpec = Array.isArray(parsedSpec) ? parsedSpec.map(slimSlideForRender) : []
+      let renderSpec = Array.isArray(parsedSpec) ? parsedSpec.map(slimSlideForRender) : []
+
+      // layout_mode / selected_layout_name are only meaningful for content slides.
+      // Strip from title/divider/thank-you so the backend uses their dedicated masters.
+      // Also strip from content slides when no template is loaded.
+      const NON_CONTENT_TYPES = new Set(['title', 'divider', 'thank_you', 'thankyou', 'end'])
+      const strippedNonContent = [], strippedNoTemplate = []
+      renderSpec = renderSpec.map(slide => {
+        const isNonContent = NON_CONTENT_TYPES.has((slide.slide_type || '').toLowerCase())
+        const hasLayoutFields = slide.layout_mode || slide.selected_layout_name
+        if (isNonContent && hasLayoutFields) {
+          strippedNonContent.push('S' + slide.slide_number + ' (' + slide.slide_type + ')')
+          const out = Object.assign({}, slide)
+          delete out.layout_mode; delete out.selected_layout_name; return out
+        }
+        if (!templateB64 && slide.slide_type === 'content' && slide.layout_mode) {
+          strippedNoTemplate.push('S' + slide.slide_number)
+          const out = Object.assign({}, slide)
+          delete out.layout_mode; delete out.selected_layout_name; return out
+        }
+        return slide
+      })
+      if (strippedNonContent.length > 0)
+        console.log('Agent 6 test — stripped layout_mode from non-content slides:', strippedNonContent.join(', '))
+      if (strippedNoTemplate.length > 0) {
+        console.log('Agent 6 test — no template: cleared layout_mode on', strippedNoTemplate.join(', '))
+        setProgress(25, 'No template — layout_mode cleared on ' + strippedNoTemplate.length + ' content slide(s); using scratch mode...')
+      }
+
       const basePayload = {
         finalSpec:     renderSpec,
         brandRulebook: slimBrandRulebookForRender(extractBrandRulebook(parsedSpec), renderSpec),

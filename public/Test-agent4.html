@@ -534,20 +534,35 @@
 
     else if (t === 'workflow') {
       const nodes = a.nodes||[], conns = a.connections||[]
-      const flow = a.flow_direction || ''
-      const isHorizontal = flow === 'left_to_right' || flow === 'horizontal' || a.workflow_type === 'timeline'
-      const isVertical = flow === 'top_to_bottom' || flow === 'top_down' || flow === 'bottom_up'
+      const flow  = (a.flow_direction || '').toLowerCase()
+      const wtype = (a.workflow_type  || '').toLowerCase()
+      // left_to_right / horizontal / timeline / process_flow / roadmap → horizontal band rules
+      // (value ABOVE box, description BELOW box)
+      const isHorizontal = flow === 'left_to_right' || flow === 'horizontal'
+        || wtype === 'timeline' || wtype === 'process_flow' || wtype === 'roadmap'
+      // top_to_bottom / bottom_up → vertical linear rules (description RIGHT of box only)
+      const isVerticalLinear = flow === 'top_to_bottom' || flow === 'bottom_up'
+      // top_down_branching / top_down / hierarchy / decomposition → branching (description BELOW only)
+      // (isHorizontal & isVerticalLinear already false for these)
       header = `<span class="ah-type atype-workflow">WORKFLOW</span><span class="ah-detail">${a.workflow_type||''} · ${a.flow_direction||''}</span>`
       const nodeHTML = nodes.slice(0,6).map((n,i) => {
-        const arrow = isHorizontal && i > 0 ? '<div class="wf-arrow">→</div>' : ''
-        if (isVertical) {
+        if (isVerticalLinear) {
+          // description to the RIGHT of node; no text above/below
           return `${i>0?'<div class="wf-arrow">↓</div>':''}<div class="wf-step vertical">
             <div class="wf-node"><div class="wf-node-label">${n.label||''}</div></div>
-            ${n.description || n.value ? `<div class="wf-note-right">${(n.description || n.value || '').slice(0,60)}</div>` : ''}
+            ${n.description ? `<div class="wf-note-right">${n.description.slice(0,60)}</div>` : ''}
           </div>`
         }
-        return `${arrow}<div class="wf-step">
-          ${n.value?`<div class="wf-note-top">${n.value}</div>`:''}
+        if (isHorizontal) {
+          // value ABOVE node, description BELOW node
+          return `${i>0?'<div class="wf-arrow">→</div>':''}<div class="wf-step">
+            ${n.value?`<div class="wf-note-top">${n.value}</div>`:''}
+            <div class="wf-node"><div class="wf-node-label">${n.label||''}</div></div>
+            ${n.description?`<div class="wf-note-bottom">${n.description.slice(0,60)}</div>`:''}
+          </div>`
+        }
+        // branching / other: description BELOW only (no value above)
+        return `${i>0?'<div class="wf-arrow">↓</div>':''}<div class="wf-step">
           <div class="wf-node"><div class="wf-node-label">${n.label||''}</div></div>
           ${n.description?`<div class="wf-note-bottom">${n.description.slice(0,60)}</div>`:''}
         </div>`
@@ -555,7 +570,7 @@
       const connSummary = conns.slice(0,6).map(c=>`${c.from}→${c.to}`).join(', ')
       body = `<div class="wf-preview">
         ${a.workflow_insight?`<div class="cm-insight" style="margin-bottom:6px;">↗ ${a.workflow_insight}</div>`:''}
-        <div class="wf-nodes ${isVertical ? 'vertical' : ''}">${nodeHTML}</div>
+        <div class="wf-nodes ${isVerticalLinear ? 'vertical' : ''}">${nodeHTML}</div>
         ${connSummary?`<div class="wf-conn-list">Connections: ${connSummary}</div>`:''}
       </div>`
     }

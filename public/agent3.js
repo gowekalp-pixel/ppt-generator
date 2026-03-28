@@ -38,22 +38,14 @@ Think carefully about the right narrative flow for THIS specific content:
 Return a single valid JSON object with this exact structure:
 {
   "document_type": "string — what kind of document this is",
-  "document_summary": "string — 2-3 sentence summary of the entire document",
   "governing_thought": "string — the single most important insight in one punchy sentence",
-  "audience": "string — who this presentation is for",
+  "audience": "string — who this presentation is for (e.g. Board of Directors, Senior Management)",
   "narrative_flow": "string — name of the flow pattern being used",
   "data_heavy": true or false,
   "key_messages": [
     "string — key message 1 with specific data if available",
     "string — key message 2 with specific data if available",
     "string — key message 3 with specific data if available"
-  ],
-  "key_data_points": [
-    "string — important metric or fact from the document",
-    "string — important metric or fact from the document"
-  ],
-  "risks_and_issues": [
-    "string — identified risk or problem"
   ],
   "recommendations": [
     "string — recommended action or next step"
@@ -71,8 +63,8 @@ Return a single valid JSON object with this exact structure:
     }
   ],
   "total_slides": number,
-  "opening_guidance": "string — how Agent 4 should open the presentation",
-  "closing_guidance": "string — how Agent 4 should close the presentation",
+  "opening_guidance": "string — one sentence: how Agent 4 should frame the title slide and opening",
+  "closing_guidance": "string — one sentence: how Agent 4 should close — what the last slide must achieve",
   "tone": "string — recommended tone (e.g. confident, cautious, urgent, balanced)"
 }
 
@@ -85,6 +77,7 @@ CRITICAL OUTPUT RULES:
 - Include 2-3 section divider slides for a clean structure.
 - key_messages must be specific and data-driven — no generic placeholders.
 - governing_thought must be a single punchy sentence a CEO finds immediately useful.
+- opening_guidance and closing_guidance must be actionable one-sentence directives, not generic advice.
 - Every key_content item must reference actual content from the document, not generic filler.`
 
 
@@ -210,7 +203,6 @@ function buildFallbackBrief(slideCount) {
 
   return {
     document_type:    'Business Document',
-    document_summary: 'Document analysis failed — Agent 4 will work from the raw content.',
     governing_thought:'Key insights from the document require further analysis.',
     audience:         'Senior Management',
     narrative_flow:   'Situation → Analysis → Recommendations',
@@ -220,8 +212,6 @@ function buildFallbackBrief(slideCount) {
       'Analysis could not be completed automatically',
       'Manual review recommended'
     ],
-    key_data_points:  [],
-    risks_and_issues: [],
     recommendations:  [],
     sections: [
       {

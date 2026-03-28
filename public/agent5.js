@@ -66,6 +66,13 @@ The renderer is NOT a designer.
 You must decide every render-critical detail yourself.
 Do not leave spacing, fitting, alignment, or artifact internals for Agent 6.
 
+BLOCKS-FIRST HANDOFF:
+- Agent 5's local runtime flattens all non-chart, non-table artifacts into primitive render blocks.
+- Therefore for insight_text, cards, workflow, matrix, driver_tree, and prioritization:
+  provide exact artifact geometry, typography, styling, and semantic content so the local block flattener can emit final blocks.
+- Charts and tables remain typed render blocks, so they must be fully specified with their renderer-facing style fields.
+- Do NOT return a blocks[] array yourself. Return the designed slide spec; the local pipeline generates blocks[] after normalization.
+
 ═══════════════════════════
 COORDINATE SYSTEM
 ═══════════════════════════
@@ -308,7 +315,7 @@ ARTIFACT CONTRACT
 
 Every artifact must be FULLY specified. No missing fields. No placeholders.
 
-Allowed types: insight_text | chart | cards | workflow | table
+Allowed types: insight_text | chart | cards | workflow | table | matrix | driver_tree | prioritization
 
 ═══════════════════════════
 1. INSIGHT TEXT
@@ -696,7 +703,9 @@ Card styling rules:
     "connector_width": number,
     "arrowhead_style": "triangle" | "stealth",
     "connector_label_font_size": number,
-    "connector_label_color": "hex"
+    "connector_label_color": "hex",
+    "node_inner_padding": number,
+    "external_label_gap": number
   },
   "nodes": [
     { "id": "n1", "x": number, "y": number, "w": number, "h": number }
@@ -786,6 +795,8 @@ WORKFLOW MICRO-LAYOUT OWNERSHIP:
   },
   "column_widths": [number],
   "column_x_positions": [number],
+  "column_types": ["label" | "numeric" | "currency" | "percent" | "categorical"],
+  "column_alignments": ["left" | "center" | "right"],
   "header_row_height": number,
   "row_heights": [number],
   "row_y_positions": [number],
@@ -1205,6 +1216,8 @@ async function designSlideBatch(batchManifest, brand, batchNum) {
     '\n- matrix: include final matrix_style and preserve semantic matrix content for block flattening' +
     '\n- driver_tree: include final tree_style and preserve root/branches for block flattening' +
     '\n- prioritization: include final priority_style and preserve ranked items/qualifiers for block flattening' +
+    '\n- non-chart/table artifacts are flattened into primitive blocks locally, so their geometry and style must be complete and render-ready' +
+    '\n- do NOT return blocks[]; return only the designed slide spec and artifact internals' +
     '\n- Return a valid JSON array of exactly ' + batchManifest.length + ' slide objects'
 
   const raw    = await callClaude(AGENT5_SYSTEM, [{ role: 'user', content: prompt }], 6000)
@@ -1261,6 +1274,7 @@ function validateDesignedSlide(slide) {
       if (a.type === 'chart'    && a.chart_style && a.chart_style.legend_position == null) issues.push(p + ': chart missing legend_position')
       if (a.type === 'chart'    && a.chart_style && a.chart_style.data_label_size == null) issues.push(p + ': chart missing data_label_size')
       if (a.type === 'chart'    && a.chart_style && a.chart_style.category_label_rotation == null) issues.push(p + ': chart missing category_label_rotation')
+      if (a.type === 'chart'    && a.chart_style?.chart_type === 'pie' && Array.isArray(a.series_style) && Array.isArray(a.categories) && a.series_style.length !== a.categories.length) issues.push(p + ': pie chart series_style.length (' + a.series_style.length + ') must equal categories.length (' + a.categories.length + ')')
       if (a.type === 'workflow' && !a.nodes?.length)   issues.push(p + ': workflow missing nodes')
       if (a.type === 'workflow' && !a.workflow_style)  issues.push(p + ': workflow missing workflow_style')
       if (a.type === 'workflow' && a.workflow_style && a.workflow_style.node_inner_padding == null) issues.push(p + ': workflow missing node_inner_padding')
@@ -1631,9 +1645,7 @@ function enforceArtifactBounds(zone) {
       }
     }
 
-    if (a.type === 'table') {
-      normalizeTableSizing(a)
-    }
+    // NOTE: table sizing is handled exclusively by computeArtifactInternals() — do not call normalizeTableSizing() here
 
     return a
   })
@@ -2259,12 +2271,9 @@ function buildMinimalSafeSlide(manifestSlide, tokens) {
     },
     layout_mode: manifestSlide.layout_mode !== false,
     selected_layout_name: manifestSlide.selected_layout_name || manifestSlide.layout_name || '',
-    section_name: manifestSlide.section_name || '',
-    section_type: manifestSlide.section_type || '',
     title: manifestSlide.title || '',
     subtitle: manifestSlide.subtitle || '',
     key_message: manifestSlide.key_message || '',
-    visual_flow_hint: manifestSlide.visual_flow_hint || '',
     speaker_note: manifestSlide.speaker_note || '',
     _fallback: true
   }
@@ -2781,7 +2790,8 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
         const flow = String(art.flow_direction || '').toLowerCase()
         const wtype = String(art.workflow_type || '').toLowerCase()
         const isHorizontal = flow === 'left_to_right' || flow === 'horizontal' || wtype === 'timeline' || wtype === 'roadmap' || wtype === 'process_flow'
-        const isTopDownBranching = flow === 'top_down_branching' || flow === 'top_down' || flow === 'vertical' || wtype === 'decomposition' || wtype === 'hierarchy'
+        const isVerticalLinear = flow === 'top_to_bottom' || flow === 'bottom_up'
+        const isTopDownBranching = !isVerticalLinear && (flow === 'top_down_branching' || flow === 'top_down' || flow === 'vertical' || wtype === 'decomposition' || wtype === 'hierarchy')
 
         if (nodes.length > 0 && isHorizontal) {
           const hasValues = nodes.some(n => String(n?.value || '').trim())
@@ -2926,6 +2936,54 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
                 { x: startX, y: midY },
                 { x: endX, y: midY },
                 { x: endX, y: endY }
+              ]
+            }
+          })
+        } else if (nodes.length > 0 && isVerticalLinear) {
+          // ── top_to_bottom / bottom_up: linear vertical stack ─────────────────
+          // Node box occupies ~40% of container width; right side reserved for description band.
+          const ax = art.x || 0
+          const ay = art.y || 0
+          const aw = art.w || 0
+          const ah = art.h || 0
+          const hb = art.header_block || {}
+          const headerH = (hb && hb.h) ? (hb.h + 0.06) : 0
+          const topPad = 0.10
+          const gapBetween = nodes.length > 1 ? Math.max(0.18, Math.min(0.35, ah * 0.06)) : 0
+          const usableH = Math.max(0.8, ah - headerH - topPad - gapBetween * Math.max(nodes.length - 1, 0))
+          const nodeH = round2(Math.max(0.60, Math.min(1.10, usableH / Math.max(nodes.length, 1))))
+          // Node box takes left 40% of width; right 60% reserved for description text
+          const hasDescs = nodes.some(n => String(n?.description || '').trim())
+          const nodeWFraction = hasDescs ? 0.40 : 0.90
+          const nodeW = round2(Math.max(0.80, Math.min(3.0, aw * nodeWFraction)))
+
+          const titleFs = art.workflow_style.node_title_font_size || 10
+          const innerPad = art.workflow_style.node_inner_padding != null ? art.workflow_style.node_inner_padding : 0.08
+          const avgCharW = titleFs * 0.58 / 72
+          const longestLabel = Math.max(...nodes.map(n => String(n?.label || '').length), 8)
+          const targetLines = longestLabel > 16 ? 3 : 2
+          const minFitW = Math.max(0.80, Math.ceil(longestLabel / targetLines) * avgCharW + innerPad * 2 + 0.12)
+          const finalNodeW = round2(Math.max(nodeW, minFitW))
+
+          const startY = round2(ay + headerH + topPad)
+          art.nodes = nodes.map((node, i) => ({
+            ...node,
+            x: round2(ax),
+            y: round2(startY + i * (nodeH + gapBetween)),
+            w: finalNodeW,
+            h: nodeH
+          }))
+
+          // Connections: bottom-center → top-center for sequential pairs
+          art.connections = art.nodes.slice(0, -1).map((node, i) => {
+            const next = art.nodes[i + 1]
+            return {
+              from: node.id,
+              to: next.id,
+              type: ((art.connections || [])[i] || {}).type || 'arrow',
+              path: [
+                { x: round2(node.x + node.w / 2), y: round2(node.y + node.h) },
+                { x: round2(next.x + next.w / 2), y: round2(next.y) }
               ]
             }
           })
@@ -3132,13 +3190,14 @@ function estimateHeaderBlockHeight(text, widthIn, fontSizePt) {
 }
 
 function normalizeArtifactHeaderBands(zones) {
+  // Align header_block bottom edges across artifacts whose headers start at the same y.
+  // Applied to ALL header styles (underline and brand_fill) — the bottom-edge alignment
+  // is style-agnostic and prevents ragged-looking multi-zone slides.
   const items = []
   for (const zone of (zones || [])) {
     for (const art of (zone.artifacts || [])) {
       const hb = art && art.header_block
       if (!hb || !hb.text) continue
-      const style = hb.style || 'underline'
-      if (style !== 'underline') continue
       const hy = Number(hb.y != null ? hb.y : art.y)
       const hw = Number(hb.w != null ? hb.w : art.w)
       const hfs = Number(hb.font_size || 11)
@@ -3950,6 +4009,12 @@ function _workflowToBlocks(art, content_y, blocks, bt, r2) {
     }
   })
 
+  const flowDir = String(art.flow_direction || '').toLowerCase()
+  const wType   = String(art.workflow_type  || '').toLowerCase()
+  const isHorizFlow  = flowDir === 'left_to_right' || flowDir === 'horizontal'
+    || wType === 'timeline' || wType === 'roadmap' || wType === 'process_flow'
+  const isVertFlow   = flowDir === 'top_to_bottom' || flowDir === 'bottom_up'
+
   nodes.forEach(node => {
     const nx = r2(node.x || 0)
     const ny = r2(node.y || content_y)
@@ -3961,10 +4026,8 @@ function _workflowToBlocks(art, content_y, blocks, bt, r2) {
     const titleFs = ws.node_title_font_size || 10
     const valueFs = ws.node_value_font_size || 9
     const innerW = r2(Math.max(0.3, nw - innerPad * 2))
-    const titleH = r2(Math.max(0.18, estimateTextHeight(titleText, innerW, titleFs, 1.15) + 0.04))
-    const valueH = valueText ? r2(Math.max(0.16, estimateTextHeight(valueText, innerW, valueFs, 1.15) + 0.04)) : 0
-    const contentTop = r2(ny + innerPad)
 
+    // ── node box ──────────────────────────────────────────────────────────────
     blocks.push({
       block_type: 'rect',
       x: nx, y: ny, w: nw, h: nh,
@@ -3973,44 +4036,87 @@ function _workflowToBlocks(art, content_y, blocks, bt, r2) {
       border_width: nodeBorderWidth,
       corner_radius: nodeCornerRadius
     })
+
+    // ── title — always inside the node box, vertically centered ───────────────
     blocks.push({
       block_type: 'text_box',
-      x: r2(nx + innerPad), y: contentTop, w: innerW, h: titleH,
+      x: r2(nx + innerPad), y: r2(ny + innerPad), w: innerW, h: r2(nh - innerPad * 2),
       text: titleText,
       font_family: titleFont,
       font_size: titleFs,
       bold: true,
       color: labelColor,
       align: 'center',
-      valign: 'top'
+      valign: 'middle'
     })
-    if (valueText) {
-      blocks.push({
-        block_type: 'text_box',
-        x: r2(nx + innerPad), y: r2(contentTop + titleH), w: innerW, h: valueH,
-        text: valueText,
-        font_family: valueFont,
-        font_size: valueFs,
-        bold: false,
-        color: labelColor,
-        align: 'center',
-        valign: 'middle'
-      })
-    }
-    if (descText) {
-      const descY = r2(ny + nh + externalGap)
-      const descH = r2(Math.max(0.18, estimateTextHeight(descText, nw, valueFs, 1.18) + 0.04))
-      blocks.push({
-        block_type: 'text_box',
-        x: nx, y: descY, w: nw, h: descH,
-        text: descText,
-        font_family: valueFont,
-        font_size: valueFs,
-        bold: false,
-        color: valueColor,
-        align: 'center',
-        valign: 'top'
-      })
+
+    if (isHorizFlow) {
+      // ── horizontal (left_to_right / timeline): value ABOVE, description BELOW ──
+      if (valueText) {
+        const valueH = r2(Math.max(0.16, estimateTextHeight(valueText, nw, valueFs, 1.15) + 0.04))
+        blocks.push({
+          block_type: 'text_box',
+          x: nx, y: r2(ny - valueH - externalGap), w: nw, h: valueH,
+          text: valueText,
+          font_family: valueFont,
+          font_size: valueFs,
+          bold: false,
+          color: valueColor,
+          align: 'center',
+          valign: 'bottom'
+        })
+      }
+      if (descText) {
+        const descH = r2(Math.max(0.18, estimateTextHeight(descText, nw, valueFs, 1.18) + 0.04))
+        blocks.push({
+          block_type: 'text_box',
+          x: nx, y: r2(ny + nh + externalGap), w: nw, h: descH,
+          text: descText,
+          font_family: valueFont,
+          font_size: valueFs,
+          bold: false,
+          color: valueColor,
+          align: 'center',
+          valign: 'top'
+        })
+      }
+    } else if (isVertFlow) {
+      // ── vertical (top_to_bottom / bottom_up): description to the RIGHT of box ──
+      // No text above or below the box in vertical flows.
+      if (descText) {
+        const ax  = art.x || 0
+        const aw  = art.w || 0
+        const rightX = r2(nx + nw + externalGap)
+        const rightW = r2(Math.max(0.3, ax + aw - rightX))
+        const descH  = r2(Math.max(0.18, estimateTextHeight(descText, rightW, valueFs, 1.18) + 0.04))
+        blocks.push({
+          block_type: 'text_box',
+          x: rightX, y: r2(ny + (nh - descH) / 2), w: rightW, h: descH,
+          text: descText,
+          font_family: valueFont,
+          font_size: valueFs,
+          bold: false,
+          color: valueColor,
+          align: 'left',
+          valign: 'middle'
+        })
+      }
+    } else {
+      // ── branching / other: description below (legacy behaviour) ──────────────
+      if (descText) {
+        const descH = r2(Math.max(0.18, estimateTextHeight(descText, nw, valueFs, 1.18) + 0.04))
+        blocks.push({
+          block_type: 'text_box',
+          x: nx, y: r2(ny + nh + externalGap), w: nw, h: descH,
+          text: descText,
+          font_family: valueFont,
+          font_size: valueFs,
+          bold: false,
+          color: valueColor,
+          align: 'center',
+          valign: 'top'
+        })
+      }
     }
   })
 }
@@ -5070,7 +5176,12 @@ function applyLayoutZoneFrames(zones, layoutName, brand) {
     })
 
   if (contentAreas.length === 0) return null
-  if (contentAreas.length < Math.max((zones || []).length, 1)) return null
+
+  const zoneCount = (zones || []).length
+  if (contentAreas.length < Math.max(zoneCount, 1)) {
+    console.warn('Agent 5 applyLayoutZoneFrames: layout "' + layoutName + '" has only ' + contentAreas.length + ' content area(s) but spec has ' + zoneCount + ' zone(s) — falling back to scratch mode for this slide')
+    return null
+  }
 
   // Small body placeholders (h ≤ 0.5") are header labels, not content areas
   const headerPhs = (layout.placeholders || [])
@@ -5386,15 +5497,11 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
     // Layout mode fields — ground truth from Agent 4 manifest
     layout_mode:           isLayoutMode,
     selected_layout_name:  manifestSlide.selected_layout_name  || designed.selected_layout_name || '',
-    section_name:          manifestSlide.section_name          || '',
-    section_type:          manifestSlide.section_type          || '',
     // Slide-level content metadata
     title:            (brandedWithLayoutTitle.title_block || {}).text || manifestSlide.title    || '',
     subtitle:         (brandedWithLayoutTitle.subtitle_block || {}).text || manifestSlide.subtitle || '',
     key_message:      manifestSlide.key_message      || '',
-    visual_flow_hint: manifestSlide.visual_flow_hint || '',
     speaker_note:     manifestSlide.speaker_note     || '',
-    layout_name:      inferLayoutName(manifestSlide, brand),
     // Condensed structural summary for Agent 5.1 review/debug; final render contract is blocks[].
     zones_summary:    finalZones.map(z => ({
       zone_id:          z.zone_id,
@@ -5488,11 +5595,23 @@ async function runAgent5(state) {
   const allDesigned = []
   const manifestBySlide = new Map((manifest || []).map(s => [s.slide_number, s]))
 
+  // Minimum interval between batch API calls (ms). Adaptive: if the batch itself took
+  // longer than this threshold (e.g. due to a slow Claude response), no extra sleep needed.
+  const BATCH_MIN_INTERVAL_MS = 45000
+
+  let batchStartTime = 0
   for (let b = 0; b < batches.length; b++) {
     if (b > 0) {
-      console.log('Agent 5 -- rate limit pause: waiting 65s before batch', b + 1, '...')
-      await new Promise(r => setTimeout(r, 65000))
+      const elapsed = Date.now() - batchStartTime
+      const remaining = BATCH_MIN_INTERVAL_MS - elapsed
+      if (remaining > 500) {
+        console.log('Agent 5 -- rate limit pause: waiting', Math.ceil(remaining / 1000) + 's before batch', b + 1, '...')
+        await new Promise(r => setTimeout(r, remaining))
+      } else {
+        console.log('Agent 5 -- batch', b + 1, 'starting immediately (prior batch used ' + Math.ceil(elapsed / 1000) + 's)')
+      }
     }
+    batchStartTime = Date.now()
     const batch  = batches[b]
     const result = await designSlideBatch(batch, brand, b + 1)
 

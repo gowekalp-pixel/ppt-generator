@@ -3002,15 +3002,21 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
     # ── Choose layout ────────────────────────────────────────────────────────
     layout = blank_layout
     if use_template:
-        if selected_layout_name:
-            # Content slide with a named layout chosen by Agent 4
+        if selected_layout_name and slide_type == 'content':
+            # Named layout selected by Agent 4 — only valid for content slides.
+            # Title/divider/thank-you slides must never use a content-area layout;
+            # they fall through to their dedicated type handlers below.
             named = find_layout_by_name(prs, selected_layout_name)
             if named:
                 layout = named
                 print(f'  Slide {slide_spec.get("slide_number","?")}: layout="{named.name}"')
+            else:
+                # Named layout not found — fall back to neutral content layout
+                layout = find_content_fallback_layout(prs) or blank_layout
+                print(f'  Slide {slide_spec.get("slide_number","?")}: layout "{selected_layout_name}" not found — using content fallback')
         elif slide_type == 'content':
-            # Scratch-mode content slide: use a neutral content layout, never
-            # a title/divider/closing layout, even if it has the fewest placeholders.
+            # Scratch-mode content slide (layout_mode=False or no selected_layout_name):
+            # use a neutral content layout, never a title/divider/closing layout.
             layout = find_content_fallback_layout(prs) or blank_layout
 
         elif slide_type == 'title':
