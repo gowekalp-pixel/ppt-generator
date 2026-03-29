@@ -5382,7 +5382,9 @@ function deriveScratchContentBounds(slideSpec) {
     const fontSizePt   = +(block.font_size || 22)
     const lineHeightIn = fontSizePt * 1.40 / 72
     const titleW       = block.w != null ? +block.w : Math.max(4, width - left - right)
-    const avgCharWIn   = fontSizePt * 0.52 / 72
+    // 0.38 avg char-width ratio is calibrated for proportional title fonts (Arial, Calibri etc.)
+    // Lower ratio → more chars per line → correct 2-line estimate for typical long slide titles.
+    const avgCharWIn   = fontSizePt * 0.38 / 72
     const charsPerLine = Math.max(10, Math.floor(titleW / avgCharWIn))
     const lines        = Math.max(1, Math.ceil(text.length / charsPerLine))
     return r2sc(lineHeightIn * lines)
@@ -5576,8 +5578,8 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
       const lineHeightIn = fontSizePt * 1.40 / 72          // generous leading
       const slideW       = +(brandedWithLayoutTitle.canvas && brandedWithLayoutTitle.canvas.width_in) || 10
       const titleW       = block.w != null ? +block.w : Math.max(4, slideW - 1.0)
-      // Average char width ≈ 0.52 × font-size in pt, converted to inches
-      const avgCharWIn   = fontSizePt * 0.52 / 72
+      // 0.38 avg char-width ratio calibrated for proportional title fonts
+      const avgCharWIn   = fontSizePt * 0.38 / 72
       const charsPerLine = Math.max(10, Math.floor(titleW / avgCharWIn))
       const lines        = Math.max(1, Math.ceil(text.length / charsPerLine))
       return r2(lineHeightIn * lines)

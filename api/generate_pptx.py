@@ -1388,7 +1388,12 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
                     lbl_color = (series_styles[si].get('data_label_color')
                                  if si < len(series_styles) else None)
                     if not lbl_color:
-                        lbl_color = '#000000' if allow_chart_fallback else bt.get('body_color', '#000000')
+                        # For horizontal bars use the bar fill color (labels outside bar on white bg)
+                        # For vertical bars use body color (labels above bar on white bg)
+                        if chart_type_str == 'horizontal_bar':
+                            lbl_color = color_hex or bt.get('primary_color', '#1A3C8F')
+                        else:
+                            lbl_color = '#000000' if allow_chart_fallback else bt.get('body_color', '#000000')
                     _lbl_size = min(max_chart_label_size, header_font_size) if allow_chart_fallback else max_chart_label_size
                     _lbl_pt = Pt(_lbl_size)
                     _lbl_rgb = hex_to_rgb(lbl_color)
@@ -1403,6 +1408,18 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
                         try:
                             lbl.font.size = _lbl_pt
                             lbl.font.color.rgb = _lbl_rgb
+                        except Exception:
+                            pass
+                    # For horizontal bars: force label position to outEnd (outside the bar)
+                    # so labels are always visible on white background, regardless of bar length.
+                    # Default inEnd buries labels inside dark-colored bars where they're invisible.
+                    if chart_type_str == 'horizontal_bar':
+                        try:
+                            dLbls_el = ser_obj.data_labels._element
+                            pos_el = dLbls_el.find(nsmap.qn('c:dLblPos'))
+                            if pos_el is None:
+                                pos_el = etree.SubElement(dLbls_el, nsmap.qn('c:dLblPos'))
+                            pos_el.set('val', 'outEnd')
                         except Exception:
                             pass
                 except Exception:
