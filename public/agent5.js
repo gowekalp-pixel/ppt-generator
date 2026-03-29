@@ -5373,11 +5373,27 @@ function deriveScratchContentBounds(slideSpec) {
   const TEMPLATE_TITLE_RESERVE = 0.90
   const HEADER_CONTENT_GAP     = 0.20   // visible breathing room below the title
 
+  // Estimate minimum title height from font size + text length so that Agent 5
+  // underestimates on wrapping long titles don't propagate into zone placement.
+  const r2sc = v => Math.round(v * 100) / 100
+  const _estimateMinTitleH = (block) => {
+    const text = (block.text || '').trim()
+    if (!text) return 0
+    const fontSizePt   = +(block.font_size || 22)
+    const lineHeightIn = fontSizePt * 1.40 / 72
+    const titleW       = block.w != null ? +block.w : Math.max(4, width - left - right)
+    const avgCharWIn   = fontSizePt * 0.52 / 72
+    const charsPerLine = Math.max(10, Math.floor(titleW / avgCharWIn))
+    const lines        = Math.max(1, Math.ceil(text.length / charsPerLine))
+    return r2sc(lineHeightIn * lines)
+  }
+
   let titleBottom
   if (!tb.text) {
     titleBottom = topMargin
   } else if (tb.y != null && tb.h != null) {
-    titleBottom = +tb.y + +tb.h   // scratch mode — explicit coords
+    const minH = _estimateMinTitleH(tb)
+    titleBottom = +tb.y + Math.max(+tb.h, minH)   // floor against font-based estimate
   } else {
     titleBottom = usesTemplate ? TEMPLATE_TITLE_RESERVE : (topMargin + 0.6)
   }
@@ -5551,11 +5567,30 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
     const sb = brandedWithLayoutTitle.subtitle_block || {}
     const topMargin = +(brandedWithLayoutTitle.canvas && brandedWithLayoutTitle.canvas.margin && brandedWithLayoutTitle.canvas.margin.top) || 0.30
 
+    // Estimate minimum title height from font size + text length, guarding against
+    // Agent 5 underestimating h for long titles that wrap to multiple lines.
+    const _estimateMinTitleH = (block) => {
+      const text = (block.text || '').trim()
+      if (!text) return 0
+      const fontSizePt   = +(block.font_size || 22)
+      const lineHeightIn = fontSizePt * 1.40 / 72          // generous leading
+      const slideW       = +(brandedWithLayoutTitle.canvas && brandedWithLayoutTitle.canvas.width_in) || 10
+      const titleW       = block.w != null ? +block.w : Math.max(4, slideW - 1.0)
+      // Average char width ≈ 0.52 × font-size in pt, converted to inches
+      const avgCharWIn   = fontSizePt * 0.52 / 72
+      const charsPerLine = Math.max(10, Math.floor(titleW / avgCharWIn))
+      const lines        = Math.max(1, Math.ceil(text.length / charsPerLine))
+      return r2(lineHeightIn * lines)
+    }
+
     let titleBottom
     if (!tb.text) {
       titleBottom = topMargin
     } else if (tb.y != null && tb.h != null) {
-      titleBottom = +tb.y + +tb.h
+      // Trust Agent 5's y, but floor h against a font-based estimate so wrapping
+      // titles don't silently undercut the gap.
+      const minH = _estimateMinTitleH(tb)
+      titleBottom = +tb.y + Math.max(+tb.h, minH)
     } else {
       titleBottom = usesTemplate ? TEMPLATE_TITLE_RESERVE : (topMargin + 0.60)
     }
