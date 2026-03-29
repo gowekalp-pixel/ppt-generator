@@ -5367,19 +5367,17 @@ function deriveScratchContentBounds(slideSpec) {
   const sb = slideSpec.subtitle_block || {}
   const usesTemplate = !!(slideSpec.brand_tokens && slideSpec.brand_tokens.uses_template)
 
-  // When Agent 5 is in template mode, title_block has no x/y/w/h.
-  // Use a standard reserve (0.90") for the master's title band so zone
-  // y coordinates always start well below the title text.
-  const TEMPLATE_TITLE_RESERVE = 0.90
   const HEADER_CONTENT_GAP     = 0.20   // visible breathing room below the title
 
   // Estimate minimum title height from font size + text length so that Agent 5
   // underestimates on wrapping long titles don't propagate into zone placement.
+  // minFontSizePt: in template mode the master overrides the block's font_size,
+  // so pass a minimum of 32pt to account for typical template title font sizes.
   const r2sc = v => Math.round(v * 100) / 100
-  const _estimateMinTitleH = (block) => {
+  const _estimateMinTitleH = (block, minFontSizePt = 0) => {
     const text = (block.text || '').trim()
     if (!text) return 0
-    const fontSizePt   = +(block.font_size || 22)
+    const fontSizePt   = Math.max(minFontSizePt, +(block.font_size || 22))
     const lineHeightIn = fontSizePt * 1.40 / 72
     const titleW       = block.w != null ? +block.w : Math.max(4, width - left - right)
     // 0.38 avg char-width ratio is calibrated for proportional title fonts (Arial, Calibri etc.)
@@ -5390,14 +5388,25 @@ function deriveScratchContentBounds(slideSpec) {
     return r2sc(lineHeightIn * lines)
   }
 
+  // In template mode, place_in_placeholder ignores the block's font_size and uses the
+  // master's title font (typically 28-36pt). Use 32pt as a conservative minimum estimate.
+  const TEMPLATE_TITLE_MIN_FONT = 32
+
   let titleBottom
   if (!tb.text) {
     titleBottom = topMargin
+  } else if (usesTemplate) {
+    // Template mode: block font_size is irrelevant for rendering. Estimate from
+    // the master's effective font size so the zone is placed well below the title.
+    const titleY = tb.y != null ? +tb.y : topMargin
+    const minH = _estimateMinTitleH(tb, TEMPLATE_TITLE_MIN_FONT)
+    const agentH = tb.h != null ? +tb.h : 0
+    titleBottom = titleY + Math.max(agentH, minH)
   } else if (tb.y != null && tb.h != null) {
     const minH = _estimateMinTitleH(tb)
     titleBottom = +tb.y + Math.max(+tb.h, minH)   // floor against font-based estimate
   } else {
-    titleBottom = usesTemplate ? TEMPLATE_TITLE_RESERVE : (topMargin + 0.6)
+    titleBottom = topMargin + 0.6
   }
 
   const subtitleBottom = sb.text
@@ -5520,6 +5529,15 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
   if (!designed || typeof designed !== 'object') return null  // caller handles null -> fallback
 
   const branded = applyBrandGuidelineOverrides(designed, manifestSlide, brand)
+
+  // Ensure brand.uses_template is reflected in brand_tokens regardless of path.
+  // Fallback designs (buildFallbackDesign) lose this flag; the renderer uses
+  // use_template=True whenever a brand PPTX template was uploaded, so agent5
+  // must use the same assumption for layout estimation.
+  if (brand && brand.uses_template && branded.brand_tokens) {
+    branded.brand_tokens = { ...branded.brand_tokens, uses_template: true }
+  }
+
   const inputIssues = validateDesignedSlide(branded)
   if (inputIssues.length > 0) {
     console.warn('Agent 5 -- S' + (branded.slide_number || '?') + ' input issues:', inputIssues.join('; '))
@@ -5552,31 +5570,31 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
     finalZones = buildScratchZoneFrames(mergedZones, brandedWithLayoutTitle)
   }
 
-  // Post-process: fill computed layout/sizing fields (stacking, chart, table, cards, font scaling)
-  // so that generate_pptx.py can act as a pure renderer reading pre-computed values.
-  computeArtifactInternals(finalZones, branded.canvas || {}, branded.brand_tokens || {})
-  normalizeArtifactHeaderBands(finalZones)
-
-  // Enforce minimum gap between slide title and content zones.
-  // Zones Agent 5 explicitly positioned may still start too close to (or inside) the title band.
-  // This runs after all geometry is settled so it is the last word on zone.frame.y.
+  // ── Enforce minimum gap between slide title and content zones ───────────────
+  // MUST run BEFORE computeArtifactInternals: that function reads zone.frame.y
+  // to compute art.y for artifacts without explicit positions.  Running after
+  // would leave those positions computed from the un-enforced frame.
+  // We also shift explicit art.y / header_block.y / container.y on artifacts
+  // that already have absolute positions set by Agent 5, because computeArtifactInternals
+  // will NOT override those (it only fills nulls).
   {
     const r2 = v => Math.round(v * 100) / 100
-    const TEMPLATE_TITLE_RESERVE = 0.90
     const HEADER_CONTENT_GAP     = 0.20
+    const TEMPLATE_TITLE_MIN_FONT = 32
     const usesTemplate = !!(brandedWithLayoutTitle.brand_tokens && brandedWithLayoutTitle.brand_tokens.uses_template)
     const tb = brandedWithLayoutTitle.title_block || {}
     const sb = brandedWithLayoutTitle.subtitle_block || {}
     const topMargin = +(brandedWithLayoutTitle.canvas && brandedWithLayoutTitle.canvas.margin && brandedWithLayoutTitle.canvas.margin.top) || 0.30
+    const slideW    = +(brandedWithLayoutTitle.canvas && brandedWithLayoutTitle.canvas.width_in) || 10
 
-    // Estimate minimum title height from font size + text length, guarding against
-    // Agent 5 underestimating h for long titles that wrap to multiple lines.
-    const _estimateMinTitleH = (block) => {
+    // Estimate minimum title height from font size + text length.
+    // minFontSizePt: in template mode the master overrides block's font_size, so
+    // pass TEMPLATE_TITLE_MIN_FONT (32pt) to account for typical master title fonts.
+    const _estimateMinTitleH = (block, minFontSizePt = 0) => {
       const text = (block.text || '').trim()
       if (!text) return 0
-      const fontSizePt   = +(block.font_size || 22)
-      const lineHeightIn = fontSizePt * 1.40 / 72          // generous leading
-      const slideW       = +(brandedWithLayoutTitle.canvas && brandedWithLayoutTitle.canvas.width_in) || 10
+      const fontSizePt   = Math.max(minFontSizePt, +(block.font_size || 22))
+      const lineHeightIn = fontSizePt * 1.40 / 72
       const titleW       = block.w != null ? +block.w : Math.max(4, slideW - 1.0)
       // 0.38 avg char-width ratio calibrated for proportional title fonts
       const avgCharWIn   = fontSizePt * 0.38 / 72
@@ -5588,13 +5606,16 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
     let titleBottom
     if (!tb.text) {
       titleBottom = topMargin
+    } else if (usesTemplate) {
+      const titleY = tb.y != null ? +tb.y : topMargin
+      const minH = _estimateMinTitleH(tb, TEMPLATE_TITLE_MIN_FONT)
+      const agentH = tb.h != null ? +tb.h : 0
+      titleBottom = titleY + Math.max(agentH, minH)
     } else if (tb.y != null && tb.h != null) {
-      // Trust Agent 5's y, but floor h against a font-based estimate so wrapping
-      // titles don't silently undercut the gap.
       const minH = _estimateMinTitleH(tb)
       titleBottom = +tb.y + Math.max(+tb.h, minH)
     } else {
-      titleBottom = usesTemplate ? TEMPLATE_TITLE_RESERVE : (topMargin + 0.60)
+      titleBottom = topMargin + 0.60
     }
     const subtitleBottom = sb.text
       ? ((+sb.y || titleBottom) + (+sb.h || 0.35))
@@ -5609,9 +5630,25 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
         const shift = r2(minContentY - fy)
         frame.y = minContentY
         if (frame.h != null) frame.h = r2(Math.max(0.20, +frame.h - shift))
+        // Shift artifact absolute positions so they stay in sync.
+        // computeArtifactInternals only fills nulls — it won't correct explicit values.
+        ;(zone.artifacts || []).forEach(art => {
+          if (art.y != null) art.y = r2(+art.y + shift)
+          if (art.header_block && art.header_block.y != null) {
+            art.header_block.y = r2(+art.header_block.y + shift)
+          }
+          if (art.container && art.container.y != null) {
+            art.container.y = r2(+art.container.y + shift)
+          }
+        })
       }
     })
   }
+
+  // Post-process: fill computed layout/sizing fields (stacking, chart, table, cards, font scaling)
+  // so that generate_pptx.py can act as a pure renderer reading pre-computed values.
+  computeArtifactInternals(finalZones, branded.canvas || {}, branded.brand_tokens || {})
+  normalizeArtifactHeaderBands(finalZones)
 
   finalZones.forEach((zone, zi) => {
     ;(zone.artifacts || []).forEach((art, ai) => {
