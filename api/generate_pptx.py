@@ -580,7 +580,17 @@ def render_header_block(slide, header_block, bt, header_style='underline'):
         add_text_box(slide, x, y, w, text_h,
                      text, font_fam, font_size, True, primary, 'left', 'top')
         rule_y = y + text_h + rule_gap
-        add_filled_rect(slide, x, rule_y, w, rule_h, fill_hex=primary)
+        # Use a connector (true hairline) instead of a filled rect to avoid PPTX minimum-height clamping
+        from pptx.enum.shapes import MSO_CONNECTOR
+        try:
+            rule_line = slide.shapes.add_connector(
+                MSO_CONNECTOR.STRAIGHT,
+                inches(x), inches(rule_y), inches(x + w), inches(rule_y)
+            )
+            rule_line.line.color.rgb = hex_to_rgb(primary)
+            rule_line.line.width = pt(0.5)
+        except Exception:
+            pass
         return rule_y + rule_h
 
 
@@ -2610,10 +2620,29 @@ def normalize_zone_artifact_stack(zone):
 # All layout decisions are pre-computed by flattenToBlocks() in agent5.js.
 
 def render_block_title(slide, block, bt, use_template):
-    """Render a title or subtitle block."""
+    """Render a title or subtitle block.
+
+    Template mode — seed text into the master's placeholder so that font, size,
+    colour, and position stay consistent across all content slides.  The caller
+    must NOT have removed the title/subtitle placeholder before this point.
+
+    Scratch mode — fall back to a free-form text box at the coordinates Agent 5
+    computed.
+    """
     text = block.get('text', '')
     if not text:
         return
+    btype = block.get('block_type', 'title')
+    if use_template:
+        # Use the layout's title (idx 0) or subtitle (idx 1) placeholder.
+        # preserve_template_style=True keeps the master's font/size/colour;
+        # we only inject the text so every content slide looks identical.
+        ph_idx = 0 if btype == 'title' else 1
+        place_in_placeholder(slide, ph_idx, text, block, bt,
+                             preserve_template_style=True,
+                             compact_title=False)
+        return
+    # Scratch mode — render as a positioned text box
     add_text_box(slide,
         block.get('x', 0.4), block.get('y', 0.15),
         block.get('w', 9.2),  block.get('h', 0.7),
@@ -2694,13 +2723,22 @@ def render_block_circle(slide, block, bt):
 
 
 def render_block_rule(slide, block, bt):
-    """Render a horizontal rule line."""
+    """Render a horizontal rule line — uses a connector for true hairline weight."""
+    from pptx.enum.shapes import MSO_CONNECTOR
     x = block.get('x', 0)
     y = block.get('y', 0)
     w = block.get('w', 1)
-    h = block.get('h', 0.03)
     color = block.get('color') or bt.get('primary_color', '#1A3C8F')
-    add_filled_rect(slide, x, y, w, h, fill_hex=color)
+    line_width_pt = float(block.get('line_width', 0.5) or 0.5)
+    try:
+        line = slide.shapes.add_connector(
+            MSO_CONNECTOR.STRAIGHT,
+            inches(x), inches(y), inches(x + w), inches(y)
+        )
+        line.line.color.rgb = hex_to_rgb(color)
+        line.line.width = pt(line_width_pt)
+    except Exception:
+        pass
 
 
 def render_block_line(slide, block, bt):

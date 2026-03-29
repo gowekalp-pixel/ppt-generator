@@ -627,6 +627,64 @@ STEP 3 — ARTIFACT SEQUENCE COHERENCE CHECK
   Values: coherent | partially_coherent | broken
   If partially_coherent or broken: state which zone breaks the sequence and why;
   flag to Phase 2 for structural review before proceeding to Phase 4.
+
+──────────────────────────────────────────────────────────
+STEP 4 — ARTIFACT HEADER DIFFERENTIATION CHECK (mandatory)
+──────────────────────────────────────────────────────────
+
+PURPOSE: A slide's title and its artifact headers form a two-level visual hierarchy.
+The title states the SLIDE CLAIM (the board's take-away).
+The artifact header states the CHART/TABLE/ZONE FINDING (the specific data that proves or
+deepens the claim).
+If both say the same thing, the board sees repetition, not depth.
+
+DEFINITION OF "NEAR-REPETITION":
+Two messages are near-repetitions when they share:
+  - the same subject entity (e.g. both name "NorthZone"), AND
+  - the same directional claim (e.g. both say "dominates" / "holds most" / "largest share"), AND
+  - no materially different data dimension, sub-segment, or implication.
+
+EXAMPLE (FAIL):
+  Title:           "NorthZone dominates with 66% of portfolio outstanding"
+  Chart header:    "NorthZone holds two-thirds of total outstanding; WestZone and EastZone severely underweight"
+  → FAIL: both assert NorthZone dominance at roughly the same aggregation level.
+
+EXAMPLE (PASS — zoom in):
+  Title:           "NorthZone dominates with 66% of portfolio outstanding"
+  Chart header:    "Punjab (₹X cr) and Haryana (₹Y cr) together represent 63% of NorthZone exposure"
+  → PASS: header zooms into the within-zone sub-segment not stated in the title.
+
+EXAMPLE (PASS — add dimension):
+  Title:           "NorthZone dominates with 66% of portfolio outstanding"
+  Chart header:    "WestZone and EastZone combined account for only 34% despite comparable borrower count"
+  → PASS: header shifts focus to the underweight zones and introduces a new comparator.
+
+EXECUTION:
+  For every artifact header (chart_header, table_header, workflow_header) in every zone:
+
+  1. Compare the header against the slide title.
+  2. Ask: does the header restate the same entity + same directional claim at the same
+     aggregation level as the title?
+  3. If YES (near-repetition detected):
+     a. Identify what new data dimension, sub-segment, contrast, or implication the
+        underlying data can support.
+     b. Rewrite the header to lead with that new dimension.
+     c. Log: header_differentiation_applied: true
+  4. If NO: retain as-is and log: header_differentiation_applied: false
+
+  REWRITE STRATEGIES (pick first that applies):
+  A. Zoom in  — lead with the specific sub-segment, geographic unit, product, or time period
+                that the title only implies (e.g. state-level breakdown inside a zone)
+  B. Flip     — lead with the underperforming / contrasting entity rather than the dominant one
+  C. Imply    — reframe around the operational or risk implication rather than the raw fact
+  D. Qualify  — add a condition or trend that the title does not capture
+                (e.g. "… but seasoning data shows 73% is <3 years old")
+
+  ABSOLUTE CONSTRAINT:
+  The rewritten header must remain factually supported by the data in the artifact.
+  Do NOT invent numbers or claims not present in the source.
+  If no differentiated claim is supportable from available data, use strategy C or D.
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PHASE 4 — LAYOUT FINALIZATION
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -828,6 +886,8 @@ STEP 5 — SELF-CHECK BEFORE OUTPUT
   [ ] No 4-card artifact shares slide with another zone
   [ ] LAYOUT MODE: selected layout has no more content cells than required
   [ ] SCRATCH MODE: all split values from the allowed list only
+  [ ] Phase 3 Step 4 executed: every chart_header / table_header / workflow_header checked
+      against slide title for near-repetition; differentiation applied where needed
   [ ] Every artifact has artifact_arrangement, artifact_coverage_hint,
       artifact_split_hint, and internal_alignment populated
   [ ] ZW codes not used when slide_format width:height < 1.5

@@ -280,8 +280,10 @@ Compute h from actual line count — do NOT use a generous fixed height:
     n_lines = ceil(90 / 86) = 2
     h = 2 × (20 × 1.35 / 72) + 0.12 = 2 × 0.375 + 0.12 = 0.87"
 
-  CRITICAL: zone frame y must start at title_block.y + title_block.h + 0.08" (minimum gap)
+  CRITICAL: zone frame y must start at title_block.y + title_block.h + 0.20" (minimum gap)
   Never add extra buffer to title_block.h — the renderer compacts it automatically.
+  In template mode (uses_template=true) where title y/h are omitted, assume the title
+  area ends at ~0.90" from the top and start all zones at ≥ 1.10" (0.90 + 0.20 gap).
 
 ═══════════════════════════
 ZONES
@@ -1096,7 +1098,7 @@ function extractBrandTokens(brand) {
     caption_font:         brand.caption_font         || {},
     typography_hierarchy: brand.typography_hierarchy || {},
     bullet_style:         brand.bullet_style         || { char: '•', indent_inches: 0.12, space_before_pt: 4 },
-    insight_box_style:    brand.insight_box_style    || { fill_color: null, border_color: null, corner_radius: 4 },
+    insight_box_style:    brand.insight_box_style    || { fill_color: null, border_color: null, corner_radius: 2 },
     visual_style:         brand.visual_style         || 'corporate',
     color_scheme_name:    brand.color_scheme_name    || '',
     logo_asset:           primaryLogo ? {
@@ -2064,6 +2066,8 @@ function buildSafeArtifactShell(manifestArt, bt) {
       type: 'workflow',
       artifact_coverage_hint,
       x: null, y: null, w: null, h: null,
+      flow_direction:  manifestArt?.flow_direction  || 'left_to_right',
+      workflow_type:   manifestArt?.workflow_type   || 'process_flow',
       workflow_style: {
         node_fill_color: bt.primary_color || '#0078AE',
         node_border_color: '#FFFFFF',
@@ -2857,7 +2861,20 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
             bodyStartY = round2(ay + hbH + hbRule + hbGap)
           }
           const effectiveBodyH = round2(ay + ah - bodyStartY)
-          const topBand = hasValues ? 0.30 : 0.12
+
+          // topBand = space between bodyStartY and the top of the node box.
+          // When value labels exist they are rendered in this band (above the box),
+          // so size it from the actual value font rather than a hardcoded constant.
+          //   valueLabelH  = one line of value text at node_value_font_size
+          //   GAP_ABOVE    = breathing room between header-rule bottom and value text top
+          //   GAP_BELOW    = breathing room between value text bottom and node box top
+          const valueFs     = art.workflow_style.node_value_font_size || 9
+          const valueLabelH = round2(valueFs * 1.35 / 72)          // one text line in inches
+          const GAP_ABOVE   = 0.06                                  // header → value label
+          const GAP_BELOW   = 0.06                                  // value label → node box
+          const topBand = hasValues
+            ? round2(Math.max(0.22, GAP_ABOVE + valueLabelH + GAP_BELOW))
+            : 0.12
           const bottomBand = hasDescriptions ? Math.min(0.95, Math.max(0.60, effectiveBodyH * 0.26)) : 0.12
           const titleFs = art.workflow_style.node_title_font_size || 10
           const innerPad = art.workflow_style.node_inner_padding != null ? art.workflow_style.node_inner_padding : 0.08
@@ -2901,7 +2918,6 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
             }
           })
 
-          const valueFs = art.workflow_style.node_value_font_size || 9
           const widthRatio = nodeW / Math.max(minFitW, 1.2)
           if (widthRatio < 1) {
             art.workflow_style = {
@@ -4231,9 +4247,10 @@ function _artifactToBlocks(art, blocks, bt, r2) {
         valign:      'top'
       })
       blocks.push({
-        block_type: 'rule',
+        block_type:  'rule',
         x: hx, y: r2(hy + hh), w: hw, h: 0.005,
-        color:      hb.rule_color || bt.primary_color || '#1A3C8F'
+        color:       hb.rule_color || bt.primary_color || '#1A3C8F',
+        line_width:  0.5
       })
     }
   }
@@ -4406,25 +4423,43 @@ function _standardInsightToBlocks(art, content_y, blocks, r2) {
   const ay = art.y || 0
   const aw = art.w || 0
   const ah = art.h || 0
-  const st = art.body_style || {}
+  const st  = art.body_style || {}
+  const sty = art.style || {}   // fill/border live in art.style per schema
 
-  const body_y = content_y
-  const body_h = r2(ay + ah - body_y)
-  const sty    = art.style || {}   // fill/border live in art.style per schema
-
-  // Container rect (fill/border)
   const hasFill   = !!sty.fill_color
   const hasBorder = !!(sty.border_color && sty.border_width)
-  if (hasFill || hasBorder) {
+  const hasBox    = hasFill || hasBorder
+  const cr        = sty.corner_radius || 0
+
+  // Issue (b): when a bordered/filled box is present AND the artifact has a header_block,
+  // add extra clearance between the header rule bottom and the box top edge so the
+  // rounded rectangle is visually separated from the header.
+  const hasHeader  = !!(art.header_block && art.header_block.text)
+  const BOX_TOP_GUARD = (hasBox && hasHeader) ? 0.06 : 0
+  const body_y = r2(content_y + BOX_TOP_GUARD)
+  const body_h = r2(Math.max(0.3, ay + ah - body_y))
+
+  // Container rect (fill/border)
+  if (hasBox) {
     blocks.push({
       block_type:    'rect',
       x: ax, y: body_y, w: aw, h: body_h,
       fill_color:    sty.fill_color    || null,
       border_color:  sty.border_color  || null,
       border_width:  sty.border_width  || 0.75,
-      corner_radius: sty.corner_radius || 0
+      corner_radius: cr
     })
   }
+
+  // Issue (a): inset the bullet list inside the border so bullet markers and
+  // text never overlay the border stroke.  Extra corner inset avoids rendering
+  // bullets into the visually-rounded corner zone.
+  // When no box exists no padding override is needed — the renderer applies defaults.
+  const cornerInset   = cr >= 4 ? 0.04 : 0
+  const bulletPadding = hasBox
+    ? { top: 0.10 + cornerInset, bottom: 0.08 + cornerInset,
+        left: 0.12 + cornerInset, right: 0.10 + cornerInset }
+    : {}
 
   // Bullet list body
   blocks.push({
@@ -4432,6 +4467,7 @@ function _standardInsightToBlocks(art, content_y, blocks, r2) {
     x: ax, y: body_y, w: aw, h: body_h,
     points:       art.points || [],
     body_style:   st,
+    padding:      bulletPadding,
     sentiment:    art.sentiment || 'neutral'
   })
 }
@@ -5329,9 +5365,28 @@ function deriveScratchContentBounds(slideSpec) {
   const bottom = +margin.bottom || 0.3
   const tb = slideSpec.title_block || {}
   const sb = slideSpec.subtitle_block || {}
-  const titleBottom = tb.text ? ((+tb.y || topMargin) + (+tb.h || 0.6)) : topMargin
-  const subtitleBottom = sb.text ? ((+sb.y || titleBottom) + (+sb.h || 0.35)) : titleBottom
-  const top = Math.max(topMargin, subtitleBottom + 0.16)
+  const usesTemplate = !!(slideSpec.brand_tokens && slideSpec.brand_tokens.uses_template)
+
+  // When Agent 5 is in template mode, title_block has no x/y/w/h.
+  // Use a standard reserve (0.90") for the master's title band so zone
+  // y coordinates always start well below the title text.
+  const TEMPLATE_TITLE_RESERVE = 0.90
+  const HEADER_CONTENT_GAP     = 0.20   // visible breathing room below the title
+
+  let titleBottom
+  if (!tb.text) {
+    titleBottom = topMargin
+  } else if (tb.y != null && tb.h != null) {
+    titleBottom = +tb.y + +tb.h   // scratch mode — explicit coords
+  } else {
+    titleBottom = usesTemplate ? TEMPLATE_TITLE_RESERVE : (topMargin + 0.6)
+  }
+
+  const subtitleBottom = sb.text
+    ? ((+sb.y || titleBottom) + (+sb.h || 0.35))
+    : titleBottom
+
+  const top = Math.max(topMargin, subtitleBottom + HEADER_CONTENT_GAP)
   return {
     x: left,
     y: top,
