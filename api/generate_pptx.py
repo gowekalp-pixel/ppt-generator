@@ -1651,35 +1651,85 @@ def render_cards(slide, artifact, bt):
         has_sub  = bool(card_sub)
         has_body = bool(card_body)
 
+        # Short-card threshold: when card height is below 1.10" and there is a big
+        # primary value (subtitle), a vertical stack makes the number crash into the
+        # heading.  Switch to a horizontal split: primary value LEFT, heading+body RIGHT.
+        USE_HORIZONTAL_SPLIT = inner_h < 1.0 and has_sub
+
         if inner_h > 0.05:
-            title_h = max(0.18, inner_h * 0.16) if card_title else 0
-            sub_h   = max(0.28, inner_h * 0.40) if card_sub else 0
-            body_h  = max(0.12, inner_h - title_h - sub_h - (TITLE_TO_SUBTITLE if card_title and card_sub else 0) - (SUBTITLE_TO_BODY if card_sub and card_body else 0)) if card_body else 0
+            if USE_HORIZONTAL_SPLIT:
+                # ── Horizontal split layout ──────────────────────────────────────
+                # Left column: primary value (big number)
+                # Right column: title (heading) stacked above body
+                split_gap   = 0.06
+                left_col_w  = max(0.30, min(inner_w * 0.38, 0.65))
+                right_col_w = max(0.20, inner_w - left_col_w - split_gap)
+                right_col_x = inner_left + left_col_w + split_gap
 
-            actual_title_size = estimate_fit_font_size(str(card_title), max(0.3, fw - padding*2), max(0.14, title_h), t_size, 8) if (allow_card_fallback and card_title) else t_size
-            actual_su_size = estimate_fit_font_size(str(card_sub), max(0.3, fw - padding*2), max(0.22, sub_h), su_size, 14) if (allow_card_fallback and sub_h > 0) else su_size
+                # Primary value — left column, vertically centred
+                actual_su_size = estimate_fit_font_size(
+                    str(card_sub), left_col_w, inner_h, su_size, 14
+                ) if allow_card_fallback else su_size
+                add_text_box(slide, inner_left, inner_top, left_col_w, inner_h,
+                             str(card_sub), su_font, actual_su_size, True,
+                             su_color, 'left', 'middle')
 
-            body_text = str(card_body or '')
-            if body_text and allow_card_fallback:
-                max_chars = max(30, int(((fw - padding * 2) * 72 / 5.5) * 2))
-                if len(body_text) > max_chars:
-                    body_text = body_text[:max_chars - 1].rstrip() + '…'
-            actual_body_size = estimate_fit_font_size(body_text, max(0.3, fw - padding*2), max(0.10, body_h), b_size, 7) if (allow_card_fallback and body_h > 0) else b_size
+                # Title — top of right column
+                title_h = max(0.16, inner_h * 0.36) if card_title else 0
+                body_h  = max(0.10, inner_h - title_h - (TITLE_TO_SUBTITLE if card_title and card_body else 0)) if card_body else 0
 
-            title_y = inner_top
-            if card_title and title_h > 0:
-                add_text_box(slide, inner_left, title_y, inner_w, title_h,
-                             str(card_title), t_font, actual_title_size, t_bold, ts.get('color', accent), 'left', 'top')
+                if card_title and title_h > 0:
+                    actual_title_size = estimate_fit_font_size(
+                        str(card_title), right_col_w, title_h, t_size, 7
+                    ) if allow_card_fallback else t_size
+                    add_text_box(slide, right_col_x, inner_top, right_col_w, title_h,
+                                 str(card_title), t_font, actual_title_size, t_bold,
+                                 ts.get('color', accent), 'left', 'top')
 
-            if card_sub and sub_h > 0:
-                subtitle_y = inner_top + title_h + (TITLE_TO_SUBTITLE if card_title else 0)
-                add_text_box(slide, inner_left, subtitle_y, inner_w, sub_h,
-                             str(card_sub), su_font, actual_su_size, True, su_color, 'left', 'middle')
+                body_text = str(card_body or '')
+                if body_text and allow_card_fallback:
+                    max_chars = max(30, int((right_col_w * 72 / 5.5) * 2))
+                    if len(body_text) > max_chars:
+                        body_text = body_text[:max_chars - 1].rstrip() + '…'
+                if body_text and body_h > 0.05:
+                    actual_body_size = estimate_fit_font_size(
+                        body_text, right_col_w, body_h, b_size, 7
+                    ) if allow_card_fallback else b_size
+                    body_y = inner_top + title_h + (TITLE_TO_SUBTITLE if card_title and card_body else 0)
+                    add_text_box(slide, right_col_x, body_y, right_col_w, body_h,
+                                 body_text, b_font, actual_body_size, False,
+                                 b_color, 'left', 'top')
 
-            if body_text and body_h > 0.05:
-                body_y = fy + fh - padding - body_h
-                add_text_box(slide, inner_left, body_y, inner_w, body_h,
-                             body_text, b_font, actual_body_size, False, b_color, 'left', 'bottom')
+            else:
+                # ── Vertical stack layout (tall cards) ──────────────────────────
+                title_h = max(0.18, inner_h * 0.16) if card_title else 0
+                sub_h   = max(0.28, inner_h * 0.40) if card_sub else 0
+                body_h  = max(0.12, inner_h - title_h - sub_h - (TITLE_TO_SUBTITLE if card_title and card_sub else 0) - (SUBTITLE_TO_BODY if card_sub and card_body else 0)) if card_body else 0
+
+                actual_title_size = estimate_fit_font_size(str(card_title), max(0.3, fw - padding*2), max(0.14, title_h), t_size, 8) if (allow_card_fallback and card_title) else t_size
+                actual_su_size = estimate_fit_font_size(str(card_sub), max(0.3, fw - padding*2), max(0.22, sub_h), su_size, 14) if (allow_card_fallback and sub_h > 0) else su_size
+
+                body_text = str(card_body or '')
+                if body_text and allow_card_fallback:
+                    max_chars = max(30, int(((fw - padding * 2) * 72 / 5.5) * 2))
+                    if len(body_text) > max_chars:
+                        body_text = body_text[:max_chars - 1].rstrip() + '…'
+                actual_body_size = estimate_fit_font_size(body_text, max(0.3, fw - padding*2), max(0.10, body_h), b_size, 7) if (allow_card_fallback and body_h > 0) else b_size
+
+                title_y = inner_top
+                if card_title and title_h > 0:
+                    add_text_box(slide, inner_left, title_y, inner_w, title_h,
+                                 str(card_title), t_font, actual_title_size, t_bold, ts.get('color', accent), 'left', 'top')
+
+                if card_sub and sub_h > 0:
+                    subtitle_y = inner_top + title_h + (TITLE_TO_SUBTITLE if card_title else 0)
+                    add_text_box(slide, inner_left, subtitle_y, inner_w, sub_h,
+                                 str(card_sub), su_font, actual_su_size, True, su_color, 'left', 'middle')
+
+                if body_text and body_h > 0.05:
+                    body_y = fy + fh - padding - body_h
+                    add_text_box(slide, inner_left, body_y, inner_w, body_h,
+                                 body_text, b_font, actual_body_size, False, b_color, 'left', 'bottom')
 
 
 def render_workflow(slide, artifact, bt):

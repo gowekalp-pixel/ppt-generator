@@ -5538,6 +5538,44 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
   // so that generate_pptx.py can act as a pure renderer reading pre-computed values.
   computeArtifactInternals(finalZones, branded.canvas || {}, branded.brand_tokens || {})
   normalizeArtifactHeaderBands(finalZones)
+
+  // Enforce minimum gap between slide title and content zones.
+  // Zones Agent 5 explicitly positioned may still start too close to (or inside) the title band.
+  // This runs after all geometry is settled so it is the last word on zone.frame.y.
+  {
+    const r2 = v => Math.round(v * 100) / 100
+    const TEMPLATE_TITLE_RESERVE = 0.90
+    const HEADER_CONTENT_GAP     = 0.20
+    const usesTemplate = !!(brandedWithLayoutTitle.brand_tokens && brandedWithLayoutTitle.brand_tokens.uses_template)
+    const tb = brandedWithLayoutTitle.title_block || {}
+    const sb = brandedWithLayoutTitle.subtitle_block || {}
+    const topMargin = +(brandedWithLayoutTitle.canvas && brandedWithLayoutTitle.canvas.margin && brandedWithLayoutTitle.canvas.margin.top) || 0.30
+
+    let titleBottom
+    if (!tb.text) {
+      titleBottom = topMargin
+    } else if (tb.y != null && tb.h != null) {
+      titleBottom = +tb.y + +tb.h
+    } else {
+      titleBottom = usesTemplate ? TEMPLATE_TITLE_RESERVE : (topMargin + 0.60)
+    }
+    const subtitleBottom = sb.text
+      ? ((+sb.y || titleBottom) + (+sb.h || 0.35))
+      : titleBottom
+    const minContentY = r2(Math.max(topMargin, subtitleBottom + HEADER_CONTENT_GAP))
+
+    finalZones.forEach(zone => {
+      const frame = zone.frame
+      if (!frame || frame.y == null) return
+      const fy = +frame.y
+      if (fy < minContentY) {
+        const shift = r2(minContentY - fy)
+        frame.y = minContentY
+        if (frame.h != null) frame.h = r2(Math.max(0.20, +frame.h - shift))
+      }
+    })
+  }
+
   finalZones.forEach((zone, zi) => {
     ;(zone.artifacts || []).forEach((art, ai) => {
       if (!art._artifact_id) art._artifact_id = 's' + (manifestSlide.slide_number || '?') + '_z' + zi + '_a' + ai
