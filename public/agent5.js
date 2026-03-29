@@ -5413,7 +5413,7 @@ function deriveScratchContentBounds(slideSpec) {
     ? ((+sb.y || titleBottom) + (+sb.h || 0.35))
     : titleBottom
 
-  const top = Math.max(topMargin, subtitleBottom + HEADER_CONTENT_GAP)
+  const top = Math.max(topMargin, Math.max(subtitleBottom, titleBottom) + HEADER_CONTENT_GAP)
   return {
     x: left,
     y: top,
@@ -5620,7 +5620,7 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
     const subtitleBottom = sb.text
       ? ((+sb.y || titleBottom) + (+sb.h || 0.35))
       : titleBottom
-    const minContentY = r2(Math.max(topMargin, subtitleBottom + HEADER_CONTENT_GAP))
+    const minContentY = r2(Math.max(topMargin, Math.max(subtitleBottom, titleBottom) + HEADER_CONTENT_GAP))
 
     finalZones.forEach(zone => {
       const frame = zone.frame
