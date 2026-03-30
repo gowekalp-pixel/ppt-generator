@@ -5365,60 +5365,39 @@ function deriveScratchContentBounds(slideSpec) {
   const bottom = +margin.bottom || 0.3
   const tb = slideSpec.title_block || {}
   const sb = slideSpec.subtitle_block || {}
-  const usesTemplate = !!(slideSpec.brand_tokens && slideSpec.brand_tokens.uses_template)
 
   const HEADER_CONTENT_GAP     = 0.20   // visible breathing room below the title
 
-  // Actual template title font size from brand guidelines (e.g. '28pt' → 28).
-  // Used as the minimum so templates with <32pt title fonts don't over-estimate.
-  const _brandTitleFs = (() => {
-    const s = ((slideSpec.brand_tokens || {}).title_font || {}).size || ''
-    const n = parseFloat(s)
-    return isNaN(n) ? 32 : n
-  })()
-
-  // Estimate minimum title height from font size + text length so that Agent 5
-  // underestimates on wrapping long titles don't propagate into zone placement.
-  // minFontSizePt: in template mode the master overrides the block's font_size,
-  // so pass the actual brand title font size (falling back to 32pt) as minimum.
+  // Estimate title height from block's own font_size + text length.
+  // We do NOT apply a template-mode minimum font size here — the block's font_size
+  // is Agent 5's best estimate and the master usually matches it closely.
+  // Cases where the master renders at a larger font are caught by the Agent 6
+  // safety net (_shift_blocks_for_title_overflow) which reads actual placeholder XML.
   const r2sc = v => Math.round(v * 100) / 100
-  const _estimateMinTitleH = (block, minFontSizePt = 0) => {
+  const _estimateMinTitleH = (block) => {
     const text = (block.text || '').trim()
     if (!text) return 0
-    const fontSizePt   = Math.max(minFontSizePt, +(block.font_size || 22))
+    const fontSizePt   = +(block.font_size || 22)
     const lineHeightIn = fontSizePt * 1.40 / 72
     const titleW       = block.w != null ? +block.w : Math.max(4, width - left - right)
-    // 0.38 avg char-width ratio is calibrated for proportional title fonts (Arial, Calibri etc.)
-    // Lower ratio → more chars per line → correct 2-line estimate for typical long slide titles.
+    // 0.38 avg char-width ratio calibrated for proportional title fonts.
     const avgCharWIn   = fontSizePt * 0.38 / 72
     const charsPerLine = Math.max(10, Math.floor(titleW / avgCharWIn))
     const lines        = Math.max(1, Math.ceil(text.length / charsPerLine))
     return r2sc(lineHeightIn * lines)
   }
 
-  // In template mode, place_in_placeholder uses the master's title font.
-  // Use the brand's actual title font size (from brand_tokens.title_font.size),
-  // falling back to 32pt if not specified.
-  const TEMPLATE_TITLE_MIN_FONT = _brandTitleFs
-
   let titleBottom
   let titleOverflows = false
   if (!tb.text) {
     titleBottom = topMargin
-  } else if (usesTemplate) {
-    // Template mode: block font_size is irrelevant for rendering. Estimate from
-    // the master's effective font size so the zone is placed well below the title.
-    const titleY = tb.y != null ? +tb.y : topMargin
-    const minH = _estimateMinTitleH(tb, TEMPLATE_TITLE_MIN_FONT)
-    const agentH = tb.h != null ? +tb.h : 0
-    // Overflow: 32pt estimate exceeds the allocated placeholder height by >0.15".
-    // Only in this case should content be pushed below titleBottom rather than
-    // the master's fixed subtitleBottom (which is correct for normal-length titles).
-    titleOverflows = agentH > 0 && minH > agentH + 0.15
-    titleBottom = titleY + Math.max(agentH, minH)
   } else if (tb.y != null && tb.h != null) {
     const minH = _estimateMinTitleH(tb)
-    titleBottom = +tb.y + Math.max(+tb.h, minH)   // floor against font-based estimate
+    const agentH = +tb.h
+    // Overflow: font-size-based estimate exceeds the allocated height by >0.15".
+    // Only then should content be pushed below titleBottom rather than subtitleBottom.
+    titleOverflows = agentH > 0 && minH > agentH + 0.15
+    titleBottom = +tb.y + Math.max(agentH, minH)
   } else {
     titleBottom = topMargin + 0.6
   }
@@ -5599,29 +5578,20 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
   {
     const r2 = v => Math.round(v * 100) / 100
     const HEADER_CONTENT_GAP = 0.20
-    const _bt = brandedWithLayoutTitle.brand_tokens || {}
-    // Use brand's actual title font size; fall back to 32pt if not specified.
-    const TEMPLATE_TITLE_MIN_FONT = (() => {
-      const s = (_bt.title_font || {}).size || ''
-      const n = parseFloat(s)
-      return isNaN(n) ? 32 : n
-    })()
-    const usesTemplate = !!_bt.uses_template
     const tb = brandedWithLayoutTitle.title_block || {}
     const sb = brandedWithLayoutTitle.subtitle_block || {}
     const topMargin = +(brandedWithLayoutTitle.canvas && brandedWithLayoutTitle.canvas.margin && brandedWithLayoutTitle.canvas.margin.top) || 0.30
     const slideW    = +(brandedWithLayoutTitle.canvas && brandedWithLayoutTitle.canvas.width_in) || 10
 
-    // Estimate minimum title height from font size + text length.
-    // minFontSizePt: in template mode the master overrides block's font_size, so
-    // pass TEMPLATE_TITLE_MIN_FONT (actual brand title font) as minimum.
-    const _estimateMinTitleH = (block, minFontSizePt = 0) => {
+    // Estimate title height using the block's own font_size — no template minimum.
+    // The master may render at a larger font, but that is caught by Agent 6's
+    // _shift_blocks_for_title_overflow which reads actual placeholder XML.
+    const _estimateMinTitleH = (block) => {
       const text = (block.text || '').trim()
       if (!text) return 0
-      const fontSizePt   = Math.max(minFontSizePt, +(block.font_size || 22))
+      const fontSizePt   = +(block.font_size || 22)
       const lineHeightIn = fontSizePt * 1.40 / 72
       const titleW       = block.w != null ? +block.w : Math.max(4, slideW - 1.0)
-      // 0.38 avg char-width ratio calibrated for proportional title fonts
       const avgCharWIn   = fontSizePt * 0.38 / 72
       const charsPerLine = Math.max(10, Math.floor(titleW / avgCharWIn))
       const lines        = Math.max(1, Math.ceil(text.length / charsPerLine))
@@ -5632,15 +5602,11 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
     let titleOverflows = false
     if (!tb.text) {
       titleBottom = topMargin
-    } else if (usesTemplate) {
-      const titleY = tb.y != null ? +tb.y : topMargin
-      const minH = _estimateMinTitleH(tb, TEMPLATE_TITLE_MIN_FONT)
-      const agentH = tb.h != null ? +tb.h : 0
-      titleOverflows = agentH > 0 && minH > agentH + 0.15
-      titleBottom = titleY + Math.max(agentH, minH)
     } else if (tb.y != null && tb.h != null) {
       const minH = _estimateMinTitleH(tb)
-      titleBottom = +tb.y + Math.max(+tb.h, minH)
+      const agentH = +tb.h
+      titleOverflows = agentH > 0 && minH > agentH + 0.15
+      titleBottom = +tb.y + Math.max(agentH, minH)
     } else {
       titleBottom = topMargin + 0.60
     }

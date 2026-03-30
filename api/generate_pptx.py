@@ -2726,9 +2726,10 @@ def _shift_blocks_for_title_overflow(slide, blocks, use_template):
     # The placeholder is still empty at this point (text hasn't been placed yet),
     # so para/run .font.size always returns None — we must read from raw XML.
     # In OOXML, font size lives in lstStyle/lvl1pPr/defRPr/@sz (hundredths of a pt,
-    # e.g. sz="2800" = 28pt). Fall back to 32pt if not found.
+    # e.g. sz="2800" = 28pt). If not found we do NOT shift — Agent 5 already used
+    # block.font_size for its estimate, so no new information to act on.
     _ADML = '{http://schemas.openxmlformats.org/drawingml/2006/main}'
-    font_pt = 32.0
+    font_pt = None
     try:
         txBody = title_ph.text_frame._txBody
         for el in txBody.iter(f'{_ADML}defRPr'):
@@ -2738,6 +2739,8 @@ def _shift_blocks_for_title_overflow(slide, blocks, use_template):
                 break
     except Exception:
         pass
+    if font_pt is None:
+        return blocks   # cannot determine actual font — trust Agent 5's placement
 
     text = title_block.get('text', '').strip()
     # Use 0.38 char-width ratio — calibrated for proportional title fonts (same as
