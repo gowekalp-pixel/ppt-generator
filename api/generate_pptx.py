@@ -2766,6 +2766,13 @@ def _shift_blocks_for_title_gap(slide, blocks, use_template):
     return shifted
 
 
+# Backward-compatible alias: build_slide historically called this helper by the
+# older "title_overflow" name. Keep both spellings so template content slides
+# cannot fail before render_blocks() runs.
+def _shift_blocks_for_title_overflow(slide, blocks, use_template):
+    return _shift_blocks_for_title_gap(slide, blocks, use_template)
+
+
 # ─── BLOCKS-BASED RENDERER ────────────────────────────────────────────────────
 # These thin wrappers are called by render_blocks() — the new pure renderer that
 # iterates slide_spec['blocks'] and dispatches each to its typed handler.
