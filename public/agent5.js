@@ -5393,6 +5393,7 @@ function deriveScratchContentBounds(slideSpec) {
   const TEMPLATE_TITLE_MIN_FONT = 32
 
   let titleBottom
+  let titleOverflows = false
   if (!tb.text) {
     titleBottom = topMargin
   } else if (usesTemplate) {
@@ -5401,6 +5402,10 @@ function deriveScratchContentBounds(slideSpec) {
     const titleY = tb.y != null ? +tb.y : topMargin
     const minH = _estimateMinTitleH(tb, TEMPLATE_TITLE_MIN_FONT)
     const agentH = tb.h != null ? +tb.h : 0
+    // Overflow: 32pt estimate exceeds the allocated placeholder height by >0.15".
+    // Only in this case should content be pushed below titleBottom rather than
+    // the master's fixed subtitleBottom (which is correct for normal-length titles).
+    titleOverflows = agentH > 0 && minH > agentH + 0.15
     titleBottom = titleY + Math.max(agentH, minH)
   } else if (tb.y != null && tb.h != null) {
     const minH = _estimateMinTitleH(tb)
@@ -5413,7 +5418,12 @@ function deriveScratchContentBounds(slideSpec) {
     ? ((+sb.y || titleBottom) + (+sb.h || 0.35))
     : titleBottom
 
-  const top = Math.max(topMargin, subtitleBottom + HEADER_CONTENT_GAP)
+  // Apply titleBottom as floor only when overflow is detected. For normal titles
+  // that fit the placeholder, subtitleBottom already encodes the master's layout
+  // intent and is the right baseline. Applying max() unconditionally over-shifts
+  // on borderline 2-line titles where the 32pt estimate is slightly too high.
+  const top = Math.max(topMargin,
+    (titleOverflows ? Math.max(subtitleBottom, titleBottom) : subtitleBottom) + HEADER_CONTENT_GAP)
   return {
     x: left,
     y: top,
@@ -5604,12 +5614,14 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
     }
 
     let titleBottom
+    let titleOverflows = false
     if (!tb.text) {
       titleBottom = topMargin
     } else if (usesTemplate) {
       const titleY = tb.y != null ? +tb.y : topMargin
       const minH = _estimateMinTitleH(tb, TEMPLATE_TITLE_MIN_FONT)
       const agentH = tb.h != null ? +tb.h : 0
+      titleOverflows = agentH > 0 && minH > agentH + 0.15
       titleBottom = titleY + Math.max(agentH, minH)
     } else if (tb.y != null && tb.h != null) {
       const minH = _estimateMinTitleH(tb)
@@ -5620,7 +5632,8 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
     const subtitleBottom = sb.text
       ? ((+sb.y || titleBottom) + (+sb.h || 0.35))
       : titleBottom
-    const minContentY = r2(Math.max(topMargin, subtitleBottom + HEADER_CONTENT_GAP))
+    const minContentY = r2(Math.max(topMargin,
+      (titleOverflows ? Math.max(subtitleBottom, titleBottom) : subtitleBottom) + HEADER_CONTENT_GAP))
 
     finalZones.forEach(zone => {
       const frame = zone.frame

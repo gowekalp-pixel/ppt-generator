@@ -2681,6 +2681,102 @@ def normalize_zone_artifact_stack(zone):
     return { **zone, 'artifacts': laid_out }
 
 
+def _shift_blocks_for_title_overflow(slide, blocks, use_template):
+    """
+    Safety net for template-mode content slides: if the title text requires more
+    vertical space than the master's fixed placeholder height, content blocks that
+    Agent 5 placed below the (smaller) allocated height will overlap the title text.
+
+    Steps:
+      1. Locate the title placeholder on the slide to get its real Y, H, W.
+      2. Estimate actual rendered height using the placeholder's font size (or 32pt
+         fallback) and estimate_wrapped_lines().
+      3. If estimated render height > placeholder height by >0.1", compute the
+         overflow shift needed so the earliest content block clears the title.
+      4. Shift all non-title/subtitle blocks down by that amount.
+    """
+    if not use_template:
+        return blocks
+
+    title_block = next(
+        (b for b in blocks if b.get('block_type') == 'title' and b.get('text')), None
+    )
+    if not title_block:
+        return blocks
+
+    # Find the title placeholder (idx 0) currently on the slide layout.
+    title_ph = None
+    try:
+        for ph in slide.placeholders:
+            if ph.placeholder_format.idx == 0:
+                title_ph = ph
+                break
+    except Exception:
+        pass
+    if title_ph is None:
+        return blocks
+
+    EMU = 914400.0
+    ph_y  = title_ph.top    / EMU
+    ph_h  = title_ph.height / EMU
+    ph_w  = title_ph.width  / EMU
+    allocated_bottom = ph_y + ph_h
+
+    # Get effective font size: try placeholder XML inheritance chain, fallback 32pt.
+    font_pt = 32.0
+    try:
+        for para in title_ph.text_frame.paragraphs:
+            sz = para.font.size
+            if sz is not None:
+                font_pt = sz.pt
+                break
+            for run in para.runs:
+                sz = run.font.size
+                if sz is not None:
+                    font_pt = sz.pt
+                    break
+            else:
+                continue
+            break
+    except Exception:
+        pass
+
+    text = title_block.get('text', '')
+    n_lines   = estimate_wrapped_lines(text, max(0.5, ph_w), font_pt)
+    line_h_in = (font_pt * 1.40) / 72.0
+    estimated_h = n_lines * line_h_in + 0.12   # small top/bottom padding
+
+    overflow = estimated_h - ph_h
+    if overflow <= 0.10:   # title fits (or close enough) — nothing to do
+        return blocks
+
+    # Find the earliest Y among non-title/subtitle blocks.
+    content_blocks = [b for b in blocks
+                      if b.get('block_type') not in ('title', 'subtitle')
+                      and b.get('y') is not None]
+    if not content_blocks:
+        return blocks
+
+    content_start_y = min(float(b['y']) for b in content_blocks)
+    needed_start    = ph_y + estimated_h + 0.20   # 0.20" breathing gap after title
+    shift           = round(max(0.0, needed_start - content_start_y), 3)
+    if shift < 0.05:
+        return blocks
+
+    print(f'[title overflow] font={font_pt}pt lines={n_lines} '
+          f'estimated={estimated_h:.2f}" allocated={ph_h:.2f}" shift={shift:.2f}"')
+
+    shifted = []
+    for b in blocks:
+        if b.get('block_type') in ('title', 'subtitle'):
+            shifted.append(b)
+        elif b.get('y') is not None:
+            shifted.append({**b, 'y': round(float(b['y']) + shift, 3)})
+        else:
+            shifted.append(b)
+    return shifted
+
+
 # ─── BLOCKS-BASED RENDERER ────────────────────────────────────────────────────
 # These thin wrappers are called by render_blocks() — the new pure renderer that
 # iterates slide_spec['blocks'] and dispatches each to its typed handler.
@@ -3332,6 +3428,12 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
 
     # Title, subtitle, artifacts, and global_elements are all pre-flattened
     # into blocks[] by flattenToBlocks() in agent5.js.
+    # Safety net: if the title overflows its template placeholder, shift content
+    # blocks down so they clear the actual rendered title text.
+    if use_template:
+        _adjusted = _shift_blocks_for_title_overflow(slide, list(slide_spec.get('blocks') or []), use_template)
+        if _adjusted is not (slide_spec.get('blocks') or []):
+            slide_spec = {**slide_spec, 'blocks': _adjusted}
     render_blocks(slide, slide_spec, bt, use_template)
 
     if use_template:
