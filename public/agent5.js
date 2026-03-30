@@ -1686,8 +1686,8 @@ function applyBrandGuidelineOverrides(slide, manifestSlide, brand) {
 
   const normalized = JSON.parse(JSON.stringify(slide))
   normalized.global_elements = normalized.global_elements || {}
-  if (brand.uses_template && normalized.global_elements.logo) {
-    delete normalized.global_elements.logo
+  if (brand.uses_template) {
+    normalized.global_elements = {}
   }
 
   // In layout mode or template title/divider, coordinates are driven by the template.
@@ -1707,12 +1707,14 @@ function applyBrandGuidelineOverrides(slide, manifestSlide, brand) {
   }
 
   // Scratch mode: apply full bounds enforcement
-  const logo = buildLogoElement(normalized, brand)
-  if (logo) {
-    normalized.global_elements.logo = logo
-    const tb = normalized.title_block
-    if (tb && tb.y < logo.y + logo.h + 0.1 && tb.x < logo.x + logo.w) {
-      tb.w = r2(Math.max(1.5, Math.min(tb.w || (logo.x - tb.x), logo.x - tb.x - 0.18)))
+  if (!brand.uses_template) {
+    const logo = buildLogoElement(normalized, brand)
+    if (logo) {
+      normalized.global_elements.logo = logo
+      const tb = normalized.title_block
+      if (tb && tb.y < logo.y + logo.h + 0.1 && tb.x < logo.x + logo.w) {
+        tb.w = r2(Math.max(1.5, Math.min(tb.w || (logo.x - tb.x), logo.x - tb.x - 0.18)))
+      }
     }
   }
 
