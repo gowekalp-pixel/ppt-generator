@@ -2690,7 +2690,7 @@ def _shift_blocks_for_title_overflow(slide, blocks, use_template):
     Steps:
       1. Locate the title placeholder on the slide to get its real Y, H, W.
       2. Estimate actual rendered height using the placeholder's font size (or 32pt
-         fallback) and estimate_wrapped_lines().
+         fallback) and a 0.38 char-width ratio calibrated for proportional title fonts.
       3. If estimated render height > placeholder height by >0.1", compute the
          overflow shift needed so the earliest content block clears the title.
       4. Shift all non-title/subtitle blocks down by that amount.
@@ -2722,29 +2722,32 @@ def _shift_blocks_for_title_overflow(slide, blocks, use_template):
     ph_w  = title_ph.width  / EMU
     allocated_bottom = ph_y + ph_h
 
-    # Get effective font size: try placeholder XML inheritance chain, fallback 32pt.
+    # Get effective font size from placeholder XML.
+    # The placeholder is still empty at this point (text hasn't been placed yet),
+    # so para/run .font.size always returns None — we must read from raw XML.
+    # In OOXML, font size lives in lstStyle/lvl1pPr/defRPr/@sz (hundredths of a pt,
+    # e.g. sz="2800" = 28pt). Fall back to 32pt if not found.
+    _ADML = '{http://schemas.openxmlformats.org/drawingml/2006/main}'
     font_pt = 32.0
     try:
-        for para in title_ph.text_frame.paragraphs:
-            sz = para.font.size
-            if sz is not None:
-                font_pt = sz.pt
+        txBody = title_ph.text_frame._txBody
+        for el in txBody.iter(f'{_ADML}defRPr'):
+            sz = el.get('sz')
+            if sz:
+                font_pt = int(sz) / 100.0
                 break
-            for run in para.runs:
-                sz = run.font.size
-                if sz is not None:
-                    font_pt = sz.pt
-                    break
-            else:
-                continue
-            break
     except Exception:
         pass
 
-    text = title_block.get('text', '')
-    n_lines   = estimate_wrapped_lines(text, max(0.5, ph_w), font_pt)
+    text = title_block.get('text', '').strip()
+    # Use 0.38 char-width ratio — calibrated for proportional title fonts (same as
+    # Agent 5's _estimateMinTitleH). estimate_wrapped_lines() uses 0.52 which
+    # over-counts lines for wide title placeholders and causes false overflow shifts.
+    avg_char_w_in = (font_pt * 0.38) / 72.0
+    chars_per_line = max(10, int(ph_w / avg_char_w_in))
+    n_lines   = max(1, -(-len(text) // chars_per_line))   # ceiling division
     line_h_in = (font_pt * 1.40) / 72.0
-    estimated_h = n_lines * line_h_in + 0.12   # small top/bottom padding
+    estimated_h = n_lines * line_h_in   # no extra padding — keeps estimate tight
 
     overflow = estimated_h - ph_h
     if overflow <= 0.10:   # title fits (or close enough) — nothing to do

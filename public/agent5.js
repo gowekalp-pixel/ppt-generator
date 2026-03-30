@@ -5369,10 +5369,18 @@ function deriveScratchContentBounds(slideSpec) {
 
   const HEADER_CONTENT_GAP     = 0.20   // visible breathing room below the title
 
+  // Actual template title font size from brand guidelines (e.g. '28pt' → 28).
+  // Used as the minimum so templates with <32pt title fonts don't over-estimate.
+  const _brandTitleFs = (() => {
+    const s = ((slideSpec.brand_tokens || {}).title_font || {}).size || ''
+    const n = parseFloat(s)
+    return isNaN(n) ? 32 : n
+  })()
+
   // Estimate minimum title height from font size + text length so that Agent 5
   // underestimates on wrapping long titles don't propagate into zone placement.
   // minFontSizePt: in template mode the master overrides the block's font_size,
-  // so pass a minimum of 32pt to account for typical template title font sizes.
+  // so pass the actual brand title font size (falling back to 32pt) as minimum.
   const r2sc = v => Math.round(v * 100) / 100
   const _estimateMinTitleH = (block, minFontSizePt = 0) => {
     const text = (block.text || '').trim()
@@ -5388,9 +5396,10 @@ function deriveScratchContentBounds(slideSpec) {
     return r2sc(lineHeightIn * lines)
   }
 
-  // In template mode, place_in_placeholder ignores the block's font_size and uses the
-  // master's title font (typically 28-36pt). Use 32pt as a conservative minimum estimate.
-  const TEMPLATE_TITLE_MIN_FONT = 32
+  // In template mode, place_in_placeholder uses the master's title font.
+  // Use the brand's actual title font size (from brand_tokens.title_font.size),
+  // falling back to 32pt if not specified.
+  const TEMPLATE_TITLE_MIN_FONT = _brandTitleFs
 
   let titleBottom
   let titleOverflows = false
@@ -5589,9 +5598,15 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
   // will NOT override those (it only fills nulls).
   {
     const r2 = v => Math.round(v * 100) / 100
-    const HEADER_CONTENT_GAP     = 0.20
-    const TEMPLATE_TITLE_MIN_FONT = 32
-    const usesTemplate = !!(brandedWithLayoutTitle.brand_tokens && brandedWithLayoutTitle.brand_tokens.uses_template)
+    const HEADER_CONTENT_GAP = 0.20
+    const _bt = brandedWithLayoutTitle.brand_tokens || {}
+    // Use brand's actual title font size; fall back to 32pt if not specified.
+    const TEMPLATE_TITLE_MIN_FONT = (() => {
+      const s = (_bt.title_font || {}).size || ''
+      const n = parseFloat(s)
+      return isNaN(n) ? 32 : n
+    })()
+    const usesTemplate = !!_bt.uses_template
     const tb = brandedWithLayoutTitle.title_block || {}
     const sb = brandedWithLayoutTitle.subtitle_block || {}
     const topMargin = +(brandedWithLayoutTitle.canvas && brandedWithLayoutTitle.canvas.margin && brandedWithLayoutTitle.canvas.margin.top) || 0.30
@@ -5599,7 +5614,7 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
 
     // Estimate minimum title height from font size + text length.
     // minFontSizePt: in template mode the master overrides block's font_size, so
-    // pass TEMPLATE_TITLE_MIN_FONT (32pt) to account for typical master title fonts.
+    // pass TEMPLATE_TITLE_MIN_FONT (actual brand title font) as minimum.
     const _estimateMinTitleH = (block, minFontSizePt = 0) => {
       const text = (block.text || '').trim()
       if (!text) return 0
