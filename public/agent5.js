@@ -1797,13 +1797,9 @@ function applyLayoutTitleFrames(slide, layoutName, brand) {
     const titleX = r2(titlePh.x_in != null ? titlePh.x_in : out.title_block.x || 0.4)
     const titleY = r2(titlePh.y_in != null ? titlePh.y_in : out.title_block.y || 0.15)
     const titleW = r2(titlePh.w_in != null ? titlePh.w_in : out.title_block.w || 9.2)
-    const titleFs = Number(out.title_block.font_size || 18)
-    const estimatedTitleH = estimateTextBlockHeight(out.title_block.text, titleW, titleFs, 1.32, 0.34)
     let titleH = r2(titlePh.h_in != null ? titlePh.h_in : out.title_block.h || 0.7)
     if (topContentY != null) {
-      titleH = Math.min(titleH, Math.max(estimatedTitleH, topContentY - titleY - 0.08))
-    } else {
-      titleH = Math.min(titleH, estimatedTitleH)
+      titleH = Math.max(0.18, Math.min(titleH, topContentY - titleY - 0.08))
     }
     out.title_block = {
       ...out.title_block,
@@ -5350,50 +5346,24 @@ function deriveScratchContentBounds(slideSpec) {
 
   const HEADER_CONTENT_GAP     = 0.20   // visible breathing room below the title
 
-  // Estimate title height from block's own font_size + text length.
-  // We do NOT apply a template-mode minimum font size here — the block's font_size
-  // is Agent 5's best estimate and the master usually matches it closely.
-  // Cases where the master renders at a larger font are caught by the Agent 6
-  // safety net (_shift_blocks_for_title_overflow) which reads actual placeholder XML.
   const r2sc = v => Math.round(v * 100) / 100
-  const _estimateMinTitleH = (block) => {
-    const text = (block.text || '').trim()
-    if (!text) return 0
-    const fontSizePt   = +(block.font_size || 22)
-    const lineHeightIn = fontSizePt * 1.40 / 72
-    const titleW       = block.w != null ? +block.w : Math.max(4, width - left - right)
-    // 0.38 avg char-width ratio calibrated for proportional title fonts.
-    const avgCharWIn   = fontSizePt * 0.38 / 72
-    const charsPerLine = Math.max(10, Math.floor(titleW / avgCharWIn))
-    const lines        = Math.max(1, Math.ceil(text.length / charsPerLine))
-    return r2sc(lineHeightIn * lines)
+  const _blockBottom = (block, fallbackY, fallbackH) => {
+    if (!block || !block.text) return fallbackY
+    const y = block.y != null ? +block.y : fallbackY
+    const h = block.h != null ? +block.h : fallbackH
+    return r2sc(y + h)
   }
 
-  let titleBottom
-  let titleOverflows = false
-  if (!tb.text) {
-    titleBottom = topMargin
-  } else if (tb.y != null && tb.h != null) {
-    const minH = _estimateMinTitleH(tb)
-    const agentH = +tb.h
-    // Overflow: font-size-based estimate exceeds the allocated height by >0.15".
-    // Only then should content be pushed below titleBottom rather than subtitleBottom.
-    titleOverflows = agentH > 0 && minH > agentH + 0.15
-    titleBottom = +tb.y + Math.max(agentH, minH)
-  } else {
-    titleBottom = topMargin + 0.6
-  }
-
+  const defaultTitleBottom = r2sc(topMargin + 0.6)
+  const titleBottom = _blockBottom(tb, topMargin, 0.6) || defaultTitleBottom
   const subtitleBottom = sb.text
-    ? ((+sb.y || titleBottom) + (+sb.h || 0.35))
+    ? _blockBottom(sb, titleBottom, 0.35)
     : titleBottom
 
-  // Apply titleBottom as floor only when overflow is detected. For normal titles
-  // that fit the placeholder, subtitleBottom already encodes the master's layout
-  // intent and is the right baseline. Applying max() unconditionally over-shifts
-  // on borderline 2-line titles where the 32pt estimate is slightly too high.
-  const top = Math.max(topMargin,
-    (titleOverflows ? Math.max(subtitleBottom, titleBottom) : subtitleBottom) + HEADER_CONTENT_GAP)
+  // In template-backed slides, Agent 5 should not infer extra title clearance
+  // from font metrics. Agent 6 places the actual title/subtitle and performs the
+  // only authoritative post-placement shift when the real template header is taller.
+  const top = Math.max(topMargin, subtitleBottom + HEADER_CONTENT_GAP)
   return {
     x: left,
     y: top,
@@ -5563,40 +5533,19 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
     const tb = brandedWithLayoutTitle.title_block || {}
     const sb = brandedWithLayoutTitle.subtitle_block || {}
     const topMargin = +(brandedWithLayoutTitle.canvas && brandedWithLayoutTitle.canvas.margin && brandedWithLayoutTitle.canvas.margin.top) || 0.30
-    const slideW    = +(brandedWithLayoutTitle.canvas && brandedWithLayoutTitle.canvas.width_in) || 10
 
-    // Estimate title height using the block's own font_size — no template minimum.
-    // The master may render at a larger font, but that is caught by Agent 6's
-    // _shift_blocks_for_title_overflow which reads actual placeholder XML.
-    const _estimateMinTitleH = (block) => {
-      const text = (block.text || '').trim()
-      if (!text) return 0
-      const fontSizePt   = +(block.font_size || 22)
-      const lineHeightIn = fontSizePt * 1.40 / 72
-      const titleW       = block.w != null ? +block.w : Math.max(4, slideW - 1.0)
-      const avgCharWIn   = fontSizePt * 0.38 / 72
-      const charsPerLine = Math.max(10, Math.floor(titleW / avgCharWIn))
-      const lines        = Math.max(1, Math.ceil(text.length / charsPerLine))
-      return r2(lineHeightIn * lines)
+    const _blockBottom = (block, fallbackY, fallbackH) => {
+      if (!block || !block.text) return fallbackY
+      const y = block.y != null ? +block.y : fallbackY
+      const h = block.h != null ? +block.h : fallbackH
+      return r2(y + h)
     }
 
-    let titleBottom
-    let titleOverflows = false
-    if (!tb.text) {
-      titleBottom = topMargin
-    } else if (tb.y != null && tb.h != null) {
-      const minH = _estimateMinTitleH(tb)
-      const agentH = +tb.h
-      titleOverflows = agentH > 0 && minH > agentH + 0.15
-      titleBottom = +tb.y + Math.max(agentH, minH)
-    } else {
-      titleBottom = topMargin + 0.60
-    }
+    const titleBottom = _blockBottom(tb, topMargin, 0.60)
     const subtitleBottom = sb.text
-      ? ((+sb.y || titleBottom) + (+sb.h || 0.35))
+      ? _blockBottom(sb, titleBottom, 0.35)
       : titleBottom
-    const minContentY = r2(Math.max(topMargin,
-      (titleOverflows ? Math.max(subtitleBottom, titleBottom) : subtitleBottom) + HEADER_CONTENT_GAP))
+    const minContentY = r2(Math.max(topMargin, subtitleBottom + HEADER_CONTENT_GAP))
 
     finalZones.forEach(zone => {
       const frame = zone.frame

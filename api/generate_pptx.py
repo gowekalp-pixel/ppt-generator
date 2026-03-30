@@ -2681,77 +2681,24 @@ def normalize_zone_artifact_stack(zone):
     return { **zone, 'artifacts': laid_out }
 
 
-def _get_title_placeholder_font_pt(slide):
+def _shift_blocks_for_title_gap(slide, blocks, use_template):
     """
-    Walk the PPTX inheritance chain to find the title placeholder's effective
-    font size: slide placeholder → layout placeholder → master placeholder.
-    OOXML stores font size as sz in hundredths of a point (sz="2800" = 28pt).
-    Returns float pt or None if not found anywhere in the chain.
-    """
-    _ADML = '{http://schemas.openxmlformats.org/drawingml/2006/main}'
+    In template mode, Agent 5 estimates title_block.h from limited info.
+    The actual title placeholder in the template has a fixed height from the
+    layout XML — always deterministic, no font estimation needed.
 
-    def _sz_from_element(elem):
-        try:
-            for el in elem.iter(f'{_ADML}defRPr'):
-                sz = el.get('sz')
-                if sz:
-                    return int(sz) / 100.0
-        except Exception:
-            pass
-        return None
+    Algorithm (per user spec):
+      1. Place title/subtitle (done by caller before render_blocks).
+         We read placeholder bounds BEFORE text is placed — bounds are fixed
+         by the layout and don't change when text is written.
+      2. Compute actual_header_bottom = bottom of title (or subtitle if present)
+         placeholder, in inches.
+      3. Compare with content_start_y = min Y of all non-header blocks.
+      4. If gap = content_start_y - actual_header_bottom < MIN_GAP_IN:
+         shift every non-header block down by (MIN_GAP_IN - gap).
 
-    def _title_ph_element(ph_collection):
-        try:
-            for ph in ph_collection:
-                if ph.placeholder_format.idx == 0:
-                    return ph._element
-        except Exception:
-            pass
-        return None
-
-    # 1. Slide's own placeholder
-    el = _title_ph_element(slide.placeholders)
-    if el is not None:
-        sz = _sz_from_element(el)
-        if sz:
-            return sz
-
-    # 2. Layout placeholder
-    try:
-        el = _title_ph_element(slide.slide_layout.placeholders)
-        if el is not None:
-            sz = _sz_from_element(el)
-            if sz:
-                return sz
-    except Exception:
-        pass
-
-    # 3. Master placeholder
-    try:
-        el = _title_ph_element(slide.slide_layout.slide_master.placeholders)
-        if el is not None:
-            sz = _sz_from_element(el)
-            if sz:
-                return sz
-    except Exception:
-        pass
-
-    return None
-
-
-def _shift_blocks_for_title_overflow(slide, blocks, use_template):
-    """
-    Safety net for template-mode content slides: if the title text requires more
-    vertical space than the master's fixed placeholder height, content blocks that
-    Agent 5 placed below the (smaller) allocated height will overlap the title text.
-
-    Steps:
-      1. Locate the title placeholder bounds (Y, H, W) from the slide layout.
-      2. Resolve the effective font size by walking slide → layout → master XML.
-         Falls back to the block's own font_size if still not found.
-      3. Estimate rendered height with a 0.38 char-width ratio.
-      4. If estimated height > placeholder height by >0.1", shift all non-title/
-         subtitle blocks down so they clear the actual title text.
+    MIN_GAP_IN ≈ 2pt ≈ 0.028" — just enough to guarantee no visual overlap.
+    No font size, no line-count estimation needed.
     """
     if not use_template:
         return blocks
@@ -2762,62 +2709,51 @@ def _shift_blocks_for_title_overflow(slide, blocks, use_template):
     if not title_block:
         return blocks
 
-    # Title placeholder bounds from the actual slide layout.
-    title_ph = None
-    try:
-        for ph in slide.placeholders:
-            if ph.placeholder_format.idx == 0:
-                title_ph = ph
-                break
-    except Exception:
-        pass
-    if title_ph is None:
+    EMU        = 914400.0
+    MIN_GAP_IN = 2 / 72.0   # 2 points ≈ 0.028" — minimum breathing room
+
+    def _ph_bottom(ph_collection, idx):
+        """Return (top + height) in inches for the placeholder at idx, or None."""
+        try:
+            for ph in ph_collection:
+                if ph.placeholder_format.idx == idx:
+                    return (ph.top + ph.height) / EMU
+        except Exception:
+            pass
+        return None
+
+    # Title placeholder bottom (idx 0)
+    header_bottom = _ph_bottom(slide.placeholders, 0)
+    if header_bottom is None:
         return blocks
 
-    EMU = 914400.0
-    ph_y = title_ph.top    / EMU
-    ph_h = title_ph.height / EMU
-    ph_w = title_ph.width  / EMU
+    # If a subtitle placeholder exists on this layout, use its bottom instead
+    sub_bottom = _ph_bottom(slide.placeholders, 1)
+    has_subtitle = any(
+        b.get('block_type') == 'subtitle' and b.get('text')
+        for b in blocks
+    )
+    if has_subtitle and sub_bottom is not None:
+        header_bottom = max(header_bottom, sub_bottom)
 
-    # Resolve font: walk slide → layout → master placeholder XML for defRPr/@sz.
-    # Falls back to block.font_size so the function always has a working estimate.
-    font_pt = _get_title_placeholder_font_pt(slide)
-    if font_pt is None:
-        font_pt = float(title_block.get('font_size') or 20)
-        font_from_xml = False
-    else:
-        font_from_xml = True
-
-    text = title_block.get('text', '').strip()
-    # 0.38 char-width ratio — same calibration as Agent 5's _estimateMinTitleH.
-    avg_char_w_in = (font_pt * 0.38) / 72.0
-    chars_per_line = max(10, int(ph_w / avg_char_w_in))
-    n_lines        = max(1, -(-len(text) // chars_per_line))
-    line_h_in      = (font_pt * 1.40) / 72.0
-    estimated_h    = n_lines * line_h_in
-
-    overflow = estimated_h - ph_h
-    # Use a tighter threshold when font came from XML (more reliable);
-    # slightly looser when falling back to block.font_size (less reliable).
-    threshold = 0.10 if font_from_xml else 0.25
-    if overflow <= threshold:
-        return blocks
-
-    content_blocks = [b for b in blocks
-                      if b.get('block_type') not in ('title', 'subtitle')
-                      and b.get('y') is not None]
+    # Earliest Y of all non-header content blocks
+    content_blocks = [
+        b for b in blocks
+        if b.get('block_type') not in ('title', 'subtitle')
+        and b.get('y') is not None
+    ]
     if not content_blocks:
         return blocks
 
     content_start_y = min(float(b['y']) for b in content_blocks)
-    needed_start    = ph_y + estimated_h + 0.20
-    shift           = round(max(0.0, needed_start - content_start_y), 3)
-    if shift < 0.05:
-        return blocks
+    gap   = content_start_y - header_bottom
+    shift = round(MIN_GAP_IN - gap, 3)   # positive → content too close / overlapping
 
-    print(f'[title overflow] font={font_pt}pt ({"xml" if font_from_xml else "block"}) '
-          f'lines={n_lines} estimated={estimated_h:.2f}" '
-          f'allocated={ph_h:.2f}" shift={shift:.2f}"')
+    if shift <= 0:
+        return blocks   # content already clears the header by at least MIN_GAP_IN
+
+    print(f'[title gap fix] header_bottom={header_bottom:.3f}" '
+          f'content_start={content_start_y:.3f}" gap={gap:.3f}" shift={shift:.3f}"')
 
     shifted = []
     for b in blocks:
