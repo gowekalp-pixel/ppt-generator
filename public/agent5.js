@@ -1686,6 +1686,9 @@ function applyBrandGuidelineOverrides(slide, manifestSlide, brand) {
 
   const normalized = JSON.parse(JSON.stringify(slide))
   normalized.global_elements = normalized.global_elements || {}
+  if (brand.uses_template && normalized.global_elements.logo) {
+    delete normalized.global_elements.logo
+  }
 
   // In layout mode or template title/divider, coordinates are driven by the template.
   // Skip bounds enforcement — enforcing would corrupt placeholder-derived positions.

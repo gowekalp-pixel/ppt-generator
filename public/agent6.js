@@ -127,6 +127,7 @@ function slimBlockForRender(block) {
 function slimSlideForRender(slide) {
   if (!slide || typeof slide !== 'object') return slide
   const out = {}
+  const useTemplate = !!((slide.brand_tokens || {}).uses_template)
   const keep = new Set([
     'slide_number', 'slide_type', 'slide_archetype',
     'canvas', 'brand_tokens', 'global_elements',
@@ -136,7 +137,17 @@ function slimSlideForRender(slide) {
   ])
   for (const [k, v] of Object.entries(slide)) {
     if (!keep.has(k) || v === undefined) continue
-    out[k] = (k === 'blocks' && Array.isArray(v)) ? v.map(slimBlockForRender) : v
+    if (k === 'blocks' && Array.isArray(v)) {
+      out[k] = v.map(slimBlockForRender)
+      continue
+    }
+    if (k === 'global_elements' && v && typeof v === 'object') {
+      const ge = { ...v }
+      if (useTemplate && ge.logo) delete ge.logo
+      out[k] = ge
+      continue
+    }
+    out[k] = v
   }
   return out
 }
