@@ -4812,29 +4812,11 @@ function flattenToBlocks(slideSpec, brandTokens) {
   // ── 4. Global elements ────────────────────────────────────────────────────
   const ge = slideSpec.global_elements || {}
 
-  if (ge.logo) {
-    const lg = ge.logo
-    blocks.push({
-      block_type: 'image',
-      artifact_type: 'global_element',
-      artifact_subtype: 'logo',
-      block_role: 'global_element',
-      artifact_header_text: '',
-      fallback_policy: {
-        allow_renderer_fallback: false,
-        fallback_mode: 'none',
-        artifact_type: 'global_element',
-        artifact_subtype: 'logo',
-        block_role: 'global_element',
-        fallback_key: 'global_element:logo'
-      },
-      image_role: 'logo',
-      x: lg.x != null ? lg.x : 0.2,
-      y: lg.y != null ? lg.y : 0.05,
-      w: lg.w || 1.2,
-      h: lg.h || 0.4
-    })
-  }
+  // Logo is intentionally not included in blocks[]:
+  // - Template mode: the master layout carries the logo automatically.
+  // - Scratch mode: logo is rendered from global_elements.logo directly (not via blocks[]).
+  // render_blocks() skips 'image' block_type in both modes anyway.
+
   if (ge.footer && ge.footer.text) {
     const ft = ge.footer
     blocks.push({
