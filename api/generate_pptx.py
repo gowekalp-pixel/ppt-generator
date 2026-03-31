@@ -2966,6 +2966,61 @@ def _shift_blocks_for_title_gap(slide, blocks, use_template):
     return shifted
 
 
+def _ensure_subtitle_placeholder_clears_title(slide, blocks):
+    """
+    In template mode, a long wrapped title can visually extend into the subtitle
+    placeholder area. Before placing subtitle text, nudge the subtitle
+    placeholder down so its top clears the estimated rendered title text bottom.
+    """
+    EMU = 914400.0
+    MIN_GAP_IN = 2 / 96.0
+
+    title_block = next(
+        (b for b in blocks if b.get('block_type') == 'title' and b.get('text')),
+        None
+    )
+    subtitle_block = next(
+        (b for b in blocks if b.get('block_type') == 'subtitle' and b.get('text')),
+        None
+    )
+    if not title_block or not subtitle_block:
+        return
+
+    def _ph(idx):
+        try:
+            for ph in slide.placeholders:
+                if ph.placeholder_format.idx == idx:
+                    return ph
+        except Exception:
+            pass
+        return None
+
+    title_ph = _ph(0)
+    subtitle_ph = _ph(1)
+    if not title_ph or not subtitle_ph:
+        return
+
+    try:
+        title_top = title_ph.top / EMU
+        title_w = max(0.5, title_ph.width / EMU)
+        font_size = int(title_block.get('font_size') or 18)
+        lines = estimate_wrapped_lines(title_block.get('text', ''), title_w, font_size)
+        line_h = (font_size / 72.0) * 1.25
+        title_text_h = max(0.22, lines * line_h + 0.06)
+        title_bottom = title_top + title_text_h
+
+        subtitle_top = subtitle_ph.top / EMU
+        min_subtitle_top = title_bottom + MIN_GAP_IN
+        if subtitle_top >= min_subtitle_top:
+            return
+
+        delta_in = min_subtitle_top - subtitle_top
+        delta_emu = int(delta_in * EMU)
+        subtitle_ph.top = subtitle_ph.top + delta_emu
+    except Exception as e:
+        print('_ensure_subtitle_placeholder_clears_title error:', e)
+
+
 # Backward-compatible alias: build_slide historically called this helper by the
 # older "title_overflow" name. Keep both spellings so template content slides
 # cannot fail before render_blocks() runs.
@@ -3225,9 +3280,34 @@ def render_blocks(slide, slide_spec, bt, use_template):
     Pure renderer: iterates slide_spec['blocks'] and dispatches each block
     to its type-specific render function. No layout decisions are made here.
     """
-    for block in (slide_spec.get('blocks') or []):
+    blocks = list(slide_spec.get('blocks') or [])
+
+    # Template mode needs a two-pass header render:
+    # 1. place title
+    # 2. ensure subtitle placeholder clears the wrapped title text
+    # 3. place subtitle
+    # 4. shift remaining content blocks based on the actual header text bottom
+    if use_template and blocks:
+        title_block = next((b for b in blocks if b.get('block_type') == 'title'), None)
+        subtitle_block = next((b for b in blocks if b.get('block_type') == 'subtitle'), None)
+        if title_block:
+            try:
+                render_block_title(slide, title_block, bt, use_template)
+            except Exception as e:
+                print(f'render_blocks: error on block_type=title: {e}')
+        if subtitle_block:
+            _ensure_subtitle_placeholder_clears_title(slide, blocks)
+            try:
+                render_block_title(slide, subtitle_block, bt, use_template)
+            except Exception as e:
+                print(f'render_blocks: error on block_type=subtitle: {e}')
+        blocks = _shift_blocks_for_title_gap(slide, blocks, use_template)
+
+    for block in blocks:
         btype = block.get('block_type', '')
         try:
+            if use_template and btype in ('title', 'subtitle'):
+                continue
             if btype in ('title', 'subtitle'):
                 render_block_title(slide, block, bt, use_template)
             elif btype == 'text_box':
@@ -3624,12 +3704,8 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
 
     # Title, subtitle, artifacts, and global_elements are all pre-flattened
     # into blocks[] by flattenToBlocks() in agent5.js.
-    # Safety net: if the title overflows its template placeholder, shift content
-    # blocks down so they clear the actual rendered title text.
-    if use_template:
-        _adjusted = _shift_blocks_for_title_overflow(slide, list(slide_spec.get('blocks') or []), use_template)
-        if _adjusted is not (slide_spec.get('blocks') or []):
-            slide_spec = {**slide_spec, 'blocks': _adjusted}
+    # Template mode header clearance is handled inside render_blocks() after the
+    # title/subtitle placeholders are actually populated.
     render_blocks(slide, slide_spec, bt, use_template)
 
     if use_template:
