@@ -1113,7 +1113,6 @@ function r2(n) { return Math.round(n * 100) / 100 }
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function extractBrandTokens(brand) {
-  const primaryLogo = brand.primary_logo || ((brand.logos || [])[0] || null)
   return {
     slide_width_inches:   r2(brand.slide_width_inches  || 13.33),
     slide_height_inches:  r2(brand.slide_height_inches || 7.50),
@@ -1133,15 +1132,6 @@ function extractBrandTokens(brand) {
     insight_box_style:    brand.insight_box_style    || { fill_color: null, border_color: null, corner_radius: 2 },
     visual_style:         brand.visual_style         || 'corporate',
     color_scheme_name:    brand.color_scheme_name    || '',
-    logo_asset:           primaryLogo ? {
-      name:        primaryLogo.name || 'logo',
-      mime_type:   primaryLogo.mime_type || 'image/png',
-      width_px:    primaryLogo.width_px || 0,
-      height_px:   primaryLogo.height_px || 0
-      // base64 intentionally excluded — large; logo rendering uses brand.primary_logo directly
-    } : null,
-    logo_local_ref:       brand.primary_logo_local_ref || '',
-    logo_position:        brand.logo_position        || 'top-right',
     spacing_notes:        brand.spacing_notes        || '',
     uses_template:        brand.uses_template        || false,
     // Compact layout map: name → { title_placeholder, body_placeholder, ph_count, content_areas, usage_guidance }
@@ -1190,8 +1180,7 @@ function buildBrandBrief(brand) {
         '\n- Title/divider slides: text only on title_block/subtitle_block — omit x/y/w/h, set layout_mode:true' +
         '\n- Content slides with selected_layout_name: LAYOUT MODE — set layout_mode:true, zone.frame:null; do NOT set placeholder_idx (pipeline assigns from layout content_areas)' +
         '\n- Content slides without selected_layout_name: SCRATCH MODE — compute all coordinates from layout_hint'
-      : '\n- SCRATCH MODE: compute all coordinates; specify background, footer, logo in global_elements') +
-    '\n\nLogo policy: Use the provided logo asset when available and keep it inside safe margins'
+      : '\n- SCRATCH MODE: compute all coordinates; specify background and footer in global_elements')
 }
 
 
@@ -1341,9 +1330,6 @@ function validateDesignedSlide(slide) {
     })
   })
 
-  if (slide.global_elements?.logo?.show && !slide.global_elements.logo.image_base64) {
-    issues.push('logo missing image_base64')
-  }
 
   return issues
 }
@@ -1637,8 +1623,12 @@ function enforceArtifactBounds(zone) {
     }
 
     if (a.type === 'cards') {
-      // Always use the zone's inner bounds as the authoritative container — LLM-output container is unreliable
-      const container = inner
+      // Use the artifact's own x/y/w/h as the authoritative container (respects allocated position/size
+      // within the zone), clamped within zone inner bounds. Ignore a.container — LLM sets it inconsistently.
+      const artBounds = (a.x != null && a.y != null && a.w != null && a.h != null)
+        ? { x: a.x, y: a.y, w: a.w, h: a.h }
+        : inner
+      const container = rectWithin(artBounds, inner)
       a.container = container
       // Always recompute card_frames to fill the full container — never trust LLM-output frames
       const _cards    = a.cards || []
@@ -1720,47 +1710,6 @@ function enforceArtifactBounds(zone) {
   return zone
 }
 
-function buildLogoElement(slide, brand) {
-  const logo = brand.primary_logo || ((brand.logos || [])[0] || null)
-  if (!logo || !logo.base64) return null
-
-  const canvas = slide.canvas || {}
-  const margin = canvas.margin || {}
-  const slideW = canvas.width_in || brand.slide_width_inches || 13.33
-  const slideH = canvas.height_in || brand.slide_height_inches || 7.5
-  const maxW = slide.slide_type === 'title' ? 1.8 : 1.35
-  const maxH = slide.slide_type === 'title' ? 0.7 : 0.45
-  const ratio = (logo.width_px && logo.height_px) ? (logo.width_px / Math.max(logo.height_px, 1)) : 3
-  let w = maxW
-  let h = r2(w / Math.max(ratio, 0.5))
-  if (h > maxH) {
-    h = maxH
-    w = r2(h * Math.max(ratio, 0.5))
-  }
-
-  const pos = (brand.logo_position || 'top-right').toLowerCase()
-  const left = margin.left || 0.4
-  const right = slideW - (margin.right || 0.4) - w
-  const top = margin.top || 0.15
-  const bottom = slideH - (margin.bottom || 0.3) - h
-
-  let x = right
-  let y = top
-  if (pos.includes('left')) x = left
-  if (pos.includes('bottom')) y = bottom
-  if (pos.includes('center')) x = r2((slideW - w) / 2)
-
-  return {
-    show: true,
-    x: r2(x),
-    y: r2(y),
-    w: r2(w),
-    h: r2(h),
-    image_base64: logo.base64,
-    image_mime_type: logo.mime_type || 'image/png',
-    preserve_aspect_ratio: true
-  }
-}
 
 function applyBrandGuidelineOverrides(slide, manifestSlide, brand) {
   if (!slide || !brand) return slide
@@ -1785,18 +1734,6 @@ function applyBrandGuidelineOverrides(slide, manifestSlide, brand) {
       normalized.subtitle_block.text = normalized.subtitle_block.text || manifestSlide.subtitle
     }
     return normalized
-  }
-
-  // Scratch mode: apply full bounds enforcement
-  if (!brand.uses_template) {
-    const logo = buildLogoElement(normalized, brand)
-    if (logo) {
-      normalized.global_elements.logo = logo
-      const tb = normalized.title_block
-      if (tb && tb.y < logo.y + logo.h + 0.1 && tb.x < logo.x + logo.w) {
-        tb.w = r2(Math.max(1.5, Math.min(tb.w || (logo.x - tb.x), logo.x - tb.x - 0.18)))
-      }
-    }
   }
 
   const slideW = normalized.canvas?.width_in || brand.slide_width_inches || 13.33
@@ -4897,9 +4834,7 @@ function flattenToBlocks(slideSpec, brandTokens) {
   const ge = slideSpec.global_elements || {}
 
   // Logo is intentionally not included in blocks[]:
-  // - Template mode: the master layout carries the logo automatically.
-  // - Scratch mode: logo is rendered from global_elements.logo directly (not via blocks[]).
-  // render_blocks() skips 'image' block_type in both modes anyway.
+  // Logo is not rendered — template mode always active; master layout carries logo automatically.
 
   if (ge.footer && ge.footer.text) {
     const ft = ge.footer

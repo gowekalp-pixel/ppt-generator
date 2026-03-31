@@ -2870,32 +2870,71 @@ def _shift_blocks_for_title_gap(slide, blocks, use_template):
     if not title_block:
         return blocks
 
-    EMU        = 914400.0
-    MIN_GAP_IN = 2 / 72.0   # 2 points ≈ 0.028" — minimum breathing room
+    EMU = 914400.0
+    # Finalized contract uses 2px, not 2pt. Assume standard Office/render DPI.
+    MIN_GAP_IN = 2 / 96.0
 
-    def _ph_bottom(ph_collection, idx):
-        """Return (top + height) in inches for the placeholder at idx, or None."""
+    def _find_block(btype):
+        return next(
+            (b for b in blocks if b.get('block_type') == btype and b.get('text')),
+            None
+        )
+
+    def _placeholder_metrics(idx):
+        """Return placeholder top/width/bottom in inches for idx, or None."""
         try:
-            for ph in ph_collection:
+            for ph in slide.placeholders:
                 if ph.placeholder_format.idx == idx:
-                    return (ph.top + ph.height) / EMU
+                    return {
+                        'top': ph.top / EMU,
+                        'width': ph.width / EMU,
+                        'bottom': (ph.top + ph.height) / EMU
+                    }
         except Exception:
             pass
         return None
 
-    # Title placeholder bottom (idx 0)
-    header_bottom = _ph_bottom(slide.placeholders, 0)
-    if header_bottom is None:
+    def _estimated_text_bottom(idx, block, default_font_size):
+        """
+        Estimate the actual rendered text bottom using the placeholder width and
+        the placed text. This follows the agreed contract more closely than
+        using the raw placeholder frame bottom, which ignores wrapped title height.
+        """
+        if not block or not block.get('text'):
+            return None
+        ph = _placeholder_metrics(idx)
+        if not ph:
+            return None
+        font_size = int(block.get('font_size') or default_font_size or 18)
+        lines = estimate_wrapped_lines(
+            block.get('text', ''),
+            max(0.5, ph['width']),
+            font_size
+        )
+        line_h = (font_size / 72.0) * 1.25
+        text_h = max(0.22, lines * line_h + 0.06)
+        return ph['top'] + text_h
+
+    title_block = _find_block('title')
+    subtitle_block = _find_block('subtitle')
+
+    # Use estimated rendered text bottoms first; fall back to placeholder bottoms.
+    title_bottom = _estimated_text_bottom(0, title_block, 18)
+    if title_bottom is None:
+        title_ph = _placeholder_metrics(0)
+        title_bottom = title_ph['bottom'] if title_ph else None
+    if title_bottom is None:
         return blocks
 
-    # If a subtitle placeholder exists on this layout, use its bottom instead
-    sub_bottom = _ph_bottom(slide.placeholders, 1)
-    has_subtitle = any(
-        b.get('block_type') == 'subtitle' and b.get('text')
-        for b in blocks
-    )
-    if has_subtitle and sub_bottom is not None:
-        header_bottom = max(header_bottom, sub_bottom)
+    header_bottom = title_bottom
+
+    if subtitle_block:
+        subtitle_bottom = _estimated_text_bottom(1, subtitle_block, 14)
+        if subtitle_bottom is None:
+            sub_ph = _placeholder_metrics(1)
+            subtitle_bottom = sub_ph['bottom'] if sub_ph else None
+        if subtitle_bottom is not None:
+            header_bottom = max(header_bottom, subtitle_bottom)
 
     # Earliest Y of all non-header content blocks
     content_blocks = [

@@ -20,13 +20,11 @@ Your job is to:
 2. Review slide masters and linked slide layouts together, not independently
 3. For each slide layout, add a "usage_guidance" field — one sentence on when to use it
 4. Add "spacing_notes" based on the slide dimensions, master regions, and layout patterns
-5. Add "logo_position" based on layout analysis, especially title/master slides
 
 Return the enriched data as valid JSON only. Keep all existing fields exactly as-is.
 Add these new fields at the top level:
 - visual_style: string
 - spacing_notes: string
-- logo_position: string
 
 Add this field to each layout object:
 - usage_guidance: string
@@ -39,7 +37,6 @@ Return ONLY a valid JSON object with exactly these fields:
 {
   "visual_style": "string — e.g. 'clean corporate', 'bold financial', 'minimal consulting'",
   "spacing_notes": "string — margin and padding conventions derived from placeholder positions",
-  "logo_position": "string — 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left'",
   "typography_hierarchy": {
     "title_size_pt": number,
     "subtitle_size_pt": number,
@@ -81,21 +78,6 @@ Return ONLY a valid JSON array. For each input layout return:
 }
 Keep layout names exactly unchanged. No markdown. No explanation.`
 
-function cachePrimaryLogoLocally(primaryLogo) {
-  if (!primaryLogo || !primaryLogo.base64) return null
-  const localRef = 'brand-logo-' + Date.now()
-  try {
-    localStorage.setItem(localRef, JSON.stringify({
-      name: primaryLogo.name || 'logo',
-      mime_type: primaryLogo.mime_type || 'image/png',
-      base64: primaryLogo.base64
-    }))
-    return localRef
-  } catch (e) {
-    console.warn('Agent 2 — could not cache logo locally:', e.message)
-    return null
-  }
-}
 
 function buildLayoutBlueprints(layouts) {
   return (layouts || []).map(l => ({
@@ -140,13 +122,6 @@ function summarizeForClaudeEnrichment(extracted) {
     title_font: d.title_font || {},
     body_font: d.body_font || {},
     caption_font: d.caption_font || {},
-    logo_candidates: (d.logos || []).slice(0, 3).map(l => ({
-      name: l.name || '',
-      width_px: l.width_px || 0,
-      height_px: l.height_px || 0,
-      usage_score: l.usage_score || 0,
-      score: l.score || 0
-    })),
     slide_masters: (d.slide_masters || []).slice(0, 6).map(m => ({
       name: m.name || '',
       background_color: m.background_color || null,
@@ -205,7 +180,6 @@ async function enrichAgent2InBatches(extracted) {
       title_font: summary.title_font,
       body_font: summary.body_font,
       caption_font: summary.caption_font,
-      logo_candidates: summary.logo_candidates,
       slide_masters: summary.slide_masters.map(m => ({
         name: m.name,
         background_color: m.background_color,
@@ -300,7 +274,6 @@ Extract ALL design rules and return as a single valid JSON object with these exa
   "slide_height_inches": 7.5,
   "visual_style": "corporate",
   "spacing_notes": "0.5 inch margins",
-  "logo_position": "top-right",
   "slide_layouts": [
     { "name": "Title slide", "structure": "Full-page title", "usage_guidance": "Use for opening" }
   ]
@@ -531,9 +504,6 @@ function buildRulebook(data) {
     title_placeholder: m.title_placeholder || null,
     body_placeholder: m.body_placeholder || null
   }))
-  const primaryLogo = d.primary_logo || ((d.logos || [])[0] || null)
-  const localLogoRef = cachePrimaryLogoLocally(primaryLogo)
-
   // Build distinct chart color sequence — use enriched sequence if available,
   // otherwise fall back to accent1–6 from all_colors, ensuring 6 distinct entries
   const allC = d.all_colors || {}
@@ -579,10 +549,6 @@ function buildRulebook(data) {
     slide_masters:        slideMasters,
     layout_blueprints:    buildLayoutBlueprints(layouts),
     master_blueprints:    buildMasterBlueprints(slideMasters),
-    logos:                d.logos             || [],
-    primary_logo:         primaryLogo,
-    primary_logo_local_ref: localLogoRef,
-    logo_position:        d.logo_position     || 'top-right',
     spacing_notes:        d.spacing_notes     || '0.5 inch margins',
     extraction_source:    d.source            || 'agent2',
     // True when the brand was extracted from a real PPTX master.
