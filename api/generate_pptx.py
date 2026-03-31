@@ -1170,21 +1170,25 @@ def _render_custom_chart_legend(slide, legend_box, font_family, font_size_pt, co
 
 
 def render_group_pie(slide, x, y, w, h, categories, series_data, series_styles,
-                     chart_palette, show_labels, label_size, accent_color, body_font):
+                     chart_palette, show_labels, label_size, accent_color, body_font,
+                     body_color='#444444'):
     """Render N individual pie charts side-by-side in a horizontal group.
 
     x, y, w, h       — bounding box AFTER legend space has been reserved above
     categories        — shared slice labels (same for every pie)
-    series_data       — one entry per entity/pie: {'name': str, 'values': [float,...]}
+    series_data       — one entry per entity/pie: {'name': str, 'series_total': str, 'values': [float,...]}
     series_styles     — one entry per SLICE (category): {'fill_color': hex, ...}
-    accent_color      — brand accent used for entity labels below each pie
+    accent_color      — brand accent used for entity name labels below each pie
     body_font         — font family for entity labels
+    body_color        — secondary text color used for series_total sub-labels
     """
     n_pies = len(series_data)
     if n_pies == 0 or not categories:
         return
 
-    ENTITY_LABEL_H   = 0.28   # height of entity label text box below each pie
+    # Determine whether any series carries a series_total sub-label
+    has_any_total   = any(str(s.get('series_total') or '').strip() for s in series_data)
+    ENTITY_LABEL_H  = 0.44 if has_any_total else 0.28   # taller when sub-label present
     ENTITY_LABEL_GAP = 0.05   # gap between pie bottom and label top
 
     pie_col_w = w / n_pies                       # width allocated to each pie column
@@ -1299,14 +1303,35 @@ def render_group_pie(slide, x, y, w, h, categories, series_data, series_styles,
             print(f'render_group_pie: error rendering pie {i} ({entity_name}):', e)
 
         # Entity label below the pie — centre-aligned, brand accent colour
-        label_y = y + pie_area_h + ENTITY_LABEL_GAP
-        add_text_box(
-            slide,
-            col_left, label_y, pie_col_w, ENTITY_LABEL_H,
-            entity_name,
-            body_font, 10, True, accent_color,
-            'center', 'middle'
-        )
+        label_y      = y + pie_area_h + ENTITY_LABEL_GAP
+        series_total = str(ser.get('series_total') or '').strip()
+
+        if series_total:
+            # Two-line block: entity name (bold, accent) + series_total (regular, body)
+            NAME_H  = 0.24
+            TOTAL_H = 0.18
+            add_text_box(
+                slide,
+                col_left, label_y, pie_col_w, NAME_H,
+                entity_name,
+                body_font, 10, True, accent_color,
+                'center', 'middle'
+            )
+            add_text_box(
+                slide,
+                col_left, label_y + NAME_H, pie_col_w, TOTAL_H,
+                series_total,
+                body_font, 8, False, body_color,
+                'center', 'top'
+            )
+        else:
+            add_text_box(
+                slide,
+                col_left, label_y, pie_col_w, ENTITY_LABEL_H,
+                entity_name,
+                body_font, 10, True, accent_color,
+                'center', 'middle'
+            )
 
 
 def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, slide_h=7.5):
@@ -1435,12 +1460,13 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
             None
         ) or bt.get('body_color') or bt.get('primary_color') or '#1A1A1A'
         body_font    = cs.get('label_font_family') or bt.get('body_font_family', 'Arial')
+        body_color   = bt.get('body_color') or bt.get('secondary_color') or '#444444'
         render_group_pie(
             slide,
             chart_x, chart_y, chart_w, chart_h,
             categories, series_data, series_styles,
             chart_palette, show_labels, max_chart_label_size,
-            accent_color, body_font
+            accent_color, body_font, body_color
         )
         return
 
@@ -1596,7 +1622,8 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
     except Exception:
         pass
 
-    # Pie: color each slice individually
+    # Pie: color each slice individually and rebuild dLbls via raw XML so
+    # Outside End positioning is honored reliably by PowerPoint.
     if chart_type_str == 'pie':
         try:
             for ser_obj in chart.series:
@@ -1610,6 +1637,68 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
                         point_obj.format.fill.fore_color.rgb = hex_to_rgb(c_hex)
         except Exception:
             pass
+
+        if show_labels:
+            try:
+                pie_label_color = next(
+                    (s.get('data_label_color') for s in series_styles if s.get('data_label_color')),
+                    None
+                ) or bt.get('body_color') or bt.get('primary_color') or '#1A1A1A'
+
+                for si, ser_obj in enumerate(chart.series):
+                    ser_el = ser_obj._element
+                    values = []
+                    if si < len(series_data):
+                        values = [
+                            float(v) if v is not None else 0.0
+                            for v in (series_data[si].get('values') or [])
+                        ]
+                    while len(values) < len(categories):
+                        values.append(0.0)
+                    values = values[:len(categories)]
+
+                    for existing in ser_el.findall(nsmap.qn('c:dLbls')):
+                        ser_el.remove(existing)
+
+                    dLbls_el = etree.Element(nsmap.qn('c:dLbls'))
+
+                    for pi, val in enumerate(values):
+                        if val == 0.0:
+                            dLbl = etree.SubElement(dLbls_el, nsmap.qn('c:dLbl'))
+                            etree.SubElement(dLbl, nsmap.qn('c:idx')).set('val', str(pi))
+                            etree.SubElement(dLbl, nsmap.qn('c:delete')).set('val', '1')
+
+                    numFmt = etree.SubElement(dLbls_el, nsmap.qn('c:numFmt'))
+                    numFmt.set('formatCode', '0%')
+                    numFmt.set('sourceLinked', '0')
+
+                    txPr = etree.SubElement(dLbls_el, nsmap.qn('c:txPr'))
+                    etree.SubElement(txPr, nsmap.qn('a:bodyPr'))
+                    etree.SubElement(txPr, nsmap.qn('a:lstStyle'))
+                    p_el = etree.SubElement(txPr, nsmap.qn('a:p'))
+                    pPr_el = etree.SubElement(p_el, nsmap.qn('a:pPr'))
+                    defRPr = etree.SubElement(pPr_el, nsmap.qn('a:defRPr'))
+                    defRPr.set('sz', str(int(max(7, max_chart_label_size) * 100)))
+                    solidFill = etree.SubElement(defRPr, nsmap.qn('a:solidFill'))
+                    srgbClr = etree.SubElement(solidFill, nsmap.qn('a:srgbClr'))
+                    srgbClr.set('val', pie_label_color.lstrip('#'))
+
+                    etree.SubElement(dLbls_el, nsmap.qn('c:dLblPos')).set('val', 'outEnd')
+                    etree.SubElement(dLbls_el, nsmap.qn('c:showLdrLines')).set('val', '1')
+                    etree.SubElement(dLbls_el, nsmap.qn('c:showLegendKey')).set('val', '0')
+                    etree.SubElement(dLbls_el, nsmap.qn('c:showVal')).set('val', '0')
+                    etree.SubElement(dLbls_el, nsmap.qn('c:showCatName')).set('val', '0')
+                    etree.SubElement(dLbls_el, nsmap.qn('c:showSerName')).set('val', '0')
+                    etree.SubElement(dLbls_el, nsmap.qn('c:showPercent')).set('val', '1')
+                    etree.SubElement(dLbls_el, nsmap.qn('c:showBubbleSize')).set('val', '0')
+
+                    cat_el = ser_el.find(nsmap.qn('c:cat'))
+                    if cat_el is not None:
+                        ser_el.insert(list(ser_el).index(cat_el), dLbls_el)
+                    else:
+                        ser_el.append(dLbls_el)
+            except Exception as e:
+                print(f'render_chart pie data label XML error: {e}')
 
     # Axis font sizes + category label rotation for many categories
     try:
@@ -2882,12 +2971,6 @@ def _shift_blocks_for_title_gap(slide, blocks, use_template):
     # Finalized contract uses 2px, not 2pt. Assume standard Office/render DPI.
     MIN_GAP_IN = 32 / 96.0
 
-    def _find_block(btype):
-        return next(
-            (b for b in blocks if b.get('block_type') == btype and b.get('text')),
-            None
-        )
-
     def _placeholder_metrics(idx):
         """Return placeholder top/width/bottom in inches for idx, or None."""
         try:
@@ -2902,47 +2985,25 @@ def _shift_blocks_for_title_gap(slide, blocks, use_template):
             pass
         return None
 
-    def _estimated_text_bottom(idx, block, default_font_size):
-        """
-        Estimate the actual rendered text bottom using the placeholder width and
-        the placed text. This follows the agreed contract more closely than
-        using the raw placeholder frame bottom, which ignores wrapped title height.
-        """
-        if not block or not block.get('text'):
-            return None
-        ph = _placeholder_metrics(idx)
-        if not ph:
-            return None
-        font_size = int(block.get('font_size') or default_font_size or 18)
-        lines = estimate_wrapped_lines(
-            block.get('text', ''),
-            max(0.5, ph['width']),
-            font_size
-        )
-        line_h = (font_size / 72.0) * 1.25
-        text_h = max(0.22, lines * line_h + 0.06)
-        return ph['top'] + text_h
+    # _compact_title_placeholder (called via render_block_title → place_in_placeholder
+    # with compact_title=True) already resized title_ph.height to reflect the actual
+    # wrapped text height before this function runs.  Reading ph['bottom'] directly
+    # gives the post-compact placeholder bottom — no separate estimation needed.
+    subtitle_block = next(
+        (b for b in blocks if b.get('block_type') == 'subtitle' and b.get('text')),
+        None
+    )
 
-    title_block = _find_block('title')
-    subtitle_block = _find_block('subtitle')
-
-    # Use estimated rendered text bottoms first; fall back to placeholder bottoms.
-    title_bottom = _estimated_text_bottom(0, title_block, 18)
-    if title_bottom is None:
-        title_ph = _placeholder_metrics(0)
-        title_bottom = title_ph['bottom'] if title_ph else None
-    if title_bottom is None:
+    title_ph = _placeholder_metrics(0)
+    if title_ph is None:
         return blocks
 
-    header_bottom = title_bottom
+    header_bottom = title_ph['bottom']
 
     if subtitle_block:
-        subtitle_bottom = _estimated_text_bottom(1, subtitle_block, 14)
-        if subtitle_bottom is None:
-            sub_ph = _placeholder_metrics(1)
-            subtitle_bottom = sub_ph['bottom'] if sub_ph else None
-        if subtitle_bottom is not None:
-            header_bottom = max(header_bottom, subtitle_bottom)
+        sub_ph = _placeholder_metrics(1)
+        if sub_ph:
+            header_bottom = max(header_bottom, sub_ph['bottom'])
 
     # Earliest Y of all non-header content blocks
     content_blocks = [
@@ -3062,7 +3123,7 @@ def render_block_title(slide, block, bt, use_template):
         ph_idx = 0 if btype == 'title' else 1
         place_in_placeholder(slide, ph_idx, text, block, bt,
                              preserve_template_style=True,
-                             compact_title=False)
+                             compact_title=(ph_idx == 0))
         return
     # Scratch mode — render as a positioned text box
     add_text_box(slide,

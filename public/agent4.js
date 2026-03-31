@@ -1253,9 +1253,9 @@ group_pie chart — use this schema instead when chart_type is "group_pie":
     "chart_header": "the one-line insight the group proves",
     "categories": ["Slice A", "Slice B", "Slice C"],  ← shared slice labels for ALL pies (max 7)
     "series": [                                        ← one entry per entity (pie); max 8 entries
-      { "name": "Entity 1", "values": [60, 25, 15], "unit": "percent" },
-      { "name": "Entity 2", "values": [70, 20, 10], "unit": "percent" },
-      { "name": "Entity 3", "values": [50, 30, 20], "unit": "percent" }
+      { "name": "Entity 1", "series_total": "₹39.7L", "values": [60, 25, 15], "unit": "percent" },
+      { "name": "Entity 2", "series_total": "₹21.8L", "values": [70, 20, 10], "unit": "percent" },
+      { "name": "Entity 3", "series_total": "₹2.0L",  "values": [50, 30, 20], "unit": "percent" }
     ],
     "show_legend": true,                               ← single shared legend above all pies
     "show_data_labels": true                           ← percentage labels on each slice
@@ -1263,6 +1263,11 @@ group_pie chart — use this schema instead when chart_type is "group_pie":
   group_pie rules:
   - categories[] = the slice breakdown (same for all pies); max 7 entries
   - series[] = one entry per entity; series[i].name becomes the label BELOW pie i; max 8 entries
+  - series[i].series_total (optional): pre-formatted absolute total displayed as a sub-label
+    directly below the entity name under each pie — use when entities differ materially in
+    absolute scale and the audience needs both composition and magnitude. Agent 4 must compute
+    and format this value from source data (e.g. "₹39.7L", "23%", "$4.2M") — do not leave
+    it blank or delegate calculation to Agent 5. Omit the field entirely if not meaningful.
   - Each series values[] must sum to ~100 (percentages) or represent a consistent unit
   - values[] length must equal categories[] length for every series
   - Do NOT use x_label, y_label, dual_axis, secondary_series for group_pie
@@ -2589,6 +2594,14 @@ Title and divider slides: set selected_layout_name = "" (pipeline assigns their 
 SLIDES TO WRITE — batch ${batchNum} (${batchPlan.length} slides):
 ${compactBatchPlan}
 
+SLIDE ORDER RULE (mandatory):
+Output slides in EXACTLY the order listed above. Do NOT reorder slides for any reason —
+not to put a summary first, not to follow top-down logic, not for narrative preference.
+The slide_number in your output must match the slide_number in the plan entry you are writing.
+A title slide with slide_number 1 must appear first in your JSON array, even if a summary
+or content slide follows it. The downstream renderer assembles slides positionally — any
+reordering produces a deck with the title in the wrong position.
+
 INSTRUCTIONS:
 - For each slide, first derive zones and artifacts from the message, then write the insight-led title and key_message
 - Before finalizing artifacts for a content slide, choose ONE zone_structure that matches the zone count and narrative geometry:
@@ -3455,7 +3468,10 @@ async function runAgent4(state) {
       batch.forEach(plan => allSlides.push(normaliseSlide({}, plan)))
     } else {
       batch.forEach((plan, idx) => {
-        const match = result[idx] || result.find(s => s.slide_number === plan.slide_number)
+        // slide_number match takes priority — Claude sometimes reorders slides in its output
+        // (e.g. putting the summary before the title). The positional result[idx] is only
+        // a fallback when no slide_number match exists.
+        const match = result.find(s => s.slide_number === plan.slide_number) || result[idx]
         const normalised = normaliseSlide(match || {}, plan)
         allSlides.push(normalised)
 

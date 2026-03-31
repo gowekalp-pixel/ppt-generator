@@ -642,6 +642,11 @@ GROUP PIE CHART CRITICAL: chart_type = "group_pie" renders N independent pie cha
     The legend entries come from categories[], colored by series_style[i].fill_color.
   Entity label: series[i].name is rendered BELOW each pie, center-aligned, in the brand accent color.
     Do NOT include entity names in the chart legend — they appear as labels under each pie.
+  series_total sub-label: if series[i].series_total is present and non-empty, render it as a
+    second line directly below the entity name, center-aligned under that pie.
+    Style: same horizontal alignment as the entity name; font size 1–2pt smaller than the
+    entity name; color: brand body_color or secondary text color (not accent).
+    If series[i].series_total is absent or empty, render only the entity name — no blank line.
 
   Layout size hints for group_pie:
   - group_pie with 5–8 pies: set zone w ≥ 9" (needs near-full slide width)
