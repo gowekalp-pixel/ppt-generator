@@ -1273,7 +1273,6 @@ function validateDesignedSlide(slide) {
   ])
 
   if (!slide.canvas)            issues.push('missing canvas')
-  if (!slide.brand_tokens)      issues.push('missing brand_tokens')
   if (!slide.title_block)       issues.push('missing title_block')
   if (!slide.title_block?.text) issues.push('empty title')
 
@@ -5831,7 +5830,6 @@ async function runAgent5(state) {
           .concat(normalized._render_validation_issues || [])
         const fatalFinal = finalIssues.filter(i =>
           i.includes('missing canvas') ||
-          i.includes('missing brand_tokens') ||
           i.includes('no zones') ||
           i.includes('no artifacts') ||
           i.includes('no blocks')
@@ -5879,9 +5877,24 @@ async function runAgent5(state) {
     return buildMinimalSafeSlide(manifestSlide, tokens)
   })
 
-  // Hoist brand_tokens to the top level — all slides share the same tokens,
-  // so we read from the first slide and strip brand_tokens from every slide.
-  const hoistedBrandTokens = (finalDesigned[0] || {}).brand_tokens || {}
+  // Hoist brand_tokens to the top level — derived authoritatively from the brand
+  // rulebook (same source used throughout Agent 5), not from slide output which
+  // may be absent (e.g. single-slide decks or fallback paths that skip brand_tokens).
+  const hoistedBrandTokens = {
+    title_font_family:  (tokens.title_font  || {}).family || 'Arial',
+    body_font_family:   (tokens.body_font   || {}).family || 'Arial',
+    caption_font_family:(tokens.caption_font|| {}).family || 'Arial',
+    primary_color:      (tokens.primary_colors   || [])[0] || '#1A3C8F',
+    secondary_color:    (tokens.secondary_colors || [])[0] || '#E8A020',
+    title_color:        (tokens.primary_colors   || [])[0] || '#1A3C8F',
+    body_color:         (tokens.text_colors      || [])[0] || '#111111',
+    caption_color:      '#888888',
+    accent_colors:      tokens.accent_colors        || [],
+    chart_palette:      tokens.chart_color_sequence || tokens.chart_colors || [],
+    uses_template:      tokens.uses_template        || false
+  }
+
+  // Strip brand_tokens from every slide — renderer reads from the top-level key.
   const slides = finalDesigned.map(slide => {
     if (!slide) return slide
     const out = Object.assign({}, slide)
