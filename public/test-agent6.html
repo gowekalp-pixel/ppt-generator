@@ -119,8 +119,8 @@
   <div class="card">
     <div class="card-title">Agent 5 Designed Spec JSON — Step 2</div>
 
-    <div class="hint">Paste the full JSON array from Agent 5 output (each slide has canvas, blocks[], and brand_tokens). blocks[] is the primary rendering contract — workflow artifacts are flattened to rect/text_box/line blocks with flow_direction already encoded; tables carry column_types and column_alignments; no layout recalculation is done here.</div>
-    <textarea id="spec-input" placeholder='[ { "slide_number": 1, "slide_type": "title", "canvas": { "width_in": 11.02, ... }, "blocks": [...], "brand_tokens": {...} }, ... ]'></textarea>
+    <div class="hint">Paste the full JSON object from Agent 5 output — format: <code>{ "brand_tokens": {...}, "slides": [...] }</code>. brand_tokens is hoisted once at the top level; each slide has canvas and blocks[]. blocks[] is the primary rendering contract — workflow artifacts are flattened to rect/text_box/line blocks with flow_direction already encoded; tables carry column_types and column_alignments; no layout recalculation is done here.</div>
+    <textarea id="spec-input" placeholder='{ "brand_tokens": { "primary_color": "...", ... }, "slides": [ { "slide_number": 1, "slide_type": "title", "canvas": { "width_in": 11.02, ... }, "blocks": [...] }, ... ] }'></textarea>
 
     <div class="upload-zone" id="zone-spec">
       <input type="file" accept=".json" onchange="loadSpecFile(this)">
@@ -153,8 +153,9 @@
 </div>
 
 <script>
-  let parsedSpec     = null
-  let templateB64    = null   // base64 of uploaded brand PPTX template
+  let parsedSpec        = null
+  let parsedBrandTokens = null
+  let templateB64       = null   // base64 of uploaded brand PPTX template
 
   function estimateJsonBytes(obj) {
     try { return new TextEncoder().encode(JSON.stringify(obj)).length }
@@ -215,17 +216,30 @@
     try {
       const cleaned = (raw || '').replace(/```json\s*/g,'').replace(/```\s*/g,'').trim()
       const parsed  = JSON.parse(cleaned)
-      const arr     = Array.isArray(parsed) ? parsed : [parsed]
+
+      // New format: { brand_tokens: {...}, slides: [...] }
+      let arr, bt = null
+      if (!Array.isArray(parsed) && parsed && Array.isArray(parsed.slides)) {
+        arr = parsed.slides
+        bt  = parsed.brand_tokens || null
+      } else {
+        // Legacy: plain array
+        arr = Array.isArray(parsed) ? parsed : [parsed]
+      }
+
       if (arr.length > 0 && arr[0].canvas) {
-        parsedSpec = arr
+        parsedSpec        = arr
+        parsedBrandTokens = bt
         showSummary(arr)
         document.getElementById('error-box').classList.remove('show')
       } else {
         parsedSpec = null
+        parsedBrandTokens = null
         document.getElementById('spec-summary').classList.remove('show')
       }
     } catch(e) {
       parsedSpec = null
+      parsedBrandTokens = null
       document.getElementById('spec-summary').classList.remove('show')
     }
   }
@@ -382,6 +396,7 @@
 
       const basePayload = {
         finalSpec:     renderSpec,
+        brand_tokens:  parsedBrandTokens || undefined,
         brandRulebook: slimBrandRulebookForRender(extractBrandRulebook(parsedSpec), renderSpec),
         templateB64:   null
       }
@@ -468,10 +483,10 @@
     document.getElementById('a6-status').textContent = msg || ''
   }
 
-  // Extract a minimal brandRulebook from the designed spec's brand_tokens
+  // Extract a minimal brandRulebook from the hoisted brand_tokens
   // so the backend has fallback values even without a separate rulebook upload
   function extractBrandRulebook(spec) {
-    const bt = (spec[0] || {}).brand_tokens || {}
+    const bt = parsedBrandTokens || {}
     return {
       primary_colors:    [bt.primary_color   || '#1A3C8F'],
       secondary_colors:  [bt.secondary_color || '#E8A020'],
@@ -515,7 +530,7 @@
     const out = {}
     const keep = new Set([
       'slide_number', 'slide_type', 'slide_archetype',
-      'canvas', 'brand_tokens', 'global_elements',
+      'canvas', 'global_elements',
       'layout_mode', 'selected_layout_name',
       'title', 'subtitle', 'speaker_note',
       'blocks'
@@ -545,8 +560,9 @@
   }
 
   function resetAll() {
-    parsedSpec  = null
-    templateB64 = null
+    parsedSpec        = null
+    parsedBrandTokens = null
+    templateB64       = null
     document.getElementById('spec-input').value = ''
     document.getElementById('zone-spec').classList.remove('ready')
     document.getElementById('zone-template').classList.remove('ready')
