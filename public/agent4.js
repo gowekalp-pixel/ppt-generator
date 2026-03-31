@@ -233,7 +233,7 @@ STEP 1 — ARTIFACT SELECTION
 ──────────────────────────────────────────────────────────
 
 AVAILABLE ARTIFACT TYPES:
-  chart:          bar | clustered_bar | horizontal_bar | line | area | pie | donut | combo
+  chart:          bar | clustered_bar | horizontal_bar | line | area | pie | donut | combo | group_pie
   insight_text:   standard | grouped
   cards
   workflow:       process_flow | hierarchy | decomposition | timeline
@@ -278,6 +278,8 @@ AVAILABLE ARTIFACT TYPES:
   - Portfolio mix / segmentation          → pie (≤5 seg), else bar; never cards
   - Precise multi-dimension lookup        → table
   - Independent headline KPI snapshot    → cards (only when metrics are structurally independent)
+  - Same composition compared across 2–8 entities → group_pie (each entity gets one pie; slices ≤7)
+    If entities > 8 or slices > 7 → table or clustered_bar; never group_pie
 
 ─── MESSAGE OBJECTIVE → ARTIFACT OVERRIDE ────────────────
 
@@ -321,6 +323,9 @@ AVAILABLE ARTIFACT TYPES:
   - Aging / maturity curve            → bar + insight_text or table
   - Total + status/risk buckets       → total card + pie/horizontal_bar/clustered_bar
                                         or decomposition workflow
+  - Same distribution across entities → group_pie + insight_text standard
+    (multi-zone slide: group_pie + insight_text standard ONLY)
+    (1-zone slide: group_pie + insight_text standard/grouped, or + cards, or + bar chart)
 
 ─── CHART FAMILY SELECTION RULES ─────────────────────────
 
@@ -337,6 +342,21 @@ AVAILABLE ARTIFACT TYPES:
                   Both series MUST share the same unit — if units differ: use bar with dual_axis
   combo:          dual-axis overlay (bar + line); use when two measures have different units
                   and trend comparison is the insight
+  group_pie:      multiple related pie charts — one pie per entity (e.g. industry, region, product);
+                  all pies share the same slice categories (same distribution breakdown);
+                  single shared legend above all pies; entity label below each pie centre-aligned.
+                  Use when: comparing the SAME composition across 2–8 distinct entities is the insight.
+                  HARD REJECT conditions:
+                    entities (series) < 2     → convert to single pie
+                    entities (series) > 8     → convert to table or clustered_bar
+                    slices (categories) > 7   → convert to clustered_bar
+                    slices (categories) < 2   → invalid
+                  Zone allocation: requires ≥ 50% of zone horizontal OR vertical axis.
+                  Layout direction:
+                    If 100% horizontal available → arrange pies side-by-side in a single row
+                    If 100% vertical available   → distribute pies across multiple rows
+                    If 50–80% allocation         → MAX 4 pies
+                    If > 80% allocation          → MAX 8 pies
 
   DUAL AXIS RULE (mandatory):
   If two or more series have DIFFERENT units (e.g. count vs currency, % vs volume):
@@ -518,6 +538,10 @@ FAMILY 2 — CHARTS
   area (> 6 time periods)          60%   100%    40%    65%
   waterfall (≤6 steps)             50%    80%    40%    60%
   waterfall (> 6 steps)            70%   100%    45%    65%   ⚠ waterfall_density_warning >10
+  group_pie (2–4 pies, 50–80% alloc) 50%  80%   40%    65%
+  group_pie (2–4 pies, >80% alloc) 80%   100%   40%    65%
+  group_pie (5–8 pies, >80% alloc) 80%   100%   45%    70%   ⚠ group_pie_density_warning
+  group_pie (< 50% alloc)          HARD REJECT — insufficient space; use table instead
 
 FAMILY 3 — CARDS
   cards (1 card)                  15%    35%    15%    28%
@@ -576,10 +600,15 @@ DENSITY FLAGS AND HARD REJECTS
   driver_tree_depth_warning      driver_tree > 5 levels
   table_density_warning          table > 6 col OR > 6 row
   prioritization_length_warning  prioritization > 8 rows
+  group_pie_density_warning      group_pie > 4 pies in a zone with < 80% allocation
 
   Hard rejects (block execution — resolve before proceeding):
   pie > 5 segments               → convert to horizontal_bar automatically
   donut > 5 segments             → convert to horizontal_bar automatically
+  group_pie entities < 2         → convert to single pie automatically
+  group_pie entities > 8         → convert to table or clustered_bar automatically
+  group_pie slices > 7           → convert to clustered_bar automatically
+  group_pie zone allocation < 50% → reject; use table instead
   insight_text > 6 points
     in a PRIMARY zone            → restructure or split the slide
 
@@ -607,6 +636,8 @@ ENVELOPE CHECK PROCEDURE
   cards (4+)                        no second artifact permitted
   insight_text grouped              cards (1–3) or simple chart ≤6 cat
   insight_text standard             cards (1–2) only
+  group_pie (multi-zone slide)      insight_text standard ONLY
+  group_pie (1-zone slide)          insight_text standard, insight_text grouped, cards, or bar chart
 
 ──────────────────────────────────────────────────────────
 STEP 3 — ARTIFACT SEQUENCE COHERENCE CHECK
@@ -704,7 +735,8 @@ STEP 1 — CHARACTERISE THE CONTENT STRUCTURE
 
   1a. Classify artifacts:
       wide_artifacts     = artifacts with MIN_W ≥ 70% (process_flow, timeline, wide charts > 6 cat,
-                           decomposition L→R > 3 nodes, cards ≥ 4)
+                           decomposition L→R > 3 nodes, cards ≥ 4,
+                           group_pie with ≥ 5 pies)
       tall_artifacts     = artifacts with MIN_H ≥ 55% (hierarchy, vertical decomposition,
                            horizontal_bar > 6 rows, driver_tree, matrix, prioritization > 5 rows)
       reasoning_artifacts = matrix | driver_tree | prioritization
@@ -773,6 +805,23 @@ STEP 2 — APPLY OVERRIDE RULES (check every artifact in order)
       Trigger: slide format is portrait or 4:3, OR width:height ratio < 1.5
       → ZW-series codes are PROHIBITED
       → Convert any ZW selection to the ZS equivalent
+
+  O8. GROUP PIE
+      Trigger: group_pie with ≥ 5 pies
+      → Zone must occupy ≥ 80% of slide width (horizontal layout) OR ≥ 80% height (vertical layout)
+      → content_structure forced to WIDE_DOMINANT (horizontal) or TALL_DOMINANT (vertical)
+      → Companion insight_text MUST be in a separate stacked zone, not side-by-side with group_pie
+
+      Trigger: group_pie with 2–4 pies
+      → Zone must occupy ≥ 50% of slide width or height
+      → Companion artifact may share the same zone or an adjacent zone
+
+      Layout direction rule:
+      → If slide width ≥ 1.5× height (widescreen): prefer horizontal arrangement (pies in one row)
+      → If slide height ≥ slide width: prefer vertical arrangement (pies in multiple rows)
+
+      SELF-CHECK: If a group_pie with ≥ 5 pies is allocated less than 80% of the slide axis
+      → STOP. Increase zone allocation OR reduce pie count to ≤ 4.
 
 STEP 3 — SELECT LAYOUT
 
@@ -974,7 +1023,7 @@ insight_text:
 chart:
   {
     "type": "chart",
-    "chart_type": "bar" | "line" | "pie" | "waterfall" | "clustered_bar" | "horizontal_bar",
+    "chart_type": "bar" | "line" | "pie" | "waterfall" | "clustered_bar" | "horizontal_bar" | "group_pie",
     "chart_decision": "one line: why this chart type was chosen",
     "chart_title": "",                                 ← leave empty when layout has header placeholder
     "chart_header": "the one-line insight the chart proves",
@@ -992,6 +1041,30 @@ chart:
   }
   chart_title is rendered INSIDE the plot area; chart_header is the zone heading.
   When a layout header placeholder exists, set chart_title: "" — never duplicate in both.
+
+group_pie chart — use this schema instead when chart_type is "group_pie":
+  {
+    "type": "chart",
+    "chart_type": "group_pie",
+    "chart_decision": "one line: why group_pie was chosen over table or clustered_bar",
+    "chart_title": "",
+    "chart_header": "the one-line insight the group proves",
+    "categories": ["Slice A", "Slice B", "Slice C"],  ← shared slice labels for ALL pies (max 7)
+    "series": [                                        ← one entry per entity (pie); max 8 entries
+      { "name": "Entity 1", "values": [60, 25, 15], "unit": "percent" },
+      { "name": "Entity 2", "values": [70, 20, 10], "unit": "percent" },
+      { "name": "Entity 3", "values": [50, 30, 20], "unit": "percent" }
+    ],
+    "show_legend": true,                               ← single shared legend above all pies
+    "show_data_labels": true                           ← percentage labels on each slice
+  }
+  group_pie rules:
+  - categories[] = the slice breakdown (same for all pies); max 7 entries
+  - series[] = one entry per entity; series[i].name becomes the label BELOW pie i; max 8 entries
+  - Each series values[] must sum to ~100 (percentages) or represent a consistent unit
+  - values[] length must equal categories[] length for every series
+  - Do NOT use x_label, y_label, dual_axis, secondary_series for group_pie
+  - Legend is always shared and rendered once above the group, below the chart_header
 
 cards:
   {
@@ -1104,6 +1177,12 @@ GATE 3 — ARTIFACT HARD CONSTRAINTS
   [ ] No cards used for part-of-whole, portfolio mix, or mutually exclusive category data
   [ ] No cards used for status buckets, risk categories, or total-plus-components structures
   [ ] No cards-only slide — cards must be accompanied by chart/workflow/table/insight_text
+  [ ] Every group_pie has 2–8 series (entities / pies)
+  [ ] Every group_pie has ≤ 7 categories (slices) — HARD MAX 7
+  [ ] Every group_pie series values[] length equals categories[] length
+  [ ] Every group_pie is allocated ≥ 50% of the zone axis (width or height)
+  [ ] group_pie with ≥ 5 pies is allocated ≥ 80% of the zone axis
+  [ ] group_pie paired with insight_text standard only (in multi-zone slides)
   [ ] matrix / driver_tree / prioritization appear only in PRIMARY zones
   [ ] matrix / driver_tree / prioritization accompanied only by insight_text
   [ ] Every left_to_right / timeline workflow spans FULL HORIZONTAL WIDTH
@@ -1330,6 +1409,24 @@ function validateArtifact(artifact) {
   if (t === 'chart') {
     const cats = artifact.categories || []
     const series = artifact.series || []
+    const chartType = (artifact.chart_type || '').toLowerCase()
+
+    // group_pie has its own validation rules
+    if (chartType === 'group_pie') {
+      if (cats.length < 2) return { valid: false, reason: 'group_pie needs 2+ categories (slices), got ' + cats.length }
+      if (cats.length > 7) return { valid: false, reason: 'group_pie exceeds HARD MAX 7 slices, got ' + cats.length + ' — convert to clustered_bar' }
+      if (series.length < 2) return { valid: false, reason: 'group_pie needs 2+ series (entities/pies), got ' + series.length + ' — convert to single pie' }
+      if (series.length > 8) return { valid: false, reason: 'group_pie exceeds HARD MAX 8 entities, got ' + series.length + ' — convert to table or clustered_bar' }
+      for (const s of series) {
+        if ((s.values || []).length !== cats.length) {
+          return { valid: false, reason: 'group_pie series "' + s.name + '" values count mismatch: ' + (s.values||[]).length + ' vs ' + cats.length }
+        }
+        if ((s.values || []).every(v => v === 0)) {
+          return { valid: false, reason: 'group_pie series "' + s.name + '" has all-zero values' }
+        }
+      }
+      return { valid: true }
+    }
 
     // Need 2+ categories (3+ ideally but 2 is minimum after normalisation)
     if (cats.length < 2) return { valid: false, reason: 'chart needs 2+ categories, got ' + cats.length }
@@ -1999,8 +2096,19 @@ function normaliseArtifact(a) {
     a.series = a.series.map(s => ({
       name:   s.name   || '',
       values: (s.values || []).map(v => typeof v === 'number' ? v : parseFloat(String(v).replace(/[^0-9.-]/g,'')) || 0),
+      unit:   s.unit   || (a.chart_type === 'group_pie' ? 'percent' : undefined),
       types:  s.types  || null
     }))
+
+    // group_pie auto-fixes
+    if (a.chart_type === 'group_pie') {
+      // Too few entities → downgrade to single pie
+      if (a.series.length < 2) a.chart_type = 'pie'
+      // Too many entities → fallback to bar (data integrity preserved; flag in conflict log)
+      else if (a.series.length > 8) a.chart_type = 'bar'
+      // Too many slices → convert to clustered_bar
+      else if (a.categories.length > 7) a.chart_type = 'clustered_bar'
+    }
 
     // Auto-fix clustered_bar with 1 series
     if (a.chart_type === 'clustered_bar' && a.series.length < 2) {
@@ -2386,6 +2494,12 @@ function pickBestLayout(slide, layoutNames) {
     const cats = Array.isArray(a.categories) ? a.categories.length : 0
     return t === 'chart' && chartType === 'horizontal_bar' && cats > 6
   })
+  const hasLargeGroupPie = artifacts.some(a => {
+    const t = (a.type || '').toLowerCase()
+    const chartType = (a.chart_type || '').toLowerCase()
+    const pies = Array.isArray(a.series) ? a.series.length : 0
+    return t === 'chart' && chartType === 'group_pie' && pies >= 5
+  })
   const isOneZoneTwoArtifacts = zoneCount === 1 && artifactCount === 2
   const isTwoZoneFourArtifacts = zoneCount === 2 && artifactCount === 4
 
@@ -2397,7 +2511,7 @@ function pickBestLayout(slide, layoutNames) {
     return ''
   }
 
-  if (hasWideWorkflow || hasReasoningArtifact || hasWideChart) {
+  if (hasWideWorkflow || hasReasoningArtifact || hasWideChart || hasLargeGroupPie) {
     const hit = findByPatterns([
       /body.?text|1\s*across|single|1\s*col/i,
       /title\s+and\s+content/i
@@ -2497,6 +2611,16 @@ function layoutConflictsWithSlide(slide, layoutName) {
   }
 
   if (isTwoZoneFourArtifacts && /3\s*column|3\s*col|1.?on.?2|2.?on.?1/i.test(name)) {
+    return true
+  }
+
+  // group_pie with ≥ 5 pies needs a wide single-column layout — narrow multi-col layouts conflict
+  const hasLargeGroupPieConflict = artifacts.some(a => {
+    return (a.type || '').toLowerCase() === 'chart' &&
+           (a.chart_type || '').toLowerCase() === 'group_pie' &&
+           (Array.isArray(a.series) ? a.series.length : 0) >= 5
+  })
+  if (hasLargeGroupPieConflict && /3\s*column|3\s*col|4\s*block|2.?on.?2|3\s*across|4\s*across|2\s*across|1.?on.?1/i.test(name)) {
     return true
   }
 
@@ -2815,6 +2939,24 @@ function pruneAgent4SlideForOutput(slide) {
       }
     }
     if (type === 'chart') {
+      const chartType = (artifact.chart_type || 'bar').toLowerCase()
+      if (chartType === 'group_pie') {
+        return {
+          type: 'chart',
+          chart_type: 'group_pie',
+          chart_title: artifact.chart_title || '',
+          chart_header: artifact.chart_header || '',
+          categories: Array.isArray(artifact.categories) ? artifact.categories : [],
+          series: Array.isArray(artifact.series) ? artifact.series.map(s => ({
+            name:   s.name   || '',
+            values: Array.isArray(s.values) ? s.values : [],
+            unit:   s.unit   || 'percent'
+          })) : [],
+          show_legend: artifact.show_legend !== false,
+          show_data_labels: artifact.show_data_labels !== false,
+          ...coverage
+        }
+      }
       return {
         type: 'chart',
         chart_type: artifact.chart_type || 'bar',

@@ -1002,7 +1002,8 @@ def _estimate_legend_text_width(label, font_size_pt):
 
 def _chart_legend_entries(chart_type_str, categories, series_data, series_styles, chart_palette, allow_fallback):
     entries = []
-    if chart_type_str == 'pie':
+    # pie, donut, and group_pie: legend entries represent SLICES (categories), colored per series_style[i]
+    if chart_type_str in ('pie', 'donut', 'group_pie'):
         for i, category in enumerate(categories or []):
             style = series_styles[i] if i < len(series_styles) else {}
             color = style.get('fill_color')
@@ -1168,6 +1169,108 @@ def _render_custom_chart_legend(slide, legend_box, font_family, font_size_pt, co
         cur_y += legend_box['line_h'] + legend_box['row_gap']
 
 
+def render_group_pie(slide, x, y, w, h, categories, series_data, series_styles,
+                     chart_palette, show_labels, label_size, accent_color, body_font):
+    """Render N individual pie charts side-by-side in a horizontal group.
+
+    x, y, w, h       — bounding box AFTER legend space has been reserved above
+    categories        — shared slice labels (same for every pie)
+    series_data       — one entry per entity/pie: {'name': str, 'values': [float,...]}
+    series_styles     — one entry per SLICE (category): {'fill_color': hex, ...}
+    accent_color      — brand accent used for entity labels below each pie
+    body_font         — font family for entity labels
+    """
+    n_pies = len(series_data)
+    if n_pies == 0 or not categories:
+        return
+
+    ENTITY_LABEL_H   = 0.28   # height of entity label text box below each pie
+    ENTITY_LABEL_GAP = 0.05   # gap between pie bottom and label top
+
+    pie_col_w = w / n_pies                       # width allocated to each pie column
+    pie_area_h = h - ENTITY_LABEL_H - ENTITY_LABEL_GAP  # height available for the pie circle
+    pie_size  = max(0.5, min(pie_col_w * 0.90, pie_area_h))  # square, 90% of column width
+
+    for i, ser in enumerate(series_data):
+        entity_name = str(ser.get('name') or '')
+        values = [float(v) if v is not None else 0.0 for v in (ser.get('values') or [])]
+        while len(values) < len(categories):
+            values.append(0.0)
+        values = values[:len(categories)]
+
+        # Centre the pie within its column
+        col_left    = x + i * pie_col_w
+        pie_x       = col_left + (pie_col_w - pie_size) / 2
+        pie_y       = y + max(0, (pie_area_h - pie_size) / 2)
+
+        # Build single-series ChartData for this pie
+        cd = ChartData()
+        cd.categories = [str(c) for c in categories]
+        cd.add_series(entity_name, values)
+
+        try:
+            pie_shape = slide.shapes.add_chart(
+                XL_CHART_TYPE.PIE,
+                inches(pie_x), inches(pie_y), inches(pie_size), inches(pie_size),
+                cd
+            )
+            pie_chart = pie_shape.chart
+            pie_chart.has_title  = False
+            pie_chart.has_legend = False
+
+            # Color each slice from series_styles (index = slice/category index)
+            try:
+                for ser_obj in pie_chart.series:
+                    for pi, point_obj in enumerate(ser_obj.points):
+                        c_hex = (series_styles[pi].get('fill_color')
+                                 if pi < len(series_styles) else None)
+                        if not c_hex:
+                            c_hex = chart_palette[pi % max(len(chart_palette), 1)]
+                        if c_hex:
+                            point_obj.format.fill.solid()
+                            point_obj.format.fill.fore_color.rgb = hex_to_rgb(c_hex)
+            except Exception:
+                pass
+
+            # Percentage data labels
+            if show_labels:
+                try:
+                    for ser_obj in pie_chart.series:
+                        ser_obj.data_labels.show_percentage = True
+                        ser_obj.data_labels.show_value      = False
+                        try:
+                            ser_obj.data_labels.number_format = '0%'
+                        except Exception:
+                            pass
+                        lbl_pt  = Pt(max(7, label_size))
+                        lbl_rgb = hex_to_rgb('#FFFFFF')
+                        try:
+                            ser_obj.data_labels.font.size      = lbl_pt
+                            ser_obj.data_labels.font.color.rgb = lbl_rgb
+                        except Exception:
+                            pass
+                        for lbl in ser_obj.data_labels:
+                            try:
+                                lbl.font.size      = lbl_pt
+                                lbl.font.color.rgb = lbl_rgb
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+        except Exception as e:
+            print(f'render_group_pie: error rendering pie {i} ({entity_name}):', e)
+
+        # Entity label below the pie — centre-aligned, brand accent colour
+        label_y = y + pie_area_h + ENTITY_LABEL_GAP
+        add_text_box(
+            slide,
+            col_left, label_y, pie_col_w, ENTITY_LABEL_H,
+            entity_name,
+            body_font, 10, True, accent_color,
+            'center', 'middle'
+        )
+
+
 def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, slide_h=7.5):
     """Render a chart artifact using python-pptx native charts.
 
@@ -1279,6 +1382,26 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
     (chart_x, chart_y, chart_w, chart_h), custom_legend_box = _compute_chart_legend_layout(
         float(x), float(y), float(w), float(h), resolved_legend_position, legend_entries, legend_font_size
     )
+
+    # ── group_pie: delegate to dedicated renderer, then render legend and return ──
+    if chart_type_str == 'group_pie':
+        if _effective_show_legend and custom_legend_box:
+            _render_custom_chart_legend(
+                slide, custom_legend_box,
+                cs.get('legend_font_family', bt.get('body_font_family', 'Arial')),
+                legend_font_size,
+                cs.get('legend_color', bt.get('body_color', '#000000'))
+            )
+        accent_color = bt.get('accent_color') or bt.get('primary_color') or '#E87722'
+        body_font    = cs.get('label_font_family') or bt.get('body_font_family', 'Arial')
+        render_group_pie(
+            slide,
+            chart_x, chart_y, chart_w, chart_h,
+            categories, series_data, series_styles,
+            chart_palette, show_labels, max_chart_label_size,
+            accent_color, body_font
+        )
+        return
 
     # Build ChartData
     cd = ChartData()

@@ -614,6 +614,38 @@ PIE CHART CRITICAL: a pie has ONE series but MULTIPLE segments (one per category
   NEVER repeat the same color for two segments. If chart_palette has fewer colors than
   segments, cycle through it (palette[i % palette.length]).
 
+GROUP PIE CHART CRITICAL: chart_type = "group_pie" renders N independent pie charts in a group.
+  Data model:
+  - categories[] = the shared slice labels (same breakdown for EVERY pie) — max 7
+  - series[]     = one entry per entity/pie; series[i].name is the entity label shown BELOW pie i
+  - series[i].values[] must have the same length as categories[]
+  - series[i].unit should be "percent" (values sum to ~100)
+
+  series_style: EXACTLY LIKE A SINGLE PIE — one entry per SLICE (category), NOT per entity.
+  The same colors are shared across every pie in the group. Output series_style.length === categories.length.
+  Example for 3 slices, 3 entity pies:
+    categories: ["Standard", "SMA-0", "Substandard"]
+    series: [
+      { "name": "Dairy",    "values": [73, 9, 11], "unit": "percent" },
+      { "name": "Kirana",   "values": [43, 11, 36], "unit": "percent" },
+      { "name": "Hardware", "values": [56, 9, 19], "unit": "percent" }
+    ]
+    series_style: [
+      { "series_name": "Standard",    "fill_color": chart_palette[0], "data_label_color": "#FFFFFF", "data_label_size": 9 },
+      { "series_name": "SMA-0",       "fill_color": chart_palette[1], "data_label_color": "#FFFFFF", "data_label_size": 9 },
+      { "series_name": "Substandard", "fill_color": chart_palette[2], "data_label_color": "#FFFFFF", "data_label_size": 9 }
+    ]
+
+  Legend: ALWAYS "top" — one shared legend listing the SLICES (categories), rendered once above all pies.
+    The legend entries come from categories[], colored by series_style[i].fill_color.
+  Entity label: series[i].name is rendered BELOW each pie, center-aligned, in the brand accent color.
+    Do NOT include entity names in the chart legend — they appear as labels under each pie.
+
+  Layout size hints for group_pie:
+  - group_pie with 5–8 pies: set zone w ≥ 9" (needs near-full slide width)
+  - group_pie with 2–4 pies: zone w ≥ 5" (≥ 50% of slide width)
+  - show_legend must be true (single shared legend); the renderer places it at the top.
+
 ═══════════════════════════
 CHART MICRO-LAYOUT OWNERSHIP:
 - You must decide legend_position, data_label_size, and category_label_rotation in the spec
@@ -1266,7 +1298,9 @@ function validateDesignedSlide(slide) {
       if (a.type === 'chart'    && a.chart_style && a.chart_style.legend_position == null) issues.push(p + ': chart missing legend_position')
       if (a.type === 'chart'    && a.chart_style && a.chart_style.data_label_size == null) issues.push(p + ': chart missing data_label_size')
       if (a.type === 'chart'    && a.chart_style && a.chart_style.category_label_rotation == null) issues.push(p + ': chart missing category_label_rotation')
-      if (a.type === 'chart'    && a.chart_style?.chart_type === 'pie' && Array.isArray(a.series_style) && Array.isArray(a.categories) && a.series_style.length !== a.categories.length) issues.push(p + ': pie chart series_style.length (' + a.series_style.length + ') must equal categories.length (' + a.categories.length + ')')
+      if (a.type === 'chart'    && a.chart_type === 'pie' && Array.isArray(a.series_style) && Array.isArray(a.categories) && a.series_style.length !== a.categories.length) issues.push(p + ': pie chart series_style.length (' + a.series_style.length + ') must equal categories.length (' + a.categories.length + ')')
+      if (a.type === 'chart'    && a.chart_type === 'group_pie' && Array.isArray(a.series_style) && Array.isArray(a.categories) && a.series_style.length !== a.categories.length) issues.push(p + ': group_pie series_style.length (' + a.series_style.length + ') must equal categories.length (' + a.categories.length + ') — one style entry per slice')
+      if (a.type === 'chart'    && a.chart_type === 'group_pie' && Array.isArray(a.series) && (a.series.length < 2 || a.series.length > 8)) issues.push(p + ': group_pie series (entities) must be 2–8, got ' + (a.series || []).length)
       if (a.type === 'workflow' && !a.nodes?.length)   issues.push(p + ': workflow missing nodes')
       if (a.type === 'workflow' && !a.workflow_style)  issues.push(p + ': workflow missing workflow_style')
       if (a.type === 'workflow' && a.workflow_style && a.workflow_style.node_inner_padding == null) issues.push(p + ': workflow missing node_inner_padding')
@@ -1976,10 +2010,12 @@ function buildSafeArtifactShell(manifestArt, bt) {
   if (t === 'chart') {
     const palette = bt.chart_palette || bt.accent_colors || ['#1A3C8F', '#E8A020', '#2E9E5B', '#C82333']
     const chartType = manifestArt?.chart_type || 'bar'
-    const isPie = chartType === 'pie'
+    const isPie = chartType === 'pie' || chartType === 'donut'
+    const isGroupPie = chartType === 'group_pie'
     const seriesArr = Array.isArray(manifestArt?.series) ? manifestArt.series : []
     const categories = Array.isArray(manifestArt?.categories) ? manifestArt.categories : []
-    const autoSeriesStyle = isPie
+    // group_pie and pie both use one series_style entry PER SLICE (category), not per entity/series
+    const autoSeriesStyle = (isPie || isGroupPie)
       ? categories.map((cat, i) => ({
           series_name: String(cat || ''), fill_color: palette[i % palette.length],
           border_color: null, border_width: 0, data_label_color: '#FFFFFF', data_label_size: 9
@@ -2469,11 +2505,16 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
 
         // legend_position
         if (art.show_legend) {
-          const widthRatio = (art.w || 0) / Math.max(canvasW, 0.1)
-          const heightRatio = (art.h || 0) / Math.max(canvasH, 0.1)
-          if (heightRatio > 0.60) computed.legend_position = 'top'
-          else if (widthRatio > 0.60) computed.legend_position = 'right'
-          else computed.legend_position = (art.chart_type === 'pie') ? 'right' : 'top'
+          if (art.chart_type === 'group_pie') {
+            // group_pie always uses a single shared legend at the top
+            computed.legend_position = 'top'
+          } else {
+            const widthRatio = (art.w || 0) / Math.max(canvasW, 0.1)
+            const heightRatio = (art.h || 0) / Math.max(canvasH, 0.1)
+            if (heightRatio > 0.60) computed.legend_position = 'top'
+            else if (widthRatio > 0.60) computed.legend_position = 'right'
+            else computed.legend_position = (art.chart_type === 'pie') ? 'right' : 'top'
+          }
         } else {
           computed.legend_position = 'none'
         }
@@ -2512,8 +2553,10 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
         // Auto-repair series_style if missing or empty — prevents criticalRenderIssues
         if (!art.series_style || art.series_style.length === 0) {
           const palette = bt.chart_palette || bt.accent_colors || ['#1A3C8F', '#E8A020', '#2E9E5B', '#C82333']
-          const isPie = art.chart_type === 'pie'
-          if (isPie) {
+          const isPie = art.chart_type === 'pie' || art.chart_type === 'donut'
+          const isGroupPie = art.chart_type === 'group_pie'
+          if (isPie || isGroupPie) {
+            // pie and group_pie both color per-slice (category) not per-series
             art.series_style = (art.categories || []).map((cat, i) => ({
               series_name: String(cat || ''),
               fill_color: palette[i % palette.length],
@@ -3876,7 +3919,8 @@ function _estimateLegendTextWidth(label, fontSizePt) {
 
 function _chartLegendEntries(chartType, categories, seriesData, seriesStyles, palette, allowFallback) {
   const entries = []
-  if (chartType === 'pie') {
+  // pie, donut, and group_pie: legend represents SLICES (categories), colored per series_style[i]
+  if (chartType === 'pie' || chartType === 'donut' || chartType === 'group_pie') {
     ;(categories || []).forEach((category, i) => {
       const style = i < (seriesStyles || []).length ? seriesStyles[i] : {}
       let color = style.fill_color
@@ -5051,10 +5095,11 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
       }
 
       if (t === 'chart') {
+        const mergedChartType = mArt.chart_type || dArt.chart_type || 'bar'
         return {
           ...dArt,
           artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
-          chart_type:       mArt.chart_type       || dArt.chart_type       || 'bar',
+          chart_type:       mergedChartType,
           chart_header:     mArt.chart_header     || dArt.chart_header     || '',
           chart_title:      mArt.chart_title      || dArt.chart_title      || '',
           chart_insight:    mArt.chart_insight    || dArt.chart_insight    || '',
@@ -5065,7 +5110,7 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
           show_data_labels: mArt.show_data_labels !== undefined
                               ? mArt.show_data_labels : (dArt.show_data_labels !== false),
           show_legend:      mArt.show_legend      !== undefined
-                              ? mArt.show_legend      : !!dArt.show_legend
+                              ? mArt.show_legend      : (mergedChartType === 'group_pie' ? true : !!dArt.show_legend)
         }
       }
 
