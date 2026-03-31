@@ -85,7 +85,6 @@ NARRATIVE ROLE → slide_intent DEFAULT MAPPING:
   decision_framework         → decide
   recommendations            → decide
   forward_looking            → plan
-  closing_synthesis          → update
   methodology_note           → explain
   additional_information     → explain
 
@@ -109,7 +108,6 @@ NARRATIVE ROLE → slide_position DEFAULT MAPPING:
   scenario_analysis          → resolution
   decision_framework         → resolution
   forward_looking            → resolution
-  closing_synthesis          → resolution
   methodology_note           → appendix
 
 proves_claim → preceding_slide_claim:
@@ -305,11 +303,6 @@ STEP 0A — ROLE-BASED ARTIFACT PRE-FILTER (execute before all other steps)
 Read the narrative_role locked in Phase 1.
 Apply the constraints below before any data-shape or zone-role rules.
 These are HARD constraints — no override permitted regardless of content.
-
-  closing_synthesis:
-    PERMITTED:  insight_text only
-    FORBIDDEN:  cards, chart, table, prioritization, workflow, matrix, driver_tree
-    Reason: this slide restates strategic confidence — no new data, no action lists
 
   recommendations:
     PERMITTED:  prioritization (primary), insight_text (secondary only)

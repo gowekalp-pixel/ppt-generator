@@ -2967,43 +2967,28 @@ def _shift_blocks_for_title_gap(slide, blocks, use_template):
     if not title_block:
         return blocks
 
-    EMU = 914400.0
     # Finalized contract uses 2px, not 2pt. Assume standard Office/render DPI.
     MIN_GAP_IN = 32 / 96.0
 
-    def _placeholder_metrics(idx):
-        """Return placeholder top/width/bottom in inches for idx, or None."""
-        try:
-            for ph in slide.placeholders:
-                if ph.placeholder_format.idx == idx:
-                    return {
-                        'top': ph.top / EMU,
-                        'width': ph.width / EMU,
-                        'bottom': (ph.top + ph.height) / EMU
-                    }
-        except Exception:
-            pass
-        return None
-
-    # _compact_title_placeholder (called via render_block_title → place_in_placeholder
-    # with compact_title=True) already resized title_ph.height to reflect the actual
-    # wrapped text height before this function runs.  Reading ph['bottom'] directly
-    # gives the post-compact placeholder bottom — no separate estimation needed.
+    # Use the block's own y+h as the header bottom — these are Agent 5's pre-computed
+    # coordinates and are the most direct measure of where the header ends.
+    # No placeholder measurement or font estimation needed.
     subtitle_block = next(
         (b for b in blocks if b.get('block_type') == 'subtitle' and b.get('text')),
         None
     )
 
-    title_ph = _placeholder_metrics(0)
-    if title_ph is None:
+    try:
+        header_bottom = float(title_block['y']) + float(title_block['h'])
+    except (KeyError, TypeError, ValueError):
         return blocks
 
-    header_bottom = title_ph['bottom']
-
     if subtitle_block:
-        sub_ph = _placeholder_metrics(1)
-        if sub_ph:
-            header_bottom = max(header_bottom, sub_ph['bottom'])
+        try:
+            sub_bottom = float(subtitle_block['y']) + float(subtitle_block['h'])
+            header_bottom = max(header_bottom, sub_bottom)
+        except (KeyError, TypeError, ValueError):
+            pass
 
     # Earliest Y of all non-header content blocks
     content_blocks = [
@@ -3123,7 +3108,7 @@ def render_block_title(slide, block, bt, use_template):
         ph_idx = 0 if btype == 'title' else 1
         place_in_placeholder(slide, ph_idx, text, block, bt,
                              preserve_template_style=True,
-                             compact_title=(ph_idx == 0))
+                             compact_title=False)
         return
     # Scratch mode — render as a positioned text box
     add_text_box(slide,

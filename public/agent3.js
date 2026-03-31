@@ -125,9 +125,6 @@ CLOSING:
   "forward_looking"      — Future state, targets, milestones, and next review commitments. References
                            current state as baseline but focuses on future targets. Cards allowed
                            only for target values (not actuals already shown elsewhere).
-  "closing_synthesis"    — Narrative wrap-up. Restates strategic confidence. NO new data, NO action
-                           lists, NO KPI cards. Forward-look milestones and confidence statement only.
-
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PROOF CHAIN POINTERS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -185,7 +182,7 @@ CRITICAL OUTPUT RULES:
 - Your response must start with { and end with }. Nothing before or after.
 - total_slides must equal exactly the number requested.
 - The sum of suggested_slide_count across all sections must equal total_slides.
-- Always include a title slide (narrative_role: "title") and a closing slide (narrative_role: "closing_synthesis").
+- Always include a title slide (narrative_role: "title").
 - Include 1-2 divider slides for clean structure. Do not overuse dividers.
 - Include a summary slide (narrative_role: "summary") ONLY when the presentation type, audience,
   and slide count warrant it — follow the WHEN TO INCLUDE / WHEN TO SKIP guidance above.
@@ -194,8 +191,7 @@ CRITICAL OUTPUT RULES:
 - governing_thought must be a single punchy sentence a CEO finds immediately useful.
 - opening_guidance and closing_guidance must be actionable one-sentence directives, not generic advice.
 - Every key_content item must reference actual content from the document, not generic filler.
-- proves_claim must be null for structural, opening, decision-support, supplementary, and closing roles.
-- closing_synthesis sections must never contain action items or KPI data in key_content.`
+- proves_claim must be null for structural, opening, decision-support, and supplementary roles.`
 
 
 async function runAgent3(state) {
@@ -285,11 +281,11 @@ Remember:
 
 // ─── SLIDE REDISTRIBUTION ────────────────────────────────────────────────────
 // If section slide counts don't add up to the target, redistribute fairly.
-// Structural roles (title, divider, transition_narrative, methodology_note,
-// closing_synthesis) are always exactly 1 slide and never receive extras.
+// Structural roles (title, divider, transition_narrative, methodology_note)
+// are always exactly 1 slide and never receive extras.
 
 const FIXED_SINGLE_SLIDE_ROLES = new Set([
-  'title', 'divider', 'transition_narrative', 'methodology_note', 'closing_synthesis'
+  'title', 'divider', 'transition_narrative', 'methodology_note'
 ])
 
 function redistributeSlides(sections, target) {
@@ -298,7 +294,7 @@ function redistributeSlides(sections, target) {
   let remaining = target - base.length
 
   if (remaining < 0) {
-    // Too many sections — trim to target, preserving title and closing_synthesis
+    // Too many sections — trim to target, preserving title
     return base.slice(0, target)
   }
 
@@ -330,7 +326,7 @@ function inferNarrativeRole(section, index) {
     executive_summary:  'summary',
     divider:            'divider',
     recommendations:    'recommendations',
-    conclusion:         'closing_synthesis',
+    conclusion:         'forward_looking',
     appendix:           'additional_information',
     financial_data:     'explainer_to_summary',
     market_analysis:    'explainer_to_summary',
@@ -342,7 +338,7 @@ function inferNarrativeRole(section, index) {
     return legacyMap[section.section_type]
   }
 
-  // Positional heuristics: first section → title, last → closing_synthesis, rest → explainer
+  // Positional heuristics: first section → title, rest → explainer
   if (index === 0) return 'title'
   return 'explainer_to_summary'
 }
@@ -352,9 +348,9 @@ function inferNarrativeRole(section, index) {
 // Used if Claude fails to return valid JSON
 
 function buildFallbackBrief(slideCount) {
-  // Fixed slots: title(1) + context_setter(1) + divider(1) + recommendations(1) + closing_synthesis(1) = 5
+  // Fixed slots: title(1) + context_setter(1) + divider(1) + recommendations(1) = 4
   // No summary in fallback — we have no content context to know whether one is appropriate
-  const proofSlides = Math.max(1, slideCount - 5)
+  const proofSlides = Math.max(1, slideCount - 4)
 
   return {
     document_type:    'Business Document',
@@ -429,22 +425,10 @@ function buildFallbackBrief(slideCount) {
         data_available:        false,
         so_what:               'What the audience must do after this presentation'
       },
-      {
-        section_number:        6,
-        section_name:          'Conclusion',
-        narrative_role:        'closing_synthesis',
-        proves_claim:          null,
-        addresses_finding:     null,
-        purpose:               'Restate strategic confidence and set next review milestone',
-        key_content:           ['Strategic confidence statement', 'Next review date and metrics'],
-        suggested_slide_count: 1,
-        data_available:        false,
-        so_what:               'The audience leaves with clarity on strategy and next milestone'
-      }
     ],
     total_slides:      slideCount,
     opening_guidance: 'Open by establishing context and scope — let the content speak before drawing conclusions',
-    closing_guidance: 'Close by reinforcing strategic confidence — no new data, no action lists',
+    closing_guidance: 'Close with recommendations and forward-looking actions — ensure every key finding has an owner',
     tone:             'confident'
   }
 }
