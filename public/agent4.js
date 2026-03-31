@@ -48,11 +48,84 @@ Purpose:
 Capture and lock every strategic, audience, and structural input needed downstream.
 Nothing is designed here. This phase captures the burden of proof.
 
+──────────────────────────────────────────────────────────
+STEP 0 — READ AND LOCK NARRATIVE ROLE (execute first)
+──────────────────────────────────────────────────────────
+Every slide plan carries a narrative_role assigned by Agent 3.
+Read it before doing anything else. It is a pre-decided input — do NOT re-derive or override it.
+
+  narrative_role tells you:
+  - What analytical job this slide has in the overall proof chain
+  - What slide_intent and slide_position to use as defaults (see mapping below)
+  - What proves_claim this slide is responding to (feeds preceding_slide_claim)
+  - What artifact constraints apply in Phase 3
+
+STRUCTURAL SKIP RULE:
+  If narrative_role is "title", "divider", or "transition_narrative":
+  → Skip Phase 1, 2, and 3 entirely. These slides have no analytical content.
+  → For "transition_narrative": write only insight_text summarising what the prior section
+    proved and what the next section will prove. No data, no claims, no zones.
+
+NARRATIVE ROLE → slide_intent DEFAULT MAPPING:
+  Use this as the starting position. Override only if content analysis gives strong reason.
+
+  summary                    → prove
+  explainer_to_summary       → prove
+  drill_down                 → explain
+  segmentation               → prove
+  trend_analysis             → explain
+  waterfall_decomposition    → explain
+  benchmark_comparison       → prove
+  exception_highlight        → alert
+  validation                 → prove
+  problem_statement          → alert
+  context_setter             → update
+  risk_register              → alert
+  scenario_analysis          → decide
+  decision_framework         → decide
+  recommendations            → decide
+  forward_looking            → plan
+  closing_synthesis          → update
+  methodology_note           → explain
+  additional_information     → explain
+
+NARRATIVE ROLE → slide_position DEFAULT MAPPING:
+  Use this as the starting position. Override only if deck position gives strong reason.
+
+  context_setter             → opening
+  problem_statement          → opening
+  summary                    → opening
+  explainer_to_summary       → build
+  drill_down                 → build
+  segmentation               → build
+  trend_analysis             → build
+  waterfall_decomposition    → build
+  benchmark_comparison       → build
+  validation                 → build
+  additional_information     → build
+  exception_highlight        → climax
+  risk_register              → climax
+  recommendations            → resolution
+  scenario_analysis          → resolution
+  decision_framework         → resolution
+  forward_looking            → resolution
+  closing_synthesis          → resolution
+  methodology_note           → appendix
+
+proves_claim → preceding_slide_claim:
+  If the slide plan carries a non-null proves_claim value, copy it directly into
+  preceding_slide_claim. Do not guess or leave it blank.
+
+──────────────────────────────────────────────────────────
 Mandatory fields to lock for every content slide:
+──────────────────────────────────────────────────────────
+  - narrative_role: read directly from slide plan — do not alter
   - slide_title_draft
   - presentation_type: strategic | financial | revenue | operational | risk | mixed
   - slide_intent: prove | explain | decide | update | alert | plan
+    (start from narrative_role default above; override only with explicit justification)
   - slide_position: opening | build | climax | resolution | appendix
+    (start from narrative_role default above; override only with explicit justification)
   - one_slide_claim: one falsifiable sentence
   - strategic_objective: one sentence — what the board must believe / decide / feel differently after this slide
   - key_message: one-sentence corridor takeaway in plain language
@@ -68,12 +141,15 @@ Mandatory fields to lock for every content slide:
 
 Optional but high-value context:
   - slide_number
-  - preceding_slide_claim
+  - preceding_slide_claim (auto-populated from proves_claim if available)
   - following_slide_claim
   - political_context
 
 Validation gate:
   Do not proceed to Phase 2 until all mandatory fields are complete and internally consistent.
+  narrative_role must be locked before slide_intent and slide_position are finalised.
+  If slide_intent or slide_position deviate from the narrative_role default, the reason
+  must be stated explicitly — silent overrides are not permitted.
   slide_archetype is descriptive metadata only — it does NOT determine zones, artifacts, or layout.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -223,7 +299,97 @@ and produce a plan the visual designer can execute without ambiguity.
 You are NOT designing charts, colors, fonts, labels, or coordinates.
 Each zone may have a MAXIMUM of 2 artifacts.
 
-STEP 0 — READ THE ZONE BRIEF STRATEGICALLY
+──────────────────────────────────────────────────────────
+STEP 0A — ROLE-BASED ARTIFACT PRE-FILTER (execute before all other steps)
+──────────────────────────────────────────────────────────
+Read the narrative_role locked in Phase 1.
+Apply the constraints below before any data-shape or zone-role rules.
+These are HARD constraints — no override permitted regardless of content.
+
+  closing_synthesis:
+    PERMITTED:  insight_text only
+    FORBIDDEN:  cards, chart, table, prioritization, workflow, matrix, driver_tree
+    Reason: this slide restates strategic confidence — no new data, no action lists
+
+  recommendations:
+    PERMITTED:  prioritization (primary), insight_text (secondary only)
+    FORBIDDEN:  cards, chart, table, workflow, matrix, driver_tree
+    Reason: this is an action slide — KPI cards and data charts do not belong here
+
+  methodology_note:
+    PERMITTED:  insight_text, table (definitions/rates only)
+    FORBIDDEN:  cards, chart, prioritization, workflow, matrix, driver_tree
+    Reason: no analytical claim — data definitions only
+
+  transition_narrative:
+    PERMITTED:  insight_text only
+    FORBIDDEN:  all data artifacts
+    Reason: narrative connector — no new data introduced
+
+  context_setter:
+    PERMITTED:  cards (baseline KPIs), insight_text, table
+    FORBIDDEN:  prioritization, workflow, matrix, driver_tree
+    Reason: neutral baseline — no verdict, no action, no process
+
+  exception_highlight:
+    PERMITTED:  cards (sentiment MUST be "negative" or "warning"), insight_text, chart (as supporting evidence)
+    FORBIDDEN:  prioritization, workflow
+    Cards rule: if cards are used, every card sentiment field must be "negative" or "warning" — positive sentiment cards are blocked
+
+  forward_looking:
+    PERMITTED:  cards (target values only — not actuals), insight_text, table (milestones)
+    FORBIDDEN:  charts showing actuals, matrix, driver_tree
+    Cards rule: card values must be future targets — if the value already appeared in an earlier
+    slide as an actual, it must not be repeated as a card here
+
+  All other roles (explainer_to_summary, drill_down, segmentation, trend_analysis,
+  waterfall_decomposition, benchmark_comparison, validation, risk_register,
+  scenario_analysis, decision_framework, summary, additional_information):
+    → No pre-filter restrictions. Proceed to Step 0B and then Step 1.
+
+──────────────────────────────────────────────────────────
+STEP 0B — SUMMARY CARD REGISTRY AND DEDUPLICATION
+──────────────────────────────────────────────────────────
+This step prevents the same KPI card from appearing on both the summary slide and a
+downstream proof slide — a top-down deck allows data to recur, but never in the same
+visual form at the same level of aggregation.
+
+IF narrative_role is "summary":
+  → REGISTER every card being emitted on this slide.
+  → Record each card as: { title, value } — e.g. { title: "Outstanding", value: "₹351 Cr" }
+  → This becomes the summary_card_registry for all downstream slides in this batch.
+  → If summary_card_registry is provided in the batch context (from a prior batch),
+    merge new cards into it — do not overwrite.
+
+IF narrative_role is in the proof chain group
+(explainer_to_summary, drill_down, segmentation, trend_analysis,
+waterfall_decomposition, benchmark_comparison, exception_highlight, validation):
+  → Before finalising any card, check its { title, value } against summary_card_registry.
+  → If a match is found — same title AND same value — apply the DEDUPLICATION RESOLUTION:
+
+    RESOLUTION PRIORITY (apply first that is possible):
+    1. Replace with a different visualization of the same data that adds analytical depth
+       — e.g. a waterfall breaking down how the number was reached, a chart showing
+         the number in context of other categories, or a table showing sub-components
+    2. Enrich the card with additional context that makes it analytically additive
+       — e.g. add a trend direction, a benchmark comparison, or a sub-segment callout
+         so the card communicates something the summary card did not
+    3. Drop the card entirely if neither option 1 nor option 2 is possible — a card
+       that only restates the summary adds no value to a proof slide
+
+  → Cards with titles and values NOT in summary_card_registry: proceed without restriction.
+
+IF narrative_role is "context_setter", "problem_statement", or summary_card_registry
+is empty (no summary slide precedes this batch):
+  → Skip deduplication. No registry to check against.
+
+IF narrative_role is "forward_looking":
+  → Cards represent future target values, not actuals — deduplication does not apply.
+    Target values are new data even if the metric name appeared in the summary.
+
+──────────────────────────────────────────────────────────
+STEP 0C — READ THE ZONE BRIEF STRATEGICALLY
+──────────────────────────────────────────────────────────
   For each zone re-read: strategic_purpose, question, weight, role.
   Ask: what is the MINIMUM artifact that answers this zone's question convincingly for a board?
   Start minimum. Add a second artifact only if the first leaves a material gap in the argument.
@@ -2333,13 +2499,17 @@ function buildSlidePlan(brief, slideCount) {
     for (let i = 0; i < count; i++) {
       if (num > slideCount) break
 
+      const narrativeRole = section.narrative_role || ''
       let slideType = 'content'
       if (num === 1) slideType = 'title'
-      else if (section.section_type === 'divider') slideType = 'divider'
+      else if (narrativeRole === 'divider' || section.section_type === 'divider') slideType = 'divider'
 
       plan.push({
         slide_number:             num,
         section_name:             section.section_name   || '',
+        narrative_role:           narrativeRole,
+        proves_claim:             section.proves_claim   || null,
+        addresses_finding:        section.addresses_finding || null,
         section_type:             section.section_type   || '',
         slide_type:               slideType,
         purpose:                  section.purpose        || '',
@@ -2363,24 +2533,30 @@ function buildSlidePlan(brief, slideCount) {
 // BATCH WRITER
 // ═══════════════════════════════════════════════════════════════════════════════
 
-async function writeSlideBatch(batchPlan, brief, contentB64, batchNum, layoutNames) {
+async function writeSlideBatch(batchPlan, brief, contentB64, batchNum, layoutNames, summaryCardRegistry = []) {
   console.log('Agent 4 — batch', batchNum, ': slides', batchPlan[0].slide_number, '–', batchPlan[batchPlan.length-1].slide_number)
 
   const hasLayouts = layoutNames.length >= 5
   const briefSummary = buildBriefSummaryForAgent4(brief)
   const compactBatchPlan = JSON.stringify((batchPlan || []).map(plan => ({
-    slide_number: plan.slide_number,
-    section_name: plan.section_name,
-    section_type: plan.section_type,
-    slide_type: plan.slide_type,
-    purpose: plan.purpose,
-    key_content: plan.key_content,
-    so_what: plan.so_what,
-    data_available: plan.data_available,
+    slide_number:           plan.slide_number,
+    section_name:           plan.section_name,
+    narrative_role:         plan.narrative_role         || '',
+    proves_claim:           plan.proves_claim           || null,
+    addresses_finding:      plan.addresses_finding      || null,
+    section_type:           plan.section_type,
+    slide_type:             plan.slide_type,
+    purpose:                plan.purpose,
+    key_content:            plan.key_content,
+    so_what:                plan.so_what,
+    data_available:         plan.data_available,
     slide_index_in_section: plan.slide_index_in_section,
-    suggested_archetype: plan.suggested_archetype
+    suggested_archetype:    plan.suggested_archetype
   })))
   const keyMsgLines = (briefSummary.key_messages || []).map((m, i) => `  ${i + 1}. ${m}`).join('\n') || '  —'
+  const registryLine = summaryCardRegistry.length > 0
+    ? `SUMMARY_CARD_REGISTRY (Phase 3 Step 0B — do not repeat these as cards on proof slides):\n${summaryCardRegistry.map(c => `  { title: "${c.title}", value: "${c.value}" }`).join('\n')}`
+    : 'SUMMARY_CARD_REGISTRY: empty — no summary slide processed yet; skip deduplication'
   const prompt = `PRESENTATION BRIEF:
 Document type:     ${briefSummary.document_type || '—'}
 Governing thought: ${briefSummary.governing_thought || '—'}
@@ -2393,6 +2569,8 @@ ${keyMsgLines}
 Recommendations:   ${briefSummary.recommendations || '—'}
 Opening guidance:  ${briefSummary.opening_guidance || '—'}
 Closing guidance:  ${briefSummary.closing_guidance || '—'}
+
+${registryLine}
 
 AVAILABLE BRAND LAYOUTS (${layoutNames.length}): ${hasLayouts
   ? layoutNames.join(' | ')
@@ -3262,7 +3440,8 @@ async function runAgent4(state) {
   const batches = []
   for (let i = 0; i < slidePlan.length; i += BATCH_SIZE) batches.push(slidePlan.slice(i, i + BATCH_SIZE))
 
-  let allSlides = []
+  let allSlides          = []
+  let summaryCardRegistry = []  // built from summary slide, threaded through all batches
 
   for (let b = 0; b < batches.length; b++) {
     if (b > 0) {
@@ -3270,14 +3449,30 @@ async function runAgent4(state) {
       await new Promise(r => setTimeout(r, 65000))
     }
     const batch  = batches[b]
-    const result = await writeSlideBatch(batch, brief, contentB64, b + 1, layoutNames)
+    const result = await writeSlideBatch(batch, brief, contentB64, b + 1, layoutNames, summaryCardRegistry)
 
     if (!result) {
       batch.forEach(plan => allSlides.push(normaliseSlide({}, plan)))
     } else {
       batch.forEach((plan, idx) => {
         const match = result[idx] || result.find(s => s.slide_number === plan.slide_number)
-        allSlides.push(normaliseSlide(match || {}, plan))
+        const normalised = normaliseSlide(match || {}, plan)
+        allSlides.push(normalised)
+
+        // If this slide was the summary, extract its cards into the registry
+        // for deduplication in subsequent batches
+        if (plan.narrative_role === 'summary') {
+          const summaryCards = (normalised.zones || [])
+            .flatMap(z => z.artifacts || [])
+            .filter(a => a.type === 'cards')
+            .flatMap(a => a.cards || [])
+            .filter(c => c.title && c.subtitle)
+            .map(c => ({ title: String(c.title).trim(), value: String(c.subtitle).trim() }))
+          if (summaryCards.length > 0) {
+            summaryCardRegistry = summaryCards
+            console.log('Agent 4 — summary card registry built:', summaryCardRegistry.map(c => `"${c.title}: ${c.value}"`).join(', '))
+          }
+        }
       })
     }
   }
