@@ -447,30 +447,51 @@ AVAILABLE ARTIFACT TYPES:
 
 ─── INSIGHT TEXT SELECTION RULES ─────────────────────────
 
+  ZONE AREA = zone W% × zone H% as a fraction of total slide content area.
+  Small zone  = zone area < 25%
+  Medium zone = zone area 25%–50%
+  Large zone  = zone area > 50%
+
+  STANDARD MODE — point count cap by zone area (HARD MAX):
+  ┌─────────────────┬───────────────┐
+  │ Zone area       │ Max points[]  │
+  ├─────────────────┼───────────────┤
+  │ Small  (< 25%)  │ 4 points      │
+  │ Medium (25–50%) │ 6 points      │
+  │ Large  (> 50%)  │ 8 points      │
+  └─────────────────┴───────────────┘
+  - Each bullet ≤ 12 words. Count every word — articles, numbers, units each count as 1.
+  - 1–2 data points per bullet maximum. Remaining detail goes to speaker notes.
+  - Data-first phrasing: lead with the number or entity. No "This shows that…" preamble.
+  - No compound sentences with dashes or semicolons — one idea per bullet.
+  - If point count would exceed the zone cap: move lower-priority points to speaker notes.
+  - If findings are thematically distinct and would exceed 4: switch to GROUPED mode.
+
   standard (1–2 points): compact callout or headline stat; annotation role only;
                           never the sole artifact in a PRIMARY zone
+  standard (3 points+):  evidence list; use zone area cap above to determine max
 
-  standard (3–6 points): short-to-medium evidence list; secondary or support zone;
-                          can share zone with chart horizontally
-
-  standard (> 6 points): signals wrong artifact choice; flag insight_density_warning;
-                          restructure or split slide before proceeding
-
-  grouped (2–3 sections, 2–3 pts each): structured argument; secondary or primary support zone
-  grouped (4+ sections):  dominant zone or full-slide; approaches a written summary
-
-  grouped insight_text IS permitted in a PRIMARY zone if it contains ≥ 4 substantive
-  structured findings.
+  GROUPED MODE — groups × bullets cap by zone area (HARD MAX):
+  ┌─────────────────┬──────────────────────────────┐
+  │ Zone area       │ Max groups × bullets / group  │
+  ├─────────────────┼──────────────────────────────┤
+  │ Small  (< 25%)  │ 2 groups × 2 bullets          │
+  │ Medium (25–50%) │ 3 groups × 3 bullets          │
+  │ Large  (> 50%)  │ 5 groups × 3 bullets          │
+  └─────────────────┴──────────────────────────────┘
+  - Each bullet ≤ 12 words. 1–2 data points per bullet. Remainder to speaker notes.
+  - Group headers: 2–4 words, no verbs, label the theme not the finding.
+  - Board scans section headers first — headers must be self-explanatory at a glance.
+  - grouped insight_text IS permitted in a PRIMARY zone if ≥ 4 substantive findings.
 
   INSIGHT TEXT VISUAL MODES:
-  - STANDARD mode (points[]): flat list read top-to-bottom; use for 1–6 sequential findings
+  - STANDARD mode (points[]): flat list read top-to-bottom; use for sequential or independent findings
   - GROUPED mode (groups[]): board scans section headers first then reads bullets;
-    use for 3+ thematically distinct finding clusters; max 5 groups; 2–4 bullets per group
+    use for 3+ thematically distinct finding clusters
   - Never use both points[] and groups[] in the same artifact
 
   When insight_text is paired alongside a chart in a side-by-side zone:
-  - Prefer grouped mode with 2–3 groups of 2–3 bullets each
-  - Groups should reflect narrative categories of the argument
+  - Prefer grouped mode with 2–3 groups reflecting narrative categories
     (e.g. exposure facts / risk implications / recommended actions)
   - Do NOT use a column group layout in a narrow side zone (< 45% slide width)
 
@@ -983,6 +1004,9 @@ SLIDE TYPE RULES
     WRONG: "Revenue Analysis"   | RIGHT: "Premium mix drove most of the revenue uplift"
     WRONG: "Market Overview"    | RIGHT: "Market growing at 22% CAGR with untapped headroom"
     WRONG: "Geographic Risk"    | RIGHT: "North Zone concentration exceeds safe exposure threshold"
+  - title HARD MAX: 10 words. Count every word — articles, prepositions, numbers each count as 1.
+    If draft exceeds 10 words: cut modifiers, drop subsidiary clauses, keep the sharpest claim.
+    Titles are scanned in 1–2 seconds on a board screen — one sharp assertion, not a paragraph.
 
 ZONE OBJECT STRUCTURE
 
@@ -1009,16 +1033,28 @@ insight_text:
   {
     "type": "insight_text",
     "insight_header": "Key Insight" | "So What" | "Risk Alert" | "Action Required",
-    "points": ["specific insight with data"],          ← STANDARD mode (1–6 points, flat list)
-    "groups": [                                        ← GROUPED mode (3+ thematic sections)
+    "points": ["specific insight with data"],          ← STANDARD mode (flat list)
+    "groups": [                                        ← GROUPED mode (thematic sections)
       { "header": "2–4 word label", "bullets": ["crisp point with data"] }
     ],
     "sentiment": "positive" | "warning" | "neutral"
   }
   Use either points[] OR groups[] — never both.
-  Bullet rules: max ~10–12 words each; data-first phrasing; no paragraph text.
+
+  STANDARD mode bullet rules:
+  - Max points by zone area: < 25% → 4 pts; 25–50% → 6 pts; > 50% → 8 pts (HARD MAX)
+  - Each bullet ≤ 12 words. 1–2 data points per bullet. Remainder goes to speaker notes.
+  - Data-first phrasing: lead with the number or entity, not "This shows that…"
+  - No compound sentences with dashes or semicolons — one idea per bullet.
+  - If at the zone cap with findings remaining: move lower-priority to speaker notes.
+
+  GROUPED mode bullet rules:
+  - Max groups × bullets by zone area: < 25% → 2×2; 25–50% → 3×3; > 50% → 5×3 (HARD MAX)
+  - Each bullet ≤ 12 words. 1–2 data points per bullet. Remainder to speaker notes.
+  - Group headers: 2–4 words, no verbs, label the theme not the finding.
+
   Content integrity: preserve ALL facts, numbers, names, percentages exactly from source.
-  Do NOT drop any insight point. Do NOT introduce new content.
+  Do NOT drop data-bearing facts. DO compress prose around the facts.
 
 chart:
   {
@@ -1147,8 +1183,18 @@ prioritization:
       }
     ]
   }
-  Max 5 items. Must be action-oriented and sorted by importance.
-  Up to 2 qualifier slots per item; qualifier labels are content-driven, not hardcoded.
+  Max 5 items (HARD MAX). Must be sorted by importance, highest first.
+  Field rules (HARD MAX):
+  - title: strategic framing only — NO numbers, NO % values, NO currency amounts; ≤ 8 words.
+    Verb-led or noun-phrase. Name the strategic action or theme, not the metric.
+    WRONG: "Provision ₹17.66 L Punjab Dairy NPA"   RIGHT: "Provision Punjab Dairy Accounts"
+    WRONG: "73% Delhi/NCR Outstanding Needs Review" RIGHT: "Review Delhi/NCR Concentration Risk"
+  - description: data-driven backing for the title; ≤ 15 words. Include the key number(s).
+    WRONG: "Implement monthly asset quality tracking for Delhi/NCR 1–3 year bucket (73% of outstanding)—establish early warning triggers for collection slowdown"
+    RIGHT: "73% outstanding in 1–3yr bucket (₹18.48 Cr); establish monthly AQ triggers"
+  - qualifiers: up to 2 per item; labels content-driven (not hardcoded).
+    label: 1 word only (e.g. "Timeline", "Owner", "Impact", "Zone")
+    value: ≤ 4 words (e.g. "Q2 2025", "Credit Team", "High")
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PRE-OUTPUT QUALITY GATES
@@ -1160,6 +1206,13 @@ GATE 1 — CONTENT INTEGRITY
   [ ] No invented numbers — every figure sourced from the source document
   [ ] No vague wording — every point specific and actionable
   [ ] All content slides have insight-led titles
+  [ ] Every slide title ≤ 10 words — count every word; rewrite if over
+  [ ] Every insight_text standard: bullet count within zone-area cap (< 25% → ≤4; 25–50% → ≤6; > 50% → ≤8)
+  [ ] Every insight_text standard: each bullet ≤ 12 words — rewrite if over; excess detail to speaker notes
+  [ ] Every insight_text grouped: group × bullet count within zone-area cap (< 25% → 2×2; 25–50% → 3×3; > 50% → 5×3)
+  [ ] Every insight_text grouped: each bullet ≤ 12 words — rewrite if over; excess detail to speaker notes
+  [ ] Every prioritization: ≤ 5 items; title ≤ 8 words and NO numbers/% /currency; description ≤ 15 words
+  [ ] Every prioritization qualifier: label = 1 word; value ≤ 4 words
 
 GATE 2 — STRUCTURAL LIMITS
   [ ] Max 4 zones per slide

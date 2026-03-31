@@ -1639,7 +1639,53 @@ function enforceArtifactBounds(zone) {
     if (a.type === 'cards') {
       const container = rectWithin(a.container || inner, inner)
       a.container = container
-      a.card_frames = (a.card_frames || []).map(frame => rectWithin(frame, container))
+      // Always recompute card_frames to fill the full container — never trust LLM-output frames
+      const _cards    = a.cards || []
+      const _count    = _cards.length
+      const _cs       = a.card_style || {}
+      const _gap      = _cs.gap || 0.12
+      const _ax       = container.x
+      const _ay       = container.y
+      const _aw       = container.w
+      const _ah       = container.h
+      const _layout   = String(a.cards_layout || '').toLowerCase()
+      const _aspect   = _ah > 0 ? _aw / _ah : 1
+      const _rowCW    = _count > 0 ? (_aw - _gap * (_count - 1)) / Math.max(_count, 1) : _aw
+      const _colCH    = _count > 0 ? (_ah - _gap * (_count - 1)) / Math.max(_count, 1) : _ah
+      const _gridCols = _count > 1 ? 2 : 1
+      const _gridRows = Math.ceil(_count / Math.max(_gridCols, 1))
+      const _gridCW   = (_aw - _gap * (_gridCols - 1)) / Math.max(_gridCols, 1)
+      const _gridCH   = (_ah - _gap * (_gridRows - 1)) / Math.max(_gridRows, 1)
+      const minCW     = 1.45
+      const minCH     = 1.10
+      let _l = _layout
+      if (!['row', 'column', 'grid'].includes(_l)) {
+        if (_count <= 1)      _l = 'row'
+        else if (_count <= 3) _l = _aspect >= 1 ? 'row' : 'column'
+        else if (_count === 4) _l = 'grid'
+        else                  _l = _aspect >= 1.15 ? 'row' : 'grid'
+      }
+      if (_l === 'row'    && _rowCW  < minCW)  _l = _count <= 3 ? 'column' : 'grid'
+      if (_l === 'grid'   && (_gridCW < minCW || _gridCH < minCH)) _l = _count <= 3 ? 'column' : (_rowCW >= minCW && _aspect >= 1.15 ? 'row' : 'grid')
+      if (_l === 'column' && _colCH  < minCH && _rowCW >= minCW)   _l = 'row'
+      const _frames = []
+      if (_l === 'row') {
+        const cw = r2((_aw - _gap * (_count - 1)) / Math.max(_count, 1))
+        for (let i = 0; i < _count; i++) _frames.push({ x: r2(_ax + i * (cw + _gap)), y: r2(_ay), w: cw, h: r2(_ah) })
+      } else if (_l === 'column') {
+        const ch = r2((_ah - _gap * (_count - 1)) / Math.max(_count, 1))
+        for (let i = 0; i < _count; i++) _frames.push({ x: r2(_ax), y: r2(_ay + i * (ch + _gap)), w: r2(_aw), h: ch })
+      } else {
+        const cols = _count > 1 ? 2 : 1
+        const rows = Math.ceil(_count / cols)
+        const cw   = r2((_aw - _gap * (cols - 1)) / Math.max(cols, 1))
+        const ch   = r2((_ah - _gap * (rows - 1)) / Math.max(rows, 1))
+        for (let i = 0; i < _count; i++) {
+          _frames.push({ x: r2(_ax + (i % cols) * (cw + _gap)), y: r2(_ay + Math.floor(i / cols) * (ch + _gap)), w: cw, h: ch })
+        }
+      }
+      a.cards_layout = _l
+      a.card_frames  = _frames
       const longestBody = Math.max(0, ...(a.cards || []).map(c => String(c.body || '').length))
       const bodyBase = (a.body_style || {}).font_size || 10
       a.body_style = { ...(a.body_style || {}), font_size: longestBody > 180 ? Math.max(8, bodyBase - 1.5) : bodyBase }
@@ -2781,16 +2827,8 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
           const ay     = art.y || 0
           const aw     = art.w || 0
           let ah       = art.h || 0
-          const slideArea = Math.max(1, (+canvas?.width_in || 13.33) * (+canvas?.height_in || 7.5))
-          const maxPerCardArea = slideArea * 0.15
-          if (count > 0 && count < 8) {
-            const currentPerCardArea = (aw * ah) / Math.max(count, 1)
-            if (currentPerCardArea > maxPerCardArea && aw > 0) {
-              const targetArtifactArea = maxPerCardArea * count
-              ah = round2(Math.max(1.10, Math.min(ah, targetArtifactArea / aw)))
-              art.h = ah
-            }
-          }
+          // Note: do NOT shrink art.h here — enforceArtifactBounds() recomputes frames
+          // from the authoritative zone container and always fills the full allocated area.
           const aspect = ah > 0 ? aw / ah : 1
           const minReadableCardWidth = 1.45
           const minReadableCardHeight = 1.10
