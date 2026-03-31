@@ -1232,57 +1232,69 @@ def render_group_pie(slide, x, y, w, h, categories, series_data, series_styles,
             except Exception:
                 pass
 
-            # Percentage data labels — outside end, primary brand color, skip zero-value slices
+            # Percentage data labels — built entirely via raw XML so element ordering
+            # is correct per OOXML spec:
+            #   <c:dLbl> delete overrides FIRST, then numFmt/txPr/position/show flags.
+            # Using the python-pptx API alone reorders elements and breaks both the
+            # zero-label suppression and the dLblPos override.
             if show_labels:
                 try:
-                    lbl_pt  = Pt(max(7, label_size))
-                    lbl_rgb = hex_to_rgb(accent_color)  # primary brand color, not white
                     for ser_obj in pie_chart.series:
-                        ser_obj.data_labels.show_percentage = True
-                        ser_obj.data_labels.show_value      = False
-                        try:
-                            ser_obj.data_labels.number_format = '0%'
-                        except Exception:
-                            pass
-                        # Series-level font (fallback)
-                        try:
-                            ser_obj.data_labels.font.size      = lbl_pt
-                            ser_obj.data_labels.font.color.rgb = lbl_rgb
-                        except Exception:
-                            pass
-                        # Per-label: set position to outEnd and hide labels for zero-value slices
-                        for pi, lbl in enumerate(ser_obj.data_labels):
-                            try:
-                                lbl.font.size      = lbl_pt
-                                lbl.font.color.rgb = lbl_rgb
-                            except Exception:
-                                pass
-                            # Hide label when slice value is 0
-                            slice_val = values[pi] if pi < len(values) else 0.0
-                            if slice_val == 0.0:
-                                try:
-                                    lbl_el = lbl._element
-                                    show_el = lbl_el.find(nsmap.qn('c:showVal'))
-                                    if show_el is None:
-                                        show_el = etree.SubElement(lbl_el, nsmap.qn('c:showVal'))
-                                    show_el.set('val', '0')
-                                    show_pct = lbl_el.find(nsmap.qn('c:showPercent'))
-                                    if show_pct is None:
-                                        show_pct = etree.SubElement(lbl_el, nsmap.qn('c:showPercent'))
-                                    show_pct.set('val', '0')
-                                except Exception:
-                                    pass
-                        # Force label position to outEnd at series level via XML
-                        try:
-                            dLbls_el = ser_obj.data_labels._element
-                            pos_el = dLbls_el.find(nsmap.qn('c:dLblPos'))
-                            if pos_el is None:
-                                pos_el = etree.SubElement(dLbls_el, nsmap.qn('c:dLblPos'))
-                            pos_el.set('val', 'outEnd')
-                        except Exception:
-                            pass
-                except Exception:
-                    pass
+                        ser_el = ser_obj._element
+
+                        # Remove any <c:dLbls> python-pptx may have already written
+                        for existing in ser_el.findall(nsmap.qn('c:dLbls')):
+                            ser_el.remove(existing)
+
+                        dLbls_el = etree.Element(nsmap.qn('c:dLbls'))
+
+                        # ── 1. Individual label overrides (MUST be first in dLbls) ──
+                        # Delete labels whose slice value is 0 so "0%" never appears
+                        for pi, val in enumerate(values):
+                            if val == 0.0:
+                                dLbl = etree.SubElement(dLbls_el, nsmap.qn('c:dLbl'))
+                                etree.SubElement(dLbl, nsmap.qn('c:idx')).set('val', str(pi))
+                                etree.SubElement(dLbl, nsmap.qn('c:delete')).set('val', '1')
+
+                        # ── 2. Number format ──
+                        numFmt = etree.SubElement(dLbls_el, nsmap.qn('c:numFmt'))
+                        numFmt.set('formatCode', '0%')
+                        numFmt.set('sourceLinked', '0')
+
+                        # ── 3. Font color + size via txPr ──
+                        txPr = etree.SubElement(dLbls_el, nsmap.qn('c:txPr'))
+                        etree.SubElement(txPr, nsmap.qn('a:bodyPr'))
+                        etree.SubElement(txPr, nsmap.qn('a:lstStyle'))
+                        p_el   = etree.SubElement(txPr, nsmap.qn('a:p'))
+                        pPr_el = etree.SubElement(p_el, nsmap.qn('a:pPr'))
+                        defRPr = etree.SubElement(pPr_el, nsmap.qn('a:defRPr'))
+                        defRPr.set('sz', str(int(max(7, label_size) * 100)))  # hundredths of a pt
+                        solidFill = etree.SubElement(defRPr, nsmap.qn('a:solidFill'))
+                        srgbClr   = etree.SubElement(solidFill, nsmap.qn('a:srgbClr'))
+                        srgbClr.set('val', accent_color.lstrip('#'))
+
+                        # ── 4. Label position — always outside end ──
+                        etree.SubElement(dLbls_el, nsmap.qn('c:dLblPos')).set('val', 'outEnd')
+
+                        # ── 5. Leader lines for small/overlapping slices (e.g. Kirana) ──
+                        etree.SubElement(dLbls_el, nsmap.qn('c:showLdrLines')).set('val', '1')
+
+                        # ── 6. Show flags ──
+                        etree.SubElement(dLbls_el, nsmap.qn('c:showLegendKey')).set('val', '0')
+                        etree.SubElement(dLbls_el, nsmap.qn('c:showVal')).set('val', '0')
+                        etree.SubElement(dLbls_el, nsmap.qn('c:showCatName')).set('val', '0')
+                        etree.SubElement(dLbls_el, nsmap.qn('c:showSerName')).set('val', '0')
+                        etree.SubElement(dLbls_el, nsmap.qn('c:showPercent')).set('val', '1')
+                        etree.SubElement(dLbls_el, nsmap.qn('c:showBubbleSize')).set('val', '0')
+
+                        # Insert dLbls before <c:cat> to keep OOXML element order valid
+                        cat_el = ser_el.find(nsmap.qn('c:cat'))
+                        if cat_el is not None:
+                            ser_el.insert(list(ser_el).index(cat_el), dLbls_el)
+                        else:
+                            ser_el.append(dLbls_el)
+                except Exception as e:
+                    print(f'render_group_pie: data label XML error:', e)
         except Exception as e:
             print(f'render_group_pie: error rendering pie {i} ({entity_name}):', e)
 
