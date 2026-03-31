@@ -1637,7 +1637,8 @@ function enforceArtifactBounds(zone) {
     }
 
     if (a.type === 'cards') {
-      const container = rectWithin(a.container || inner, inner)
+      // Always use the zone's inner bounds as the authoritative container — LLM-output container is unreliable
+      const container = inner
       a.container = container
       // Always recompute card_frames to fill the full container — never trust LLM-output frames
       const _cards    = a.cards || []
