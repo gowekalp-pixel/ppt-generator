@@ -9,7 +9,8 @@ const state = {
   brandRulebook: null,   // Agent 2
   outline:       null,   // Agent 3
   slideManifest: null,   // Agent 4 — zones, artifacts, archetypes
-  designedSpec:  null,   // Agent 5 — final blocks-first slide specs
+  designedSpec:  null,   // Agent 5 — final blocks-first slide specs (array)
+  brandTokens:   null,   // Agent 5 — hoisted brand tokens shared across all slides
   reviewedSpec:  null,   // Agent 5.1 — partner-reviewed final spec
   reviewReport:  null,   // Agent 5.1 — structured critique
   finalSpec:     null,   // alias → reviewedSpec (consumed by Agent 6)
@@ -168,7 +169,10 @@ async function runPipeline() {
     // Calls Claude in batches and emits final blocks-first slide specs
     // Content from Agent 4 manifest is merged in automatically
     setStep(5, 'active')
-    state.designedSpec = await runAgent5(state)
+    const agent5Result  = await runAgent5(state)
+    state.designedSpec  = agent5Result.slides
+    state.brandTokens   = agent5Result.brand_tokens
+    state.finalSpec     = state.designedSpec   // Agent 6 reads state.finalSpec (updated by 5.1 if available)
     const totalBlocks = state.designedSpec.reduce((s, sl) => s + ((sl.blocks || []).length), 0)
     const totalArts  = state.designedSpec.reduce((s, sl) =>
       s + ((sl.zones_summary || []).reduce((m, z) => m + ((z.artifact_types || []).length), 0)), 0)
@@ -183,7 +187,7 @@ async function runPipeline() {
     const { reviewedSpec, reviewReport } = await runAgent51(state)
     state.reviewedSpec = reviewedSpec
     state.reviewReport = reviewReport
-    state.finalSpec    = reviewedSpec   // Agent 6 reads state.finalSpec
+    state.finalSpec    = reviewedSpec   // Agent 6 reads state.finalSpec (slides array, brand_tokens stays in state.brandTokens)
 
     const rating   = reviewReport ? reviewReport.overall_rating : 'not_reviewed'
     const issueCount = reviewReport ? (reviewReport.issues || []).length : 0
@@ -254,6 +258,7 @@ function showResults() {
 function downloadSpec() {
   const output = {
     brandRulebook:  state.brandRulebook,
+    brandTokens:    state.brandTokens,
     outline:        state.outline,
     slideManifest:  state.slideManifest,
     designedSpec:   state.designedSpec,

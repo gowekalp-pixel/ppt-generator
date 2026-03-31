@@ -124,13 +124,12 @@ function slimBlockForRender(block) {
   return out
 }
 
-function slimSlideForRender(slide) {
+function slimSlideForRender(slide, useTemplate) {
   if (!slide || typeof slide !== 'object') return slide
   const out = {}
-  const useTemplate = !!((slide.brand_tokens || {}).uses_template)
   const keep = new Set([
     'slide_number', 'slide_type', 'slide_archetype',
-    'canvas', 'brand_tokens', 'global_elements',
+    'canvas', 'global_elements',
     'layout_mode', 'selected_layout_name',
     'title', 'subtitle', 'speaker_note',
     'blocks'
@@ -240,7 +239,7 @@ async function generatePPTX() {
   const cardEl     = $('pptx-download-card')
 
   // ── Guard ─────────────────────────────────────────────────────────────────
-  if (!state.finalSpec || !state.brandRulebook) {
+  if (!state.finalSpec || !state.brandRulebook || !state.brandTokens) {
     alert('Please run the full pipeline first (click Run AI Pipeline).')
     return
   }
@@ -279,7 +278,7 @@ async function generatePPTX() {
     progressEl.style.width = '30%'
     statusEl.textContent   = '⏳ python-pptx building ' + slideCount + ' slides on server...'
 
-    let renderSpec = Array.isArray(state.finalSpec) ? state.finalSpec.map(slimSlideForRender) : []
+    let renderSpec = Array.isArray(state.finalSpec) ? state.finalSpec.map(s => slimSlideForRender(s, useTemplate)) : []
 
     // ── Layout-mode sanitisation ─────────────────────────────────────────────
     // layout_mode and selected_layout_name are ONLY meaningful for content slides.
@@ -326,6 +325,7 @@ async function generatePPTX() {
 
     const basePayload = {
       finalSpec:     renderSpec,
+      brand_tokens:  state.brandTokens,
       brandRulebook: slimBrandRulebookForRender(state.brandRulebook, renderSpec),
       templateB64:   null
     }

@@ -84,7 +84,6 @@ NARRATIVE ROLE → slide_intent DEFAULT MAPPING:
   scenario_analysis          → decide
   decision_framework         → decide
   recommendations            → decide
-  forward_looking            → plan
   methodology_note           → explain
   additional_information     → explain
 
@@ -107,7 +106,6 @@ NARRATIVE ROLE → slide_position DEFAULT MAPPING:
   recommendations            → resolution
   scenario_analysis          → resolution
   decision_framework         → resolution
-  forward_looking            → resolution
   methodology_note           → appendix
 
 proves_claim → preceding_slide_claim:
@@ -305,9 +303,9 @@ Apply the constraints below before any data-shape or zone-role rules.
 These are HARD constraints — no override permitted regardless of content.
 
   recommendations:
-    PERMITTED:  prioritization (primary), insight_text (secondary only)
-    FORBIDDEN:  cards, chart, table, workflow, matrix, driver_tree
-    Reason: this is an action slide — KPI cards and data charts do not belong here
+    PERMITTED:  prioritization (primary), insight_text, cards (target/milestone values only — not actuals), table (milestones)
+    FORBIDDEN:  charts showing actuals, workflow, matrix, driver_tree
+    Cards rule: card values must be future targets or milestones — do not restate actuals already shown on earlier slides
 
   methodology_note:
     PERMITTED:  insight_text, table (definitions/rates only)
@@ -328,12 +326,6 @@ These are HARD constraints — no override permitted regardless of content.
     PERMITTED:  cards (sentiment MUST be "negative" or "warning"), insight_text, chart (as supporting evidence)
     FORBIDDEN:  prioritization, workflow
     Cards rule: if cards are used, every card sentiment field must be "negative" or "warning" — positive sentiment cards are blocked
-
-  forward_looking:
-    PERMITTED:  cards (target values only — not actuals), insight_text, table (milestones)
-    FORBIDDEN:  charts showing actuals, matrix, driver_tree
-    Cards rule: card values must be future targets — if the value already appeared in an earlier
-    slide as an actual, it must not be repeated as a card here
 
   All other roles (explainer_to_summary, drill_down, segmentation, trend_analysis,
   waterfall_decomposition, benchmark_comparison, validation, risk_register,
@@ -376,8 +368,8 @@ IF narrative_role is "context_setter", "problem_statement", or summary_card_regi
 is empty (no summary slide precedes this batch):
   → Skip deduplication. No registry to check against.
 
-IF narrative_role is "forward_looking":
-  → Cards represent future target values, not actuals — deduplication does not apply.
+IF narrative_role is "recommendations":
+  → Cards represent future target/milestone values, not actuals — deduplication does not apply.
     Target values are new data even if the metric name appeared in the summary.
 
 ──────────────────────────────────────────────────────────
@@ -1191,7 +1183,7 @@ ARTIFACT SCHEMAS
 insight_text:
   {
     "type": "insight_text",
-    "insight_header": "Key Insight" | "So What" | "Risk Alert" | "Action Required",
+    "insight_header": "2–4 word specific label that names the implication — e.g. 'Risk Implication', 'Growth Opportunity', 'Action Required', 'Portfolio Risk' — never use generic labels like 'So What' or 'Key Insight'",
     "points": ["specific insight with data"],          ← STANDARD mode (flat list)
     "groups": [                                        ← GROUPED mode (thematic sections)
       { "header": "2–4 word label", "bullets": ["crisp point with data"] }
@@ -1466,7 +1458,7 @@ function defaultZonesForArchetype(archetype) {
         { zone_id: 'z2', zone_role: 'implication', narrative_weight: 'secondary',
           message_objective: 'Interpret the trend',
           layout_hint: { split: 'right_40' },
-          artifacts: [{ type: 'insight_text', insight_header: 'So What', points: [], sentiment: 'neutral' }] }
+          artifacts: [{ type: 'insight_text', insight_header: 'Trend Implication', points: [], sentiment: 'neutral' }] }
       ]
 
     case 'comparison':
@@ -1515,7 +1507,7 @@ function defaultZonesForArchetype(archetype) {
         { zone_id: 'z2', zone_role: 'implication', narrative_weight: 'secondary',
           message_objective: 'Key insight or action from the process',
           layout_hint: { split: 'bottom_40' },
-          artifacts: [{ type: 'insight_text', insight_header: 'So What', points: [], sentiment: 'neutral' }] }
+          artifacts: [{ type: 'insight_text', insight_header: 'Process Implication', points: [], sentiment: 'neutral' }] }
       ]
 
     case 'recommendation':
@@ -1535,7 +1527,7 @@ function defaultZonesForArchetype(archetype) {
         { zone_id: 'z2', zone_role: 'implication', narrative_weight: 'secondary',
           message_objective: 'Interpretation and implication of the evidence',
           layout_hint: { split: 'right_40' },
-          artifacts: [{ type: 'insight_text', insight_header: 'So What', points: [], sentiment: 'neutral' }] }
+          artifacts: [{ type: 'insight_text', insight_header: 'Risk Implication', points: [], sentiment: 'neutral' }] }
       ]
 
     default: // summary
@@ -2343,7 +2335,7 @@ function normaliseArtifact(a) {
   if (t === 'insight_text') {
     if (!a.points) a.points = []
     // Map insight_header → heading for backward compatibility with Agent 5/6
-    if (!a.heading) a.heading = a.insight_header || 'Key Insight'
+    if (!a.heading) a.heading = a.insight_header || ''
     if (!a.insight_header) a.insight_header = a.heading
     if (!a.sentiment) a.sentiment = 'neutral'
     // Normalise points — flatten if they're objects
@@ -2641,7 +2633,7 @@ INSTRUCTIONS:
 - Card density rule: unless a single cards artifact contains 8+ cards, no individual card may imply more than ~15% of total slide area.
 - Every chart: MUST have 3+ categories, matching values, no all-zeros; set chart_header to the one-line insight the chart proves
 - clustered_bar: MUST have exactly 2 series
-- Every insight_text: MUST have specific, data-driven points; set insight_header to one of: Key Insight | So What | Risk Alert | Action Required
+- Every insight_text: MUST have specific, data-driven points; set insight_header to a 2–4 word specific label naming the implication (e.g. "Risk Implication", "Growth Opportunity", "Action Required") — never use generic labels like "So What" or "Key Insight"
 - Workflows: fully populate nodes and connections; set workflow_header to the one-line insight
 - Workflow restrictions:
   - process_flow: left_to_right only, >=4 nodes, full-width zone, >=50% height

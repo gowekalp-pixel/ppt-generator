@@ -3820,18 +3820,10 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
       x: rankX, y: rankY, w: rankSize, h: rankSize,
       fill_color: rankFill,
       font_color: ps.rank_text_color || '#FFFFFF',
-      text: String(item.rank != null ? item.rank : idx + 1)
-    })
-    blocks.push({
-      block_type: 'text_box',
-      x: rankX, y: rankY, w: rankSize, h: rankSize,
-      text: String(item.rank != null ? item.rank : idx + 1),
       font_family: ps.rank_font_family || bt.title_font_family || 'Arial',
-      font_size: ps.rank_font_size || 17,
+      font_size: ps.rank_font_size || Math.max(12, Math.round(rankSize * 36)),
       bold: true,
-      color: ps.rank_text_color || '#FFFFFF',
-      align: 'center',
-      valign: 'middle'
+      text: String(item.rank != null ? item.rank : idx + 1)
     })
 
     blocks.push({
@@ -4328,7 +4320,6 @@ function _artifactToBlocks(art, blocks, bt, r2) {
           legend_position: 'none'
         },
         series_style:            art.series_style  || [],
-        brand_tokens:            { primary_color: bt.primary_color, chart_palette: bt.chart_palette },
         // Pre-computed by computeArtifactInternals — renderer reads these directly
         legend_position:         computed.legend_position        || 'none',
         data_label_size:         computed.data_label_size        || 9,
@@ -5888,5 +5879,16 @@ async function runAgent5(state) {
     return buildMinimalSafeSlide(manifestSlide, tokens)
   })
 
-  return finalDesigned
+  // Hoist brand_tokens to the top level — all slides share the same tokens,
+  // so we read from the first slide and strip brand_tokens from every slide.
+  const hoistedBrandTokens = (finalDesigned[0] || {}).brand_tokens || {}
+  const slides = finalDesigned.map(slide => {
+    if (!slide) return slide
+    const out = Object.assign({}, slide)
+    delete out.brand_tokens
+    return out
+  })
+
+  console.log('Agent 5 -- brand_tokens hoisted to top level; removed from', slides.length, 'slides')
+  return { brand_tokens: hoistedBrandTokens, slides }
 }

@@ -5,8 +5,9 @@ Receives Agent 5 finalSpec JSON → builds PPTX using python-pptx → returns ba
 
 Input (POST body JSON):
   {
-    "finalSpec": [...],       # Agent 5 designed spec array
-    "brandRulebook": {...}    # Agent 2 brand rulebook (for fallback values)
+    "finalSpec": [...],       # Agent 5 designed spec — array of slides (no per-slide brand_tokens)
+    "brand_tokens": {...},    # Hoisted brand tokens shared across all slides
+    "brandRulebook": {...}    # Agent 2 brand rulebook (layout names, slide size fallbacks)
   }
 
 Output (JSON):
@@ -3505,7 +3506,8 @@ def _legacy_render_zones(slide, slide_spec, bt, use_template, layout_mode,
 
 
 def build_slide(prs, slide_spec, blank_layout, use_template=False,
-                title_layout_name=None, divider_layout_name=None):
+                title_layout_name=None, divider_layout_name=None,
+                global_brand_tokens=None):
     """
     Build one slide from its spec object.
 
@@ -3520,7 +3522,9 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
     slide_type           = slide_spec.get('slide_type', 'content')
     layout_mode          = slide_spec.get('layout_mode', False)
     selected_layout_name = slide_spec.get('selected_layout_name', '')
-    bt                   = slide_spec.get('brand_tokens', {})
+    # brand_tokens: prefer the hoisted top-level tokens; fall back to any per-slide
+    # remnant for backward compatibility with older payloads.
+    bt                   = {**(global_brand_tokens or {}), **slide_spec.get('brand_tokens', {})}
     cvs                  = slide_spec.get('canvas', {})
     tb                   = dict(slide_spec.get('title_block') or {})
     sb                   = dict(slide_spec.get('subtitle_block') or {})
@@ -3770,7 +3774,7 @@ def build_slide(prs, slide_spec, blank_layout, use_template=False,
 
 # ─── MAIN BUILDER ─────────────────────────────────────────────────────────────
 
-def build_presentation(final_spec, brand_rulebook, template_b64=None):
+def build_presentation(final_spec, brand_rulebook, template_b64=None, brand_tokens=None):
     """
     Build a complete Presentation from the Agent 5 final spec.
 
@@ -3840,7 +3844,8 @@ def build_presentation(final_spec, brand_rulebook, template_b64=None):
         try:
             build_slide(prs, slide_spec, blank_layout, use_template,
                         title_layout_name=title_layout_name,
-                        divider_layout_name=divider_layout_name)
+                        divider_layout_name=divider_layout_name,
+                        global_brand_tokens=brand_tokens or {})
         except Exception as e:
             print(f"Error building slide {slide_spec.get('slide_number', '?')}:", e)
             traceback.print_exc()
@@ -3862,6 +3867,7 @@ class handler(BaseHTTPRequestHandler):
             data   = json.loads(body)
 
             final_spec     = data.get('finalSpec', [])
+            brand_tokens   = data.get('brand_tokens') or {}
             brand_rulebook = data.get('brandRulebook', {})
             template_b64   = data.get('templateB64') or None
 
@@ -3870,7 +3876,7 @@ class handler(BaseHTTPRequestHandler):
                 return
 
             # Build the presentation (optionally from a brand template)
-            prs = build_presentation(final_spec, brand_rulebook, template_b64)
+            prs = build_presentation(final_spec, brand_rulebook, template_b64, brand_tokens=brand_tokens)
 
             # Serialize to bytes
             buf = io.BytesIO()

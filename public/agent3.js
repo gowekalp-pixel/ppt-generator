@@ -119,12 +119,11 @@ SUPPLEMENTARY:
                            claim. Typically 1 slide; appears after the slide that uses the method.
 
 CLOSING:
-  "recommendations"      — Actionable items with owners, timelines, and measurable outcomes. Must
-                           set addresses_finding to the section(s) that identified the problem
-                           each action resolves. No headline KPI cards — this is an action slide.
-  "forward_looking"      — Future state, targets, milestones, and next review commitments. References
-                           current state as baseline but focuses on future targets. Cards allowed
-                           only for target values (not actuals already shown elsewhere).
+  "recommendations"      — Actionable items with owners, timelines, and measurable outcomes, plus
+                           forward-looking milestones and next review commitments. Must set
+                           addresses_finding to the section(s) that identified the problem each
+                           action resolves. Cards allowed only for target/milestone values — no
+                           headline KPI cards restating actuals already shown elsewhere.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PROOF CHAIN POINTERS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -326,7 +325,7 @@ function inferNarrativeRole(section, index) {
     executive_summary:  'summary',
     divider:            'divider',
     recommendations:    'recommendations',
-    conclusion:         'forward_looking',
+    conclusion:         'recommendations',
     appendix:           'additional_information',
     financial_data:     'explainer_to_summary',
     market_analysis:    'explainer_to_summary',
