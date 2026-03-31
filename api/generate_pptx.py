@@ -2880,7 +2880,7 @@ def _shift_blocks_for_title_gap(slide, blocks, use_template):
 
     EMU = 914400.0
     # Finalized contract uses 2px, not 2pt. Assume standard Office/render DPI.
-    MIN_GAP_IN = 16 / 96.0
+    MIN_GAP_IN = 32 / 96.0
 
     def _find_block(btype):
         return next(
@@ -2955,7 +2955,7 @@ def _shift_blocks_for_title_gap(slide, blocks, use_template):
 
     content_start_y = min(float(b['y']) for b in content_blocks)
     gap   = content_start_y - header_bottom
-    shift = round(MIN_GAP_IN - gap, 8)   # positive → content too close / overlapping
+    shift = round(MIN_GAP_IN - gap, 16)   # positive → content too close / overlapping
 
     if shift <= 0:
         return blocks   # content already clears the header by at least MIN_GAP_IN
