@@ -364,10 +364,11 @@ function safeParseJSON(raw, fallback) {
     try {
       setProgress(15, 'Calling Claude — batch 1...')
 
-      const spec = await runAgent5({
+      const agent5Result = await runAgent5({
         slideManifest: filteredSlides,
         brandRulebook: brand
       })
+      const spec = agent5Result.slides
 
       resultSpec  = spec
       activeSlide = 0
