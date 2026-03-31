@@ -1232,9 +1232,11 @@ def render_group_pie(slide, x, y, w, h, categories, series_data, series_styles,
             except Exception:
                 pass
 
-            # Percentage data labels
+            # Percentage data labels — outside end, primary brand color, skip zero-value slices
             if show_labels:
                 try:
+                    lbl_pt  = Pt(max(7, label_size))
+                    lbl_rgb = hex_to_rgb(accent_color)  # primary brand color, not white
                     for ser_obj in pie_chart.series:
                         ser_obj.data_labels.show_percentage = True
                         ser_obj.data_labels.show_value      = False
@@ -1242,19 +1244,43 @@ def render_group_pie(slide, x, y, w, h, categories, series_data, series_styles,
                             ser_obj.data_labels.number_format = '0%'
                         except Exception:
                             pass
-                        lbl_pt  = Pt(max(7, label_size))
-                        lbl_rgb = hex_to_rgb('#FFFFFF')
+                        # Series-level font (fallback)
                         try:
                             ser_obj.data_labels.font.size      = lbl_pt
                             ser_obj.data_labels.font.color.rgb = lbl_rgb
                         except Exception:
                             pass
-                        for lbl in ser_obj.data_labels:
+                        # Per-label: set position to outEnd and hide labels for zero-value slices
+                        for pi, lbl in enumerate(ser_obj.data_labels):
                             try:
                                 lbl.font.size      = lbl_pt
                                 lbl.font.color.rgb = lbl_rgb
                             except Exception:
                                 pass
+                            # Hide label when slice value is 0
+                            slice_val = values[pi] if pi < len(values) else 0.0
+                            if slice_val == 0.0:
+                                try:
+                                    lbl_el = lbl._element
+                                    show_el = lbl_el.find(nsmap.qn('c:showVal'))
+                                    if show_el is None:
+                                        show_el = etree.SubElement(lbl_el, nsmap.qn('c:showVal'))
+                                    show_el.set('val', '0')
+                                    show_pct = lbl_el.find(nsmap.qn('c:showPercent'))
+                                    if show_pct is None:
+                                        show_pct = etree.SubElement(lbl_el, nsmap.qn('c:showPercent'))
+                                    show_pct.set('val', '0')
+                                except Exception:
+                                    pass
+                        # Force label position to outEnd at series level via XML
+                        try:
+                            dLbls_el = ser_obj.data_labels._element
+                            pos_el = dLbls_el.find(nsmap.qn('c:dLblPos'))
+                            if pos_el is None:
+                                pos_el = etree.SubElement(dLbls_el, nsmap.qn('c:dLblPos'))
+                            pos_el.set('val', 'outEnd')
+                        except Exception:
+                            pass
                 except Exception:
                     pass
         except Exception as e:
