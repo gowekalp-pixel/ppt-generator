@@ -4,7 +4,6 @@ import base64
 import zipfile
 import re
 import posixpath
-import struct
 from http.server import BaseHTTPRequestHandler
 
 
@@ -42,120 +41,6 @@ def clean_hex(val):
     if len(h) == 6 and all(c in '0123456789ABCDEF' for c in h):
         return '#' + h
     return None
-
-
-def image_dimensions(image_bytes, filename=''):
-    """Best-effort image size extractor for PNG/JPEG/GIF without external deps."""
-    name = (filename or '').lower()
-    try:
-        if name.endswith('.png') and image_bytes[:8] == b'\x89PNG\r\n\x1a\n':
-            return struct.unpack('>II', image_bytes[16:24])
-        if name.endswith(('.jpg', '.jpeg')) and image_bytes[:2] == b'\xff\xd8':
-            i = 2
-            while i < len(image_bytes) - 9:
-                if image_bytes[i] != 0xFF:
-                    i += 1
-                    continue
-                marker = image_bytes[i + 1]
-                if marker in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
-                    h, w = struct.unpack('>HH', image_bytes[i + 5:i + 9])
-                    return (w, h)
-                seg_len = struct.unpack('>H', image_bytes[i + 2:i + 4])[0]
-                i += 2 + seg_len
-        if name.endswith('.gif') and image_bytes[:6] in (b'GIF87a', b'GIF89a'):
-            return struct.unpack('<HH', image_bytes[6:10])
-    except Exception:
-        pass
-    return (0, 0)
-
-
-def collect_media_usage(files, z):
-    """Count how often each media asset is referenced by slides/layouts/masters."""
-    usage = {}
-    rel_files = [f for f in files if f.startswith('ppt/') and '/_rels/' in f and f.endswith('.rels')]
-
-    for rel_path in rel_files:
-        try:
-            rel_xml = z.read(rel_path).decode('utf-8', errors='ignore')
-        except Exception:
-            continue
-
-        if 'slideMasters/' in rel_path:
-            source_weight = 6
-        elif 'slideLayouts/' in rel_path:
-            source_weight = 4
-        elif 'slides/' in rel_path:
-            source_weight = 1
-        else:
-            source_weight = 0
-
-        if source_weight == 0:
-            continue
-
-        base_dir = posixpath.dirname(rel_path).replace('/_rels', '')
-        for target in re.findall(r'Target="([^"]+)"', rel_xml):
-            normalized = posixpath.normpath(posixpath.join(base_dir, target))
-            if normalized.startswith('ppt/media/'):
-                usage[normalized] = usage.get(normalized, 0) + source_weight
-
-    return usage
-
-
-def extract_logo_candidates(files, z):
-    """Extract likely logo assets from embedded PPT media."""
-    media_usage = collect_media_usage(files, z)
-    media_files = [f for f in files if f.startswith('ppt/media/')]
-    candidates = []
-
-    for media_path in media_files:
-        name = posixpath.basename(media_path)
-        lower = name.lower()
-        ext = lower.split('.')[-1] if '.' in lower else ''
-        if ext not in ('png', 'jpg', 'jpeg', 'gif'):
-            continue
-
-        try:
-            blob = z.read(media_path)
-        except Exception:
-            continue
-
-        width_px, height_px = image_dimensions(blob, name)
-        byte_size = len(blob)
-
-        score = 0
-        if any(tag in lower for tag in ('logo', 'brand', 'mark', 'wordmark')):
-            score += 120
-        score += media_usage.get(media_path, 0) * 10
-        if ext == 'png':
-            score += 12
-        if 2_000 <= byte_size <= 350_000:
-            score += 18
-        if width_px and height_px:
-            area = width_px * height_px
-            aspect = width_px / max(height_px, 1)
-            if 2.0 <= aspect <= 8.0:
-                score += 20
-            if 4_000 <= area <= 500_000:
-                score += 15
-            elif area > 2_500_000:
-                score -= 25
-        if media_usage.get(media_path, 0) == 0:
-            score -= 20
-
-        candidates.append({
-            'name': name,
-            'path': media_path,
-            'mime_type': 'image/jpeg' if ext in ('jpg', 'jpeg') else 'image/' + ext,
-            'base64': base64.b64encode(blob).decode('utf-8'),
-            'width_px': width_px,
-            'height_px': height_px,
-            'byte_size': byte_size,
-            'usage_score': media_usage.get(media_path, 0),
-            'score': score
-        })
-
-    candidates.sort(key=lambda c: (c['score'], c['usage_score'], -c['byte_size']), reverse=True)
-    return candidates[:5]
 
 
 def read_relationships(z, rel_path):
@@ -394,8 +279,6 @@ def extract_brand_from_pptx(pptx_bytes):
         'body_font':           {},
         'slide_layouts':       [],
         'slide_masters':       [],
-        'logos':               [],
-        'primary_logo':        None,
         'raw_fonts':           {},
         'errors':              []
     }
@@ -470,10 +353,6 @@ def extract_brand_from_pptx(pptx_bytes):
                     if master_path in masters_by_path:
                         masters_by_path[master_path]['layout_paths'].append(lf)
                         masters_by_path[master_path]['layout_names'].append(layout_info.get('name', lf))
-
-            logos = extract_logo_candidates(files, z)
-            result['logos'] = logos
-            result['primary_logo'] = logos[0] if logos else None
 
     except Exception as e:
         result['errors'].append(str(e))
