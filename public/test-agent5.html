@@ -279,8 +279,9 @@ function safeParseJSON(raw, fallback) {
     } else { console.log('[Agent5] agent5.js loaded OK — runAgent5 is defined') }
   })
 
-  let resultSpec  = null
-  let activeSlide = 0
+  let resultSpec        = null
+  let resultBrandTokens = null
+  let activeSlide       = 0
 
   // ─── JSON HELPERS ──────────────────────────────────────────────────────────
   // Round display values to 2dp — prevents 10.21999... in inspector
@@ -369,6 +370,7 @@ function safeParseJSON(raw, fallback) {
         brandRulebook: brand
       })
       const spec = agent5Result.slides
+      resultBrandTokens = agent5Result.brand_tokens
 
       resultSpec  = spec
       activeSlide = 0
@@ -1552,13 +1554,15 @@ function safeParseJSON(raw, fallback) {
 
   function copyJSON() {
     if (!resultSpec) return
-    navigator.clipboard.writeText(JSON.stringify(resultSpec, null, 2))
+    const output = { brand_tokens: resultBrandTokens, slides: resultSpec }
+    navigator.clipboard.writeText(JSON.stringify(output, null, 2))
       .then(() => alert('Copied to clipboard!'))
       .catch(() => alert('Copy failed — select and copy manually.'))
   }
 
   function resetAll() {
     resultSpec = null
+    resultBrandTokens = null
     ;['brand','manifest'].forEach(t => {
       document.getElementById(t + '-input').value = ''
       document.getElementById('zone-' + t).classList.remove('ready')

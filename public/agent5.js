@@ -6,8 +6,10 @@
 //
 // Architecture: Claude API call per batch of 3 slides.
 // Claude receives the Agent 4 manifest + brand guideline and returns
-// a precise layout spec: canvas, brand_tokens, title_block, subtitle_block,
+// a precise layout spec: canvas, title_block, subtitle_block,
 // zones (with fully positioned artifacts), and global_elements.
+// brand_tokens are derived from the brand rulebook and hoisted to the
+// top-level return value — Claude does NOT output them per slide.
 //
 // Agent 5.1 then reviews this spec and applies targeted fixes.
 // Agent 6 (python-pptx) consumes the final reviewed spec.
@@ -199,18 +201,6 @@ Each slide must return EXACTLY:
     "height_in": number,
     "margin": { "left": number, "right": number, "top": number, "bottom": number },
     "background": { "color": "hex" }
-  },
-  "brand_tokens": {
-    "title_font_family": "string",
-    "body_font_family": "string",
-    "caption_font_family": "string",
-    "title_color": "hex",
-    "body_color": "hex",
-    "caption_color": "hex",
-    "primary_color": "hex",
-    "secondary_color": "hex",
-    "accent_colors": ["hex"],
-    "chart_palette": ["hex"]
   },
   "title_block": {
     "text": "string",
@@ -2332,7 +2322,7 @@ function buildMinimalSafeSlide(manifestSlide, tokens) {
     : (fallbackSlide.zones || [])
 
   if (framedZones.length > 0) {
-    computeArtifactInternals(framedZones, fallbackSlide.canvas || {}, fallbackSlide.brand_tokens || {})
+    computeArtifactInternals(framedZones, fallbackSlide.canvas || {}, fallbackBrandTokens)
     normalizeArtifactHeaderBands(framedZones)
     framedZones.forEach((zone, zi) => {
       ;(zone.artifacts || []).forEach((art, ai) => {
@@ -2344,7 +2334,7 @@ function buildMinimalSafeSlide(manifestSlide, tokens) {
   fallbackSlide.zones = framedZones
   fallbackSlide.blocks = sanitizeBlocks(flattenToBlocks(
     fallbackSlide,
-    fallbackSlide.brand_tokens || {}
+    fallbackBrandTokens
   ), fallbackSlide)
   fallbackSlide.zones_summary = framedZones.map(z => ({
     zone_id: z.zone_id,
@@ -5504,13 +5494,24 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
 
   const branded = applyBrandGuidelineOverrides(designed, manifestSlide, brand)
 
-  // Ensure brand.uses_template is reflected in brand_tokens regardless of path.
-  // Fallback designs (buildFallbackDesign) lose this flag; the renderer uses
-  // use_template=True whenever a brand PPTX template was uploaded, so agent5
-  // must use the same assumption for layout estimation.
-  if (brand && brand.uses_template && branded.brand_tokens) {
-    branded.brand_tokens = { ...branded.brand_tokens, uses_template: true }
+  // Derive bt from the brand rulebook — authoritative source, never depends on
+  // what Claude returned per-slide (brand_tokens is no longer in Claude output).
+  const bt = {
+    primary_color:      (brand.primary_colors    || [])[0] || '#1A3C8F',
+    secondary_color:    (brand.secondary_colors  || [])[0] || '#E8A020',
+    title_color:        (brand.primary_colors    || [])[0] || '#1A3C8F',
+    body_color:         (brand.text_colors       || [])[0] || '#111111',
+    caption_color:      '#888888',
+    title_font_family:  (brand.title_font   || {}).family  || 'Arial',
+    body_font_family:   (brand.body_font    || {}).family  || 'Arial',
+    caption_font_family:(brand.caption_font || {}).family  || 'Arial',
+    accent_colors:      brand.accent_colors        || [],
+    chart_palette:      brand.chart_color_sequence || brand.chart_colors || [],
+    uses_template:      brand.uses_template        || false
   }
+  // Keep brand_tokens on the slide object for internal processing only —
+  // it is stripped from every slide before runAgent5 returns.
+  branded.brand_tokens = bt
 
   const inputIssues = validateDesignedSlide(branded)
   if (inputIssues.length > 0) {
@@ -5521,7 +5522,7 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
   const mergedZones = mergeContentIntoZones(
     branded.zones || [],
     manifestSlide.zones || [],
-    branded.brand_tokens || {}
+    bt
   )
 
   // Layout mode: fill zone frames + artifact placeholder_idx from the layout's content_areas.
@@ -5596,7 +5597,7 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
 
   // Post-process: fill computed layout/sizing fields (stacking, chart, table, cards, font scaling)
   // so that generate_pptx.py can act as a pure renderer reading pre-computed values.
-  computeArtifactInternals(finalZones, branded.canvas || {}, branded.brand_tokens || {})
+  computeArtifactInternals(finalZones, branded.canvas || {}, bt)
   normalizeArtifactHeaderBands(finalZones)
 
   finalZones.forEach((zone, zi) => {
@@ -5617,7 +5618,7 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
   // generate_pptx.py reads these directly when present; zones path is legacy fallback.
   brandedWithLayoutTitle.blocks = sanitizeBlocks(flattenToBlocks(
     { ...brandedWithLayoutTitle, zones: finalZones },
-    brandedWithLayoutTitle.brand_tokens || {}
+    bt
   ), brandedWithLayoutTitle)
   const renderIssues = validateRenderCompleteness({ ...brandedWithLayoutTitle, zones: finalZones })
   if (renderIssues.length > 0) {

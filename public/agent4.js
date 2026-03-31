@@ -1193,14 +1193,14 @@ insight_text:
   Use either points[] OR groups[] — never both.
 
   STANDARD mode bullet rules:
-  - Max points by zone area: < 25% → 4 pts; 25–50% → 6 pts; > 50% → 8 pts (HARD MAX)
+  - Max points by slide area: < 25% → 4 pts; 25–50% → 6 pts; > 50% → 8 pts (HARD MAX)
   - Each bullet ≤ 12 words. 1–2 data points per bullet. Remainder goes to speaker notes.
   - Data-first phrasing: lead with the number or entity, not "This shows that…"
   - No compound sentences with dashes or semicolons — one idea per bullet.
-  - If at the zone cap with findings remaining: move lower-priority to speaker notes.
+  - If at the slide-area cap with findings remaining: move lower-priority findings to speaker notes.
 
   GROUPED mode bullet rules:
-  - Max groups × bullets by zone area: < 25% → 2×2; 25–50% → 3×3; > 50% → 5×3 (HARD MAX)
+  - Grouped mode eligibility by slide area: < 30% → not allowed, revert to Standard; 30–50% → max 3 groups × 3 bullets each; > 50% → max 6 groups × 3 bullets each (HARD MAX)
   - Each bullet ≤ 12 words. 1–2 data points per bullet. Remainder to speaker notes.
   - Group headers: 2–4 words, no verbs, label the theme not the finding.
 
