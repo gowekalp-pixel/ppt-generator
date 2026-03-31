@@ -461,7 +461,7 @@ function safeParseJSON(raw, fallback) {
       return '<button class="slide-btn type-' + s.slide_type + (i === 0 ? ' active' : '') + extra + '" onclick="showSlide(' + i + ')" title="' + title + '">' + label + '</button>'
     }).join('')
 
-    document.getElementById('raw-json').textContent = JSON.stringify(spec, null, 2)
+    document.getElementById('raw-json').textContent = JSON.stringify({ brand_tokens: resultBrandTokens, slides: spec }, null, 2)
     showSlide(0)
   }
 
