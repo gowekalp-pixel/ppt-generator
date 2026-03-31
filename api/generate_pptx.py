@@ -1430,7 +1430,10 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
                 legend_font_size,
                 cs.get('legend_color', bt.get('body_color', '#000000'))
             )
-        accent_color = bt.get('accent_color') or bt.get('primary_color') or '#E87722'
+        accent_color = next(
+            (s.get('data_label_color') for s in series_styles if s.get('data_label_color')),
+            None
+        ) or bt.get('body_color') or bt.get('primary_color') or '#1A1A1A'
         body_font    = cs.get('label_font_family') or bt.get('body_font_family', 'Arial')
         render_group_pie(
             slide,
@@ -1549,12 +1552,9 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
                     lbl_color = (series_styles[si].get('data_label_color')
                                  if si < len(series_styles) else None)
                     if not lbl_color:
-                        # For horizontal bars use the bar fill color (labels outside bar on white bg)
-                        # For vertical bars use body color (labels above bar on white bg)
-                        if chart_type_str == 'horizontal_bar':
-                            lbl_color = color_hex or bt.get('primary_color', '#1A3C8F')
-                        else:
-                            lbl_color = '#000000' if allow_chart_fallback else bt.get('body_color', '#000000')
+                        # Agent 6 renders labels outside the data mark, so default to a
+                        # brand text color rather than white / series fill.
+                        lbl_color = bt.get('body_color') or bt.get('primary_color', '#1A3C8F')
                     _lbl_size = min(max_chart_label_size, header_font_size) if allow_chart_fallback else max_chart_label_size
                     _lbl_pt = Pt(_lbl_size)
                     _lbl_rgb = hex_to_rgb(lbl_color)
@@ -1571,10 +1571,18 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
                             lbl.font.color.rgb = _lbl_rgb
                         except Exception:
                             pass
-                    # For horizontal bars: force label position to outEnd (outside the bar)
-                    # so labels are always visible on white background, regardless of bar length.
-                    # Default inEnd buries labels inside dark-colored bars where they're invisible.
+                    # Force data labels outside the data mark for all chart types where
+                    # PowerPoint supports dLblPos so labels render in the slide background area.
                     if chart_type_str == 'horizontal_bar':
+                        try:
+                            dLbls_el = ser_obj.data_labels._element
+                            pos_el = dLbls_el.find(nsmap.qn('c:dLblPos'))
+                            if pos_el is None:
+                                pos_el = etree.SubElement(dLbls_el, nsmap.qn('c:dLblPos'))
+                            pos_el.set('val', 'outEnd')
+                        except Exception:
+                            pass
+                    else:
                         try:
                             dLbls_el = ser_obj.data_labels._element
                             pos_el = dLbls_el.find(nsmap.qn('c:dLblPos'))
@@ -2872,7 +2880,7 @@ def _shift_blocks_for_title_gap(slide, blocks, use_template):
 
     EMU = 914400.0
     # Finalized contract uses 2px, not 2pt. Assume standard Office/render DPI.
-    MIN_GAP_IN = 4 / 96.0
+    MIN_GAP_IN = 16 / 96.0
 
     def _find_block(btype):
         return next(
@@ -2947,7 +2955,7 @@ def _shift_blocks_for_title_gap(slide, blocks, use_template):
 
     content_start_y = min(float(b['y']) for b in content_blocks)
     gap   = content_start_y - header_bottom
-    shift = round(MIN_GAP_IN - gap, 4)   # positive → content too close / overlapping
+    shift = round(MIN_GAP_IN - gap, 8)   # positive → content too close / overlapping
 
     if shift <= 0:
         return blocks   # content already clears the header by at least MIN_GAP_IN

@@ -7,8 +7,8 @@
 // Agent 3 deeply understands the document and defines the presentation strategy.
 // Agent 4 uses this brief to build the slide content.
 
-const AGENT3_SYSTEM = `You are a senior management consultant with deep expertise in financial analysis, 
-strategy, and board-level communication. You have been asked to review a document and 
+const AGENT3_SYSTEM = `You are a senior management consultant with deep expertise in financial analysis,
+strategy, and board-level communication. You have been asked to review a document and
 prepare a comprehensive presentation brief for your team who will build the actual slides.
 
 Your job has TWO parts:
@@ -31,9 +31,119 @@ Structure the presentation using the top-down approach:
 
 Think carefully about the right narrative flow for THIS specific content:
 - For financial content: Situation → Performance → Drivers → Outlook → Actions
-- For market research: Context → Market Dynamics → Competitive Position → Implications → Recommendations  
+- For market research: Context → Market Dynamics → Competitive Position → Implications → Recommendations
 - For strategy: Objective → Current State → Gap Analysis → Options → Recommended Path
 - For operational: Baseline → Issues → Root Cause → Solutions → Implementation
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NARRATIVE ROLES — assign one to every section
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Each section must be assigned a narrative_role from the list below.
+The role defines the analytical job of the slide and controls how Agent 4 renders it.
+
+STRUCTURAL (no data, no proof chain — always 1 slide each):
+  "title"                — Opening slide. Framing only, no analysis.
+  "divider"              — Section break between major analytical blocks.
+  "transition_narrative" — Connects two analytical sections: summarises what was just proven,
+                           sets up what comes next. Narrative only, no new data.
+
+OPENING / FRAMING:
+  "context_setter"       — Establishes factual baseline before any claim is made: portfolio size,
+                           time period, scope, definitions. Neutral — no governing thought yet.
+  "problem_statement"    — States the complication or trigger: what changed, what risk emerged,
+                           what decision must be made. The "Complication" in SCR structure.
+  "summary"              — THE governing thought slide. States the conclusion first. All downstream
+                           proof slides exist to validate this one slide. Maximum 1 per deck.
+                           Agent 4 will register all cards/KPIs on this slide and deduplicate
+                           them against subsequent slides.
+
+                           WHEN TO INCLUDE a summary slide:
+                           ✓ Board or C-suite audience who need the conclusion in 30 seconds
+                           ✓ Multi-thread decks (6+ slides) where several independent analytical
+                             sections need a single governing thought to unify them
+                           ✓ Decision-seeking decks where the audience must approve or act
+                           ✓ Situation is complex or politically sensitive — leading with the
+                             answer frames everything that follows
+
+                           WHEN TO SKIP the summary slide:
+                           ✗ Short focused decks (≤5 slides) on a single topic — dive straight in
+                           ✗ Sequential process or methodology presentations — logic unfolds step by step
+                           ✗ Pure data/appendix decks — no governing thought, just reference material
+                           ✗ Exploratory or hypothesis-generating decks where the conclusion is
+                             not yet known — use problem_statement instead to open with the question
+                           ✗ Operational updates or status reports where the audience just needs
+                             the facts in order, not a pre-stated verdict
+
+PROOF CHAIN (main analytical body — prove the summary claims):
+  "explainer_to_summary" — Directly proves one specific claim on the summary slide. First level
+                           of the proof hierarchy. Must set proves_claim to the summary bullet
+                           it supports. May share data with summary but must go one analytical
+                           level deeper — not just restate.
+  "drill_down"           — Zooms into a specific sub-segment of an explainer slide: one geography,
+                           one cohort, one industry. Narrow scope. Must set proves_claim to the
+                           explainer section it supports.
+  "segmentation"         — Compares multiple sub-groups side by side to reveal which are
+                           outperforming, lagging, or anomalous. Different from drill_down which
+                           goes deep into ONE segment — segmentation shows MULTIPLE segments.
+  "trend_analysis"       — Specifically examines how a metric has evolved over time. Drives
+                           line charts and period-over-period comparisons. Different from drill_down
+                           which is a cross-section at one point in time.
+  "waterfall_decomposition" — Explains how a top-line number breaks into its components or how it
+                           moved from one period to another. Answers "what drives this number?"
+  "benchmark_comparison" — Contextualises performance against an external reference: industry peers,
+                           regulatory thresholds, historical norms, or internal targets. Answers
+                           "is this number good or bad?"
+  "exception_highlight"  — Calls out a specific anomaly, outlier, or deviation from the expected
+                           pattern. Not a drill-down into normal behaviour — it surfaces something
+                           that breaks the pattern and demands attention.
+  "validation"           — Explicitly tests a stated assumption or strategic hypothesis with data.
+                           "The thesis was X — here is what the data shows." Used to confirm or
+                           challenge strategic bets or expansion assumptions.
+
+DECISION SUPPORT:
+  "risk_register"        — Structured inventory of identified risks with likelihood, impact, and
+                           mitigation status. Used when the board must approve risk appetite
+                           or sign off on mitigations collectively.
+  "scenario_analysis"    — Shows how outcomes change under different assumptions: base / downside /
+                           stress case. Answers "what if?" rather than "what is?"
+  "decision_framework"   — Presents the structured logic for arriving at a decision: 2×2 matrix,
+                           decision tree, criteria-weighted scorecard. Shows HOW the team
+                           evaluated options, not just what they concluded.
+
+SUPPLEMENTARY:
+  "additional_information" — Enriching context that supports the narrative but is NOT in the direct
+                           proof chain. If removed, the core argument still holds. No new KPIs
+                           that contradict the summary.
+  "methodology_note"     — Explains how data was collected, calculated, or classified. No analytical
+                           claim. Typically 1 slide; appears after the slide that uses the method.
+
+CLOSING:
+  "recommendations"      — Actionable items with owners, timelines, and measurable outcomes. Must
+                           set addresses_finding to the section(s) that identified the problem
+                           each action resolves. No headline KPI cards — this is an action slide.
+  "forward_looking"      — Future state, targets, milestones, and next review commitments. References
+                           current state as baseline but focuses on future targets. Cards allowed
+                           only for target values (not actuals already shown elsewhere).
+  "closing_synthesis"    — Narrative wrap-up. Restates strategic confidence. NO new data, NO action
+                           lists, NO KPI cards. Forward-look milestones and confidence statement only.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PROOF CHAIN POINTERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Use these two optional fields to create an explicit proof chain:
+
+  "proves_claim": "string — the exact summary bullet or explainer claim this slide proves"
+    → Required for: explainer_to_summary, drill_down, segmentation, trend_analysis,
+      waterfall_decomposition, benchmark_comparison, exception_highlight, validation
+    → Leave null for all other roles
+
+  "addresses_finding": "string — the section name or finding this recommendation/action resolves"
+    → Required for: recommendations
+    → Leave null for all other roles
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Return a single valid JSON object with this exact structure:
 {
@@ -54,7 +164,9 @@ Return a single valid JSON object with this exact structure:
     {
       "section_number": 1,
       "section_name": "string — name of this section",
-      "section_type": "string — one of: title, executive_summary, divider, financial_data, market_analysis, strategic_analysis, operational_review, recommendations, appendix, conclusion",
+      "narrative_role": "string — one of the roles defined above",
+      "proves_claim": "string or null — the summary/explainer claim this slide proves",
+      "addresses_finding": "string or null — the finding this recommendation resolves",
       "purpose": "string — what this section must achieve for the audience",
       "key_content": ["string — specific content point to cover in this section"],
       "suggested_slide_count": number,
@@ -73,12 +185,17 @@ CRITICAL OUTPUT RULES:
 - Your response must start with { and end with }. Nothing before or after.
 - total_slides must equal exactly the number requested.
 - The sum of suggested_slide_count across all sections must equal total_slides.
-- Always include a title slide (1 slide) and conclusion/next steps (1 slide).
-- Include 2-3 section divider slides for a clean structure.
+- Always include a title slide (narrative_role: "title") and a closing slide (narrative_role: "closing_synthesis").
+- Include 1-2 divider slides for clean structure. Do not overuse dividers.
+- Include a summary slide (narrative_role: "summary") ONLY when the presentation type, audience,
+  and slide count warrant it — follow the WHEN TO INCLUDE / WHEN TO SKIP guidance above.
+  If included, there must be exactly one. If skipped, open with context_setter or problem_statement instead.
 - key_messages must be specific and data-driven — no generic placeholders.
 - governing_thought must be a single punchy sentence a CEO finds immediately useful.
 - opening_guidance and closing_guidance must be actionable one-sentence directives, not generic advice.
-- Every key_content item must reference actual content from the document, not generic filler.`
+- Every key_content item must reference actual content from the document, not generic filler.
+- proves_claim must be null for structural, opening, decision-support, supplementary, and closing roles.
+- closing_synthesis sections must never contain action items or KPI data in key_content.`
 
 
 async function runAgent3(state) {
@@ -142,14 +259,16 @@ Remember:
 
   // Ensure every section has required fields
   brief.sections = brief.sections.map((s, i) => ({
-    section_number:       s.section_number       || (i + 1),
-    section_name:         s.section_name         || 'Section ' + (i + 1),
-    section_type:         s.section_type         || 'content',
-    purpose:              s.purpose              || '',
-    key_content:          Array.isArray(s.key_content) ? s.key_content : [],
-    suggested_slide_count:s.suggested_slide_count|| 1,
-    data_available:       s.data_available       !== undefined ? s.data_available : false,
-    so_what:              s.so_what              || ''
+    section_number:        s.section_number        || (i + 1),
+    section_name:          s.section_name          || 'Section ' + (i + 1),
+    narrative_role:        s.narrative_role        || inferNarrativeRole(s, i),
+    proves_claim:          s.proves_claim          || null,
+    addresses_finding:     s.addresses_finding     || null,
+    purpose:               s.purpose               || '',
+    key_content:           Array.isArray(s.key_content) ? s.key_content : [],
+    suggested_slide_count: s.suggested_slide_count || 1,
+    data_available:        s.data_available        !== undefined ? s.data_available : false,
+    so_what:               s.so_what               || ''
   }))
 
   console.log('Agent 3 complete — brief summary:')
@@ -165,23 +284,29 @@ Remember:
 
 
 // ─── SLIDE REDISTRIBUTION ────────────────────────────────────────────────────
-// If section slide counts don't add up to the target, redistribute fairly
+// If section slide counts don't add up to the target, redistribute fairly.
+// Structural roles (title, divider, transition_narrative, methodology_note,
+// closing_synthesis) are always exactly 1 slide and never receive extras.
+
+const FIXED_SINGLE_SLIDE_ROLES = new Set([
+  'title', 'divider', 'transition_narrative', 'methodology_note', 'closing_synthesis'
+])
 
 function redistributeSlides(sections, target) {
   // Give each section at least 1 slide
-  const base     = sections.map(s => ({ ...s, suggested_slide_count: 1 }))
-  let remaining  = target - base.length
+  const base    = sections.map(s => ({ ...s, suggested_slide_count: 1 }))
+  let remaining = target - base.length
 
   if (remaining < 0) {
-    // Too many sections — trim to target
+    // Too many sections — trim to target, preserving title and closing_synthesis
     return base.slice(0, target)
   }
 
-  // Distribute remaining slides to content sections (not title/divider)
+  // Only distribute extras to analytical / proof-chain sections
   const contentIdxs = base
-    .map((s, i) => ({ i, type: s.section_type }))
-    .filter(s => !['title', 'divider'].includes(s.type))
-    .map(s => s.i)
+    .map((s, i) => ({ i, role: s.narrative_role }))
+    .filter(({ role }) => !FIXED_SINGLE_SLIDE_ROLES.has(role))
+    .map(({ i }) => i)
 
   let idx = 0
   while (remaining > 0) {
@@ -195,11 +320,41 @@ function redistributeSlides(sections, target) {
 }
 
 
+// ─── NARRATIVE ROLE INFERENCE ─────────────────────────────────────────────────
+// Fallback for sections that came back from Claude without a narrative_role.
+// Maps legacy section_type values and positional heuristics to a best-guess role.
+
+function inferNarrativeRole(section, index) {
+  const legacyMap = {
+    title:              'title',
+    executive_summary:  'summary',
+    divider:            'divider',
+    recommendations:    'recommendations',
+    conclusion:         'closing_synthesis',
+    appendix:           'additional_information',
+    financial_data:     'explainer_to_summary',
+    market_analysis:    'explainer_to_summary',
+    strategic_analysis: 'explainer_to_summary',
+    operational_review: 'explainer_to_summary',
+  }
+
+  if (section.section_type && legacyMap[section.section_type]) {
+    return legacyMap[section.section_type]
+  }
+
+  // Positional heuristics: first section → title, last → closing_synthesis, rest → explainer
+  if (index === 0) return 'title'
+  return 'explainer_to_summary'
+}
+
+
 // ─── FALLBACK BRIEF ──────────────────────────────────────────────────────────
 // Used if Claude fails to return valid JSON
 
 function buildFallbackBrief(slideCount) {
-  const contentSlides = slideCount - 4 // minus title, exec summary, divider, conclusion
+  // Fixed slots: title(1) + context_setter(1) + divider(1) + recommendations(1) + closing_synthesis(1) = 5
+  // No summary in fallback — we have no content context to know whether one is appropriate
+  const proofSlides = Math.max(1, slideCount - 5)
 
   return {
     document_type:    'Business Document',
@@ -216,48 +371,80 @@ function buildFallbackBrief(slideCount) {
     sections: [
       {
         section_number:        1,
-        section_name:         'Title',
-        section_type:         'title',
-        purpose:              'Opening title slide',
-        key_content:          [],
+        section_name:          'Title',
+        narrative_role:        'title',
+        proves_claim:          null,
+        addresses_finding:     null,
+        purpose:               'Opening title slide',
+        key_content:           [],
         suggested_slide_count: 1,
         data_available:        false,
-        so_what:              ''
+        so_what:               ''
       },
       {
         section_number:        2,
-        section_name:         'Executive Summary',
-        section_type:         'executive_summary',
-        purpose:              'Key takeaways for senior management',
-        key_content:          ['Key message 1', 'Key message 2', 'Key message 3'],
+        section_name:          'Context',
+        narrative_role:        'context_setter',
+        proves_claim:          null,
+        addresses_finding:     null,
+        purpose:               'Establish scope, time period, and factual baseline',
+        key_content:           ['Document scope', 'Time period covered', 'Key definitions'],
         suggested_slide_count: 1,
         data_available:        false,
-        so_what:              'The three things the audience must remember'
+        so_what:               'Audience understands what they are reviewing and why'
       },
       {
         section_number:        3,
-        section_name:         'Main Content',
-        section_type:         'strategic_analysis',
-        purpose:              'Core content from the document',
-        key_content:          ['Content from uploaded document'],
-        suggested_slide_count: Math.max(1, contentSlides),
-        data_available:        true,
-        so_what:              'Key insight from the content'
+        section_name:          'Analysis',
+        narrative_role:        'divider',
+        proves_claim:          null,
+        addresses_finding:     null,
+        purpose:               'Section break before analytical detail',
+        key_content:           [],
+        suggested_slide_count: 1,
+        data_available:        false,
+        so_what:               ''
       },
       {
         section_number:        4,
-        section_name:         'Next Steps',
-        section_type:         'conclusion',
-        purpose:              'Recommended actions and owners',
-        key_content:          ['Action items', 'Owners', 'Timeline'],
+        section_name:          'Main Content',
+        narrative_role:        'explainer_to_summary',
+        proves_claim:          null,
+        addresses_finding:     null,
+        purpose:               'Core content from the document',
+        key_content:           ['Content from uploaded document'],
+        suggested_slide_count: Math.max(1, proofSlides),
+        data_available:        true,
+        so_what:               'Key insight from the content'
+      },
+      {
+        section_number:        5,
+        section_name:          'Recommended Actions',
+        narrative_role:        'recommendations',
+        proves_claim:          null,
+        addresses_finding:     'Main Content',
+        purpose:               'Actionable next steps with owners and timelines',
+        key_content:           ['Action items', 'Owners', 'Timeline'],
         suggested_slide_count: 1,
         data_available:        false,
-        so_what:              'What the audience should do after this presentation'
+        so_what:               'What the audience must do after this presentation'
+      },
+      {
+        section_number:        6,
+        section_name:          'Conclusion',
+        narrative_role:        'closing_synthesis',
+        proves_claim:          null,
+        addresses_finding:     null,
+        purpose:               'Restate strategic confidence and set next review milestone',
+        key_content:           ['Strategic confidence statement', 'Next review date and metrics'],
+        suggested_slide_count: 1,
+        data_available:        false,
+        so_what:               'The audience leaves with clarity on strategy and next milestone'
       }
     ],
     total_slides:      slideCount,
-    opening_guidance: 'Lead with the governing thought on the title slide',
-    closing_guidance: 'End with clear, specific, owned next steps',
+    opening_guidance: 'Open by establishing context and scope — let the content speak before drawing conclusions',
+    closing_guidance: 'Close by reinforcing strategic confidence — no new data, no action lists',
     tone:             'confident'
   }
 }

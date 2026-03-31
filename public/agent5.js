@@ -560,6 +560,8 @@ GEOMETRY — rows layout (renderer uses these formulas):
 Chart rules:
 - use brand chart_palette in sequence for series
 - primary series uses primary brand color
+- data_label_color must use a brand text color token, preferably body_color; do not hardcode white
+- assume Agent 6 renders chart data labels at Outside End, so choose label colors for readability on the slide background
 - minimum axis font size: 8pt
 - if chart + table in zone: chart takes 60–75% of zone width
 - show_gridlines must always be false; no chart should display gridlines
@@ -631,9 +633,9 @@ GROUP PIE CHART CRITICAL: chart_type = "group_pie" renders N independent pie cha
       { "name": "Hardware", "values": [56, 9, 19], "unit": "percent" }
     ]
     series_style: [
-      { "series_name": "Standard",    "fill_color": chart_palette[0], "data_label_color": "#FFFFFF", "data_label_size": 9 },
-      { "series_name": "SMA-0",       "fill_color": chart_palette[1], "data_label_color": "#FFFFFF", "data_label_size": 9 },
-      { "series_name": "Substandard", "fill_color": chart_palette[2], "data_label_color": "#FFFFFF", "data_label_size": 9 }
+      { "series_name": "Standard",    "fill_color": chart_palette[0], "data_label_color": body_color, "data_label_size": 9 },
+      { "series_name": "SMA-0",       "fill_color": chart_palette[1], "data_label_color": body_color, "data_label_size": 9 },
+      { "series_name": "Substandard", "fill_color": chart_palette[2], "data_label_color": body_color, "data_label_size": 9 }
     ]
 
   Legend: ALWAYS "top" — one shared legend listing the SLICES (categories), rendered once above all pies.
@@ -1998,15 +2000,16 @@ function buildSafeArtifactShell(manifestArt, bt) {
     const isGroupPie = chartType === 'group_pie'
     const seriesArr = Array.isArray(manifestArt?.series) ? manifestArt.series : []
     const categories = Array.isArray(manifestArt?.categories) ? manifestArt.categories : []
+    const defaultLabelColor = bt.body_color || bt.primary_color || '#111111'
     // group_pie and pie both use one series_style entry PER SLICE (category), not per entity/series
     const autoSeriesStyle = (isPie || isGroupPie)
       ? categories.map((cat, i) => ({
           series_name: String(cat || ''), fill_color: palette[i % palette.length],
-          border_color: null, border_width: 0, data_label_color: '#FFFFFF', data_label_size: 9
+          border_color: null, border_width: 0, data_label_color: defaultLabelColor, data_label_size: 9
         }))
       : (seriesArr.length > 0 ? seriesArr : [{ name: '' }]).map((s, i) => ({
           series_name: s.name || '', fill_color: palette[i % palette.length],
-          border_color: null, border_width: 0, data_label_color: '#FFFFFF', data_label_size: 9
+          border_color: null, border_width: 0, data_label_color: defaultLabelColor, data_label_size: 9
         }))
     return {
       type: 'chart',
@@ -2545,7 +2548,8 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
               series_name: String(cat || ''),
               fill_color: palette[i % palette.length],
               border_color: null, border_width: 0,
-              data_label_color: '#FFFFFF', data_label_size: art.chart_style.data_label_size || 9
+              data_label_color: bt.body_color || bt.primary_color || '#111111',
+              data_label_size: art.chart_style.data_label_size || 9
             }))
           } else {
             const seriesArr = art.series && art.series.length > 0
@@ -2555,7 +2559,8 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
               series_name: s.name || '',
               fill_color: palette[i % palette.length],
               border_color: null, border_width: 0,
-              data_label_color: '#FFFFFF', data_label_size: art.chart_style.data_label_size || 9
+              data_label_color: bt.body_color || bt.primary_color || '#111111',
+              data_label_size: art.chart_style.data_label_size || 9
             }))
           }
         }
