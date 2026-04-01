@@ -1170,9 +1170,8 @@
             <div class="artifact-head">
               <div class="artifact-title-row">
                 <div class="artifact-title">Artifact ${artifactCards.length + 1}</div>
-                <div class="zone-badge">${currentType}</div>
+                <div class="artifact-badge">${currentType}</div>
               </div>
-              <div class="zone-copy">${artifactHeaderText(artifact, zone, slide)}</div>
               <div class="artifact-current">Agent 4 original: <strong>${currentType}</strong>${currentSubtype && currentSubtype !== currentType ? ` / ${currentSubtype}` : ''}</div>
               <div class="artifact-current">Agent 5 rendered bounds: <strong>${formatRect(geometry.artifactBounds)}</strong></div>
             </div>
@@ -1190,7 +1189,7 @@
         `)
       })
     })
-    $('artifact-list').innerHTML = artifactCards.join('') || '<div class="artifact-card"><div class="artifact-head"><div class="zone-copy">This slide has no swappable non-insight artifacts.</div></div></div>'
+    $('artifact-list').innerHTML = artifactCards.join('') || '<div class="artifact-card"><div class="artifact-head"><div class="artifact-copy">This slide has no swappable non-insight artifacts.</div></div></div>'
 
     ;[...document.querySelectorAll('select[data-role="type"]')].forEach((select) => {
       select.addEventListener('change', (event) => {
