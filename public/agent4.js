@@ -2139,6 +2139,19 @@ function validateArtifact(artifact) {
     return { valid: true }
   }
 
+  if (t === 'stat_bar') {
+    const rows = artifact.rows || []
+    if (rows.length < 2) return { valid: false, reason: 'stat_bar needs 2+ rows' }
+    if (!artifact.stat_header || String(artifact.stat_header).trim().length < 3) return { valid: false, reason: 'stat_bar missing stat_header' }
+    if (!artifact.annotation_style) return { valid: false, reason: 'stat_bar missing annotation_style' }
+    for (const row of rows) {
+      if (!String(row?.label || '').trim()) return { valid: false, reason: 'stat_bar row missing label' }
+      if (!Number.isFinite(+row?.value)) return { valid: false, reason: 'stat_bar row missing numeric value' }
+    }
+    if (rows.every(r => (+r.value || 0) === 0)) return { valid: false, reason: 'stat_bar has all-zero row values' }
+    return { valid: true }
+  }
+
   if (t === 'insight_text') {
     const groups = artifact.groups || []
     const points = artifact.points || []
@@ -2761,10 +2774,33 @@ function hasPlaceholderContent(slide) {
 
 function normaliseArtifact(a) {
   if (!a || !a.type) return null
+  // Resolve type early: chart+chart_type:stat_bar → stat_bar
+  if (String(a.type).toLowerCase() === 'chart' && String(a.chart_type || '').toLowerCase() === 'stat_bar') {
+    a.type = 'stat_bar'
+  }
   const t = a.type.toLowerCase()
   if (a.artifact_coverage_hint != null) {
     const n = parseFloat(a.artifact_coverage_hint)
     a.artifact_coverage_hint = Number.isFinite(n) ? Math.max(1, Math.min(100, n)) : undefined
+  }
+
+  if (t === 'stat_bar') {
+    if (!a.stat_header) a.stat_header = a.chart_header || ''
+    if (!a.stat_decision) a.stat_decision = a.chart_decision || ''
+    if (!a.rows) a.rows = []
+    if (!a.column_headers) a.column_headers = {}
+    if (!a.annotation_style) a.annotation_style = 'trailing'
+    a.rows = a.rows.map((row, idx) => ({
+      id:                      row?.id || `row_${idx + 1}`,
+      label:                   row?.label || '',
+      value:                   typeof row?.value === 'number' ? row.value : (parseFloat(String(row?.value || '').replace(/[^0-9.-]/g, '')) || 0),
+      unit:                    row?.unit || '',
+      display_value:           row?.display_value || '',
+      annotation:              row?.annotation || '',
+      annotation_representation: row?.annotation_representation || 'text',
+      bar_color:               row?.bar_color || '',
+      highlight:               row?.highlight === true
+    }))
   }
 
   if (t === 'chart') {
