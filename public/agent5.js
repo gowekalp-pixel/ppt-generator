@@ -308,7 +308,7 @@ ARTIFACT CONTRACT
 
 Every artifact must be FULLY specified. No missing fields. No placeholders.
 
-Allowed types: insight_text | chart | cards | workflow | table | matrix | driver_tree | prioritization | comparison_table | initiative_map | profile_card_set | risk_register
+Allowed types: insight_text | chart | stat_bar | cards | workflow | table | matrix | driver_tree | prioritization | comparison_table | initiative_map | profile_card_set | risk_register
 
 ═══════════════════════════
 1. INSIGHT TEXT
@@ -1259,6 +1259,7 @@ function validateDesignedSlide(slide) {
   const issues = []
   const supportedArtifactTypes = new Set([
     'chart',
+    'stat_bar',
     'insight_text',
     'table',
     'comparison_table',
@@ -1286,63 +1287,69 @@ function validateDesignedSlide(slide) {
     if (!z.artifacts?.length)           issues.push('z' + zi + ': no artifacts')
     ;(z.artifacts || []).forEach((a, ai) => {
       const p = 'z' + zi + '.a' + ai
+      const normalizedType = normalizeArtifactType(a.type, a.chart_type)
+      const normalizedChartType = normalizeChartSubtype(a.type, a.chart_type)
       if (!a.type)                                     issues.push(p + ': missing type')
-      if (a.type && !supportedArtifactTypes.has(a.type)) issues.push(p + ': unsupported artifact type ' + a.type)
-      if (a.type === 'chart'    && !a.chart_style)     issues.push(p + ': chart missing chart_style')
-      if (a.type === 'chart'    && !a.series_style)    issues.push(p + ': chart missing series_style')
-      if (a.type === 'chart'    && a.chart_style && a.chart_style.legend_position == null) issues.push(p + ': chart missing legend_position')
-      if (a.type === 'chart'    && a.chart_style && a.chart_style.data_label_size == null) issues.push(p + ': chart missing data_label_size')
-      if (a.type === 'chart'    && a.chart_style && a.chart_style.category_label_rotation == null) issues.push(p + ': chart missing category_label_rotation')
-      if (a.type === 'chart'    && a.chart_type === 'pie' && Array.isArray(a.series_style) && Array.isArray(a.categories) && a.series_style.length !== a.categories.length) issues.push(p + ': pie chart series_style.length (' + a.series_style.length + ') must equal categories.length (' + a.categories.length + ')')
-      if (a.type === 'chart'    && a.chart_type === 'group_pie' && Array.isArray(a.series_style) && Array.isArray(a.categories) && a.series_style.length !== a.categories.length) issues.push(p + ': group_pie series_style.length (' + a.series_style.length + ') must equal categories.length (' + a.categories.length + ') — one style entry per slice')
-      if (a.type === 'chart'    && a.chart_type === 'group_pie' && Array.isArray(a.series) && (a.series.length < 2 || a.series.length > 8)) issues.push(p + ': group_pie series (entities) must be 2–8, got ' + (a.series || []).length)
-      if (a.type === 'workflow' && !a.nodes?.length)   issues.push(p + ': workflow missing nodes')
-      if (a.type === 'workflow' && !a.workflow_style)  issues.push(p + ': workflow missing workflow_style')
-      if (a.type === 'workflow' && a.workflow_style && a.workflow_style.node_inner_padding == null) issues.push(p + ': workflow missing node_inner_padding')
-      if (a.type === 'workflow' && a.workflow_style && a.workflow_style.external_label_gap == null) issues.push(p + ': workflow missing external_label_gap')
-      if (a.type === 'workflow' && (a.connections || []).some(c => !Array.isArray(c.path) || c.path.length < 2)) issues.push(p + ': workflow connection missing path')
-      if (a.type === 'table'    && !a.table_style)     issues.push(p + ': table missing table_style')
-      if (a.type === 'table'    && !a.column_widths)   issues.push(p + ': table missing column_widths')
-      if (a.type === 'table'    && !a.row_heights)     issues.push(p + ': table missing row_heights')
-      if (a.type === 'table'    && !a.column_types)    issues.push(p + ': table missing column_types')
-      if (a.type === 'table'    && !a.column_alignments) issues.push(p + ': table missing column_alignments')
-      if (a.type === 'table'    && a.table_style && a.table_style.cell_padding == null) issues.push(p + ': table missing cell_padding')
-      if (a.type === 'comparison_table' && !Array.isArray(a.criteria)) issues.push(p + ': comparison_table missing criteria')
-      if (a.type === 'comparison_table' && !Array.isArray(a.options)) issues.push(p + ': comparison_table missing options')
-      if (a.type === 'comparison_table' && !a.comparison_style) issues.push(p + ': comparison_table missing comparison_style')
-      if (a.type === 'initiative_map' && !Array.isArray(a.dimension_labels)) issues.push(p + ': initiative_map missing dimension_labels')
-      if (a.type === 'initiative_map' && !Array.isArray(a.initiatives)) issues.push(p + ': initiative_map missing initiatives')
-      if (a.type === 'initiative_map' && !a.initiative_style) issues.push(p + ': initiative_map missing initiative_style')
-      if (a.type === 'profile_card_set' && !Array.isArray(a.profiles)) issues.push(p + ': profile_card_set missing profiles')
-      if (a.type === 'profile_card_set' && !a.profile_style) issues.push(p + ': profile_card_set missing profile_style')
-      if (a.type === 'risk_register' && !Array.isArray(a.risks)) issues.push(p + ': risk_register missing risks')
-      if (a.type === 'risk_register' && !a.risk_style) issues.push(p + ': risk_register missing risk_style')
-      if (a.type === 'cards'    && !a.card_frames?.length) issues.push(p + ': cards missing card_frames')
-      if (a.type === 'cards'    && !a.card_style)      issues.push(p + ': cards missing card_style')
-      if (a.type === 'cards'    && !a.cards_layout)    issues.push(p + ': cards missing cards_layout')
-      if (a.type === 'cards'    && !a.container)       issues.push(p + ': cards missing container')
-      if (a.type === 'matrix'   && !a.matrix_style)    issues.push(p + ': matrix missing matrix_style')
-      if (a.type === 'matrix'   && !a.x_axis?.label)   issues.push(p + ': matrix missing x_axis.label')
-      if (a.type === 'matrix'   && !a.y_axis?.label)   issues.push(p + ': matrix missing y_axis.label')
-      if (a.type === 'matrix'   && (a.quadrants || []).length !== 4) issues.push(p + ': matrix must define 4 quadrants')
-      if (a.type === 'matrix'   && !(a.points || []).length) issues.push(p + ': matrix missing points')
-      if (a.type === 'driver_tree' && !a.tree_style)   issues.push(p + ': driver_tree missing tree_style')
-      if (a.type === 'driver_tree' && !a.root?.label)  issues.push(p + ': driver_tree missing root.label')
-      if (a.type === 'driver_tree' && !(a.branches || []).length) issues.push(p + ': driver_tree missing branches')
-      if (a.type === 'prioritization' && !a.priority_style) issues.push(p + ': prioritization missing priority_style')
-      if (a.type === 'prioritization' && !(a.items || []).length) issues.push(p + ': prioritization missing items')
-      if (a.type === 'prioritization' && (a.items || []).some(it => it.rank == null || !String(it.title || '').trim())) issues.push(p + ': prioritization items require rank and title')
-      if (a.type === 'insight_text' && !a.heading_style) issues.push(p + ': insight_text missing heading_style')
-      if (a.type === 'insight_text' && a.insight_mode === 'grouped' && !a.group_header_style) issues.push(p + ': grouped insight_text missing group_header_style')
-      if (a.type === 'insight_text' && a.insight_mode === 'grouped' && !a.group_bullet_box_style) issues.push(p + ': grouped insight_text missing group_bullet_box_style')
-      if (a.type === 'insight_text' && a.insight_mode === 'grouped' && !a.bullet_style) issues.push(p + ': grouped insight_text missing bullet_style')
-      if (a.type === 'insight_text' && a.insight_mode === 'grouped' && a.group_gap_in == null) issues.push(p + ': grouped insight_text missing group_gap_in')
-      if (a.type === 'insight_text' && a.insight_mode === 'grouped' && a.header_to_box_gap_in == null) issues.push(p + ': grouped insight_text missing header_to_box_gap_in')
-      if (a.type === 'insight_text' && (!a.insight_mode || a.insight_mode === 'standard') && !a.body_style) issues.push(p + ': insight_text missing body_style')
-      if (a.type === 'insight_text' && (!a.insight_mode || a.insight_mode === 'standard') && a.body_style && a.body_style.list_style == null) issues.push(p + ': insight_text missing list_style')
-      if (a.type === 'insight_text' && (!a.insight_mode || a.insight_mode === 'standard') && a.body_style && a.body_style.line_spacing == null) issues.push(p + ': insight_text missing line_spacing')
-      if (a.type === 'insight_text' && (!a.insight_mode || a.insight_mode === 'standard') && a.body_style && a.body_style.indent_inches == null) issues.push(p + ': insight_text missing indent_inches')
-      if (a.type === 'insight_text' && (!a.insight_mode || a.insight_mode === 'standard') && a.body_style && a.body_style.space_before_pt == null) issues.push(p + ': insight_text missing space_before_pt')
+      if (a.type && !supportedArtifactTypes.has(normalizedType)) issues.push(p + ': unsupported artifact type ' + a.type)
+      if (normalizedType === 'chart'    && !a.chart_style)     issues.push(p + ': chart missing chart_style')
+      if (normalizedType === 'chart'    && !a.series_style)    issues.push(p + ': chart missing series_style')
+      if (normalizedType === 'chart'    && a.chart_style && a.chart_style.legend_position == null) issues.push(p + ': chart missing legend_position')
+      if (normalizedType === 'chart'    && a.chart_style && a.chart_style.data_label_size == null) issues.push(p + ': chart missing data_label_size')
+      if (normalizedType === 'chart'    && a.chart_style && a.chart_style.category_label_rotation == null) issues.push(p + ': chart missing category_label_rotation')
+      if (normalizedType === 'stat_bar' && !Array.isArray(a.rows)) issues.push(p + ': stat_bar missing rows')
+      if (normalizedType === 'stat_bar' && (a.rows || []).length < 2) issues.push(p + ': stat_bar needs 2+ rows')
+      if (normalizedType === 'stat_bar' && !a.stat_header && !a.chart_header) issues.push(p + ': stat_bar missing stat_header')
+      if (normalizedType === 'stat_bar' && !a.annotation_style) issues.push(p + ': stat_bar missing annotation_style')
+      if (normalizedType === 'chart'    && normalizedChartType === 'pie' && Array.isArray(a.series_style) && Array.isArray(a.categories) && a.series_style.length !== a.categories.length) issues.push(p + ': pie chart series_style.length (' + a.series_style.length + ') must equal categories.length (' + a.categories.length + ')')
+      if (normalizedType === 'chart'    && normalizedChartType === 'group_pie' && Array.isArray(a.series_style) && Array.isArray(a.categories) && a.series_style.length !== a.categories.length) issues.push(p + ': group_pie series_style.length (' + a.series_style.length + ') must equal categories.length (' + a.categories.length + ') — one style entry per slice')
+      if (normalizedType === 'chart'    && normalizedChartType === 'group_pie' && Array.isArray(a.series) && (a.series.length < 2 || a.series.length > 8)) issues.push(p + ': group_pie series (entities) must be 2–8, got ' + (a.series || []).length)
+      if (normalizedType === 'workflow' && !a.nodes?.length)   issues.push(p + ': workflow missing nodes')
+      if (normalizedType === 'workflow' && !a.workflow_style)  issues.push(p + ': workflow missing workflow_style')
+      if (normalizedType === 'workflow' && a.workflow_style && a.workflow_style.node_inner_padding == null) issues.push(p + ': workflow missing node_inner_padding')
+      if (normalizedType === 'workflow' && a.workflow_style && a.workflow_style.external_label_gap == null) issues.push(p + ': workflow missing external_label_gap')
+      if (normalizedType === 'workflow' && (a.connections || []).some(c => !Array.isArray(c.path) || c.path.length < 2)) issues.push(p + ': workflow connection missing path')
+      if (normalizedType === 'table'    && !a.table_style)     issues.push(p + ': table missing table_style')
+      if (normalizedType === 'table'    && !a.column_widths)   issues.push(p + ': table missing column_widths')
+      if (normalizedType === 'table'    && !a.row_heights)     issues.push(p + ': table missing row_heights')
+      if (normalizedType === 'table'    && !a.column_types)    issues.push(p + ': table missing column_types')
+      if (normalizedType === 'table'    && !a.column_alignments) issues.push(p + ': table missing column_alignments')
+      if (normalizedType === 'table'    && a.table_style && a.table_style.cell_padding == null) issues.push(p + ': table missing cell_padding')
+      if (normalizedType === 'comparison_table' && !Array.isArray(a.criteria)) issues.push(p + ': comparison_table missing criteria')
+      if (normalizedType === 'comparison_table' && !Array.isArray(a.options)) issues.push(p + ': comparison_table missing options')
+      if (normalizedType === 'comparison_table' && !a.comparison_style) issues.push(p + ': comparison_table missing comparison_style')
+      if (normalizedType === 'initiative_map' && !Array.isArray(a.dimension_labels)) issues.push(p + ': initiative_map missing dimension_labels')
+      if (normalizedType === 'initiative_map' && !Array.isArray(a.initiatives)) issues.push(p + ': initiative_map missing initiatives')
+      if (normalizedType === 'initiative_map' && !a.initiative_style) issues.push(p + ': initiative_map missing initiative_style')
+      if (normalizedType === 'profile_card_set' && !Array.isArray(a.profiles)) issues.push(p + ': profile_card_set missing profiles')
+      if (normalizedType === 'profile_card_set' && !a.profile_style) issues.push(p + ': profile_card_set missing profile_style')
+      if (normalizedType === 'risk_register' && !Array.isArray(a.risks)) issues.push(p + ': risk_register missing risks')
+      if (normalizedType === 'risk_register' && !a.risk_style) issues.push(p + ': risk_register missing risk_style')
+      if (normalizedType === 'cards'    && !a.card_frames?.length) issues.push(p + ': cards missing card_frames')
+      if (normalizedType === 'cards'    && !a.card_style)      issues.push(p + ': cards missing card_style')
+      if (normalizedType === 'cards'    && !a.cards_layout)    issues.push(p + ': cards missing cards_layout')
+      if (normalizedType === 'cards'    && !a.container)       issues.push(p + ': cards missing container')
+      if (normalizedType === 'matrix'   && !a.matrix_style)    issues.push(p + ': matrix missing matrix_style')
+      if (normalizedType === 'matrix'   && !a.x_axis?.label)   issues.push(p + ': matrix missing x_axis.label')
+      if (normalizedType === 'matrix'   && !a.y_axis?.label)   issues.push(p + ': matrix missing y_axis.label')
+      if (normalizedType === 'matrix'   && (a.quadrants || []).length !== 4) issues.push(p + ': matrix must define 4 quadrants')
+      if (normalizedType === 'matrix'   && !(a.points || []).length) issues.push(p + ': matrix missing points')
+      if (normalizedType === 'driver_tree' && !a.tree_style)   issues.push(p + ': driver_tree missing tree_style')
+      if (normalizedType === 'driver_tree' && !a.root?.label)  issues.push(p + ': driver_tree missing root.label')
+      if (normalizedType === 'driver_tree' && !(a.branches || []).length) issues.push(p + ': driver_tree missing branches')
+      if (normalizedType === 'prioritization' && !a.priority_style) issues.push(p + ': prioritization missing priority_style')
+      if (normalizedType === 'prioritization' && !(a.items || []).length) issues.push(p + ': prioritization missing items')
+      if (normalizedType === 'prioritization' && (a.items || []).some(it => it.rank == null || !String(it.title || '').trim())) issues.push(p + ': prioritization items require rank and title')
+      if (normalizedType === 'insight_text' && !a.heading_style) issues.push(p + ': insight_text missing heading_style')
+      if (normalizedType === 'insight_text' && a.insight_mode === 'grouped' && !a.group_header_style) issues.push(p + ': grouped insight_text missing group_header_style')
+      if (normalizedType === 'insight_text' && a.insight_mode === 'grouped' && !a.group_bullet_box_style) issues.push(p + ': grouped insight_text missing group_bullet_box_style')
+      if (normalizedType === 'insight_text' && a.insight_mode === 'grouped' && !a.bullet_style) issues.push(p + ': grouped insight_text missing bullet_style')
+      if (normalizedType === 'insight_text' && a.insight_mode === 'grouped' && a.group_gap_in == null) issues.push(p + ': grouped insight_text missing group_gap_in')
+      if (normalizedType === 'insight_text' && a.insight_mode === 'grouped' && a.header_to_box_gap_in == null) issues.push(p + ': grouped insight_text missing header_to_box_gap_in')
+      if (normalizedType === 'insight_text' && (!a.insight_mode || a.insight_mode === 'standard') && !a.body_style) issues.push(p + ': insight_text missing body_style')
+      if (normalizedType === 'insight_text' && (!a.insight_mode || a.insight_mode === 'standard') && a.body_style && a.body_style.list_style == null) issues.push(p + ': insight_text missing list_style')
+      if (normalizedType === 'insight_text' && (!a.insight_mode || a.insight_mode === 'standard') && a.body_style && a.body_style.line_spacing == null) issues.push(p + ': insight_text missing line_spacing')
+      if (normalizedType === 'insight_text' && (!a.insight_mode || a.insight_mode === 'standard') && a.body_style && a.body_style.indent_inches == null) issues.push(p + ': insight_text missing indent_inches')
+      if (normalizedType === 'insight_text' && (!a.insight_mode || a.insight_mode === 'standard') && a.body_style && a.body_style.space_before_pt == null) issues.push(p + ': insight_text missing space_before_pt')
     })
   })
 
@@ -1951,7 +1958,36 @@ async function buildFallbackDesign(manifestSlide, brand) {
 }
 
 function manifestZoneArtifactSignature(slideLike) {
-  return (slideLike?.zones || []).map(z => (z.artifacts || []).map(a => a.type || 'unknown'))
+  return (slideLike?.zones || []).map(z => (z.artifacts || []).map(a => artifactSignatureType(a)))
+}
+
+function normalizeArtifactType(type, chartType) {
+  if (String(type || '').toLowerCase() === 'stat_bar') return 'stat_bar'
+  if (String(type || '').toLowerCase() === 'star_bar') return 'stat_bar'
+  return type || 'unknown'
+}
+
+function normalizeChartSubtype(type, chartType) {
+  const t = String(type || '').toLowerCase()
+  if (t === 'stat_bar' || t === 'star_bar') return 'stat_bar'
+  return chartType || ''
+}
+
+function artifactSignatureType(artifact) {
+  const normalizedType = normalizeArtifactType(artifact?.type, artifact?.chart_type)
+  return normalizedType || 'unknown'
+}
+
+function normalizeArtifactDefinition(artifact) {
+  if (!artifact || typeof artifact !== 'object') return artifact
+  const normalizedType = normalizeArtifactType(artifact.type, artifact.chart_type)
+  const normalizedChartType = normalizeChartSubtype(artifact.type, artifact.chart_type)
+  if (normalizedType === artifact.type && normalizedChartType === (artifact.chart_type || '')) return artifact
+  return {
+    ...artifact,
+    type: normalizedType,
+    ...(normalizedChartType ? { chart_type: normalizedChartType } : {})
+  }
 }
 
 function validateFallbackStructure(candidate, manifestSlide) {
@@ -1981,6 +2017,7 @@ function validateFallbackStructure(candidate, manifestSlide) {
 function makeHeaderBlockFromManifestArtifact(artifact, bt) {
   const text = (
     artifact?.insight_header ||
+    artifact?.stat_header ||
     artifact?.chart_header ||
     artifact?.table_header ||
     artifact?.comparison_header ||
@@ -2008,12 +2045,25 @@ function makeHeaderBlockFromManifestArtifact(artifact, bt) {
 }
 
 function buildSafeArtifactShell(manifestArt, bt) {
-  const t = manifestArt?.type || 'insight_text'
+  const t = normalizeArtifactType(manifestArt?.type, manifestArt?.chart_type) || 'insight_text'
   const header_block = makeHeaderBlockFromManifestArtifact(manifestArt, bt)
   const artifact_coverage_hint = manifestArt?.artifact_coverage_hint
+  if (t === 'stat_bar') {
+    return {
+      type: 'stat_bar',
+      artifact_coverage_hint,
+      x: null, y: null, w: null, h: null,
+      stat_header: manifestArt?.stat_header || manifestArt?.chart_header || '',
+      stat_decision: manifestArt?.stat_decision || manifestArt?.chart_insight || '',
+      column_headers: manifestArt?.column_headers || {},
+      rows: Array.isArray(manifestArt?.rows) ? manifestArt.rows : [],
+      annotation_style: manifestArt?.annotation_style || 'trailing',
+      header_block
+    }
+  }
   if (t === 'chart') {
     const palette = bt.chart_palette || bt.accent_colors || ['#1A3C8F', '#E8A020', '#2E9E5B', '#C82333']
-    const chartType = manifestArt?.chart_type || 'bar'
+    const chartType = normalizeChartSubtype(manifestArt?.type, manifestArt?.chart_type) || 'bar'
     const isPie = chartType === 'pie' || chartType === 'donut'
     const isGroupPie = chartType === 'group_pie'
     const seriesArr = Array.isArray(manifestArt?.series) ? manifestArt.series : []
@@ -2039,8 +2089,8 @@ function buildSafeArtifactShell(manifestArt, bt) {
       categories:       categories,
       series:           seriesArr,
       chart_title:      manifestArt?.chart_title  || '',
-      chart_header:     manifestArt?.chart_header || '',
-      chart_insight:    manifestArt?.chart_insight || '',
+      chart_header:     manifestArt?.chart_header || manifestArt?.stat_header || '',
+      chart_insight:    manifestArt?.chart_insight || manifestArt?.stat_decision || '',
       show_data_labels: manifestArt?.show_data_labels !== false,
       show_legend:      !!(manifestArt?.show_legend),
       x_label:          manifestArt?.x_label || '',
@@ -2476,7 +2526,7 @@ function buildMinimalSafeSlide(manifestSlide, tokens) {
     zone_id: z.zone_id,
     zone_role: z.zone_role,
     narrative_weight: z.narrative_weight,
-    artifact_types: (z.artifacts || []).map(a => a.type)
+    artifact_types: (z.artifacts || []).map(a => artifactSignatureType(a))
   }))
 
   return fallbackSlide
@@ -3351,6 +3401,7 @@ function resolveArtifactSubtype(art) {
   if (!art || typeof art !== 'object') return 'generic'
   switch (art.type) {
     case 'chart':        return art.chart_type || 'generic'
+    case 'stat_bar':     return 'stat_bar'
     case 'insight_text': return art.insight_mode || 'standard'
     case 'workflow':     return art.workflow_type || art.flow_direction || 'workflow'
     case 'cards':        return art.cards_layout || 'cards'
@@ -4516,6 +4567,7 @@ function _riskRegisterToBlocks(art, content_y, blocks, bt, r2) {
 
 function _statBarToBlocks(art, content_y, blocks, bt, r2) {
   const cs = art.chart_style || {}
+  const headers = art.column_headers || {}
   const rows = Array.isArray(art.rows) && art.rows.length
     ? art.rows
     : ((art.categories || []).map((label, i) => ({
@@ -4555,28 +4607,28 @@ function _statBarToBlocks(art, content_y, blocks, bt, r2) {
   blocks.push({
     block_type: 'text_box',
     x: labelX, y: ay, w: labelW, h: headerH,
-    text: 'PARTNER',
+    text: String(headers.label || 'PARTNER'),
     font_family: bodyFont, font_size: 9, bold: true,
     color: headerColor, align: 'left', valign: 'middle'
   })
   blocks.push({
     block_type: 'text_box',
     x: barX, y: ay, w: barW, h: headerH,
-    text: String(art.metric_header || 'AVG. CHARGE (₹/ORDER)'),
+    text: String(headers.metric || art.metric_header || 'AVG. CHARGE (₹/ORDER)'),
     font_family: bodyFont, font_size: 9, bold: true,
     color: headerColor, align: 'left', valign: 'middle'
   })
   blocks.push({
     block_type: 'text_box',
     x: valueX, y: ay, w: valueW, h: headerH,
-    text: String(art.value_header || (art.y_label ? String(art.y_label).toUpperCase() : 'VALUE')),
+    text: String(headers.value || art.value_header || (art.y_label ? String(art.y_label).toUpperCase() : 'VALUE')),
     font_family: bodyFont, font_size: 9, bold: true,
     color: headerColor, align: 'right', valign: 'middle'
   })
   blocks.push({
     block_type: 'text_box',
     x: annotationX, y: ay, w: annotationW, h: headerH,
-    text: String(art.annotation_header || 'USE CASE'),
+    text: String(headers.annotation || art.annotation_header || 'USE CASE'),
     font_family: bodyFont, font_size: 9, bold: true,
     color: headerColor, align: 'left', valign: 'middle'
   })
@@ -4624,7 +4676,7 @@ function _statBarToBlocks(art, content_y, blocks, bt, r2) {
     blocks.push({
       block_type: 'text_box',
       x: valueX, y, w: valueW, h: rowH,
-      text: `${row?.value ?? ''}${row?.unit ? ' ' + row.unit : ''}`.trim(),
+      text: String(row?.display_value || `${row?.value ?? ''}${row?.unit ? ' ' + row.unit : ''}`.trim()),
       font_family: bodyFont, font_size: 9, bold: true,
       color: isHighlighted ? '#386B2A' : (bt.body_color || '#111111'), align: 'right', valign: 'middle'
     })
@@ -5585,11 +5637,12 @@ function _artifactToBlocks(art, blocks, bt, r2) {
   const headerEnd = blocks.length
   switch (art.type) {
 
+    case 'stat_bar': {
+      _statBarToBlocks(art, content_y, blocks, bt, r2)
+      break
+    }
+
     case 'chart': {
-      if (art.chart_type === 'stat_bar') {
-        _statBarToBlocks(art, content_y, blocks, bt, r2)
-        break
-      }
       const computed = art._computed || {}
       const chartStyle = art.chart_style || {}
       const legendPos = computed.legend_position || chartStyle.legend_position || 'none'
@@ -6239,9 +6292,11 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
     const mergedArtifacts = (dZone.artifacts || []).map((dArt, ai) => {
       // Match manifest artifact by position index
       const mArt = (mZone.artifacts || [])[ai]
-      if (!mArt || mArt.type !== dArt.type) return dArt
+      const dType = normalizeArtifactType(dArt?.type, dArt?.chart_type)
+      const mType = normalizeArtifactType(mArt?.type, mArt?.chart_type)
+      if (!mArt || mType !== dType) return dArt
 
-      const t = dArt.type
+      const t = dType
 
       if (t === 'insight_text') {
         // ── Determine mode: manifest (Agent 4) is authoritative for content structure ──
@@ -6402,9 +6457,9 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
           ...dArt,
           artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
           chart_type:       mergedChartType,
-          chart_header:     mArt.chart_header     || dArt.chart_header     || '',
+          chart_header:     mArt.chart_header     || mArt.stat_header || dArt.chart_header     || '',
           chart_title:      mArt.chart_title      || dArt.chart_title      || '',
-          chart_insight:    mArt.chart_insight    || dArt.chart_insight    || '',
+          chart_insight:    mArt.chart_insight    || mArt.stat_decision || dArt.chart_insight    || '',
           rows:             mArt.rows             || dArt.rows             || [],
           annotation_style: mArt.annotation_style || dArt.annotation_style || 'trailing',
           x_label:          mArt.x_label          || dArt.x_label          || '',
@@ -6415,6 +6470,18 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
                               ? mArt.show_data_labels : (dArt.show_data_labels !== false),
           show_legend:      mArt.show_legend      !== undefined
                               ? mArt.show_legend      : (mergedChartType === 'group_pie' ? true : !!dArt.show_legend)
+        }
+      }
+
+      if (t === 'stat_bar') {
+        return {
+          ...dArt,
+          artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
+          stat_header: mArt.stat_header || dArt.stat_header || '',
+          stat_decision: mArt.stat_decision || dArt.stat_decision || '',
+          column_headers: mArt.column_headers || dArt.column_headers || {},
+          rows: mArt.rows || dArt.rows || [],
+          annotation_style: mArt.annotation_style || dArt.annotation_style || 'trailing'
         }
       }
 
@@ -6874,6 +6941,10 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
   if (!designed || typeof designed !== 'object') return null  // caller handles null -> fallback
 
   const branded = applyBrandGuidelineOverrides(designed, manifestSlide, brand)
+  branded.zones = (branded.zones || []).map(zone => ({
+    ...zone,
+    artifacts: (zone.artifacts || []).map(normalizeArtifactDefinition)
+  }))
 
   // Derive bt from the brand rulebook — authoritative source, never depends on
   // what Claude returned per-slide (brand_tokens is no longer in Claude output).
@@ -7109,7 +7180,7 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
       zone_id:          z.zone_id,
       zone_role:        z.zone_role,
       narrative_weight: z.narrative_weight,
-      artifact_types:   (z.artifacts || []).map(a => a.type)
+      artifact_types:   (z.artifacts || []).map(a => artifactSignatureType(a))
     })),
     _validation_issues: finalArtifactIssues.length > 0 ? finalArtifactIssues : undefined,
     _source_validation_issues: inputIssues.length > 0 ? inputIssues : undefined,

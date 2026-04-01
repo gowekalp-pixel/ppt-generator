@@ -386,7 +386,8 @@ STEP 1 — ARTIFACT SELECTION
 ──────────────────────────────────────────────────────────
 
 AVAILABLE ARTIFACT TYPES:
-  chart:            bar | clustered_bar | horizontal_bar | line | area | pie | donut | combo | group_pie | stat_bar
+  chart:            bar | clustered_bar | horizontal_bar | line | area | pie | donut | combo | group_pie
+  stat_bar
   insight_text:     standard | grouped
   cards
   profile_card_set
@@ -403,7 +404,7 @@ AVAILABLE ARTIFACT TYPES:
 
   PRIMARY / DOMINANT zones:
   - Must carry a proof or reasoning artifact
-  - Permitted: chart (all subtypes incl. stat_bar), comparison_table, initiative_map, risk_register,
+  - Permitted: chart, stat_bar, comparison_table, initiative_map, risk_register,
                profile_card_set, workflow, driver_tree, matrix, prioritization, grouped insight_text
   - table: only when TABLE GATE passes (A8 path) — never as a first choice
   - Never: standard insight_text alone
@@ -411,7 +412,7 @@ AVAILABLE ARTIFACT TYPES:
 
   SECONDARY zones:
   - Must answer a specific question, not just add detail
-  - Permitted: chart (all subtypes incl. stat_bar), comparison_table, profile_card_set,
+  - Permitted: chart, stat_bar, comparison_table, profile_card_set,
                cards, standard insight_text, grouped insight_text, prioritization
   - table: only when TABLE GATE passes (A8 path)
   - Avoid workflow unless process or sequence is the explicit subject of the zone
@@ -743,14 +744,14 @@ AVAILABLE ARTIFACT TYPES:
 
   stat_bar
   ─────────
-  A horizontal bar chart where each bar is accompanied by an inline qualitative
-  annotation (label or descriptor) placed to the right of or alongside the bar.
+  A ranked annotated bar display where each row combines a label, a proportional
+  horizontal bar, a numeric value, and an inline qualitative annotation.
   Use when: ranking is the primary message AND each entity needs a one-phrase
   qualifier that a separate insight_text zone would fail to connect visually.
   Examples: courier partners ranked by cost with "use case" label; SKUs ranked
   by revenue with "growth trajectory" label; cities ranked by orders with
   "priority tier" label.
-  Subtype of chart — specify as:  artifact_type: "chart", chart_type: "stat_bar"
+  Top-level structured artifact — specify as:  "type": "stat_bar"
   Sizing envelope:
     stat_bar (≤5 rows)    35%  65%   40%  60%
     stat_bar (6–8 rows)   40%  70%   55%  75%
@@ -759,6 +760,8 @@ AVAILABLE ARTIFACT TYPES:
     GENERIC HANDOFF (mandatory):
     Do NOT encode stat_bar as raw table rows. Emit semantic row objects that a renderer
     can map directly to label / bar / value / annotation regions.
+    stat_header: one-line insight the stat_bar proves
+    stat_decision: one line: why stat_bar was chosen over horizontal_bar + insight_text or table
     rows[]: {
       id?,                         // stable key if available
       label,                       // left-side row label
@@ -777,6 +780,7 @@ AVAILABLE ARTIFACT TYPES:
       annotation?: string
     }
     annotation_style: "inline" | "trailing"  (default: "trailing")
+    HARD RULE: a bare {"type":"stat_bar"} is INVALID. rows[] with at least 2 entries is mandatory.
 
   comparison_table
   ─────────────────
@@ -1586,6 +1590,8 @@ STEP 5 — SELF-CHECK BEFORE OUTPUT
       artifact_split_hint, and internal_alignment populated
   [ ] Every stat_bar / initiative_map / risk_register / comparison_table / profile_card_set
       has zone_constraint populated on its parent zone object
+  [ ] Every stat_bar is emitted as top-level type "stat_bar" with stat_header, rows[] (>= 2),
+      and annotation_style — never as chart_type and never as a bare placeholder artifact
   [ ] ZW codes not used when slide_format width:height < 1.5
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1703,6 +1709,36 @@ chart:
   }
   chart_title is rendered INSIDE the plot area; chart_header is the zone heading.
   When a layout header placeholder exists, set chart_title: "" — never duplicate in both.
+
+stat_bar:
+  {
+    "type": "stat_bar",
+    "stat_decision": "one line: why stat_bar was chosen",
+    "stat_header": "the one-line insight the ranked display proves",
+    "column_headers": {
+      "label": "string",
+      "metric": "string",
+      "value": "string",
+      "annotation": "string"
+    },
+    "rows": [
+      {
+        "id": "string",
+        "label": "string",
+        "value": number,
+        "unit": "count|currency|percent|other",
+        "display_value": "string",
+        "annotation": "string",
+        "annotation_representation": "text" | "pill",
+        "bar_color": "#HEX",
+        "highlight": true | false
+      }
+    ],
+    "annotation_style": "inline" | "trailing"
+  }
+  Use stat_bar as a top-level structured display artifact — never as chart_type.
+  rows[] is mandatory and must contain at least 2 entries.
+  stat_header is the zone heading; Agent 5 will convert rows into primitive render blocks.
 
 group_pie chart — use this schema instead when chart_type is "group_pie":
   {
@@ -2030,13 +2066,13 @@ function inferArchetype(sectionType, slideIndex) {
 
 function inferArchetypeFromZones(slide, plan) {
   const zones = slide?.zones || []
-  const artifacts = zones.flatMap(z => z.artifacts || []).map(a => String(a.type || '').toLowerCase())
+  const artifacts = zones.flatMap(z => z.artifacts || []).map(a => artifactType(a))
   const zoneCount = zones.length
   const has = t => artifacts.includes(t)
   const hasOnlyInsight = artifacts.length > 0 && artifacts.every(t => t === 'insight_text')
   const hasCards = has('cards')
   const hasWorkflow = has('workflow')
-  const hasChart = has('chart')
+  const hasChart = has('chart') || has('stat_bar')
   const hasTable = has('table')
   const hasReasoning = artifacts.some(t => ['matrix', 'driver_tree', 'prioritization'].includes(t))
 
@@ -2089,6 +2125,19 @@ function buildBriefSummaryForAgent4(brief) {
 
 function validateArtifact(artifact) {
   const t = (artifact.type || '').toLowerCase()
+
+  if (t === 'stat_bar') {
+    const rows = Array.isArray(artifact.rows) ? artifact.rows : []
+    if (rows.length < 2) return { valid: false, reason: 'stat_bar needs 2+ rows' }
+    if (!artifact.stat_header || String(artifact.stat_header).trim().length < 3) return { valid: false, reason: 'stat_bar missing stat_header' }
+    if (!artifact.annotation_style) return { valid: false, reason: 'stat_bar missing annotation_style' }
+    for (const row of rows) {
+      if (!String(row?.label || '').trim()) return { valid: false, reason: 'stat_bar row missing label' }
+      if (!Number.isFinite(+row?.value)) return { valid: false, reason: 'stat_bar row missing numeric value' }
+    }
+    if (rows.every(r => (+r.value || 0) === 0)) return { valid: false, reason: 'stat_bar has all-zero row values' }
+    return { valid: true }
+  }
 
   if (t === 'chart') {
     const cats = artifact.categories || []
@@ -2219,7 +2268,10 @@ function validateWorkflowUsage(slide) {
 }
 
 function artifactType(artifact) {
-  return String((artifact || {}).type || '').toLowerCase()
+  const t = String((artifact || {}).type || '').toLowerCase()
+  if (t === 'star_bar') return 'stat_bar'
+  if (t === 'chart' && String((artifact || {}).chart_type || '').toLowerCase() === 'stat_bar') return 'stat_bar'
+  return t
 }
 
 const ZONE_STRUCTURE_LIBRARY = {
@@ -2362,6 +2414,7 @@ function isDenseSoloArtifact(artifact) {
     return shape.cols >= 5 && shape.rows >= 10
   }
   if (t === 'workflow') return artifactWorkflowNodeCount(artifact) >= 6
+  if (t === 'stat_bar') return ((artifact.rows || []).length || 0) >= 6
   return false
 }
 
@@ -2376,6 +2429,7 @@ function isSubstantialArtifact(artifact) {
     return shape.cols >= 4 || shape.rows >= 6
   }
   if (t === 'chart') return ((artifact.categories || []).length || 0) >= 4
+  if (t === 'stat_bar') return ((artifact.rows || []).length || 0) >= 4
   if (t === 'cards') return artifactCardCount(artifact) >= 4
   if (t === 'prioritization') return artifactPrioritizationCount(artifact) >= 4
   if (t === 'driver_tree') return artifactDriverTreeNodeCount(artifact) >= 5
@@ -2391,7 +2445,7 @@ function zoneStructureArtifactProfile(zone) {
     hasInsight: arts.some(a => artifactType(a) === 'insight_text'),
     hasReasoning: arts.some(isReasoningArtifact),
     hasWorkflow: arts.some(a => artifactType(a) === 'workflow'),
-    hasChart: arts.some(a => artifactType(a) === 'chart'),
+    hasChart: arts.some(a => ['chart', 'stat_bar'].includes(artifactType(a))),
     hasTable: arts.some(a => artifactType(a) === 'table'),
     hasCards: arts.some(a => artifactType(a) === 'cards'),
     denseSolo: arts.length === 1 && isDenseSoloArtifact(arts[0]),
@@ -2565,7 +2619,10 @@ function validateWorkflowArtifactAndZone(workflowArtifact, zone) {
 }
 
 function zoneArtifactPairKey(zone) {
-  return ((zone?.artifacts || []).map(artifactType).sort().join('+'))
+  return ((zone?.artifacts || []).map(a => {
+    const t = artifactType(a)
+    return t === 'stat_bar' ? 'chart' : t
+  }).sort().join('+'))
 }
 
 function slideHasDominantReasoningArtifact(slide) {
@@ -2805,6 +2862,25 @@ function normaliseArtifact(a) {
       s.values = s.values.slice(0, a.categories.length)
       return s
     })
+  }
+
+  if (t === 'stat_bar') {
+    if (!a.stat_header) a.stat_header = a.chart_header || a.heading || ''
+    if (!a.stat_decision) a.stat_decision = a.chart_decision || ''
+    if (!a.rows) a.rows = []
+    if (!a.column_headers) a.column_headers = {}
+    if (!a.annotation_style) a.annotation_style = 'trailing'
+    a.rows = a.rows.map((row, idx) => ({
+      id: row?.id || `row_${idx + 1}`,
+      label: row?.label || '',
+      value: typeof row?.value === 'number' ? row.value : (parseFloat(String(row?.value || '').replace(/[^0-9.-]/g,'')) || 0),
+      unit: row?.unit || '',
+      display_value: row?.display_value || '',
+      annotation: row?.annotation || '',
+      annotation_representation: row?.annotation_representation || 'text',
+      bar_color: row?.bar_color || '',
+      highlight: row?.highlight === true
+    }))
   }
 
   if (t === 'insight_text') {
@@ -3108,6 +3184,7 @@ INSTRUCTIONS:
 - In Scratch Mode, cards with 1–2 items are compact summary anchors only: keep their zone share at or below ~40% of the slide, prefer top strips or narrow side panes, and never let 2 sparse cards occupy a tall dominant zone.
 - Card density rule: unless a single cards artifact contains 8+ cards, no individual card may imply more than ~15% of total slide area.
 - Every chart: MUST have 3+ categories, matching values, no all-zeros; set chart_header to the one-line insight the chart proves
+- Every stat_bar: MUST be top-level type "stat_bar" with stat_header, rows[] (>= 2), and annotation_style
 - clustered_bar: MUST have exactly 2 series
 - Every insight_text: MUST have specific, data-driven points; set insight_header to a 2–4 word specific label naming the implication (e.g. "Risk Implication", "Growth Opportunity", "Action Required") — never use generic labels like "So What" or "Key Insight"
 - Workflows: fully populate nodes and connections; set workflow_header to the one-line insight
@@ -3173,30 +3250,32 @@ function pickBestLayout(slide, layoutNames) {
   const zoneCount = (slide.zones || []).length || 1
   const zones = slide.zones || []
   const artifacts = zones.flatMap(z => z.artifacts || [])
-  const artifactTypes = artifacts.map(a => (a.type || '').toLowerCase())
+  const artifactTypes = artifacts.map(a => artifactType(a))
   const artifactCount = artifacts.length || 1
   const singleFullZone = zones.length === 1 && (((zones[0].layout_hint || {}).split || 'full') === 'full')
   const hasReasoningArtifact = artifactTypes.some(t => ['matrix', 'driver_tree', 'prioritization'].includes(t))
   const hasGroupedInsightOnly = artifactTypes.length > 0 && artifactTypes.every(t => t === 'insight_text')
   const hasWideWorkflow = artifacts.some(a => {
-    const t = (a.type || '').toLowerCase()
-    const dir = (a.flow_direction || '').toLowerCase()
-    return t === 'workflow' && (dir === 'left_to_right' || dir === 'timeline')
+      const t = artifactType(a)
+      const dir = (a.flow_direction || '').toLowerCase()
+      return t === 'workflow' && (dir === 'left_to_right' || dir === 'timeline')
   })
   const hasTallWorkflow = artifacts.some(a => {
-    const t = (a.type || '').toLowerCase()
-    const dir = (a.flow_direction || '').toLowerCase()
-    return t === 'workflow' && (dir === 'top_to_bottom' || dir === 'top_down_branching')
+      const t = artifactType(a)
+      const dir = (a.flow_direction || '').toLowerCase()
+      return t === 'workflow' && (dir === 'top_to_bottom' || dir === 'top_down_branching')
   })
   const hasWideChart = artifacts.some(a => {
-    const t = (a.type || '').toLowerCase()
-    const cats = Array.isArray(a.categories) ? a.categories.length : 0
-    return t === 'chart' && cats > 6
+      const t = artifactType(a)
+      const cats = t === 'stat_bar'
+        ? (Array.isArray(a.rows) ? a.rows.length : 0)
+        : (Array.isArray(a.categories) ? a.categories.length : 0)
+      return (t === 'chart' || t === 'stat_bar') && cats > 6
   })
   const hasTallHorizontalBar = artifacts.some(a => {
-    const t = (a.type || '').toLowerCase()
-    const chartType = (a.chart_type || '').toLowerCase()
-    const cats = Array.isArray(a.categories) ? a.categories.length : 0
+      const t = artifactType(a)
+      const chartType = (a.chart_type || '').toLowerCase()
+      const cats = Array.isArray(a.categories) ? a.categories.length : 0
     return t === 'chart' && chartType === 'horizontal_bar' && cats > 6
   })
   const hasLargeGroupPie = artifacts.some(a => {
@@ -3249,7 +3328,7 @@ function pickBestLayout(slide, layoutNames) {
   }
 
   if (isOneZoneTwoArtifacts) {
-    const pair = artifactTypes.slice().sort().join('+')
+    const pair = artifactTypes.map(t => t === 'stat_bar' ? 'chart' : t).slice().sort().join('+')
     const horizontalPairs = new Set([
       'chart+insight_text',
       'cards+insight_text',
@@ -3321,7 +3400,7 @@ function layoutConflictsWithSlide(slide, layoutName) {
 
   // group_pie with ≥ 5 pies needs a wide single-column layout — narrow multi-col layouts conflict
   const hasLargeGroupPieConflict = artifacts.some(a => {
-    return (a.type || '').toLowerCase() === 'chart' &&
+    return artifactType(a) === 'chart' &&
            (a.chart_type || '').toLowerCase() === 'group_pie' &&
            (Array.isArray(a.series) ? a.series.length : 0) >= 5
   })
@@ -3337,12 +3416,12 @@ function hasCompatibleLayout(slide, layoutNames) {
 }
 
 function artifactDominanceScoreForScratch(artifact) {
-  const type = String((artifact || {}).type || '').toLowerCase()
+  const type = artifactType(artifact)
   const sentiment = String((artifact || {}).sentiment || '').toLowerCase()
   const pointCount = Array.isArray(artifact?.points) ? artifact.points.length : 0
   if (['matrix', 'driver_tree', 'prioritization'].includes(type)) return 100
   if (type === 'workflow') return 92
-  if (type === 'chart') return 88
+  if (type === 'chart' || type === 'stat_bar') return 88
   if (type === 'table') return 76
   if (type === 'insight_text') return 72 + Math.min(pointCount, 5) * 2 + (sentiment === 'warning' ? 4 : 0)
   if (type === 'cards') {
@@ -3513,20 +3592,22 @@ function assignScratchSplits(slide) {
   }))
   if (!zones.length) return slide
 
-  const zoneArtifactTypes = zones.map(z => (z.artifacts || []).map(a => (a.type || '').toLowerCase()))
+  const zoneArtifactTypes = zones.map(z => (z.artifacts || []).map(a => artifactType(a)))
   const allArtifacts = zoneArtifactTypes.flat()
   const artifactCount = allArtifacts.length
   const hasReasoning = allArtifacts.some(t => ['matrix', 'driver_tree', 'prioritization'].includes(t))
   const compactCardZoneIndices = zones.map((z, idx) => ({ idx, compact: isCompactCardsZone(z) })).filter(x => x.compact).map(x => x.idx)
   const hasWideWorkflow = zones.some(z => (z.artifacts || []).some(a => {
-    const t = (a.type || '').toLowerCase()
+    const t = artifactType(a)
     const dir = (a.flow_direction || '').toLowerCase()
     return t === 'workflow' && (dir === 'left_to_right' || dir === 'timeline')
   }))
   const hasWideChart = zones.some(z => (z.artifacts || []).some(a => {
-    const t = (a.type || '').toLowerCase()
-    const cats = Array.isArray(a.categories) ? a.categories.length : 0
-    return t === 'chart' && cats > 6
+    const t = artifactType(a)
+    const cats = t === 'stat_bar'
+      ? (Array.isArray(a.rows) ? a.rows.length : 0)
+      : (Array.isArray(a.categories) ? a.categories.length : 0)
+    return (t === 'chart' || t === 'stat_bar') && cats > 6
   }))
 
   if (zones.length === 1) {
@@ -3629,7 +3710,7 @@ function pruneAgent4SlideForOutput(slide) {
   if (!slide || typeof slide !== 'object') return slide
   const pruneArtifactForOutput = (artifact) => {
     if (!artifact || typeof artifact !== 'object') return artifact
-    const type = String(artifact.type || '').toLowerCase()
+    const type = artifactType(artifact)
     const coverage = artifact.artifact_coverage_hint != null
       ? { artifact_coverage_hint: artifact.artifact_coverage_hint }
       : {}
@@ -3675,6 +3756,27 @@ function pruneAgent4SlideForOutput(slide) {
         secondary_series: Array.isArray(artifact.secondary_series) ? artifact.secondary_series : [],
         show_data_labels: artifact.show_data_labels !== false,
         show_legend: artifact.show_legend === true,
+        ...coverage
+      }
+    }
+    if (type === 'stat_bar') {
+      return {
+        type: 'stat_bar',
+        stat_header: artifact.stat_header || '',
+        stat_decision: artifact.stat_decision || '',
+        column_headers: artifact.column_headers || {},
+        rows: Array.isArray(artifact.rows) ? artifact.rows.map(row => ({
+          id: row?.id || '',
+          label: row?.label || '',
+          value: Number.isFinite(+row?.value) ? +row.value : 0,
+          unit: row?.unit || '',
+          display_value: row?.display_value || '',
+          annotation: row?.annotation || '',
+          annotation_representation: row?.annotation_representation || 'text',
+          bar_color: row?.bar_color || '',
+          highlight: row?.highlight === true
+        })) : [],
+        annotation_style: artifact.annotation_style || 'trailing',
         ...coverage
       }
     }
