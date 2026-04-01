@@ -57,6 +57,14 @@ SUBTITLE_TO_BODY = 0.10
 TABLE_MIN_ROW_HEIGHT = 0.32
 CELL_PADDING = 0.09
 
+FLATTENED_STRUCTURED_ARTIFACTS = {
+    'comparison_table',
+    'initiative_map',
+    'profile_card_set',
+    'risk_register',
+    'stat_bar',
+}
+
 
 def renderer_fallback_allowed(spec):
     """Whether Agent 6 is allowed to make design-time fallback decisions."""
@@ -315,8 +323,11 @@ def infer_slide_header_style(slide_spec):
 
 def infer_artifact_header_style(artifact_type):
     """Choose header emphasis by artifact type."""
-    if str(artifact_type or '').lower() == 'insight_text':
+    artifact_type = str(artifact_type or '').lower()
+    if artifact_type == 'insight_text':
         return 'brand_fill'
+    if artifact_type in FLATTENED_STRUCTURED_ARTIFACTS:
+        return 'underline'
     return 'underline'
 
 
@@ -3334,6 +3345,10 @@ def render_blocks(slide, slide_spec, bt, use_template):
     """
     Pure renderer: iterates slide_spec['blocks'] and dispatches each block
     to its type-specific render function. No layout decisions are made here.
+
+    Structured display artifacts such as comparison_table, initiative_map,
+    profile_card_set, risk_register, and stat_bar are expected to arrive
+    already flattened into primitive blocks by Agent 5.
     """
     blocks = list(slide_spec.get('blocks') or [])
 

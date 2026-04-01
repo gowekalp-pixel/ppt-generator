@@ -69,10 +69,11 @@ You must decide every render-critical detail yourself.
 Do not leave spacing, fitting, alignment, or artifact internals for Agent 6.
 
 BLOCKS-FIRST HANDOFF:
-- Agent 5's local runtime flattens all non-chart, non-table artifacts into primitive render blocks.
-- Therefore for insight_text, cards, workflow, matrix, driver_tree, and prioritization:
+- Agent 5's local runtime flattens all non-native artifacts into primitive render blocks.
+- Therefore for insight_text, cards, workflow, matrix, driver_tree, prioritization,
+  comparison_table, initiative_map, profile_card_set, and risk_register:
   provide exact artifact geometry, typography, styling, and semantic content so the local block flattener can emit final blocks.
-- Charts and tables remain typed render blocks, so they must be fully specified with their renderer-facing style fields.
+- Only native chart/table artifacts remain typed render blocks. stat_bar is flattened into primitive blocks.
 - Do NOT return a blocks[] array yourself. Return the designed slide spec; the local pipeline generates blocks[] after normalization.
 
 ═══════════════════════════
@@ -307,7 +308,7 @@ ARTIFACT CONTRACT
 
 Every artifact must be FULLY specified. No missing fields. No placeholders.
 
-Allowed types: insight_text | chart | cards | workflow | table | matrix | driver_tree | prioritization
+Allowed types: insight_text | chart | cards | workflow | table | matrix | driver_tree | prioritization | comparison_table | initiative_map | profile_card_set | risk_register
 
 ═══════════════════════════
 1. INSIGHT TEXT
@@ -1214,15 +1215,20 @@ async function designSlideBatch(batchManifest, brand, batchNum) {
     '\n- chart: must have chart_style and series_style[]' +
     '\n- workflow: must have workflow_style, nodes[] with x/y/w/h, connections[] with path[]' +
     '\n- table: must have table_style, column_widths[], column_types[], column_alignments[], header_row_height, row_heights[] (cell positions/frames are computed automatically)' +
+    '\n- comparison_table: must have comparison_style, criteria[], options[], recommended_option' +
+    '\n- initiative_map: must have initiative_style, dimension_labels[], initiatives[]' +
+    '\n- profile_card_set: must have profile_style, profiles[], layout_direction' +
+    '\n- risk_register: must have risk_style, risks[], show_mitigation' +
     '\n- cards: must have card_style, card_frames[] with x/y/w/h per card' +
     '\n- matrix: must have matrix_style plus semantic fields from Agent 4 (x_axis, y_axis, quadrants, points)' +
     '\n- driver_tree: must have tree_style plus semantic fields from Agent 4 (root, branches)' +
     '\n- prioritization: must have priority_style plus semantic fields from Agent 4 (items[], qualifiers[])' +
     '\n- insight_text (standard mode): must have insight_mode:"standard", style, heading_style, body_style' +
     '\n- insight_text (grouped mode):  must have insight_mode:"grouped", heading_style, group_layout, group_header_style, group_bullet_box_style, bullet_style, group_gap_in, header_to_box_gap_in' +
-    '\n- charts: include final legend_position, data_label_size, category_label_rotation, and series styling' +
+    '\n- charts: include final legend_position, data_label_size, category_label_rotation, and series styling; stat_bar must preserve rows[] + annotation_style for local block flattening' +
     '\n- workflows: include final node geometry, connection paths, node_inner_padding, and external_label_gap' +
     '\n- tables: include column_widths, column_types, column_alignments, header_row_height, row_heights, and cell_padding (do NOT compute column_x_positions, row_y_positions, header_cell_frames, body_cell_frames — these are computed automatically)' +
+    '\n- comparison_table / initiative_map / profile_card_set / risk_register are flattened locally into rect/text blocks, so emphasize rounded rows, semantic fills, and explicit labels rather than native table behavior' +
     '\n- matrix: include final matrix_style and preserve semantic matrix content for block flattening' +
     '\n- driver_tree: include final tree_style and preserve root/branches for block flattening' +
     '\n- prioritization: include final priority_style and preserve ranked items/qualifiers for block flattening' +
@@ -1255,6 +1261,10 @@ function validateDesignedSlide(slide) {
     'chart',
     'insight_text',
     'table',
+    'comparison_table',
+    'initiative_map',
+    'profile_card_set',
+    'risk_register',
     'matrix',
     'driver_tree',
     'prioritization',
@@ -1297,6 +1307,16 @@ function validateDesignedSlide(slide) {
       if (a.type === 'table'    && !a.column_types)    issues.push(p + ': table missing column_types')
       if (a.type === 'table'    && !a.column_alignments) issues.push(p + ': table missing column_alignments')
       if (a.type === 'table'    && a.table_style && a.table_style.cell_padding == null) issues.push(p + ': table missing cell_padding')
+      if (a.type === 'comparison_table' && !Array.isArray(a.criteria)) issues.push(p + ': comparison_table missing criteria')
+      if (a.type === 'comparison_table' && !Array.isArray(a.options)) issues.push(p + ': comparison_table missing options')
+      if (a.type === 'comparison_table' && !a.comparison_style) issues.push(p + ': comparison_table missing comparison_style')
+      if (a.type === 'initiative_map' && !Array.isArray(a.dimension_labels)) issues.push(p + ': initiative_map missing dimension_labels')
+      if (a.type === 'initiative_map' && !Array.isArray(a.initiatives)) issues.push(p + ': initiative_map missing initiatives')
+      if (a.type === 'initiative_map' && !a.initiative_style) issues.push(p + ': initiative_map missing initiative_style')
+      if (a.type === 'profile_card_set' && !Array.isArray(a.profiles)) issues.push(p + ': profile_card_set missing profiles')
+      if (a.type === 'profile_card_set' && !a.profile_style) issues.push(p + ': profile_card_set missing profile_style')
+      if (a.type === 'risk_register' && !Array.isArray(a.risks)) issues.push(p + ': risk_register missing risks')
+      if (a.type === 'risk_register' && !a.risk_style) issues.push(p + ': risk_register missing risk_style')
       if (a.type === 'cards'    && !a.card_frames?.length) issues.push(p + ': cards missing card_frames')
       if (a.type === 'cards'    && !a.card_style)      issues.push(p + ': cards missing card_style')
       if (a.type === 'cards'    && !a.cards_layout)    issues.push(p + ': cards missing cards_layout')
@@ -1901,7 +1921,7 @@ async function buildFallbackDesign(manifestSlide, brand) {
     '\nPreserve the title, key_message, zones structure and artifact content from the manifest.' +
     '\nCRITICAL: preserve the exact number of zones and the exact artifact types in each zone from the manifest.' +
     '\nTreat slide_archetype as a weak summary label only. The explicit manifest structure is authoritative.' +
-    '\nDo NOT collapse charts, tables, workflows, cards, matrix, driver_tree, or prioritization into generic insight_text unless the manifest itself uses insight_text.' +
+    '\nDo NOT collapse charts, tables, workflows, cards, matrix, driver_tree, prioritization, comparison_table, initiative_map, profile_card_set, or risk_register into generic insight_text unless the manifest itself uses insight_text.' +
     '\nChoose the cleanest, most board-ready layout from the manifest structure itself: zone count, zone roles, artifact types, and selected_layout_name if present.' +
     '\nReturn a single JSON object for this one slide.'
 
@@ -1963,6 +1983,10 @@ function makeHeaderBlockFromManifestArtifact(artifact, bt) {
     artifact?.insight_header ||
     artifact?.chart_header ||
     artifact?.table_header ||
+    artifact?.comparison_header ||
+    artifact?.initiative_header ||
+    artifact?.profile_header ||
+    artifact?.risk_header ||
     artifact?.workflow_header ||
     artifact?.matrix_header ||
     artifact?.tree_header ||
@@ -2010,6 +2034,8 @@ function buildSafeArtifactShell(manifestArt, bt) {
       artifact_coverage_hint,
       x: null, y: null, w: null, h: null,
       chart_type:       chartType,
+      rows:             Array.isArray(manifestArt?.rows) ? manifestArt.rows : [],
+      annotation_style: manifestArt?.annotation_style || 'trailing',
       categories:       categories,
       series:           seriesArr,
       chart_title:      manifestArt?.chart_title  || '',
@@ -2074,6 +2100,116 @@ function buildSafeArtifactShell(manifestArt, bt) {
       header_row_height: null,
       column_types: [],
       column_alignments: [],
+      header_block
+    }
+  }
+  if (t === 'comparison_table') {
+    return {
+      type: 'comparison_table',
+      artifact_coverage_hint,
+      x: null, y: null, w: null, h: null,
+      comparison_header: manifestArt?.comparison_header || manifestArt?.table_header || '',
+      criteria: Array.isArray(manifestArt?.criteria) ? manifestArt.criteria : [],
+      options: Array.isArray(manifestArt?.options) ? manifestArt.options : [],
+      recommended_option: manifestArt?.recommended_option || '',
+      comparison_style: {
+        container_fill_color: '#FFFFFF',
+        container_border_color: '#D7DEE8',
+        container_border_width: 0.6,
+        container_corner_radius: 8,
+        header_fill_color: bt.primary_color || '#0078AE',
+        header_text_color: '#FFFFFF',
+        row_fill_color: '#FFFFFF',
+        row_alt_fill_color: '#F7F8FA',
+        recommended_fill_color: '#EEF4E2',
+        grid_color: '#D7DEE8',
+        yes_fill_color: '#E4F2DE',
+        partial_fill_color: '#FFF4BF',
+        no_fill_color: '#FDE8E8',
+        neutral_fill_color: '#F4F5F7',
+        label_font_family: bt.title_font_family || 'Arial',
+        label_font_size: 10,
+        body_font_family: bt.body_font_family || 'Arial',
+        body_font_size: 9
+      },
+      header_block
+    }
+  }
+  if (t === 'initiative_map') {
+    return {
+      type: 'initiative_map',
+      artifact_coverage_hint,
+      x: null, y: null, w: null, h: null,
+      initiative_header: manifestArt?.initiative_header || manifestArt?.table_header || '',
+      dimension_labels: Array.isArray(manifestArt?.dimension_labels) ? manifestArt.dimension_labels : [],
+      initiatives: Array.isArray(manifestArt?.initiatives) ? manifestArt.initiatives : [],
+      initiative_style: {
+        row_fill_color: '#FFFFFF',
+        row_border_color: '#D7DEE8',
+        row_border_width: 0.6,
+        row_corner_radius: 8,
+        header_fill_color: bt.primary_color || '#0078AE',
+        header_text_color: '#FFFFFF',
+        label_font_family: bt.title_font_family || 'Arial',
+        label_font_size: 10,
+        body_font_family: bt.body_font_family || 'Arial',
+        body_font_size: 9,
+        accent_color: bt.secondary_color || bt.primary_color || '#0078AE'
+      },
+      header_block
+    }
+  }
+  if (t === 'profile_card_set') {
+    return {
+      type: 'profile_card_set',
+      artifact_coverage_hint,
+      x: null, y: null, w: null, h: null,
+      profile_header: manifestArt?.profile_header || manifestArt?.heading || '',
+      profiles: Array.isArray(manifestArt?.profiles) ? manifestArt.profiles : [],
+      layout_direction: manifestArt?.layout_direction || 'horizontal',
+      profile_style: {
+        card_fill_color: '#FFFFFF',
+        card_border_color: '#D7DEE8',
+        card_border_width: 0.6,
+        card_corner_radius: 10,
+        header_fill_color: '#EDF4FF',
+        header_text_color: bt.primary_color || '#0078AE',
+        key_fill_color: '#F4F5F7',
+        key_text_color: '#4B5563',
+        label_font_family: bt.title_font_family || 'Arial',
+        label_font_size: 11,
+        body_font_family: bt.body_font_family || 'Arial',
+        body_font_size: 9,
+        positive_color: '#2D7F5E',
+        negative_color: '#C2410C',
+        warning_color: '#B45309',
+        neutral_color: bt.body_color || '#111111'
+      },
+      header_block
+    }
+  }
+  if (t === 'risk_register') {
+    return {
+      type: 'risk_register',
+      artifact_coverage_hint,
+      x: null, y: null, w: null, h: null,
+      risk_header: manifestArt?.risk_header || manifestArt?.table_header || '',
+      risks: Array.isArray(manifestArt?.risks) ? manifestArt.risks : [],
+      show_mitigation: manifestArt?.show_mitigation !== false,
+      risk_style: {
+        row_border_color: '#D7DEE8',
+        row_border_width: 0.6,
+        row_corner_radius: 8,
+        critical_fill_color: '#FDE8E8',
+        high_fill_color: '#FFF1F2',
+        medium_fill_color: '#FFF7E5',
+        low_fill_color: '#EEFBF3',
+        badge_text_color: '#FFFFFF',
+        label_font_family: bt.title_font_family || 'Arial',
+        label_font_size: 10,
+        body_font_family: bt.body_font_family || 'Arial',
+        body_font_size: 9
+      },
       header_block
     }
   }
@@ -3219,6 +3355,10 @@ function resolveArtifactSubtype(art) {
     case 'workflow':     return art.workflow_type || art.flow_direction || 'workflow'
     case 'cards':        return art.cards_layout || 'cards'
     case 'table':        return art.table_subtype || 'standard'
+    case 'comparison_table': return 'comparison_table'
+    case 'initiative_map': return 'initiative_map'
+    case 'profile_card_set': return art.layout_direction || 'profile_card_set'
+    case 'risk_register': return 'risk_register'
     case 'matrix':       return art.matrix_type || '2x2'
     case 'driver_tree':  return 'driver_tree'
     case 'prioritization': return 'ranked_list'
@@ -3232,6 +3372,10 @@ function resolveArtifactHeaderText(art) {
     art.insight_header ||
     art.chart_header ||
     art.table_header ||
+    art.comparison_header ||
+    art.initiative_header ||
+    art.profile_header ||
+    art.risk_header ||
     art.matrix_header ||
     art.tree_header ||
     art.priority_header ||
@@ -3330,6 +3474,1176 @@ function decorateArtifactBlocks(blocks, startIdx, endIdx, art, blockRole) {
       fallback_policy: blocks[i].fallback_policy || fallbackPolicy
     }
   }
+}
+
+function _sentimentColor(sentiment, style, bt) {
+  const token = String(sentiment || '').toLowerCase()
+  if (token === 'positive') return style?.positive_color || '#2D7F5E'
+  if (token === 'negative') return style?.negative_color || '#C2410C'
+  if (token === 'warning') return style?.warning_color || '#B45309'
+  return style?.neutral_color || bt.body_color || '#111111'
+}
+
+function _ratingVisual(rating, note, cs) {
+  const token = String(rating || '').toLowerCase()
+  // Big-4 style: symbol + semantic color pill; text label only for free-text cells
+  if (token === 'yes')     return { fill: cs.yes_fill_color     || '#D1FAE5', text: '✓', textColor: cs.yes_text_color     || '#065F46', bold: true }
+  if (token === 'partial') return { fill: cs.partial_fill_color || '#FEF3C7', text: '◑', textColor: cs.partial_text_color || '#92400E', bold: true }
+  if (token === 'no')      return { fill: cs.no_fill_color      || '#FEE2E2', text: '✗', textColor: cs.no_text_color      || '#991B1B', bold: true }
+  return { fill: cs.neutral_fill_color || '#F4F5F7', text: String(note || rating || ''), textColor: null, bold: false }
+}
+
+function _riskSeverityFill(severity, rs) {
+  const token = String(severity || '').toLowerCase()
+  if (token === 'critical') return rs.critical_fill_color || '#FEE2E2'
+  if (token === 'high')     return rs.high_fill_color     || '#FFF1E5'
+  if (token === 'medium')   return rs.medium_fill_color   || '#FFFBEB'
+  return rs.low_fill_color || '#ECFDF5'
+}
+
+function _riskSeverityBadgeColor(severity, rs) {
+  // Solid semantic badge colors — severity IS the signal, not brand color
+  const token = String(severity || '').toLowerCase()
+  if (token === 'critical') return rs.critical_badge_color || '#DC2626'
+  if (token === 'high')     return rs.high_badge_color     || '#EA580C'
+  if (token === 'medium')   return rs.medium_badge_color   || '#D97706'
+  return rs.low_badge_color || '#16A34A'
+}
+
+function _truncateText(text, maxChars) {
+  const str = String(text || '')
+  if (!maxChars || str.length <= maxChars) return str
+  return str.slice(0, Math.max(0, maxChars - 1)).trimEnd() + '…'
+}
+
+function _displayLabel(value) {
+  if (value == null) return ''
+  if (typeof value === 'string') return value
+  if (typeof value === 'object' && value !== null) {
+    return String(value.label || value.name || value.title || value.id || '')
+  }
+  return String(value)
+}
+
+function _comparisonTableToBlocks_legacy(art, content_y, blocks, bt, r2) {
+  const cs = art.comparison_style || {}
+  const criteria = (art.criteria || []).slice(0, 6).map(c => (
+    typeof c === 'object' && c !== null
+      ? { id: String(c.id || c.label || c.name || ''), label: _displayLabel(c) }
+      : { id: String(c), label: String(c) }
+  ))
+  const options = (art.options || []).slice(0, 5)
+  const recommended = String(art.recommended_option || '').trim().toLowerCase()
+  const ax = art.x || 0
+  const ay = content_y
+  const aw = art.w || 0
+  const ah = r2((art.y || 0) + (art.h || 0) - content_y)
+  if (!criteria.length || !options.length || aw <= 0 || ah <= 0) return
+
+  const gap = 0.06
+  const outerPad = 0.08
+  const headerH = r2(Math.min(0.52, Math.max(0.36, ah * 0.16)))
+  const bodyTop = r2(ay + headerH + gap)
+  const rowGap = 0.05
+  const rowH = r2(Math.max(0.42, (ah - headerH - gap - rowGap * Math.max(0, options.length - 1)) / Math.max(options.length, 1)))
+  const labelW = r2(Math.min(Math.max(1.45, aw * 0.24), 2.2))
+  const critGap = 0.05
+  const critW = r2(Math.max(0.65, (aw - labelW - critGap * Math.max(0, criteria.length)) / Math.max(criteria.length, 1)))
+  const titleFont = cs.label_font_family || bt.title_font_family || 'Arial'
+  const bodyFont = cs.body_font_family || bt.body_font_family || 'Arial'
+
+  blocks.push({
+    block_type: 'rect',
+    x: ax, y: ay, w: aw, h: ah,
+    fill_color: cs.container_fill_color || '#FFFFFF',
+    border_color: cs.container_border_color || '#D7DEE8',
+    border_width: cs.container_border_width != null ? cs.container_border_width : 0.6,
+    corner_radius: cs.container_corner_radius != null ? cs.container_corner_radius : 8
+  })
+
+  blocks.push({
+    block_type: 'rect',
+    x: r2(ax + outerPad), y: r2(ay + outerPad), w: r2(labelW - outerPad), h: r2(headerH - outerPad),
+    fill_color: cs.header_fill_color || bt.primary_color || '#0078AE',
+    border_color: null, border_width: 0, corner_radius: 6
+  })
+  blocks.push({
+    block_type: 'text_box',
+    x: r2(ax + outerPad + 0.06), y: r2(ay + outerPad + 0.03), w: r2(labelW - outerPad - 0.12), h: r2(headerH - outerPad - 0.06),
+    text: 'Options',
+    font_family: titleFont, font_size: cs.label_font_size || 10, bold: true,
+    color: cs.header_text_color || '#FFFFFF', align: 'left', valign: 'middle'
+  })
+
+  criteria.forEach((criterion, ci) => {
+    const cellX = r2(ax + labelW + critGap + ci * (critW + critGap))
+    blocks.push({
+      block_type: 'rect',
+      x: cellX, y: r2(ay + outerPad), w: critW, h: r2(headerH - outerPad),
+      fill_color: cs.header_fill_color || bt.primary_color || '#0078AE',
+      border_color: null, border_width: 0, corner_radius: 6
+    })
+    blocks.push({
+      block_type: 'text_box',
+      x: r2(cellX + 0.06), y: r2(ay + outerPad + 0.03), w: r2(critW - 0.12), h: r2(headerH - outerPad - 0.06),
+      text: _truncateText(criterion.label, 18),
+      font_family: titleFont, font_size: cs.label_font_size || 10, bold: true,
+      color: cs.header_text_color || '#FFFFFF', align: 'center', valign: 'middle'
+    })
+  })
+
+  options.forEach((option, oi) => {
+    const rowY = r2(bodyTop + oi * (rowH + rowGap))
+    const isRecommended = recommended && String(option?.name || '').trim().toLowerCase() === recommended
+    blocks.push({
+      block_type: 'rect',
+      x: ax, y: rowY, w: aw, h: rowH,
+      fill_color: isRecommended ? (cs.recommended_fill_color || '#EEF4E2') : (oi % 2 === 1 ? (cs.row_alt_fill_color || '#F7F8FA') : (cs.row_fill_color || '#FFFFFF')),
+      border_color: cs.grid_color || '#D7DEE8',
+      border_width: 0.5,
+      corner_radius: 6
+    })
+    // Option name
+    blocks.push({
+      block_type: 'text_box',
+      x: r2(ax + 0.10), y: r2(rowY + 0.06), w: r2(labelW - 0.2), h: r2(rowH - 0.12),
+      text: String(option?.name || ''),
+      font_family: titleFont, font_size: cs.label_font_size || 10, bold: isRecommended,
+      color: bt.body_color || '#111111', align: 'left', valign: isRecommended ? 'top' : 'middle'
+    })
+    // "Recommended" pill — separate badge below name when this is the recommended row
+    if (isRecommended) {
+      const pillH = 0.16
+      const pillW = Math.min(r2(labelW - 0.20), 1.0)
+      blocks.push({
+        block_type: 'rect',
+        x: r2(ax + 0.10), y: r2(rowY + rowH - pillH - 0.08), w: pillW, h: pillH,
+        fill_color: cs.recommended_badge_fill || '#166534',
+        border_color: null, border_width: 0, corner_radius: 4
+      })
+      blocks.push({
+        block_type: 'text_box',
+        x: r2(ax + 0.12), y: r2(rowY + rowH - pillH - 0.07), w: r2(pillW - 0.04), h: pillH,
+        text: 'Recommended',
+        font_family: bodyFont, font_size: 7, bold: true,
+        color: '#FFFFFF', align: 'left', valign: 'middle'
+      })
+    }
+    criteria.forEach((criterion, ci) => {
+      const cells = option?.cells || option?.ratings || []
+      const rating = cells.find(r =>
+        String(r?.criterion_id || r?.criterion || '') === String(criterion.id || criterion.label)
+      ) || cells[ci] || {}
+      const visual = _ratingVisual(rating?.rating, rating?.note, cs)
+      const cellX = r2(ax + labelW + critGap + ci * (critW + critGap))
+      const pillW = r2(Math.max(0.42, critW - 0.16))
+      const pillH = r2(Math.max(0.24, Math.min(0.36, rowH - 0.16)))
+      const pillY = r2(rowY + (rowH - pillH) / 2)
+      blocks.push({
+        block_type: 'rect',
+        x: r2(cellX + (critW - pillW) / 2), y: pillY, w: pillW, h: pillH,
+        fill_color: visual.fill,
+        border_color: null, border_width: 0, corner_radius: 10
+      })
+      blocks.push({
+        block_type: 'text_box',
+        x: r2(cellX + 0.06), y: r2(rowY + 0.04), w: r2(critW - 0.12), h: r2(rowH - 0.08),
+        text: _truncateText(visual.text, 16),
+        font_family: bodyFont, font_size: (cs.body_font_size || 9) + 1, bold: visual.bold,
+        color: visual.textColor || bt.body_color || '#111111', align: 'center', valign: 'middle'
+      })
+    })
+  })
+}
+
+// Override: comparison_table should render as a simple comparison grid using
+// one outer shell, plain headers, row dividers, recommended-row highlight,
+// and small judgment marks built from basic shapes.
+function _comparisonTableToBlocks(art, content_y, blocks, bt, r2) {
+  const cs = art.comparison_style || {}
+  const criteria = (art.criteria || []).slice(0, 6)
+  const options = (art.options || []).slice(0, 5)
+  const recommended = String(art.recommended_option || '').trim().toLowerCase()
+  const ax = art.x || 0
+  const ay = content_y
+  const aw = art.w || 0
+  const ah = r2((art.y || 0) + (art.h || 0) - content_y)
+  if (!criteria.length || !options.length || aw <= 0 || ah <= 0) return
+
+  const headerH = 0.34
+  const rowH = r2(Math.max(0.44, (ah - headerH) / Math.max(options.length, 1)))
+  const labelW = r2(Math.min(Math.max(1.9, aw * 0.24), 2.7))
+  const colW = r2(Math.max(0.75, (aw - labelW) / Math.max(criteria.length, 1)))
+  const titleFont = cs.label_font_family || bt.title_font_family || 'Arial'
+  const bodyFont = cs.body_font_family || bt.body_font_family || 'Arial'
+  const shellBorder = cs.container_border_color || '#D7DEE8'
+  const recommendedFill = cs.recommended_fill_color || '#E8F0D9'
+
+  const iconFor = (rating) => {
+    const token = String(rating || '').toLowerCase()
+    if (token === 'yes') return { fill: '#EEF4E2', text: '✓', color: '#386B2A' }
+    if (token === 'no') return { fill: '#F8EAEA', text: '✖', color: '#8B2C23' }
+    if (token === 'partial') return { fill: '#FBF4E2', text: '~', color: '#7A6220' }
+    return { fill: '#F4F5F7', text: String(rating || ''), color: bt.body_color || '#111111' }
+  }
+
+  blocks.push({
+    block_type: 'rect',
+    x: ax, y: ay, w: aw, h: ah,
+    fill_color: '#FFFFFF',
+    border_color: shellBorder,
+    border_width: 0.6,
+    corner_radius: 10
+  })
+
+  blocks.push({
+    block_type: 'text_box',
+    x: r2(ax + 0.14), y: r2(ay + 0.05), w: r2(labelW - 0.18), h: 0.22,
+    text: 'Option',
+    font_family: titleFont, font_size: 10, bold: true,
+    color: '#555555', align: 'left', valign: 'middle'
+  })
+  criteria.forEach((criterion, ci) => {
+    const x = r2(ax + labelW + ci * colW)
+    blocks.push({
+      block_type: 'text_box',
+      x, y: r2(ay + 0.05), w: colW, h: 0.22,
+      text: _truncateText(criterion, 18),
+      font_family: titleFont, font_size: 10, bold: true,
+      color: '#555555', align: 'center', valign: 'middle'
+    })
+  })
+  blocks.push({
+    block_type: 'rule',
+    x: ax, y: r2(ay + headerH), w: aw, h: 0.005,
+    color: '#BDBDBD',
+    line_width: 0.6
+  })
+
+  options.forEach((option, oi) => {
+    const rowY = r2(ay + headerH + oi * rowH)
+    const isRecommended = recommended && String(option?.name || '').trim().toLowerCase() === recommended
+    if (isRecommended) {
+      blocks.push({
+        block_type: 'rect',
+        x: ax, y: rowY, w: aw, h: rowH,
+        fill_color: recommendedFill,
+        border_color: null, border_width: 0,
+        corner_radius: 0
+      })
+    }
+
+    blocks.push({
+      block_type: 'text_box',
+      x: r2(ax + 0.14), y: r2(rowY + 0.08), w: r2(labelW - 0.24), h: 0.22,
+      text: String(option?.name || ''),
+      font_family: titleFont, font_size: 11, bold: true,
+      color: isRecommended ? '#386B2A' : (bt.body_color || '#111111'),
+      align: 'left', valign: 'middle'
+    })
+    if (isRecommended) {
+      blocks.push({
+        block_type: 'rect',
+        x: r2(ax + 0.98), y: r2(rowY + 0.07), w: 0.92, h: 0.24,
+        fill_color: '#E3EDCF',
+        border_color: '#7AA243',
+        border_width: 0.6,
+        corner_radius: 10
+      })
+      blocks.push({
+        block_type: 'text_box',
+        x: r2(ax + 1.06), y: r2(rowY + 0.11), w: 0.76, h: 0.14,
+        text: 'recommended',
+        font_family: bodyFont, font_size: 8, bold: true,
+        color: '#4A4A4A', align: 'center', valign: 'middle'
+      })
+    }
+
+    criteria.forEach((criterion, ci) => {
+      const rating = (option?.ratings || []).find(r => String(r?.criterion || '') === String(criterion)) || (option?.ratings || [])[ci] || {}
+      const visual = iconFor(rating?.rating || rating?.note || '')
+      const cx = r2(ax + labelW + ci * colW + colW / 2)
+      const cy = r2(rowY + rowH / 2)
+
+      blocks.push({
+        block_type: 'circle',
+        x: r2(cx - 0.10), y: r2(cy - 0.10), w: 0.20, h: 0.20,
+        fill_color: visual.fill,
+        font_color: '#FFFFFF',
+        text: ''
+      })
+      blocks.push({
+        block_type: 'text_box',
+        x: r2(cx - 0.12), y: r2(cy - 0.11), w: 0.24, h: 0.20,
+        text: visual.text,
+        font_family: titleFont, font_size: 10, bold: true,
+        color: visual.color, align: 'center', valign: 'middle'
+      })
+    })
+
+    if (oi < options.length - 1) {
+      blocks.push({
+        block_type: 'rule',
+        x: ax, y: r2(rowY + rowH), w: aw, h: 0.005,
+        color: '#D9D9D9',
+        line_width: 0.5
+      })
+    }
+  })
+}
+
+function _initiativeMapToBlocks_legacy(art, content_y, blocks, bt, r2) {
+  const istyle = art.initiative_style || {}
+  const initiatives = (art.initiatives || []).slice(0, 6)
+  const dims = (art.dimension_labels || []).slice(0, 6).map(d => (
+    typeof d === 'object' && d !== null
+      ? { id: String(d.id || d.label || d.name || ''), label: _displayLabel(d) }
+      : { id: String(d), label: String(d) }
+  ))
+  const ax = art.x || 0
+  const ay = content_y
+  const aw = art.w || 0
+  const ah = r2((art.y || 0) + (art.h || 0) - content_y)
+  if (!initiatives.length || aw <= 0 || ah <= 0) return
+
+  const colHeaderH = 0.28
+  const rowGap = 0.07
+  const totalRowH = ah - colHeaderH - 0.06
+  const rowH = r2(Math.max(0.58, (totalRowH - rowGap * Math.max(0, initiatives.length - 1)) / Math.max(initiatives.length, 1)))
+  const nameW = r2(Math.min(Math.max(1.55, aw * 0.24), 2.2))
+  const dimGap = 0.06
+  const dimCount = Math.max(dims.length, 1)
+  const dimW = r2(Math.max(0.8, (aw - nameW - dimGap * dimCount) / dimCount))
+  const titleFont = istyle.label_font_family || bt.title_font_family || 'Arial'
+  const bodyFont = istyle.body_font_family || bt.body_font_family || 'Arial'
+  const cornerR = istyle.row_corner_radius != null ? istyle.row_corner_radius : 8
+  const primaryColor = bt.primary_color || '#0078AE'
+
+  // ── Column header row ────────────────────────────────────────────────────────
+  // "Initiative" header
+  blocks.push({
+    block_type: 'rect',
+    x: ax, y: ay, w: nameW, h: colHeaderH,
+    fill_color: istyle.col_header_fill || primaryColor,
+    border_color: null, border_width: 0, corner_radius: cornerR
+  })
+  blocks.push({
+    block_type: 'text_box',
+    x: r2(ax + 0.10), y: ay, w: r2(nameW - 0.16), h: colHeaderH,
+    text: 'Initiative',
+    font_family: titleFont, font_size: (istyle.label_font_size || 10) - 1, bold: true,
+    color: istyle.col_header_text_color || '#FFFFFF', align: 'left', valign: 'middle'
+  })
+  // Dimension column headers
+  dims.forEach((dim, di) => {
+    const cellX = r2(ax + nameW + dimGap + di * (dimW + dimGap))
+    blocks.push({
+      block_type: 'rect',
+      x: cellX, y: ay, w: dimW, h: colHeaderH,
+      fill_color: istyle.col_header_fill || primaryColor,
+      border_color: null, border_width: 0, corner_radius: cornerR
+    })
+    blocks.push({
+      block_type: 'text_box',
+      x: r2(cellX + 0.08), y: ay, w: r2(dimW - 0.12), h: colHeaderH,
+      text: _truncateText(dim, 18),
+      font_family: titleFont, font_size: (istyle.label_font_size || 10) - 1, bold: true,
+      color: istyle.col_header_text_color || '#FFFFFF', align: 'left', valign: 'middle'
+    })
+  })
+
+  // ── Initiative rows ──────────────────────────────────────────────────────────
+  const rowStartY = r2(ay + colHeaderH + 0.06)
+  initiatives.forEach((initiative, ii) => {
+    const rowY = r2(rowStartY + ii * (rowH + rowGap))
+
+    // Row background (full width)
+    blocks.push({
+      block_type: 'rect',
+      x: ax, y: rowY, w: aw, h: rowH,
+      fill_color: ii % 2 === 0 ? (istyle.row_fill_color || '#FFFFFF') : (istyle.row_alt_fill_color || '#F7F8FA'),
+      border_color: istyle.row_border_color || '#D7DEE8',
+      border_width: istyle.row_border_width != null ? istyle.row_border_width : 0.5,
+      corner_radius: cornerR
+    })
+    // Left accent bar in primary color — lighter treatment than full column fill
+    blocks.push({
+      block_type: 'rect',
+      x: ax, y: rowY, w: 0.06, h: rowH,
+      fill_color: primaryColor,
+      border_color: null, border_width: 0, corner_radius: cornerR
+    })
+    // Initiative name — bold, primary color text; no solid filled column
+    blocks.push({
+      block_type: 'text_box',
+      x: r2(ax + 0.12), y: r2(rowY + 0.08), w: r2(nameW - 0.18), h: r2(rowH - 0.16),
+      text: String(initiative?.name || ''),
+      font_family: titleFont, font_size: istyle.label_font_size || 10, bold: true,
+      color: istyle.name_text_color || primaryColor, align: 'left', valign: 'middle'
+    })
+
+    dims.forEach((dim, di) => {
+      const cellX = r2(ax + nameW + dimGap + di * (dimW + dimGap))
+      const dimValue = (initiative?.dimensions || []).find(d => String(d?.label || '') === String(dim)) || (initiative?.dimensions || [])[di] || {}
+      // Thin separator line between dim cells
+      if (di > 0) {
+        blocks.push({
+          block_type: 'rect',
+          x: r2(cellX - dimGap * 0.5), y: r2(rowY + 0.12), w: 0.01, h: r2(rowH - 0.24),
+          fill_color: '#D7DEE8', border_color: null, border_width: 0, corner_radius: 0
+        })
+      }
+      blocks.push({
+        block_type: 'text_box',
+        x: r2(cellX + 0.06), y: r2(rowY + 0.06), w: r2(dimW - 0.10), h: r2(rowH - 0.12),
+        text: _truncateText(dimValue?.value || '', 38),
+        font_family: bodyFont, font_size: istyle.body_font_size || 9, bold: false,
+        color: bt.body_color || '#111111', align: 'left', valign: 'middle'
+      })
+    })
+  })
+}
+
+function _profileCardSetToBlocks(art, content_y, blocks, bt, r2) {
+  const ps = art.profile_style || {}
+  const profiles = (art.profiles || []).slice(0, 6)
+  const direction = String(art.layout_direction || 'horizontal').toLowerCase()
+  const ax = art.x || 0
+  const ay = content_y
+  const aw = art.w || 0
+  const ah = r2((art.y || 0) + (art.h || 0) - content_y)
+  if (!profiles.length || aw <= 0 || ah <= 0) return
+
+  const gap = 0.12
+  const cols = direction === 'grid'
+    ? Math.min(3, Math.max(2, Math.ceil(Math.sqrt(profiles.length))))
+    : profiles.length <= 3 ? profiles.length : Math.min(3, profiles.length)
+  const rows = Math.ceil(profiles.length / cols)
+  const cardW = r2((aw - gap * Math.max(0, cols - 1)) / cols)
+  const cardH = r2((ah - gap * Math.max(0, rows - 1)) / rows)
+  const titleFont = ps.label_font_family || bt.title_font_family || 'Arial'
+  const bodyFont = ps.body_font_family || bt.body_font_family || 'Arial'
+
+  profiles.forEach((profile, pi) => {
+    const col = pi % cols
+    const row = Math.floor(pi / cols)
+    const x = r2(ax + col * (cardW + gap))
+    const y = r2(ay + row * (cardH + gap))
+    const attrs = (profile?.secondary_items || profile?.attributes || []).slice(0, 5)
+    const titleH = 0.28
+    const subtitleH = 0.20
+    const topPad = 0.10
+    const dividerY = r2(y + 0.66)
+    const bodyStartY = r2(dividerY + 0.10)
+    const attrGap = 0.05
+    const attrH = r2(Math.max(0.24, (cardH - (bodyStartY - y) - 0.12 - attrGap * Math.max(0, attrs.length - 1)) / Math.max(attrs.length, 1)))
+    const cardCornerR = ps.card_corner_radius != null ? ps.card_corner_radius : 10
+    const primaryColor = bt.primary_color || '#0078AE'
+    const mutedColor = '#6B7280'
+    const dividerColor = '#D9D9D9'
+    const subtitle = String(profile?.subtitle || profile?.entity_type || profile?.category || profile?.subtype || '')
+    const badgeText = String(profile?.badge_text || profile?.kpi_badge || profile?.headline_metric || profile?.metric_badge || '')
+
+    blocks.push({
+      block_type: 'rect',
+      x, y, w: cardW, h: cardH,
+      fill_color: ps.card_fill_color || '#FFFFFF',
+      border_color: ps.card_border_color || '#D7DEE8',
+      border_width: ps.card_border_width != null ? ps.card_border_width : 0.5,
+      corner_radius: cardCornerR
+    })
+    blocks.push({
+      block_type: 'text_box',
+      x: r2(x + 0.14), y: r2(y + topPad), w: r2(cardW - 1.55), h: titleH,
+      text: String(profile?.entity_name || ''),
+      font_family: titleFont, font_size: ps.label_font_size || 11, bold: true,
+      color: bt.body_color || '#111111', align: 'left', valign: 'middle'
+    })
+    if (subtitle) {
+      blocks.push({
+        block_type: 'text_box',
+        x: r2(x + 0.14), y: r2(y + topPad + 0.26), w: r2(cardW - 1.60), h: subtitleH,
+        text: subtitle,
+        font_family: bodyFont, font_size: 9, bold: false,
+        color: mutedColor, align: 'left', valign: 'middle'
+      })
+    }
+    if (badgeText) {
+      const badgeW = r2(Math.min(1.35, Math.max(0.85, badgeText.length * 0.08)))
+      blocks.push({
+        block_type: 'rect',
+        x: r2(x + cardW - badgeW - 0.18), y: r2(y + 0.12), w: badgeW, h: 0.32,
+        fill_color: '#E8F0D9',
+        border_color: '#7AA243',
+        border_width: 0.7,
+        corner_radius: 10
+      })
+      blocks.push({
+        block_type: 'text_box',
+        x: r2(x + cardW - badgeW - 0.14), y: r2(y + 0.17), w: r2(badgeW - 0.08), h: 0.20,
+        text: badgeText,
+        font_family: bodyFont, font_size: 8.5, bold: true,
+        color: '#386B2A', align: 'center', valign: 'middle'
+      })
+    }
+    blocks.push({
+      block_type: 'rule',
+      x: x, y: dividerY, w: cardW, h: 0.005,
+      color: dividerColor, line_width: 0.5
+    })
+
+    const attrLabelX = r2(x + 0.14)
+    const attrValueX = r2(x + 1.28)
+    const attrValueW = r2(cardW - (attrValueX - x) - 0.14)
+    attrs.forEach((attr, ai) => {
+      const rowY = r2(bodyStartY + ai * (attrH + attrGap))
+      const key = String(attr?.label || attr?.key || '')
+      const rawValue = attr?.value
+      const representationType = String(attr?.representation_type || '').toLowerCase()
+      const isChipRow = representationType === 'chip_list' || Array.isArray(rawValue) || /city|cities|market|markets/i.test(key)
+      const chipValues = Array.isArray(rawValue)
+        ? rawValue.map(v => String(v || '')).filter(Boolean)
+        : String(rawValue || '').split(',').map(s => s.trim()).filter(Boolean)
+
+      blocks.push({
+        block_type: 'text_box',
+        x: attrLabelX, y: rowY, w: 1.00, h: attrH,
+        text: _truncateText(key, 16),
+        font_family: bodyFont, font_size: 9, bold: false,
+        color: mutedColor, align: 'left', valign: 'middle'
+      })
+      if (isChipRow && chipValues.length) {
+        let chipX = attrValueX
+        const chipY = r2(rowY + 0.02)
+        chipValues.slice(0, 5).forEach((chip) => {
+          const chipW = r2(Math.min(1.05, Math.max(0.55, chip.length * 0.07 + 0.16)))
+          blocks.push({
+            block_type: 'rect',
+            x: chipX, y: chipY, w: chipW, h: 0.24,
+            fill_color: '#F5F3EE',
+            border_color: '#DDD6C8',
+            border_width: 0.5,
+            corner_radius: 8
+          })
+          blocks.push({
+            block_type: 'text_box',
+            x: r2(chipX + 0.05), y: r2(chipY + 0.03), w: r2(chipW - 0.10), h: 0.14,
+            text: _truncateText(chip, 14),
+            font_family: bodyFont, font_size: 8, bold: false,
+            color: '#4B5563', align: 'center', valign: 'middle'
+          })
+          chipX = r2(chipX + chipW + 0.06)
+        })
+      } else {
+        blocks.push({
+          block_type: 'text_box',
+          x: attrValueX, y: rowY, w: attrValueW, h: attrH,
+          text: _truncateText(rawValue || '', 44),
+          font_family: bodyFont, font_size: 9.5, bold: false,
+          color: _sentimentColor(attr?.sentiment, ps, bt), align: 'left', valign: 'middle'
+        })
+      }
+    })
+  })
+}
+
+// Override: initiative_map should render as a swim-lane scaffold with placed
+// "lego blocks", not as a row table. This later declaration intentionally
+// replaces the earlier helper.
+function _initiativeMapToBlocks(art, content_y, blocks, bt, r2) {
+  const istyle = art.initiative_style || {}
+  const initiatives = (art.initiatives || []).slice(0, 6)
+  const dims = (art.dimension_labels || []).slice(0, 6)
+  const ax = art.x || 0
+  const ay = content_y
+  const aw = art.w || 0
+  const ah = r2((art.y || 0) + (art.h || 0) - content_y)
+  if (!initiatives.length || aw <= 0 || ah <= 0) return
+
+  const colHeaderH = 0.30
+  const headerGap = 0.08
+  const rowGap = 0.10
+  const totalRowH = ah - colHeaderH - headerGap
+  const rowH = r2(Math.max(0.82, (totalRowH - rowGap * Math.max(0, initiatives.length - 1)) / Math.max(initiatives.length, 1)))
+  const trackW = r2(Math.min(Math.max(1.9, aw * 0.22), 2.55))
+  const laneGap = 0.16
+  const laneCount = Math.max(dims.length, 1)
+  const laneW = r2(Math.max(1.4, (aw - trackW - laneGap * laneCount) / laneCount))
+  const titleFont = istyle.label_font_family || bt.title_font_family || 'Arial'
+  const bodyFont = istyle.body_font_family || bt.body_font_family || 'Arial'
+  const dividerColor = '#D9D9D9'
+  const primaryColor = bt.primary_color || '#3F66C4'
+  const secondaryColor = bt.secondary_color || '#7A6220'
+  const rowStartY = r2(ay + colHeaderH + headerGap)
+
+  blocks.push({
+    block_type: 'text_box',
+    x: ax, y: ay, w: trackW, h: colHeaderH,
+    text: 'TRACK',
+    font_family: titleFont, font_size: (istyle.label_font_size || 10) - 1, bold: true,
+    color: '#6B7280', align: 'left', valign: 'middle'
+  })
+
+  dims.forEach((dim, di) => {
+    const laneX = r2(ax + trackW + laneGap + di * (laneW + laneGap))
+    blocks.push({
+      block_type: 'text_box',
+      x: laneX, y: ay, w: laneW, h: colHeaderH,
+      text: _truncateText(dim.label, 24),
+      font_family: titleFont, font_size: (istyle.label_font_size || 10) - 1, bold: true,
+      color: di === 0 ? primaryColor : secondaryColor, align: 'center', valign: 'middle'
+    })
+  })
+
+  blocks.push({
+    block_type: 'rule',
+    x: ax, y: r2(ay + colHeaderH + 0.02), w: aw, h: 0.005,
+    color: dividerColor,
+    line_width: 0.5
+  })
+
+  initiatives.forEach((initiative, ii) => {
+    const rowY = r2(rowStartY + ii * (rowH + rowGap))
+    const subtitle = String(initiative?.subtitle || initiative?.entity_type || initiative?.category || initiative?.subtype || '')
+
+    blocks.push({
+      block_type: 'text_box',
+      x: ax, y: r2(rowY + 0.10), w: trackW, h: 0.28,
+      text: String(initiative?.name || ''),
+      font_family: titleFont, font_size: istyle.label_font_size || 10, bold: true,
+      color: bt.body_color || '#111111', align: 'left', valign: 'middle'
+    })
+    if (subtitle) {
+      blocks.push({
+        block_type: 'text_box',
+        x: ax, y: r2(rowY + 0.40), w: trackW, h: 0.22,
+        text: subtitle,
+        font_family: bodyFont, font_size: 9, bold: false,
+        color: '#6B7280', align: 'left', valign: 'middle'
+      })
+    }
+
+    dims.forEach((dim, di) => {
+      const laneX = r2(ax + trackW + laneGap + di * (laneW + laneGap))
+      const placement = (initiative?.placements || []).find(p =>
+        String(p?.lane_id || '') === String(dim.id)
+      )
+      const dimValue = placement || (initiative?.dimensions || []).find(d =>
+        String(d?.label || d?.lane_id || '') === String(dim.id || dim.label)
+      ) || (initiative?.dimensions || [])[di] || {}
+      const raw = placement || dimValue?.value
+      if (!raw || (Array.isArray(raw) && raw.length === 0)) return
+
+      const cardFill = di === 0 ? '#C8D7F1' : '#F3EBD6'
+      const accentFill = di === 0 ? primaryColor : secondaryColor
+      const titleColor = di === 0 ? primaryColor : secondaryColor
+      const cardH = r2(Math.min(Math.max(0.92, rowH - 0.12), rowH))
+      const cardY = r2(rowY + (rowH - cardH) / 2)
+      const cardCorner = 8
+
+      const cellObj = (typeof raw === 'object' && raw !== null && !Array.isArray(raw)) ? raw : { title: String(raw) }
+      const cellTitle = String(cellObj.title || cellObj.name || raw || '')
+      const chipsSource = cellObj.chips || cellObj.tags || cellObj.cities || cellObj.locations || []
+      const chips = Array.isArray(chipsSource)
+        ? chipsSource.map(v => String(v || '')).filter(Boolean)
+        : String(chipsSource || '').split(',').map(s => s.trim()).filter(Boolean)
+      const outcome = String(cellObj.outcome || cellObj.value || cellObj.metric || cellObj.footer || '')
+
+      blocks.push({
+        block_type: 'rect',
+        x: laneX, y: cardY, w: laneW, h: cardH,
+        fill_color: cardFill,
+        border_color: null, border_width: 0, corner_radius: cardCorner
+      })
+      blocks.push({
+        block_type: 'rect',
+        x: laneX, y: cardY, w: 0.04, h: cardH,
+        fill_color: accentFill,
+        border_color: null, border_width: 0, corner_radius: cardCorner
+      })
+      blocks.push({
+        block_type: 'text_box',
+        x: r2(laneX + 0.14), y: r2(cardY + 0.10), w: r2(laneW - 0.20), h: 0.24,
+        text: _truncateText(cellTitle, 34),
+        font_family: titleFont, font_size: 10, bold: true,
+        color: titleColor, align: 'left', valign: 'middle'
+      })
+
+      if (chips.length) {
+        let chipX = r2(laneX + 0.14)
+        const chipY = r2(cardY + 0.42)
+        chips.slice(0, 4).forEach(chip => {
+          const chipW = r2(Math.min(1.05, Math.max(0.56, chip.length * 0.07 + 0.16)))
+          if (chipX + chipW > laneX + laneW - 0.08) return
+          blocks.push({
+            block_type: 'rect',
+            x: chipX, y: chipY, w: chipW, h: 0.24,
+            fill_color: '#FFFFFF',
+            border_color: '#B8B8B8',
+            border_width: 0.5,
+            corner_radius: 8
+          })
+          blocks.push({
+            block_type: 'text_box',
+            x: r2(chipX + 0.05), y: r2(chipY + 0.03), w: r2(chipW - 0.10), h: 0.14,
+            text: _truncateText(chip, 14),
+            font_family: bodyFont, font_size: 8, bold: false,
+            color: '#4B5563', align: 'center', valign: 'middle'
+          })
+          chipX = r2(chipX + chipW + 0.06)
+        })
+      }
+
+      if (outcome) {
+        blocks.push({
+          block_type: 'text_box',
+          x: r2(laneX + 0.14), y: r2(cardY + cardH - 0.32), w: r2(laneW - 0.20), h: 0.22,
+          text: _truncateText(outcome, 34),
+          font_family: bodyFont, font_size: 9, bold: true,
+          color: '#386B2A', align: 'left', valign: 'middle'
+        })
+      }
+    })
+  })
+}
+
+function _riskRegisterToBlocks_legacy(art, content_y, blocks, bt, r2) {
+  const rs = art.risk_style || {}
+  const risks = (art.risks || []).slice(0, 8)
+  const showMitigation = art.show_mitigation !== false
+  const ax = art.x || 0
+  const ay = content_y
+  const aw = art.w || 0
+  const ah = r2((art.y || 0) + (art.h || 0) - content_y)
+  if (!risks.length || aw <= 0 || ah <= 0) return
+
+  const gap = 0.08
+  const rowH = r2(Math.max(0.46, (ah - gap * Math.max(0, risks.length - 1)) / Math.max(risks.length, 1)))
+  const badgeW = r2(Math.min(0.9, Math.max(0.62, aw * 0.12)))
+  const ownerW = r2(Math.min(1.15, Math.max(0.9, aw * 0.14)))
+  const statusW = r2(Math.min(1.0, Math.max(0.8, aw * 0.12)))
+  const mitigationW = showMitigation ? r2(Math.min(2.2, Math.max(1.5, aw * 0.28))) : 0
+  const descW = r2(Math.max(1.4, aw - badgeW - ownerW - statusW - mitigationW - 0.42))
+  const titleFont = rs.label_font_family || bt.title_font_family || 'Arial'
+  const bodyFont = rs.body_font_family || bt.body_font_family || 'Arial'
+
+  const accentBarW = 0.06  // left accent stripe width in inches
+
+  risks.forEach((risk, ri) => {
+    const rowY = r2(ay + ri * (rowH + gap))
+    const fill = _riskSeverityFill(risk?.severity, rs)
+    const badgeColor = _riskSeverityBadgeColor(risk?.severity, rs)
+    const cornerR = rs.row_corner_radius != null ? rs.row_corner_radius : 8
+
+    // Row background
+    blocks.push({
+      block_type: 'rect',
+      x: ax, y: rowY, w: aw, h: rowH,
+      fill_color: fill,
+      border_color: rs.row_border_color || '#D7DEE8',
+      border_width: rs.row_border_width != null ? rs.row_border_width : 0.5,
+      corner_radius: cornerR
+    })
+    // Left accent bar — severity color, full row height, sits on top of row bg
+    blocks.push({
+      block_type: 'rect',
+      x: ax, y: rowY, w: accentBarW, h: rowH,
+      fill_color: badgeColor,
+      border_color: null, border_width: 0, corner_radius: cornerR
+    })
+
+    // Severity badge pill — uses semantic badge color, not brand color
+    blocks.push({
+      block_type: 'rect',
+      x: r2(ax + accentBarW + 0.08), y: r2(rowY + 0.08), w: badgeW, h: r2(rowH - 0.16),
+      fill_color: badgeColor,
+      border_color: null, border_width: 0, corner_radius: 10
+    })
+    blocks.push({
+      block_type: 'text_box',
+      x: r2(ax + accentBarW + 0.10), y: r2(rowY + 0.10), w: r2(badgeW - 0.04), h: r2(rowH - 0.20),
+      text: String(risk?.severity || 'low').toUpperCase(),
+      font_family: titleFont, font_size: rs.label_font_size || 9, bold: true,
+      color: rs.badge_text_color || '#FFFFFF', align: 'center', valign: 'middle'
+    })
+
+    let cursorX = r2(ax + accentBarW + 0.08 + badgeW + 0.12)
+    blocks.push({
+      block_type: 'text_box',
+      x: cursorX, y: r2(rowY + 0.09), w: descW, h: r2(rowH - 0.18),
+      text: _truncateText(risk?.description || '', 54),
+      font_family: bodyFont, font_size: rs.body_font_size || 9, bold: false,
+      color: bt.body_color || '#111111', align: 'left', valign: 'middle'
+    })
+    cursorX = r2(cursorX + descW + 0.08)
+
+    if (showMitigation) {
+      blocks.push({
+        block_type: 'text_box',
+        x: cursorX, y: r2(rowY + 0.09), w: mitigationW, h: r2(rowH - 0.18),
+        text: _truncateText(risk?.mitigation || '', 34),
+        font_family: bodyFont, font_size: rs.body_font_size || 9, bold: false,
+        color: bt.body_color || '#111111', align: 'left', valign: 'middle'
+      })
+      cursorX = r2(cursorX + mitigationW + 0.08)
+    }
+
+    blocks.push({
+      block_type: 'text_box',
+      x: cursorX, y: r2(rowY + 0.09), w: ownerW, h: r2(rowH - 0.18),
+      text: _truncateText(risk?.owner || '', 16),
+      font_family: bodyFont, font_size: rs.body_font_size || 9, bold: true,
+      color: bt.body_color || '#111111', align: 'left', valign: 'middle'
+    })
+    cursorX = r2(cursorX + ownerW + 0.04)
+
+    blocks.push({
+      block_type: 'text_box',
+      x: cursorX, y: r2(rowY + 0.09), w: statusW, h: r2(rowH - 0.18),
+      text: _truncateText(risk?.status || '', 14),
+      font_family: bodyFont, font_size: rs.body_font_size || 9, bold: false,
+      color: bt.body_color || '#111111', align: 'right', valign: 'middle'
+    })
+  })
+}
+
+// Override: risk_register should render as a severity-banded stack with
+// simple section bands, item rows, owner/status pills, and pip encodings.
+function _riskRegisterToBlocks(art, content_y, blocks, bt, r2) {
+  const rs = art.risk_style || {}
+  const risks = (art.risks || []).slice(0, 8)
+  const ax = art.x || 0
+  const ay = content_y
+  const aw = art.w || 0
+  const ah = r2((art.y || 0) + (art.h || 0) - content_y)
+  if (!risks.length || aw <= 0 || ah <= 0) return
+
+  const titleFont = rs.label_font_family || bt.title_font_family || 'Arial'
+  const bodyFont = rs.body_font_family || bt.body_font_family || 'Arial'
+  const pipSize = 0.10
+  const pipGap = 0.04
+  const bandH = 0.34
+  const rowH = 0.92
+  const dividerH = 0.005
+  const sectionGap = 0.16
+  const severityOrder = ['high', 'medium', 'low', 'critical']
+  const severityLabel = {
+    critical: 'Critical severity',
+    high: 'High severity',
+    medium: 'Medium severity',
+    low: 'Low severity'
+  }
+  const severitySuffix = {
+    critical: 'immediate action required',
+    high: 'immediate action required',
+    medium: 'monitor closely',
+    low: 'resolved or contained'
+  }
+  const bandTextColor = {
+    critical: '#8B2C23',
+    high: '#8B2C23',
+    medium: '#6E5712',
+    low: '#6B7280'
+  }
+  const pipFill = {
+    critical: '#8B2C23',
+    high: '#8B2C23',
+    medium: '#6E5712',
+    low: '#7A7A72'
+  }
+
+  const groups = severityOrder
+    .map(sev => ({
+      severity: sev,
+      items: risks.filter(r => String(r?.severity || '').toLowerCase() === sev)
+    }))
+    .filter(g => g.items.length)
+
+  let cursorY = ay
+  groups.forEach((group, gi) => {
+    const sev = group.severity
+    const fill = _riskSeverityFill(sev, rs)
+    const dotColor = _riskSeverityBadgeColor(sev, rs)
+
+    blocks.push({
+      block_type: 'rect',
+      x: ax, y: cursorY, w: aw, h: bandH,
+      fill_color: fill,
+      border_color: null, border_width: 0,
+      corner_radius: 10
+    })
+    blocks.push({
+      block_type: 'circle',
+      x: r2(ax + 0.16), y: r2(cursorY + 0.11), w: 0.10, h: 0.10,
+      fill_color: dotColor,
+      font_color: '#FFFFFF',
+      text: ''
+    })
+    blocks.push({
+      block_type: 'text_box',
+      x: r2(ax + 0.40), y: r2(cursorY + 0.06), w: r2(aw - 1.6), h: 0.20,
+      text: `${severityLabel[sev] || 'Severity'} — ${severitySuffix[sev] || ''}`,
+      font_family: titleFont, font_size: 10, bold: true,
+      color: bandTextColor[sev] || '#111111', align: 'left', valign: 'middle'
+    })
+    blocks.push({
+      block_type: 'text_box',
+      x: r2(ax + aw - 0.90), y: r2(cursorY + 0.06), w: 0.74, h: 0.20,
+      text: `${group.items.length} item${group.items.length > 1 ? 's' : ''}`,
+      font_family: bodyFont, font_size: 9, bold: false,
+      color: bandTextColor[sev] || '#111111', align: 'right', valign: 'middle'
+    })
+    cursorY = r2(cursorY + bandH + 0.08)
+
+    group.items.forEach((risk, ri) => {
+      const rowY = cursorY
+      const leftX = r2(ax + 0.16)
+      const rightColW = 1.95
+      const leftW = r2(aw - rightColW - 0.32)
+      const rightX = r2(ax + aw - rightColW)
+      const owner = String(risk?.owner_tag || risk?.owner || '')
+      const status = String(risk?.status_tag || risk?.status || '')
+      const title = String(risk?.title || risk?.description || '')
+      const detail = String(risk?.detail || risk?.mitigation || '')
+
+      blocks.push({
+        block_type: 'text_box',
+        x: leftX, y: r2(rowY + 0.06), w: leftW, h: 0.24,
+        text: _truncateText(title, 64),
+        font_family: titleFont, font_size: 11, bold: true,
+        color: bt.body_color || '#111111', align: 'left', valign: 'middle'
+      })
+      blocks.push({
+        block_type: 'text_box',
+        x: leftX, y: r2(rowY + 0.34), w: leftW, h: 0.22,
+        text: _truncateText(detail, 96),
+        font_family: bodyFont, font_size: 9, bold: false,
+        color: '#404040', align: 'left', valign: 'middle'
+      })
+
+      let pillCursorX = r2(rightX + 0.02)
+      if (owner) {
+        const ownerW = r2(Math.min(1.10, Math.max(0.70, owner.length * 0.07 + 0.20)))
+        blocks.push({
+          block_type: 'rect',
+          x: pillCursorX, y: r2(rowY + 0.04), w: ownerW, h: 0.26,
+          fill_color: '#FAF7EF',
+          border_color: '#D1D5DB',
+          border_width: 0.5,
+          corner_radius: 10
+        })
+        blocks.push({
+          block_type: 'text_box',
+          x: r2(pillCursorX + 0.08), y: r2(rowY + 0.08), w: r2(ownerW - 0.12), h: 0.16,
+          text: _truncateText(owner, 16),
+          font_family: bodyFont, font_size: 8.5, bold: false,
+          color: '#404040', align: 'center', valign: 'middle'
+        })
+        pillCursorX = r2(pillCursorX + ownerW + 0.08)
+      }
+
+      if (status) {
+        const statusW = r2(Math.min(1.05, Math.max(0.74, status.length * 0.07 + 0.22)))
+        const statusBorder = status.toLowerCase().includes('open') ? '#A33B32'
+          : status.toLowerCase().includes('progress') ? '#9A6B10'
+          : '#7AA243'
+        const statusText = status.toLowerCase().includes('open') ? '#A33B32'
+          : status.toLowerCase().includes('progress') ? '#6E5712'
+          : '#386B2A'
+        const statusFill = status.toLowerCase().includes('open') ? '#FFF7F6'
+          : status.toLowerCase().includes('progress') ? '#FFF8E8'
+          : '#F1F8E8'
+        blocks.push({
+          block_type: 'rect',
+          x: pillCursorX, y: r2(rowY + 0.04), w: statusW, h: 0.26,
+          fill_color: statusFill,
+          border_color: statusBorder,
+          border_width: 0.6,
+          corner_radius: 10
+        })
+        blocks.push({
+          block_type: 'text_box',
+          x: r2(pillCursorX + 0.08), y: r2(rowY + 0.08), w: r2(statusW - 0.12), h: 0.16,
+          text: _truncateText(status, 14),
+          font_family: bodyFont, font_size: 8.5, bold: true,
+          color: statusText, align: 'center', valign: 'middle'
+        })
+      }
+
+      const likelihood = Math.max(0, Math.min(3, Number(risk?.likelihood ?? 0)))
+      const impact = Math.max(0, Math.min(3, Number(risk?.impact ?? 0)))
+      const pipLabelX = r2(rightX + 0.38)
+      const pipStartX = r2(rightX + 1.16)
+      const likY = r2(rowY + 0.40)
+      const impY = r2(rowY + 0.64)
+      ;[
+        { label: 'Likelihood', value: likelihood, y: likY },
+        { label: 'Impact', value: impact, y: impY }
+      ].forEach(row => {
+        blocks.push({
+          block_type: 'text_box',
+          x: pipLabelX, y: row.y, w: 0.70, h: 0.16,
+          text: row.label,
+          font_family: bodyFont, font_size: 8.5, bold: false,
+          color: '#6B7280', align: 'right', valign: 'middle'
+        })
+        for (let i = 0; i < 3; i++) {
+          blocks.push({
+            block_type: 'rect',
+            x: r2(pipStartX + i * (pipSize + pipGap)), y: r2(row.y + 0.02), w: pipSize, h: pipSize,
+            fill_color: i < row.value ? pipFill[sev] : '#FFFFFF',
+            border_color: '#B8B8B8',
+            border_width: 0.5,
+            corner_radius: 2
+          })
+        }
+      })
+
+      cursorY = r2(cursorY + rowH)
+      if (ri < group.items.length - 1) {
+        blocks.push({
+          block_type: 'rule',
+          x: r2(ax + 0.16), y: r2(cursorY - 0.04), w: r2(aw - 0.32), h: dividerH,
+          color: '#D9D9D9',
+          line_width: 0.5
+        })
+      }
+    })
+
+    if (gi < groups.length - 1) cursorY = r2(cursorY + sectionGap)
+  })
+}
+
+function _statBarToBlocks(art, content_y, blocks, bt, r2) {
+  const cs = art.chart_style || {}
+  const rows = Array.isArray(art.rows) && art.rows.length
+    ? art.rows
+    : ((art.categories || []).map((label, i) => ({
+        label,
+        value: ((art.series || [])[0]?.values || [])[i],
+        unit: art.y_label || '',
+        annotation: ''
+      })))
+  const items = rows.slice(0, 10)
+  const ax = art.x || 0
+  const ay = content_y
+  const aw = art.w || 0
+  const ah = r2((art.y || 0) + (art.h || 0) - content_y)
+  if (!items.length || aw <= 0 || ah <= 0) return
+
+  const headerH = r2(Math.min(0.42, Math.max(0.26, ah * 0.12)))
+  const headerGap = 0.06
+  const rowGap = 0.04
+  const rowH = r2(Math.max(0.34, (ah - headerH - headerGap - rowGap * Math.max(0, items.length - 1)) / Math.max(items.length, 1)))
+  const labelW = r2(Math.min(Math.max(1.7, aw * 0.26), 3.0))
+  const valueW = r2(Math.min(Math.max(0.85, aw * 0.12), 1.15))
+  const annotationW = r2(Math.min(Math.max(1.6, aw * 0.25), 3.1))
+  const colGap = 0.12
+  const barW = r2(Math.max(1.0, aw - labelW - valueW - annotationW - colGap * 3))
+  const values = items.map(r => Math.abs(+r?.value || 0))
+  const maxValue = Math.max(...values, 1)
+  const bodyFont = cs.label_font_family || bt.body_font_family || 'Arial'
+  const palette = bt.chart_palette || [bt.primary_color || '#0078AE', bt.secondary_color || '#E0B324']
+  const headerColor = cs.annotation_color || '#6B7280'
+  const dividerColor = '#CFCFCF'
+  const labelX = ax
+  const barX = r2(labelX + labelW + colGap)
+  const valueX = r2(barX + barW + colGap)
+  const annotationX = r2(valueX + valueW + colGap)
+  const bodyTop = r2(ay + headerH + headerGap)
+
+  blocks.push({
+    block_type: 'text_box',
+    x: labelX, y: ay, w: labelW, h: headerH,
+    text: 'PARTNER',
+    font_family: bodyFont, font_size: 9, bold: true,
+    color: headerColor, align: 'left', valign: 'middle'
+  })
+  blocks.push({
+    block_type: 'text_box',
+    x: barX, y: ay, w: barW, h: headerH,
+    text: String(art.metric_header || 'AVG. CHARGE (₹/ORDER)'),
+    font_family: bodyFont, font_size: 9, bold: true,
+    color: headerColor, align: 'left', valign: 'middle'
+  })
+  blocks.push({
+    block_type: 'text_box',
+    x: valueX, y: ay, w: valueW, h: headerH,
+    text: String(art.value_header || (art.y_label ? String(art.y_label).toUpperCase() : 'VALUE')),
+    font_family: bodyFont, font_size: 9, bold: true,
+    color: headerColor, align: 'right', valign: 'middle'
+  })
+  blocks.push({
+    block_type: 'text_box',
+    x: annotationX, y: ay, w: annotationW, h: headerH,
+    text: String(art.annotation_header || 'USE CASE'),
+    font_family: bodyFont, font_size: 9, bold: true,
+    color: headerColor, align: 'left', valign: 'middle'
+  })
+  blocks.push({
+    block_type: 'rule',
+    x: ax, y: r2(ay + headerH + 0.01), w: aw, h: 0.005,
+    color: dividerColor,
+    line_width: 0.6
+  })
+
+  items.forEach((row, ri) => {
+    const y = r2(bodyTop + ri * (rowH + rowGap))
+    const isHighlighted = row?.highlight === true
+    const fill = row?.bar_color || (palette[ri % Math.max(palette.length, 1)] || '#7C7C77')
+    const barLen = r2((Math.abs(+row?.value || 0) / maxValue) * barW)
+    const trackY = r2(y + rowH * 0.34)
+    const trackH = r2(Math.max(0.12, rowH * 0.26))
+
+    if (isHighlighted) {
+      blocks.push({
+        block_type: 'rect',
+        x: ax, y: r2(y + 0.01), w: aw, h: r2(rowH - 0.02),
+        fill_color: '#E5EED3',
+        border_color: null, border_width: 0, corner_radius: 10
+      })
+    }
+
+    blocks.push({
+      block_type: 'text_box',
+      x: labelX, y, w: labelW, h: rowH,
+      text: _truncateText(row?.label || '', 28),
+      font_family: bodyFont, font_size: 9, bold: true,
+      color: isHighlighted ? '#386B2A' : (bt.body_color || '#111111'), align: 'left', valign: 'middle'
+    })
+    blocks.push({
+      block_type: 'rect',
+      x: barX, y: trackY, w: barW, h: trackH,
+      fill_color: '#EEF1EA', border_color: null, border_width: 0, corner_radius: 8
+    })
+    blocks.push({
+      block_type: 'rect',
+      x: barX, y: trackY, w: Math.max(0.04, barLen), h: trackH,
+      fill_color: isHighlighted ? '#D7E4BF' : fill, border_color: null, border_width: 0, corner_radius: 8
+    })
+    blocks.push({
+      block_type: 'text_box',
+      x: valueX, y, w: valueW, h: rowH,
+      text: `${row?.value ?? ''}${row?.unit ? ' ' + row.unit : ''}`.trim(),
+      font_family: bodyFont, font_size: 9, bold: true,
+      color: isHighlighted ? '#386B2A' : (bt.body_color || '#111111'), align: 'right', valign: 'middle'
+    })
+    blocks.push({
+      block_type: 'text_box',
+      x: annotationX, y, w: annotationW, h: rowH,
+      text: _truncateText(row?.annotation || '', 28),
+      font_family: bodyFont, font_size: 8, bold: false,
+      color: isHighlighted ? '#386B2A' : (cs.annotation_color || '#4B5563'), align: 'left', valign: 'middle'
+    })
+    if (ri < items.length - 1) {
+      blocks.push({
+        block_type: 'rule',
+        x: ax, y: r2(y + rowH + 0.01), w: aw, h: 0.005,
+        color: '#D9D9D9',
+        line_width: 0.5
+      })
+    }
+  })
 }
 
 function _matrixToBlocks(art, content_y, blocks, bt, r2) {
@@ -4272,6 +5586,10 @@ function _artifactToBlocks(art, blocks, bt, r2) {
   switch (art.type) {
 
     case 'chart': {
+      if (art.chart_type === 'stat_bar') {
+        _statBarToBlocks(art, content_y, blocks, bt, r2)
+        break
+      }
       const computed = art._computed || {}
       const chartStyle = art.chart_style || {}
       const legendPos = computed.legend_position || chartStyle.legend_position || 'none'
@@ -4394,6 +5712,26 @@ function _artifactToBlocks(art, blocks, bt, r2) {
         table_style:        art.table_style         || {},
         table_fit_failed:   !!art._table_fit_failed
       })
+      break
+    }
+
+    case 'comparison_table': {
+      _comparisonTableToBlocks(art, content_y, blocks, bt, r2)
+      break
+    }
+
+    case 'initiative_map': {
+      _initiativeMapToBlocks(art, content_y, blocks, bt, r2)
+      break
+    }
+
+    case 'profile_card_set': {
+      _profileCardSetToBlocks(art, content_y, blocks, bt, r2)
+      break
+    }
+
+    case 'risk_register': {
+      _riskRegisterToBlocks(art, content_y, blocks, bt, r2)
       break
     }
 
@@ -5067,6 +6405,8 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
           chart_header:     mArt.chart_header     || dArt.chart_header     || '',
           chart_title:      mArt.chart_title      || dArt.chart_title      || '',
           chart_insight:    mArt.chart_insight    || dArt.chart_insight    || '',
+          rows:             mArt.rows             || dArt.rows             || [],
+          annotation_style: mArt.annotation_style || dArt.annotation_style || 'trailing',
           x_label:          mArt.x_label          || dArt.x_label          || '',
           y_label:          mArt.y_label          || dArt.y_label          || '',
           categories:       mArt.categories       || dArt.categories       || [],
@@ -5075,6 +6415,47 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
                               ? mArt.show_data_labels : (dArt.show_data_labels !== false),
           show_legend:      mArt.show_legend      !== undefined
                               ? mArt.show_legend      : (mergedChartType === 'group_pie' ? true : !!dArt.show_legend)
+        }
+      }
+
+      if (t === 'comparison_table') {
+        return {
+          ...dArt,
+          artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
+          comparison_header: mArt.comparison_header || dArt.comparison_header || mArt.table_header || '',
+          criteria: mArt.criteria || dArt.criteria || [],
+          options: mArt.options || dArt.options || [],
+          recommended_option: mArt.recommended_option || dArt.recommended_option || ''
+        }
+      }
+
+      if (t === 'initiative_map') {
+        return {
+          ...dArt,
+          artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
+          initiative_header: mArt.initiative_header || dArt.initiative_header || mArt.table_header || '',
+          dimension_labels: mArt.dimension_labels || dArt.dimension_labels || [],
+          initiatives: mArt.initiatives || dArt.initiatives || []
+        }
+      }
+
+      if (t === 'profile_card_set') {
+        return {
+          ...dArt,
+          artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
+          profile_header: mArt.profile_header || dArt.profile_header || mArt.heading || '',
+          profiles: mArt.profiles || dArt.profiles || [],
+          layout_direction: mArt.layout_direction || dArt.layout_direction || 'horizontal'
+        }
+      }
+
+      if (t === 'risk_register') {
+        return {
+          ...dArt,
+          artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
+          risk_header: mArt.risk_header || dArt.risk_header || mArt.table_header || '',
+          risks: mArt.risks || dArt.risks || [],
+          show_mitigation: mArt.show_mitigation !== undefined ? mArt.show_mitigation : (dArt.show_mitigation !== false)
         }
       }
 
@@ -5754,6 +7135,7 @@ function inferLayoutName(manifestSlide, brand) {
   const artifactTypes = artifacts.map(a => String(a.type || '').toLowerCase())
   const zoneCount = zones.length
   const hasReasoning = artifactTypes.some(t => ['matrix', 'driver_tree', 'prioritization'].includes(t))
+  const hasStructuredDisplay = artifactTypes.some(t => ['comparison_table', 'initiative_map', 'profile_card_set', 'risk_register'].includes(t))
   const hasWorkflow = artifactTypes.includes('workflow')
   const hasWideWorkflow = artifacts.some(a => {
     const t = String(a.type || '').toLowerCase()
@@ -5774,7 +7156,7 @@ function inferLayoutName(manifestSlide, brand) {
     return (find(['Body Text', '1 Across', 'body text', '1 across'])               || {}).name || 'Body Text'
   if (hasWorkflow && zoneCount >= 2)
     return (find(['Body Text', '1 Across', 'body text', '1 across'])               || {}).name || 'Body Text'
-  if (zoneCount >= 3 && (hasChart || hasCards))
+  if (zoneCount >= 3 && (hasChart || hasCards || hasStructuredDisplay))
     return (find(['1 Across', '2 Across', '1 across', '2 across'])                 || {}).name || '1 Across'
   if (zoneCount === 2 && !hasOnlyInsight)
     return (find(['2 Across', '2 across', '2 Column', '2 column', '1 on 1'])      || {}).name || '2 Across'

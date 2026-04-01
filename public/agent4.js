@@ -303,12 +303,13 @@ Apply the constraints below before any data-shape or zone-role rules.
 These are HARD constraints — no override permitted regardless of content.
 
   recommendations:
-    PERMITTED:  prioritization (primary), insight_text, cards (target/milestone values only — not actuals), table (milestones)
+    PERMITTED:  prioritization (primary), initiative_map, comparison_table, insight_text,
+                cards (target/milestone values only — not actuals), table (milestones — only after TABLE GATE A8)
     FORBIDDEN:  charts showing actuals, workflow, matrix, driver_tree
     Cards rule: card values must be future targets or milestones — do not restate actuals already shown on earlier slides
 
   methodology_note:
-    PERMITTED:  insight_text, table (definitions/rates only)
+    PERMITTED:  insight_text, table (definitions/rates only — TABLE GATE A8 mandatory)
     FORBIDDEN:  cards, chart, prioritization, workflow, matrix, driver_tree
     Reason: no analytical claim — data definitions only
 
@@ -318,7 +319,8 @@ These are HARD constraints — no override permitted regardless of content.
     Reason: narrative connector — no new data introduced
 
   context_setter:
-    PERMITTED:  cards (baseline KPIs), insight_text, table
+    PERMITTED:  cards (baseline KPIs), insight_text, stat_bar, comparison_table,
+                table (only after TABLE GATE A8)
     FORBIDDEN:  prioritization, workflow, matrix, driver_tree
     Reason: neutral baseline — no verdict, no action, no process
 
@@ -384,11 +386,15 @@ STEP 1 — ARTIFACT SELECTION
 ──────────────────────────────────────────────────────────
 
 AVAILABLE ARTIFACT TYPES:
-  chart:          bar | clustered_bar | horizontal_bar | line | area | pie | donut | combo | group_pie
-  insight_text:   standard | grouped
+  chart:            bar | clustered_bar | horizontal_bar | line | area | pie | donut | combo | group_pie | stat_bar
+  insight_text:     standard | grouped
   cards
-  workflow:       process_flow | hierarchy | decomposition | timeline
-  table
+  profile_card_set
+  workflow:         process_flow | hierarchy | decomposition | timeline
+  table             ← LAST RESORT — only after TABLE GATE passes (see TABLE GATE section below)
+  comparison_table
+  initiative_map
+  risk_register
   matrix
   driver_tree
   prioritization
@@ -397,19 +403,23 @@ AVAILABLE ARTIFACT TYPES:
 
   PRIMARY / DOMINANT zones:
   - Must carry a proof or reasoning artifact
-  - Permitted: chart, table, workflow, driver_tree, matrix, prioritization, grouped insight_text
+  - Permitted: chart (all subtypes incl. stat_bar), comparison_table, initiative_map, risk_register,
+               profile_card_set, workflow, driver_tree, matrix, prioritization, grouped insight_text
+  - table: only when TABLE GATE passes (A8 path) — never as a first choice
   - Never: standard insight_text alone
   - Never: sparse cards (1–3 cards) as the only artifact
 
   SECONDARY zones:
   - Must answer a specific question, not just add detail
-  - Permitted: chart, table, cards, standard insight_text, grouped insight_text, prioritization
+  - Permitted: chart (all subtypes incl. stat_bar), comparison_table, profile_card_set,
+               cards, standard insight_text, grouped insight_text, prioritization
+  - table: only when TABLE GATE passes (A8 path)
   - Avoid workflow unless process or sequence is the explicit subject of the zone
 
   SUPPORTING / SUBORDINATE zones:
   - Compact only
-  - Preferred: standard insight_text, cards (1–3), simple chart (≤6 categories)
-  - Avoid: workflow, driver_tree, matrix, large table
+  - Preferred: standard insight_text, cards (1–3), simple chart (≤6 categories), profile_card_set (≤3 profiles)
+  - Avoid: workflow, driver_tree, matrix, large table, initiative_map, risk_register
 
   CO-PRIMARY zones (P2, P5):
   - Both zones must carry proof-class artifacts
@@ -423,14 +433,20 @@ AVAILABLE ARTIFACT TYPES:
 ─── DATA SHAPE → ARTIFACT FAMILY ─────────────────────────
 
   Classify content before choosing artifact:
-  - Comparison across categories          → bar or horizontal_bar
-  - Composition / part-to-whole           → pie (≤5 seg), else horizontal_bar; never cards
-  - Trend over time                        → line or bar
-  - Portfolio mix / segmentation          → pie (≤5 seg), else bar; never cards
-  - Precise multi-dimension lookup        → table
-  - Independent headline KPI snapshot    → cards (only when metrics are structurally independent)
+  - Comparison across categories                → bar or horizontal_bar
+  - Composition / part-to-whole                 → pie (≤5 seg), else horizontal_bar; never cards
+  - Trend over time                              → line or bar
+  - Portfolio mix / segmentation                → pie (≤5 seg), else bar; never cards
+  - Rows ranked by metric + qualitative label   → stat_bar (bar + inline annotation per row)
+  - Rows ranked by metric, no per-row label     → horizontal_bar + insight_text grouped
+  - Options evaluated against criteria          → comparison_table (tick/cross/partial cell encoding)
+  - Parallel initiatives, no rank, multi-dim    → initiative_map
+  - Entities with heterogeneous profile attrs   → profile_card_set
+  - Risk/issue items; severity is primary       → risk_register
+  - Independent headline KPI snapshot           → cards (only when metrics are structurally independent)
   - Same composition compared across 2–8 entities → group_pie (each entity gets one pie; slices ≤7)
-    If entities > 8 or slices > 7 → table or clustered_bar; never group_pie
+    If entities > 8 or slices > 7 → comparison_table or clustered_bar; never group_pie
+  - Precise cell lookup required by the board   → table [LAST RESORT — only after TABLE GATE passes]
 
 ─── MESSAGE OBJECTIVE → ARTIFACT OVERRIDE ────────────────
 
@@ -446,6 +462,10 @@ AVAILABLE ARTIFACT TYPES:
   - Positioning / trade-off               → matrix (not chart, not cards)
   - Causal explanation / why              → driver_tree (not workflow, not chart)
   - Decision / action prioritisation      → prioritization (not cards)
+  - Options compared on multiple criteria → comparison_table (not table, not cards)
+  - Parallel initiatives / work streams   → initiative_map (not table, not prioritization)
+  - Risk / issue items with severity      → risk_register (not table)
+  - Entity profiles (heterogeneous attrs) → profile_card_set (not table, not cards)
   - Status mix / risk buckets / stage distribution → pie, horizontal_bar, clustered_bar,
                                             or decomposition workflow; only aggregate total
                                             may be a card
@@ -490,9 +510,14 @@ AVAILABLE ARTIFACT TYPES:
   waterfall:      bridge or variance — series items typed positive/negative/total
   clustered_bar:  EXACTLY 2 series compared across same 3+ categories
                   If only 1 series: use bar instead
-                  Both series MUST share the same unit — if units differ: use bar with dual_axis
-  combo:          dual-axis overlay (bar + line); use when two measures have different units
-                  and trend comparison is the insight
+                  HARD REJECT — units differ (e.g. count vs ₹, % vs volume):
+                    → NEVER use clustered_bar when series units differ
+                    → AUTOMATICALLY convert to combo (dual-axis) if trend is the insight
+                    → AUTOMATICALLY convert to two separate bar artifacts if categories are the insight
+                  Both series MUST share EXACTLY the same unit (both ₹, both %, both count, etc.)
+  combo:          dual-axis overlay (bar + line); MANDATORY when two measures have different units
+                  Use combo — NOT clustered_bar — whenever series units differ, regardless of
+                  whether a time axis exists. Primary series → bar. Secondary series → line.
   group_pie:      multiple related pie charts — one pie per entity (e.g. industry, region, product);
                   all pies share the same slice categories (same distribution breakdown);
                   single shared legend above all pies; entity label below each pie centre-aligned.
@@ -509,11 +534,17 @@ AVAILABLE ARTIFACT TYPES:
                     If 50–80% allocation         → MAX 4 pies
                     If > 80% allocation          → MAX 8 pies
 
-  DUAL AXIS RULE (mandatory):
-  If two or more series have DIFFERENT units (e.g. count vs currency, % vs volume):
-  → MUST set dual_axis: true
+  DUAL AXIS RULE (mandatory — enforced before ANY chart is finalised):
+  If two or more series have DIFFERENT units (e.g. count vs ₹, k-orders vs currency, % vs volume):
+  → clustered_bar is HARD REJECTED — do NOT use it
+  → MUST use combo (dual-axis bar+line) instead
+  → Set dual_axis: true on the combo artifact
   → List secondary-axis series in secondary_series[]
-  → NEVER plot different units on the same Y axis
+  → NEVER plot different units on the same Y axis under any circumstances
+
+  SELF-CHECK before finalising any clustered_bar:
+    "Do Series A and Series B share the same unit?"
+    If NO → reject clustered_bar → replace with combo
 
   MINIMUM category counts:
   bar / line / clustered_bar / horizontal_bar: minimum 3 categories
@@ -590,11 +621,290 @@ AVAILABLE ARTIFACT TYPES:
   Always pair when interpretation is needed — embed inside the same zone.
   Insight_text companion goes above/below for left_to_right; left/right for top_to_bottom.
 
-─── TABLE SELECTION RULES ─────────────────────────────────
+─── TABLE GATE — MANDATORY DECISION TREE (execute before ANY table artifact) ──────────
 
-  Use table when precise row/column lookup is necessary and no chart can substitute.
-  Max 6 rows. Include only columns that DIRECTLY support the zone's message_objective.
-  Omit all other columns even if present in source data.
+  table is the LAST RESORT. You must walk this gate every time you consider using table,
+  comparison_table, or any tabular form. Only reach for table after all other paths fail.
+
+  ══════════════════════════════════════════════════════
+  PART A — DISQUALIFICATION CHECK (all must fail to allow table)
+  ══════════════════════════════════════════════════════
+  Ask each question. If ANY answer is YES → follow the redirect. Do NOT use table.
+
+  DQ1. Can rows be ranked by one primary numeric metric?               YES → Flow A
+  DQ2. Do rows sum or decompose to a stated total?                     YES → Flow A (A1)
+  DQ3. Are rows actions, initiatives, options, or risk items?          YES → Flow B
+  DQ4. Are rows entities described by mixed, non-parallel attributes?  YES → profile_card_set
+  DQ5. Is one column the only proof; others are context/label only?   YES → cards + insight_text grouped
+
+  If ALL five are NO → proceed to Part B.
+
+  ══════════════════════════════════════════════════════
+  PART B — FLOW A: DATA TABLES (rows are quantitative data)
+  ══════════════════════════════════════════════════════
+  Walk A1 → A8 in order. Stop at first match.
+
+  A1. Rows add up to a total
+      First ask: what do the COLUMNS represent?
+
+      A1a. Columns also add up to totals (e.g. rows = Industries, cols = Asset Classes;
+           every cell is a sub-total and all cells sum to a grand total)
+           → group_pie  — one pie per row entity; slices = column categories
+           → Each pie shows that row's composition; shared slice legend across all pies
+           → NEVER table
+
+      A1b. Only selected columns add up to a total (e.g. rows = Industries; cols include
+           a mix of classification buckets and non-additive attributes like LTV or yield)
+           → group_pie + text annotation below each pie (annotation = the non-additive
+             key metric for that entity, e.g. "Avg LTV: 68%")
+           → NEVER table
+
+      A1c. Columns do NOT add up to a total (e.g. rows = Industries; cols are independent
+           descriptors — no compositional relationship between columns)
+           → decomposition workflow   OR   pie + headline card
+           → NEVER table
+
+      Decision shortcut: if you can draw a % breakdown pie for each row independently
+      → A1a or A1b (group_pie). If columns are not shares of a whole → A1c.
+
+  A2. Rows ranked by one numeric metric; each row needs a qualitative annotation
+      alongside the bar (e.g. courier partner ranked by cost + use-case label per row)
+      → stat_bar  (bar + inline annotation per row, single artifact)
+      → NEVER table
+
+  A3. Rows ranked by one numeric metric; no per-row qualitative annotation needed
+      → horizontal_bar + insight_text grouped
+      → NEVER table
+
+  A4. Two numeric metrics correlated across rows (e.g. margin % + revenue per category)
+      Same unit → clustered_bar
+      Different units → combo (dual_axis: true)
+      → NEVER table
+
+  A5. One row is a dominant outlier vs a cluster of similar rows
+      → horizontal_bar + callout card highlighting the outlier
+      → NEVER table
+
+  A6. Rows = entities described by heterogeneous attributes
+      (e.g. SKUs with different feature types, geographies, revenue ranges)
+      → profile_card_set
+      → NEVER table
+
+  A7. Rows = risk or issue items; severity level is the primary signal
+      → risk_register  (severity encoded as row background color)
+      → NEVER table
+
+  A8. Precise cell-level lookup is genuinely required by the board
+      AND none of A1–A7 applies
+      → table  [PERMITTED — the only path that reaches table in Flow A]
+      MANDATORY extensions when table is used:
+        • column_role per column:  "label" | "proof" | "context"
+          (proof = column the board reads first; label = row identifier; context = supporting)
+        • cell_sentiment per cell (optional):  "positive" | "negative" | "neutral" | "warning"
+          (drives cell background tinting — use when threshold crossing IS the message)
+        • highlight_rows: [] — rows to emphasise (already supported)
+        • Max 6 rows, max 6 columns. Omit all columns not directly serving the message.
+
+  ══════════════════════════════════════════════════════
+  PART C — FLOW B: STRATEGIC TABLES (rows are actions, options, or initiatives)
+  ══════════════════════════════════════════════════════
+  Walk B1 → B6 in order. Stop at first match.
+
+  B1. Rows are ranked actions — order matters
+      → prioritization  (ranked list with qualifiers)
+      → NEVER table
+
+  B2. Rows are parallel initiatives — no rank, multi-dimension attributes
+      (e.g. transformation workstreams with owner / timeline / budget / KPI columns)
+      → initiative_map  (structured grid, each row is a self-contained action block)
+      → NEVER table
+
+  B3. Rows are options evaluated against shared criteria — judgment IS the content
+      (e.g. vendor selection, channel comparison, build vs buy)
+      → comparison_table  (tick ✓ / cross ✗ / partial ◑ cell encoding)
+      → NEVER plain table
+
+  B4. Rows = entities described with mixed attributes (profile-style)
+      → profile_card_set  (if attributes dominate)
+         OR cards  (if 2–3 headline metrics dominate per entity)
+
+  B5. The right-most column is the only proof; all other columns are context or labels
+      → cards  (entity + outcome per card) + insight_text grouped
+      → NEVER table
+
+  B6. Rows have a time or process sequence
+      → workflow: timeline  (phased events)  OR  process_flow  (step sequence)
+      → NEVER table
+
+  If NONE of B1–B6 matches → this is a rare genuine strategic table.
+  Apply the same mandatory extensions as A8 (column_role, cell_sentiment, highlight_rows).
+
+─── NEW ARTIFACT SELECTION RULES ──────────────────────────────────────────────
+
+  stat_bar
+  ─────────
+  A horizontal bar chart where each bar is accompanied by an inline qualitative
+  annotation (label or descriptor) placed to the right of or alongside the bar.
+  Use when: ranking is the primary message AND each entity needs a one-phrase
+  qualifier that a separate insight_text zone would fail to connect visually.
+  Examples: courier partners ranked by cost with "use case" label; SKUs ranked
+  by revenue with "growth trajectory" label; cities ranked by orders with
+  "priority tier" label.
+  Subtype of chart — specify as:  artifact_type: "chart", chart_type: "stat_bar"
+  Sizing envelope:
+    stat_bar (≤5 rows)    35%  65%   40%  60%
+    stat_bar (6–8 rows)   40%  70%   55%  75%
+    stat_bar (9–10 rows)  45%  75%   70%  90%
+  Schema additions:
+    GENERIC HANDOFF (mandatory):
+    Do NOT encode stat_bar as raw table rows. Emit semantic row objects that a renderer
+    can map directly to label / bar / value / annotation regions.
+    rows[]: {
+      id?,                         // stable key if available
+      label,                       // left-side row label
+      value,                       // numeric value driving bar length
+      unit?,                       // unit suffix for the displayed value
+      display_value?,              // optional preformatted value label
+      annotation?,                 // right-side qualifier text
+      annotation_representation?: "text" | "pill",
+      bar_color?,                  // optional override
+      highlight?: true | false     // explicit row emphasis; never infer from rank
+    }
+    column_headers?: {
+      label?: string,
+      metric?: string,
+      value?: string,
+      annotation?: string
+    }
+    annotation_style: "inline" | "trailing"  (default: "trailing")
+
+  comparison_table
+  ─────────────────
+  A structured grid where rows are options/candidates and columns are evaluation
+  criteria. Each cell contains a judgment rating, not a raw number.
+  Use when: the board needs to see WHICH option wins against WHICH criteria.
+  The recommended option must be visually distinguished (recommended_option field).
+  NEVER use plain table for option-vs-criteria data — comparison_table is mandatory.
+  Sizing envelope:
+    comparison_table (≤3 options, ≤4 criteria)  40%  70%   30%  55%
+    comparison_table (4–5 options, ≤4 criteria) 55%  80%   40%  65%
+    comparison_table (≤3 options, 5–6 criteria) 50%  80%   40%  65%
+    comparison_table (4–5 options, 5–6 criteria)70% 100%   50%  75%
+  Schema additions:
+    GENERIC HANDOFF (mandatory):
+    criteria[]: {
+      id,                          // stable criterion key
+      label                        // display label
+    }
+    options[]: {
+      id?,
+      name,
+      badge_text?,                 // optional row badge such as "recommended"
+      cells[]: {
+        criterion_id,              // matches criteria[].id
+        rating: "yes"|"partial"|"no"|"text",
+        display_value?,            // optional rendered symbol/text if not default
+        note?,                     // supporting note when rating = "text"
+        representation_type?: "icon" | "text"
+      }
+    }
+    recommended_option_id?: option id
+    recommended_option?: name of the preferred option (allowed fallback only if id unavailable)
+
+  initiative_map
+  ───────────────
+  A structured grid where each row is a parallel work stream or initiative.
+  Unlike prioritization, rows have NO implied rank between them.
+  Unlike table, each row is a self-contained action block, not a data lookup row.
+  Use when: showing 3–6 parallel initiatives each described by 3–4 structured
+  dimensions (e.g. owner, timeline, budget, KPI, status).
+  NEVER use when rows have a rank order (use prioritization instead).
+  NEVER use when rows are process steps (use workflow instead).
+  Sizing envelope:
+    initiative_map (≤4 initiatives, ≤4 dims)  55%  85%   40%  65%
+    initiative_map (5–6 initiatives, ≤4 dims)  60%  90%   55%  75%
+    initiative_map (≤4 initiatives, 5–6 dims)  70% 100%   45%  68%
+  Schema additions:
+    GENERIC HANDOFF (mandatory):
+    dimension_labels[]: {
+      id,                          // stable lane / phase key
+      label                        // display header
+    }
+    initiatives[]: {
+      id?,
+      name,                        // track label shown at left
+      subtitle?,                   // optional track subtitle
+      placements[]: {              // preferred; one object per occupied lane
+        lane_id,                   // matches dimension_labels[].id
+        title,                     // block title inside the lane
+        subtitle?,                 // optional short secondary line
+        tags?: string[],           // chips inside the block
+        footer?,                   // bottom line / outcome
+        accent_tone?: "primary" | "secondary" | "neutral"
+      },
+      dimensions[]: { label, value }   // allowed backward-compatible fallback only
+    }
+
+  profile_card_set
+  ─────────────────
+  An entity-first card layout where each card describes one entity using a set
+  of key-value attribute pairs. Attributes may differ per entity (heterogeneous).
+  Unlike cards (which are metric-first and structurally parallel), profile cards
+  are read vertically within each card, not scanned horizontally across cards.
+  Use when: rows describe entities with mixed attribute types (feature type +
+  geography + revenue range + status all on the same entity row).
+  NEVER use when metrics are structurally identical across entities (use cards).
+  Sizing envelope:
+    profile_card_set (2–3 profiles)  45%  80%   30%  55%
+    profile_card_set (4–5 profiles)  70% 100%   40%  65%
+    profile_card_set (6+ profiles)   85% 100%   50%  75%
+  Schema additions:
+    GENERIC HANDOFF (mandatory):
+    profiles[]: {
+      id?,
+      entity_name,
+      subtitle?,                   // optional line directly below title
+      badge_text?,                 // optional KPI / tag pill at top-right
+      secondary_items[]: [         // preferred; ordered list of rows in the lower region
+        {
+          label,                   // left-side key
+          value,                   // string OR string[]
+          representation_type: "text" | "chip_list" | "pill",
+          sentiment?: "positive" | "negative" | "neutral" | "warning"
+        }
+      ],
+      attributes[]: { key, value, sentiment? }  // allowed backward-compatible fallback only
+    }
+    layout_direction: "horizontal" | "grid"  (default: "horizontal")
+
+  risk_register
+  ──────────────
+  A severity-encoded list of risks or issues where row background color IS the
+  primary data channel (not decoration). Multiple rows may have different severity
+  levels simultaneously — this is what distinguishes it from highlight_rows on a
+  plain table (which marks only one row at a time).
+  Use when: risks or issues must be shown with per-row severity variation AND
+  the board's eye must be directed to critical items without reading every cell.
+  NEVER use plain table when severity-by-row is the primary signal.
+  Sizing envelope:
+    risk_register (≤4 risks)   40%  70%   35%  55%
+    risk_register (5–6 risks)  45%  75%   50%  70%
+    risk_register (7–8 risks)  50%  80%   65%  85%
+  Schema additions:
+    GENERIC HANDOFF (mandatory):
+    risks[]: {
+      id?,
+      title,                       // short risk headline
+      detail,                      // explanatory line under the title
+      severity: "critical"|"high"|"medium"|"low",
+      owner?,
+      status?,
+      likelihood?: 0 | 1 | 2 | 3,  // pip count
+      impact?: 0 | 1 | 2 | 3,      // pip count
+      owner_tag?: string,          // optional display override for owner pill
+      status_tag?: string          // optional display override for status pill
+    }
+    show_mitigation: true | false  (legacy fallback only; avoid if detail already includes mitigation)
 
 ─── INSIGHT TEXT SELECTION RULES ─────────────────────────
 
@@ -740,13 +1050,31 @@ FAMILY 4 — WORKFLOW
   decomposition (T→B, ≤4 nodes)   28%    50%    50%    80%
   decomposition (T→B, > 4 nodes)  30%    55%    65%    90%
 
-FAMILY 5 — TABLE
+FAMILY 5 — TABLE (last resort — use only when TABLE GATE A8 or B-fallback passes)
   table (≤3 col, ≤3 row)          30%    55%    22%    40%
   table (≤4 col, ≤4 row)          40%    65%    25%    45%
   table (5–6 col, ≤4 row)         60%    85%    28%    48%
   table (≤4 col, 5–6 row)         40%    65%    45%    65%
   table (5–6 col, 5–6 row)        70%   100%    48%    70%
   table (> 6 col OR > 6 row)      80%   100%    55%    85%   ⚠ table_density_warning
+
+FAMILY 5B — STRUCTURED DISPLAY ARTIFACTS (new)
+  stat_bar (≤5 rows)              35%    65%    40%    60%
+  stat_bar (6–8 rows)             40%    70%    55%    75%
+  stat_bar (9–10 rows)            45%    75%    70%    90%
+  comparison_table (≤3 opt, ≤4 crit) 40%  70%  30%   55%
+  comparison_table (4–5 opt, ≤4 crit)55%  80%  40%   65%
+  comparison_table (≤3 opt, 5–6 crit)50%  80%  40%   65%
+  comparison_table (4–5 opt, 5–6 crit)70% 100% 50%   75%
+  initiative_map (≤4 init, ≤4 dim)  55%  85%   40%   65%
+  initiative_map (5–6 init, ≤4 dim)  60%  90%  55%   75%
+  initiative_map (≤4 init, 5–6 dim)  70% 100%  45%   68%
+  profile_card_set (2–3 profiles)   45%   80%   30%   55%
+  profile_card_set (4–5 profiles)   70%  100%   40%   65%
+  profile_card_set (6+ profiles)    85%  100%   50%   75%
+  risk_register (≤4 risks)          40%   70%   35%   55%
+  risk_register (5–6 risks)         45%   75%   50%   70%
+  risk_register (7–8 risks)         50%   80%   65%   85%
 
 FAMILY 6 — REASONING ARTIFACTS
   matrix (2×2)                    45%    70%    50%    75%
@@ -763,6 +1091,7 @@ DENSITY FLAGS AND HARD REJECTS
   category_density_warning       bar/line > 12 categories
   clustered_density_warning      clustered_bar > 6 cat with > 3 series
   row_density_warning            horizontal_bar > 10 rows
+  stat_bar_density_warning       stat_bar > 10 rows
   waterfall_density_warning      waterfall > 10 steps
   card_density_warning           cards 7–10
   workflow_density_warning       process_flow 7–9 nodes
@@ -771,6 +1100,9 @@ DENSITY FLAGS AND HARD REJECTS
   hierarchy_depth_warning        hierarchy > 4 levels
   driver_tree_depth_warning      driver_tree > 5 levels
   table_density_warning          table > 6 col OR > 6 row
+  comparison_table_warning       comparison_table > 5 options OR > 6 criteria
+  initiative_map_warning         initiative_map > 6 initiatives OR > 6 dimensions
+  risk_register_warning          risk_register > 8 risks
   prioritization_length_warning  prioritization > 8 rows
   group_pie_density_warning      group_pie > 4 pies in a zone with < 80% allocation
 
@@ -778,9 +1110,14 @@ DENSITY FLAGS AND HARD REJECTS
   pie > 5 segments               → convert to horizontal_bar automatically
   donut > 5 segments             → convert to horizontal_bar automatically
   group_pie entities < 2         → convert to single pie automatically
-  group_pie entities > 8         → convert to table or clustered_bar automatically
+  group_pie entities > 8         → convert to comparison_table or clustered_bar automatically
   group_pie slices > 7           → convert to clustered_bar automatically
-  group_pie zone allocation < 50% → reject; use table instead
+  group_pie zone allocation < 50% → reject; use comparison_table instead
+  clustered_bar with mixed units → HARD REJECT; convert to combo (dual_axis: true) automatically
+                                   Mixed unit examples: Orders(k) + ASP(₹), Revenue(₹) + Volume(units),
+                                   Growth(%) + Revenue(₹), Count + Currency — ANY mismatch triggers this
+  table selected without         → HARD REJECT; must walk TABLE GATE first; resolve to correct
+    running TABLE GATE             Flow A or Flow B artifact before proceeding
   insight_text > 6 points
     in a PRIMARY zone            → restructure or split the slide
 
@@ -797,8 +1134,13 @@ ENVELOPE CHECK PROCEDURE
   Primary artifact                  Permitted second artifact
   bar / line / combo / clustered    insight_text (any subtype)
   horizontal_bar                    insight_text (any subtype)
+  stat_bar                          insight_text standard (callout only — 1–2 points)
   pie / donut                       cards (1–2) or insight_text standard
   table                             insight_text (any subtype)
+  comparison_table                  insight_text standard (recommendation rationale — 1–3 points)
+  initiative_map                    insight_text standard (framing headline — 1–2 points)
+  profile_card_set                  insight_text standard (1–2 points) or cards (1–2)
+  risk_register                     insight_text standard (top risk callout — 1–2 points)
   matrix                            insight_text grouped
   driver_tree                       insight_text grouped
   prioritization                    insight_text (any subtype)
@@ -907,12 +1249,14 @@ STEP 1 — CHARACTERISE THE CONTENT STRUCTURE
 
   1a. Classify artifacts:
       wide_artifacts     = artifacts with MIN_W ≥ 70% (process_flow, timeline, wide charts > 6 cat,
-                           decomposition L→R > 3 nodes, cards ≥ 4,
-                           group_pie with ≥ 5 pies)
+                           decomposition L→R > 3 nodes, cards ≥ 4, group_pie with ≥ 5 pies,
+                           stat_bar [always], initiative_map [always], profile_card_set ≥ 4 profiles)
       tall_artifacts     = artifacts with MIN_H ≥ 55% (hierarchy, vertical decomposition,
-                           horizontal_bar > 6 rows, driver_tree, matrix, prioritization > 5 rows)
-      reasoning_artifacts = matrix | driver_tree | prioritization
+                           horizontal_bar > 6 rows, driver_tree, matrix, prioritization > 5 rows,
+                           risk_register [always], comparison_table ≥ 4 options)
+      reasoning_artifacts = matrix | driver_tree | prioritization | comparison_table
       workflow_artifacts  = process_flow | timeline | hierarchy | decomposition
+      structured_display  = stat_bar | initiative_map | profile_card_set | risk_register | comparison_table
       peer_zones          = zones where both are CO-PRIMARY (P2 or P5)
 
   1b. Canonical content structure (first match wins):
@@ -995,6 +1339,71 @@ STEP 2 — APPLY OVERRIDE RULES (check every artifact in order)
       SELF-CHECK: If a group_pie with ≥ 5 pies is allocated less than 80% of the slide axis
       → STOP. Increase zone allocation OR reduce pie count to ≤ 4.
 
+  O9. STAT BAR
+      Trigger: stat_bar (any row count)
+      → Zone MUST span full horizontal slide width — label + bar track + value + annotation
+        all require horizontal space in sequence; truncating width breaks the reading flow
+      → content_structure forced to WIDE_DOMINANT
+      → No zone may sit to the left or right of a stat_bar zone
+      → Companion insight_text (if present) MUST be stacked above only (never below, never beside)
+        — the stat_bar reading direction is top-to-bottom; a zone below steals eye flow
+      → artifact_arrangement: single; artifact_coverage_hint: full; internal_alignment: fill
+
+      SELF-CHECK: If stat_bar is placed in a side zone (left_X, right_X, tl, tr, bl, br)
+      → STOP. Reassign stat_bar to a full-width zone and move any companion to a stacked zone above.
+
+  O10. INITIATIVE MAP
+      Trigger: initiative_map (any row/column count)
+      → Zone MUST span full horizontal slide width — swim-lane columns require the full width
+        to give each phase/dimension enough space for cell content
+      → content_structure forced to WIDE_DOMINANT
+      → No zone may sit to the left or right of an initiative_map zone
+      → Companion insight_text (if present) MUST be stacked above only — max 25% slide height
+      → artifact_arrangement: single; artifact_coverage_hint: full; internal_alignment: fill
+
+      SELF-CHECK: If initiative_map is placed in a side zone
+      → STOP. Reassign to full-width zone.
+
+  O11. RISK REGISTER
+      Trigger: risk_register (any item count)
+      → Zone must occupy ≥ 65% of slide HEIGHT — severity-banded rows stack vertically;
+        compressing height truncates the pip encoding and status pills
+      → content_structure: SINGLE (no companion) or PRIMARY_SUPPORT_TWO (companion above only)
+      → If companion zone exists: companion takes top 30%; risk_register takes bottom 70%
+      → No zone may sit to the left or right of a risk_register zone
+      → artifact_arrangement: single; artifact_coverage_hint: full; internal_alignment: fill
+
+      SELF-CHECK: If risk_register zone height < 65%
+      → STOP. Remove companion zone OR stack companion above at 25% height, risk_register below at 75%.
+
+  O12. COMPARISON TABLE
+      Trigger: comparison_table (any option/criteria count)
+      → Zone must be DOMINANT — minimum 60% content area
+      → Full width strongly preferred: criteria columns require horizontal space per column;
+        narrow zones compress criteria headers below readability
+      → If slide has two zones: comparison_table takes ≥ 60% width; companion takes ≤ 40%
+        and should contain insight_text only — no second data artifact alongside a comparison_table
+      → If comparison_table is the only artifact: assign full zone (SINGLE)
+      → artifact_arrangement: single; artifact_coverage_hint: full; internal_alignment: fill
+
+      SELF-CHECK: If comparison_table zone width < 55% of slide width
+      → STOP. Either make it full width (SINGLE) or primary-left (left_60 or wider).
+
+  O13. PROFILE CARD SET
+      Trigger: profile_card_set ≥ 4 profiles
+      → Zone MUST span full horizontal slide width — grid layout requires 3+ columns
+      → content_structure forced to WIDE_DOMINANT
+      → No companion zone permitted when profiles ≥ 4
+      → artifact_arrangement: single; artifact_coverage_hint: full; internal_alignment: fill
+
+      Trigger: profile_card_set 2–3 profiles
+      → Zone must occupy ≥ 50% slide width
+      → Companion insight_text permitted in adjacent zone (right side, ≤ 40% width)
+      → artifact_arrangement: single; artifact_coverage_hint: full; internal_alignment: fill
+
+      SELF-CHECK: If profile_card_set ≥ 4 profiles is not in a full-width zone
+      → STOP. Reassign to full-width zone. Remove companion zone.
+
 STEP 3 — SELECT LAYOUT
 
   LAYOUT MODE — map content_structure to brand layout:
@@ -1048,6 +1457,18 @@ STEP 3 — SELECT LAYOUT
     THREE_PEER                                     → left_33 + mid_33 + right_33 (flag: three_peer_columns)
     QUAD_PEER / DOMINANT_PLUS_THREE                → tl + tr + bl + br
 
+    STRUCTURED DISPLAY ARTIFACT SPLITS (override generic logic when triggered):
+    stat_bar alone                                 → split = full
+    stat_bar + companion insight_text              → top_30 + bottom_70 (insight_text top, stat_bar bottom)
+    initiative_map alone                           → split = full
+    initiative_map + companion insight_text        → top_25 + bottom_75 (insight_text top, initiative_map bottom)
+    risk_register alone                            → split = full
+    risk_register + companion                      → top_30 + bottom_70 (companion top, risk_register bottom)
+    comparison_table alone                         → split = full
+    comparison_table + companion insight_text      → left_65 + right_35
+    profile_card_set ≥ 4 alone                     → split = full
+    profile_card_set 2–3 + companion insight_text  → left_60 + right_40
+
     VISUAL WEIGHT CORRECTION (apply after assigning splits):
     PRIMARY zone must occupy ≥ 60% of content area
     SECONDARY zone must occupy ≤ 40%
@@ -1092,25 +1513,79 @@ STEP 4 — ARTIFACT PLACEMENT HINTS (all modes)
     left_to_right | top_to_bottom | top_down_branching
 
   internal_alignment
-    fill       — chart, table, workflow
+    fill       — chart, table, workflow, stat_bar, initiative_map, risk_register,
+                 comparison_table, profile_card_set
     center     — cards (row)
     top_left   — insight_text (compact)
     top_center — insight_text (wide)
+
+  STRUCTURED DISPLAY PLACEMENT HINTS (mandatory when artifact is stat_bar, initiative_map,
+  risk_register, comparison_table, or profile_card_set):
+
+    stat_bar
+      artifact_arrangement:     single
+      artifact_coverage_hint:   full
+      artifact_split_hint:      100
+      internal_alignment:       fill
+      zone_constraint:          full_width  ← emit this field on the zone object
+
+    initiative_map
+      artifact_arrangement:     single
+      artifact_coverage_hint:   full
+      artifact_split_hint:      100
+      internal_alignment:       fill
+      zone_constraint:          full_width  ← emit this field on the zone object
+
+    risk_register
+      artifact_arrangement:     single
+      artifact_coverage_hint:   full
+      artifact_split_hint:      100
+      internal_alignment:       fill
+      zone_constraint:          full_width  ← emit this field on the zone object
+
+    comparison_table
+      artifact_arrangement:     single
+      artifact_coverage_hint:   full
+      artifact_split_hint:      100
+      internal_alignment:       fill
+      zone_constraint:          full_width_preferred  ← full width if alone; dominant-left if paired
+
+    profile_card_set (≥ 4 profiles)
+      artifact_arrangement:     single
+      artifact_coverage_hint:   full
+      artifact_split_hint:      100
+      internal_alignment:       fill
+      zone_constraint:          full_width
+
+    profile_card_set (2–3 profiles)
+      artifact_arrangement:     single
+      artifact_coverage_hint:   full
+      artifact_split_hint:      100
+      internal_alignment:       fill
+      zone_constraint:          dominant_left  ← min 50% width
 
 STEP 5 — SELF-CHECK BEFORE OUTPUT
 
   [ ] O1 ACTIVE: no left_to_right workflow shares horizontal space with any zone
   [ ] O2 ACTIVE: no top-down workflow is stacked above or below another zone
+  [ ] O9 ACTIVE: stat_bar is in a full-width zone; no sibling zone shares horizontal space
+  [ ] O10 ACTIVE: initiative_map is in a full-width zone; no sibling zone shares horizontal space
+  [ ] O11 ACTIVE: risk_register zone height ≥ 65% slide height; companion (if any) stacked above only
+  [ ] O12 ACTIVE: comparison_table zone width ≥ 55% slide width; companion (if any) is insight_text only
+  [ ] O13 ACTIVE: profile_card_set ≥ 4 profiles is in full-width zone with no companion
   [ ] PRIMARY zone occupies ≥ 60% content area (unless both zones are CO-PRIMARY)
   [ ] No SECONDARY zone is larger than PRIMARY zone
-  [ ] No reasoning artifact is in a zone < 45% W or < 50% H
+  [ ] No reasoning artifact (incl. comparison_table) is in a zone < 45% W or < 50% H
   [ ] No 4-card artifact shares slide with another zone
   [ ] LAYOUT MODE: selected layout has no more content cells than required
   [ ] SCRATCH MODE: all split values from the allowed list only
-  [ ] Phase 3 Step 4 executed: every chart_header / table_header / workflow_header checked
+  [ ] Phase 3 Step 4 executed: every chart_header / table_header / workflow_header /
+      comparison_header / initiative_header / risk_header / profile_header checked
       against slide title for near-repetition; differentiation applied where needed
   [ ] Every artifact has artifact_arrangement, artifact_coverage_hint,
       artifact_split_hint, and internal_alignment populated
+  [ ] Every stat_bar / initiative_map / risk_register / comparison_table / profile_card_set
+      has zone_constraint populated on its parent zone object
   [ ] ZW codes not used when slide_format width:height < 1.5
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
