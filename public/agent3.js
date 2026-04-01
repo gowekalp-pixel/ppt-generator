@@ -223,7 +223,7 @@ Remember:
     ]
   }]
 
-  const raw = await callClaude(AGENT3_SYSTEM, messages, 4500)
+  const raw = await callClaude(AGENT3_SYSTEM, messages, 8000)
 
   console.log('Agent 3 — raw response length:', raw.length)
   if (raw.length < 200) console.warn('Agent 3 — suspiciously short response:', raw)
