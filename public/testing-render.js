@@ -1,6 +1,5 @@
 (function () {
   const ARTIFACT_CATALOG = [
-    { type: 'insight_text', label: 'Insight Text', subtypes: ['standard', 'grouped'] },
     { type: 'chart', label: 'Chart', subtypes: ['bar', 'horizontal_bar', 'clustered_bar', 'line', 'pie', 'donut', 'group_pie'] },
     { type: 'stat_bar', label: 'Stat Bar', subtypes: ['stat_bar'] },
     { type: 'cards', label: 'Cards', subtypes: ['row', 'column', 'grid'] },
@@ -111,8 +110,10 @@
     const selections = {}
     ;(slide?.zones || []).forEach((zone, zi) => {
       ;(zone.artifacts || []).forEach((artifact, ai) => {
+        const normalizedType = localNormalizeArtifactType(artifact?.type, artifact?.chart_type)
+        if (normalizedType === 'insight_text') return
         selections[`${zi}-${ai}`] = {
-          type: localNormalizeArtifactType(artifact?.type, artifact?.chart_type),
+          type: normalizedType,
           subtype: localArtifactSubtype(artifact)
         }
       })
@@ -247,12 +248,193 @@
     return deepClone(designedZone?.frame || manifestZone?.frame || fallbackZoneFrame(index, total, canvas))
   }
 
-  function makeDemoManifestArtifact(type, subtype, originalArtifact, zone, slide) {
+  function uniqStrings(values, fallbackPrefix) {
+    const seen = new Set()
+    return (values || []).map((value, idx) => {
+      const raw = String(value == null ? `${fallbackPrefix || 'Item'} ${idx + 1}` : value).trim() || `${fallbackPrefix || 'Item'} ${idx + 1}`
+      let candidate = raw
+      let suffix = 2
+      while (seen.has(candidate.toLowerCase())) {
+        candidate = `${raw} ${suffix}`
+        suffix += 1
+      }
+      seen.add(candidate.toLowerCase())
+      return candidate
+    })
+  }
+
+  function artifactTextLines(artifact, zone, slide) {
+    const lines = []
+    const push = (value) => {
+      const text = String(value == null ? '' : value).trim()
+      if (text) lines.push(text)
+    }
+    push(artifact?.heading)
+    push(artifact?.insight_header)
+    ;(artifact?.points || []).forEach(push)
+    ;(artifact?.groups || []).forEach((group) => {
+      push(group?.header)
+      ;(group?.bullets || []).forEach(push)
+    })
+    ;(artifact?.cards || []).forEach((card) => {
+      push(card?.title)
+      push(card?.subtitle)
+      push(card?.body)
+    })
+    ;(artifact?.rows || []).forEach((row) => {
+      if (Array.isArray(row)) row.forEach(push)
+      else {
+        push(row?.label)
+        push(row?.display_value)
+        push(row?.annotation)
+      }
+    })
+    ;(artifact?.headers || []).forEach(push)
+    ;(artifact?.criteria || []).forEach(push)
+    ;(artifact?.options || []).forEach((option) => {
+      push(option?.name)
+      ;(option?.ratings || []).forEach((rating) => {
+        push(rating?.criterion)
+        push(rating?.rating)
+      })
+    })
+    ;(artifact?.initiatives || []).forEach((item) => {
+      push(item?.name)
+      push(item?.subtitle)
+      ;(item?.placements || []).forEach((placement) => {
+        push(placement?.title)
+        push(placement?.outcome)
+        ;(placement?.chips || []).forEach(push)
+      })
+    })
+    ;(artifact?.profiles || []).forEach((profile) => {
+      push(profile?.entity_name)
+      push(profile?.subtitle)
+      push(profile?.badge_text)
+      ;(profile?.secondary_items || []).forEach((item) => {
+        push(item?.label)
+        if (Array.isArray(item?.value)) item.value.forEach(push)
+        else push(item?.value)
+      })
+    })
+    ;(artifact?.risks || []).forEach((risk) => {
+      push(risk?.severity)
+      push(risk?.description)
+      push(risk?.mitigation)
+      push(risk?.owner)
+      push(risk?.status)
+    })
+    push(artifact?.root?.label)
+    push(artifact?.root?.value)
+    ;(artifact?.branches || []).forEach((branch) => {
+      push(branch?.label)
+      push(branch?.value)
+      ;(branch?.children || []).forEach((child) => {
+        push(child?.label)
+        push(child?.value)
+      })
+    })
+    ;(artifact?.items || []).forEach((item) => {
+      push(item?.title)
+      push(item?.description)
+      ;(item?.qualifiers || []).forEach(push)
+    })
+    ;(artifact?.nodes || []).forEach((node) => {
+      push(node?.label)
+      push(node?.value)
+      push(node?.description)
+    })
+    ;(artifact?.categories || []).forEach(push)
+    ;(artifact?.series || []).forEach((series) => {
+      push(series?.name)
+      ;(series?.values || []).forEach((value) => push(value))
+    })
+    ;(artifact?.quadrants || []).forEach((quadrant) => {
+      push(quadrant?.name)
+      push(quadrant?.insight)
+    })
+    ;(artifact?.points || []).forEach((point) => {
+      if (typeof point === 'string') return
+      push(point?.label)
+    })
+    push(zone?.message_objective)
+    push(slide?.key_message)
+    return uniqStrings(lines, 'Item')
+  }
+
+  function artifactNumericSeries(artifact) {
+    if (artifact?.type === 'chart' && Array.isArray(artifact?.series) && artifact.series.length) {
+      const categories = uniqStrings(artifact.categories || artifact.series[0]?.values?.map((_, idx) => `Series ${idx + 1}`) || [], 'Item')
+      const series = artifact.series.map((entry, idx) => ({
+        name: String(entry?.name || `Series ${idx + 1}`),
+        values: (entry?.values || []).map((value, vi) => Number.isFinite(Number(value)) ? Number(value) : vi + 1),
+        unit: entry?.unit || 'count'
+      }))
+      return { categories, series }
+    }
+    if (artifact?.type === 'stat_bar') {
+      const rows = artifact.rows || []
+      return {
+        categories: uniqStrings(rows.map((row, idx) => row?.label || `Item ${idx + 1}`), 'Item'),
+        series: [{
+          name: (artifact.column_headers && (artifact.column_headers.metric || artifact.column_headers.value)) || 'Value',
+          values: rows.map((row, idx) => Number.isFinite(Number(row?.value)) ? Number(row.value) : idx + 1),
+          unit: 'count'
+        }]
+      }
+    }
+    if (artifact?.type === 'table') {
+      const rows = artifact.rows || []
+      return {
+        categories: uniqStrings(rows.map((row, idx) => Array.isArray(row) ? row[0] : `Row ${idx + 1}`), 'Row'),
+        series: [{
+          name: (artifact.headers && artifact.headers[1]) || 'Value',
+          values: rows.map((row, idx) => {
+            const value = Array.isArray(row) ? row[1] : null
+            return Number.isFinite(Number(value)) ? Number(value) : idx + 1
+          }),
+          unit: 'count'
+        }]
+      }
+    }
+    const labels = artifactTextLines(artifact).slice(0, 5)
+    return {
+      categories: uniqStrings(labels.length ? labels : ['A', 'B', 'C'], 'Item'),
+      series: [{
+        name: 'Value',
+        values: (labels.length ? labels : ['A', 'B', 'C']).map((_, idx) => idx + 1),
+        unit: 'count'
+      }]
+    }
+  }
+
+  function buildConvertedManifestArtifact(type, subtype, originalArtifact, zone, slide) {
     const header = artifactHeaderText(originalArtifact, zone, slide)
     const shared = {
       type,
       artifact_coverage_hint: originalArtifact?.artifact_coverage_hint || zone?.message_objective || ''
     }
+    const lines = artifactTextLines(originalArtifact, zone, slide)
+    const metrics = artifactNumericSeries(originalArtifact)
+    const standardPoints = uniqStrings((originalArtifact?.points || []).length ? originalArtifact.points : lines.slice(0, 4), 'Point').slice(0, 5)
+    const groupedSource = Array.isArray(originalArtifact?.groups) && originalArtifact.groups.length
+      ? originalArtifact.groups.map((group, idx) => ({
+          header: String(group?.header || `Group ${idx + 1}`),
+          bullets: uniqStrings(group?.bullets || [], 'Point').slice(0, 3)
+        }))
+      : [
+          { header: 'Signal', bullets: standardPoints.slice(0, 2) },
+          { header: 'Evidence', bullets: standardPoints.slice(2, 4) },
+          { header: 'Implication', bullets: standardPoints.slice(4, 6) }
+        ].filter((group) => group.bullets.length)
+    const cardItems = Array.isArray(originalArtifact?.cards) && originalArtifact.cards.length
+      ? originalArtifact.cards
+      : standardPoints.slice(0, 4).map((point, idx) => ({
+          title: lines[idx] || `Card ${idx + 1}`,
+          subtitle: idx === 0 ? 'Primary' : `Item ${idx + 1}`,
+          body: point,
+          sentiment: originalArtifact?.sentiment || 'neutral'
+        }))
 
     if (type === 'insight_text') {
       if (subtype === 'grouped') {
@@ -261,12 +443,9 @@
           type: 'insight_text',
           insight_mode: 'grouped',
           insight_header: header,
-          groups: [
-            { header: 'Signal', bullets: ['Demand is concentrated and measurable.', 'The proof base is strong enough to compare formats.'] },
-            { header: 'Test', bullets: ['Use this zone to validate grouped insight rendering.', 'Swap headers, bullets, or count to stress the layout.'] },
-            { header: 'Outcome', bullets: ['This output is synthetic and only meant for artifact rendering.', 'Content quality is intentionally secondary here.'] }
-          ],
-          sentiment: 'neutral'
+          heading: header,
+          groups: groupedSource,
+          sentiment: originalArtifact?.sentiment || 'neutral'
         }
       }
       return {
@@ -275,12 +454,8 @@
         insight_mode: 'standard',
         insight_header: header,
         heading: header,
-        points: [
-          'This is a local rendering test for the selected artifact.',
-          'The app keeps slide context but swaps the artifact structure.',
-          'Use the regenerated Agent 5 response to validate Agent 6 rendering.'
-        ],
-        sentiment: 'neutral'
+        points: standardPoints,
+        sentiment: originalArtifact?.sentiment || 'neutral'
       }
     }
 
@@ -293,12 +468,12 @@
           chart_type: 'group_pie',
           chart_header: header,
           chart_title: '',
-          categories: ['High', 'Medium', 'Low'],
-          series: [
-            { name: 'Channel A', values: [45, 35, 20], unit: 'percent' },
-            { name: 'Channel B', values: [30, 40, 30], unit: 'percent' },
-            { name: 'Channel C', values: [55, 25, 20], unit: 'percent' }
-          ],
+          categories: metrics.categories.slice(0, 5),
+          series: metrics.series.slice(0, 3).map((series, idx) => ({
+            name: series.name || `Series ${idx + 1}`,
+            values: series.values.slice(0, Math.min(5, metrics.categories.length)),
+            unit: series.unit || 'count'
+          })),
           x_label: '',
           y_label: ''
         }
@@ -310,8 +485,12 @@
           chart_type: chartType,
           chart_header: header,
           chart_title: '',
-          categories: ['Core', 'Growth', 'Risk'],
-          series: [{ name: 'Share', values: [52, 31, 17], unit: 'percent' }],
+          categories: metrics.categories.slice(0, 6),
+          series: [{
+            name: metrics.series[0]?.name || 'Share',
+            values: (metrics.series[0]?.values || []).slice(0, Math.min(6, metrics.categories.length)),
+            unit: metrics.series[0]?.unit || 'count'
+          }],
           x_label: '',
           y_label: ''
         }
@@ -323,11 +502,19 @@
           chart_type: 'clustered_bar',
           chart_header: header,
           chart_title: '',
-          categories: ['Q1', 'Q2', 'Q3', 'Q4'],
-          series: [
-            { name: 'Base', values: [18, 24, 21, 29], unit: 'count' },
-            { name: 'Target', values: [22, 26, 25, 32], unit: 'count' }
-          ],
+          categories: metrics.categories.slice(0, 6),
+          series: (metrics.series.length > 1 ? metrics.series.slice(0, 3) : [
+            metrics.series[0],
+            {
+              name: `${metrics.series[0]?.name || 'Value'} Target`,
+              values: (metrics.series[0]?.values || []).slice(0, 6).map((value) => Math.round(Number(value || 0) * 1.15 * 100) / 100),
+              unit: metrics.series[0]?.unit || 'count'
+            }
+          ]).map((series, idx) => ({
+            name: series?.name || `Series ${idx + 1}`,
+            values: (series?.values || []).slice(0, Math.min(6, metrics.categories.length)),
+            unit: series?.unit || 'count'
+          })),
           x_label: 'Quarter',
           y_label: 'Value'
         }
@@ -339,8 +526,12 @@
           chart_type: 'line',
           chart_header: header,
           chart_title: '',
-          categories: ['Jan', 'Feb', 'Mar', 'Apr', 'May'],
-          series: [{ name: 'Trend', values: [10, 14, 13, 18, 22], unit: 'count' }],
+          categories: metrics.categories.slice(0, 6),
+          series: [{
+            name: metrics.series[0]?.name || 'Trend',
+            values: (metrics.series[0]?.values || []).slice(0, Math.min(6, metrics.categories.length)),
+            unit: metrics.series[0]?.unit || 'count'
+          }],
           x_label: 'Month',
           y_label: 'Value'
         }
@@ -351,8 +542,12 @@
         chart_type: chartType,
         chart_header: header,
         chart_title: '',
-        categories: ['A', 'B', 'C', 'D'],
-        series: [{ name: 'Series 1', values: [42, 34, 27, 19], unit: 'count' }],
+        categories: metrics.categories.slice(0, 8),
+        series: (metrics.series.length ? metrics.series : [{ name: 'Series 1', values: [1, 2, 3], unit: 'count' }]).slice(0, 3).map((series, idx) => ({
+          name: series?.name || `Series ${idx + 1}`,
+          values: (series?.values || []).slice(0, Math.min(8, metrics.categories.length)),
+          unit: series?.unit || 'count'
+        })),
         x_label: chartType === 'horizontal_bar' ? 'Value' : 'Category',
         y_label: chartType === 'horizontal_bar' ? 'Category' : 'Value'
       }
@@ -363,15 +558,21 @@
         ...shared,
         type: 'stat_bar',
         stat_header: header,
-        stat_decision: 'Synthetic stat bar for local rendering validation.',
+        stat_decision: zone?.message_objective || slide?.key_message || header,
         column_headers: { label: 'Item', metric: 'Metric', value: 'Value', annotation: 'Note' },
         annotation_style: 'trailing',
-        rows: [
-          { id: 'row_1', label: 'Alpha', value: 1.2, display_value: '1.2', annotation: 'Primary highlight', highlight: true, bar_color: '#D7E4BF' },
-          { id: 'row_2', label: 'Beta', value: 8.9, display_value: '8.9', annotation: 'Strong benchmark', highlight: false },
-          { id: 'row_3', label: 'Gamma', value: 10.4, display_value: '10.4', annotation: 'Secondary case', highlight: false },
-          { id: 'row_4', label: 'Delta', value: 12.0, display_value: '12.0', annotation: 'Upper bound', highlight: false }
-        ]
+        rows: metrics.categories.slice(0, 6).map((label, idx) => {
+          const value = metrics.series[0]?.values?.[idx]
+          return {
+            id: `row_${idx + 1}`,
+            label,
+            value: Number.isFinite(Number(value)) ? Number(value) : idx + 1,
+            display_value: String(Number.isFinite(Number(value)) ? Number(value) : idx + 1),
+            annotation: standardPoints[idx] || lines[idx + 1] || header,
+            highlight: idx === 0,
+            bar_color: idx === 0 ? '#D7E4BF' : undefined
+          }
+        })
       }
     }
 
@@ -380,11 +581,7 @@
         ...shared,
         type: 'cards',
         cards_layout: subtype || 'column',
-        cards: [
-          { title: 'Metric One', subtitle: '42%', body: 'Primary card body for render testing.', sentiment: 'positive' },
-          { title: 'Metric Two', subtitle: '18%', body: 'Secondary card body for render testing.', sentiment: 'neutral' },
-          { title: 'Metric Three', subtitle: '7%', body: 'Tertiary card body for render testing.', sentiment: 'negative' }
-        ]
+        cards: cardItems.slice(0, 6)
       }
     }
 
@@ -399,11 +596,11 @@
           flow_direction: flowDirection,
           workflow_header: header,
           nodes: [
-            { id: 'n1', label: 'Root', value: 'Owner', description: 'Top node', level: 1 },
-            { id: 'n2', label: 'Branch A', value: 'Step', description: 'First branch', level: 2 },
-            { id: 'n3', label: 'Branch B', value: 'Step', description: 'Second branch', level: 2 },
-            { id: 'n4', label: 'Leaf A1', value: 'Action', description: 'Leaf node', level: 3 },
-            { id: 'n5', label: 'Leaf B1', value: 'Action', description: 'Leaf node', level: 3 }
+            { id: 'n1', label: lines[0] || header, value: 'Root', description: standardPoints[0] || '', level: 1 },
+            { id: 'n2', label: lines[1] || 'Branch A', value: 'Branch', description: standardPoints[1] || '', level: 2 },
+            { id: 'n3', label: lines[2] || 'Branch B', value: 'Branch', description: standardPoints[2] || '', level: 2 },
+            { id: 'n4', label: lines[3] || 'Leaf A1', value: 'Action', description: standardPoints[3] || '', level: 3 },
+            { id: 'n5', label: lines[4] || 'Leaf B1', value: 'Action', description: standardPoints[4] || '', level: 3 }
           ],
           connections: [
             { from: 'n1', to: 'n2', type: 'arrow' },
@@ -420,9 +617,9 @@
         flow_direction: workflowType === 'timeline' ? 'left_to_right' : flowDirection,
         workflow_header: header,
         nodes: [
-          { id: 'n1', label: 'Discover', value: '01', description: 'Start the test flow', level: 1 },
-          { id: 'n2', label: 'Shape', value: '02', description: 'Convert to selected artifact', level: 1 },
-          { id: 'n3', label: 'Render', value: '03', description: 'Flatten to blocks locally', level: 1 }
+          { id: 'n1', label: lines[0] || 'Discover', value: '01', description: standardPoints[0] || '', level: 1 },
+          { id: 'n2', label: lines[1] || 'Shape', value: '02', description: standardPoints[1] || '', level: 1 },
+          { id: 'n3', label: lines[2] || 'Render', value: '03', description: standardPoints[2] || '', level: 1 }
         ],
         connections: [
           { from: 'n1', to: 'n2', type: 'arrow' },
@@ -436,14 +633,14 @@
         ...shared,
         type: 'table',
         table_header: header,
-        headers: ['Option', 'Value', 'Status'],
-        rows: [
-          ['Alpha', '42', 'Good'],
-          ['Beta', '31', 'Watch'],
-          ['Gamma', '18', 'Low']
-        ],
-        highlight_rows: [0],
-        note: 'Synthetic table for local artifact rendering.'
+        headers: ['Item', 'Value', 'Note'],
+        rows: metrics.categories.slice(0, 6).map((label, idx) => [
+          label,
+          String(metrics.series[0]?.values?.[idx] ?? idx + 1),
+          standardPoints[idx] || lines[idx + 1] || ''
+        ]),
+        highlight_rows: [0].filter((_, idx) => idx < Math.min(1, metrics.categories.length)),
+        note: zone?.message_objective || slide?.key_message || ''
       }
     }
 
@@ -452,26 +649,24 @@
         ...shared,
         type: 'comparison_table',
         comparison_header: header,
-        criteria: ['Fit', 'Speed', 'Complexity'],
+        criteria: uniqStrings((originalArtifact?.criteria || lines.slice(0, 3)), 'Criteria').slice(0, 4),
         options: [
           {
-            name: 'Option A',
-            ratings: [
-              { criterion: 'Fit', rating: 'yes' },
-              { criterion: 'Speed', rating: 'partial' },
-              { criterion: 'Complexity', rating: 'no' }
-            ]
+            name: lines[3] || 'Option A',
+            ratings: uniqStrings((originalArtifact?.criteria || lines.slice(0, 3)), 'Criteria').slice(0, 4).map((criterion, idx) => ({
+              criterion,
+              rating: ['yes', 'partial', 'no'][idx % 3]
+            }))
           },
           {
-            name: 'Option B',
-            ratings: [
-              { criterion: 'Fit', rating: 'yes' },
-              { criterion: 'Speed', rating: 'yes' },
-              { criterion: 'Complexity', rating: 'partial' }
-            ]
+            name: lines[4] || 'Option B',
+            ratings: uniqStrings((originalArtifact?.criteria || lines.slice(0, 3)), 'Criteria').slice(0, 4).map((criterion, idx) => ({
+              criterion,
+              rating: ['yes', 'yes', 'partial', 'no'][idx % 4]
+            }))
           }
         ],
-        recommended_option: 'Option B'
+        recommended_option: lines[4] || 'Option B'
       }
     }
 
@@ -486,18 +681,18 @@
         ],
         initiatives: [
           {
-            name: 'Data foundation',
-            subtitle: 'Platform',
+            name: lines[0] || 'Primary initiative',
+            subtitle: lines[1] || 'Current workstream',
             placements: [
-              { lane_id: 'now', title: 'Schema cleanup', chips: ['ETL', 'Keys'], outcome: 'Weeks 1-2' },
-              { lane_id: 'next', title: 'Monitoring', chips: ['QA'], outcome: 'Weeks 3-4' }
+              { lane_id: 'now', title: standardPoints[0] || 'Current step', chips: lines.slice(2, 4), outcome: 'Current' },
+              { lane_id: 'next', title: standardPoints[1] || 'Next step', chips: lines.slice(4, 6), outcome: 'Next' }
             ]
           },
           {
-            name: 'Artifact validation',
-            subtitle: 'Design',
+            name: lines[2] || 'Secondary initiative',
+            subtitle: lines[3] || 'Follow-up',
             placements: [
-              { lane_id: 'now', title: 'Block test', chips: ['Agent 5'], outcome: 'Immediate' }
+              { lane_id: 'now', title: standardPoints[2] || 'Immediate action', chips: lines.slice(6, 8), outcome: 'Immediate' }
             ]
           }
         ]
@@ -510,26 +705,15 @@
         type: 'profile_card_set',
         profile_header: header,
         layout_direction: subtype === 'grid' ? 'grid' : 'horizontal',
-        profiles: [
-          {
-            entity_name: 'Persona A',
-            subtitle: 'Primary segment',
-            badge_text: 'Core',
-            secondary_items: [
-              { label: 'Need', value: 'Clarity' },
-              { label: 'Market', value: ['Metro', 'Tier 1'], representation_type: 'chip_list' }
-            ]
-          },
-          {
-            entity_name: 'Persona B',
-            subtitle: 'Secondary segment',
-            badge_text: 'Pilot',
-            secondary_items: [
-              { label: 'Need', value: 'Speed' },
-              { label: 'Market', value: ['Online'], representation_type: 'chip_list' }
-            ]
-          }
-        ]
+        profiles: cardItems.slice(0, 4).map((card, idx) => ({
+          entity_name: card.title || `Profile ${idx + 1}`,
+          subtitle: card.subtitle || `Segment ${idx + 1}`,
+          badge_text: idx === 0 ? 'Core' : 'Test',
+          secondary_items: [
+            { label: 'Insight', value: card.body || '' },
+            { label: 'Signals', value: lines.slice(idx * 2, idx * 2 + 2), representation_type: 'chip_list' }
+          ]
+        }))
       }
     }
 
@@ -539,11 +723,13 @@
         type: 'risk_register',
         risk_header: header,
         show_mitigation: true,
-        risks: [
-          { severity: 'high', description: 'Renderer mismatch across artifact families.', mitigation: 'Keep blocks canonical.', owner: 'Eng', status: 'Open' },
-          { severity: 'medium', description: 'Synthetic content may overflow narrow zones.', mitigation: 'Adjust sample density.', owner: 'Design', status: 'Watch' },
-          { severity: 'low', description: 'Non-critical cosmetic drift in preview.', mitigation: 'Validate with Agent 6.', owner: 'QA', status: 'Contained' }
-        ]
+        risks: standardPoints.slice(0, 4).map((point, idx) => ({
+          severity: ['high', 'medium', 'low', 'medium'][idx % 4],
+          description: point,
+          mitigation: lines[idx + 1] || 'Review and mitigate.',
+          owner: ['Ops', 'Design', 'QA', 'Eng'][idx % 4],
+          status: ['Open', 'Watch', 'Contained', 'Open'][idx % 4]
+        }))
       }
     }
 
@@ -556,16 +742,16 @@
         x_axis: { label: 'Impact', low_label: 'Low', high_label: 'High' },
         y_axis: { label: 'Feasibility', low_label: 'Low', high_label: 'High' },
         quadrants: [
-          { id: 'q1', name: 'Monitor', insight: 'Low impact, high effort.' },
-          { id: 'q2', name: 'Invest', insight: 'High impact, high feasibility.' },
-          { id: 'q3', name: 'Ignore', insight: 'Low impact, low feasibility.' },
-          { id: 'q4', name: 'Test', insight: 'High impact, uncertain effort.' }
+          { id: 'q1', name: 'Monitor', insight: standardPoints[0] || 'Low impact, high effort.' },
+          { id: 'q2', name: 'Invest', insight: standardPoints[1] || 'High impact, high feasibility.' },
+          { id: 'q3', name: 'Ignore', insight: standardPoints[2] || 'Low impact, low feasibility.' },
+          { id: 'q4', name: 'Test', insight: standardPoints[3] || 'High impact, uncertain effort.' }
         ],
-        points: [
-          { label: 'Artifact A', x: 'high', y: 'high' },
-          { label: 'Artifact B', x: 'medium', y: 'low' },
-          { label: 'Artifact C', x: 'low', y: 'medium' }
-        ]
+        points: lines.slice(0, 4).map((line, idx) => ({
+          label: line,
+          x: ['high', 'medium', 'low', 'medium'][idx % 4],
+          y: ['high', 'low', 'medium', 'high'][idx % 4]
+        }))
       }
     }
 
@@ -574,22 +760,22 @@
         ...shared,
         type: 'driver_tree',
         tree_header: header,
-        root: { label: 'Primary outcome', value: '100%' },
+        root: { label: lines[0] || header, value: '100%' },
         branches: [
           {
-            label: 'Driver A',
+            label: lines[1] || 'Driver A',
             value: '40%',
             children: [
-              { label: 'Leaf A1', value: '18%' },
-              { label: 'Leaf A2', value: '22%' }
+              { label: lines[3] || 'Leaf A1', value: '18%' },
+              { label: lines[4] || 'Leaf A2', value: '22%' }
             ]
           },
           {
-            label: 'Driver B',
+            label: lines[2] || 'Driver B',
             value: '60%',
             children: [
-              { label: 'Leaf B1', value: '35%' },
-              { label: 'Leaf B2', value: '25%' }
+              { label: lines[5] || 'Leaf B1', value: '35%' },
+              { label: lines[6] || 'Leaf B2', value: '25%' }
             ]
           }
         ]
@@ -601,11 +787,12 @@
         ...shared,
         type: 'prioritization',
         priority_header: header,
-        items: [
-          { rank: 1, title: 'Stabilize render contract', description: 'Keep block output deterministic.', qualifiers: ['High impact', 'Low effort'] },
-          { rank: 2, title: 'Swap artifact families', description: 'Validate flattening coverage.', qualifiers: ['Medium effort'] },
-          { rank: 3, title: 'Compare Agent 6 output', description: 'Use regenerated JSON as test input.', qualifiers: ['Fast feedback'] }
-        ]
+        items: standardPoints.slice(0, 5).map((point, idx) => ({
+          rank: idx + 1,
+          title: lines[idx] || `Priority ${idx + 1}`,
+          description: point,
+          qualifiers: [idx === 0 ? 'High impact' : 'Test', idx % 2 === 0 ? 'Low effort' : 'Medium effort']
+        }))
       }
     }
 
@@ -617,6 +804,79 @@
       heading: header,
       points: ['Fallback artifact placeholder.']
     }
+  }
+
+  function inferOriginalArtifactId(originalSlide, zi, ai) {
+    return originalSlide?.zones?.[zi]?.artifacts?.[ai]?._artifact_id || `s${originalSlide?.slide_number}_z${zi}_a${ai}`
+  }
+
+  function rectFromBlock(block) {
+    if (!block) return null
+    if ([block.x, block.y, block.w, block.h].every((value) => value != null)) {
+      return { x: Number(block.x), y: Number(block.y), w: Number(block.w), h: Number(block.h) }
+    }
+    if ([block.x1, block.y1, block.x2, block.y2].every((value) => value != null)) {
+      const x1 = Number(block.x1); const x2 = Number(block.x2)
+      const y1 = Number(block.y1); const y2 = Number(block.y2)
+      return { x: Math.min(x1, x2), y: Math.min(y1, y2), w: Math.abs(x2 - x1), h: Math.abs(y2 - y1) }
+    }
+    return null
+  }
+
+  function unionRects(rects) {
+    const valid = (rects || []).filter((rect) => rect && [rect.x, rect.y, rect.w, rect.h].every((value) => Number.isFinite(Number(value))))
+    if (!valid.length) return null
+    const minX = Math.min(...valid.map((rect) => rect.x))
+    const minY = Math.min(...valid.map((rect) => rect.y))
+    const maxX = Math.max(...valid.map((rect) => rect.x + rect.w))
+    const maxY = Math.max(...valid.map((rect) => rect.y + rect.h))
+    return {
+      x: Math.round(minX * 100) / 100,
+      y: Math.round(minY * 100) / 100,
+      w: Math.round(Math.max(0.1, maxX - minX) * 100) / 100,
+      h: Math.round(Math.max(0.1, maxY - minY) * 100) / 100
+    }
+  }
+
+  function collectOriginalArtifactGeometry(originalSlide, zi, ai) {
+    const artifactId = inferOriginalArtifactId(originalSlide, zi, ai)
+    const blocks = (originalSlide?.blocks || []).filter((block) => block.artifact_id === artifactId)
+    const bodyBounds = unionRects(blocks.filter((block) => block.block_role === 'artifact_body').map(rectFromBlock))
+    const allBounds = unionRects(blocks.map(rectFromBlock))
+    const zoneArtifact = originalSlide?.zones?.[zi]?.artifacts?.[ai]
+    const artifactBounds = bodyBounds || allBounds || (
+      zoneArtifact && [zoneArtifact.x, zoneArtifact.y, zoneArtifact.w, zoneArtifact.h].every((value) => value != null)
+        ? { x: zoneArtifact.x, y: zoneArtifact.y, w: zoneArtifact.w, h: zoneArtifact.h }
+        : null
+    )
+    const headerBounds = unionRects(blocks.filter((block) => block.block_role === 'artifact_header').map(rectFromBlock))
+    return { artifactId, artifactBounds, headerBounds }
+  }
+
+  function applyOriginalGeometry(rebuiltSlide, originalSlide) {
+    ;(rebuiltSlide?.zones || []).forEach((zone, zi) => {
+      const originalZone = originalSlide?.zones?.[zi]
+      if (originalZone?.frame) zone.frame = deepClone(originalZone.frame)
+      ;(zone.artifacts || []).forEach((artifact, ai) => {
+        const geometry = collectOriginalArtifactGeometry(originalSlide, zi, ai)
+        if (geometry.artifactBounds) {
+          artifact.x = geometry.artifactBounds.x
+          artifact.y = geometry.artifactBounds.y
+          artifact.w = geometry.artifactBounds.w
+          artifact.h = geometry.artifactBounds.h
+          if (artifact.type === 'cards' || artifact.type === 'workflow') artifact.container = deepClone(geometry.artifactBounds)
+        }
+        if (artifact.header_block && geometry.headerBounds) {
+          artifact.header_block = {
+            ...artifact.header_block,
+            x: geometry.headerBounds.x,
+            y: geometry.headerBounds.y,
+            w: geometry.headerBounds.w,
+            h: geometry.headerBounds.h
+          }
+        }
+      })
+    })
   }
 
   function buildZoneShells(modifiedManifestSlide, originalAgent5Slide, bt) {
@@ -651,12 +911,14 @@
 
     ;(modifiedManifestSlide.zones || []).forEach((zone, zi) => {
       ;(zone.artifacts || []).forEach((artifact, ai) => {
+        const originalType = localNormalizeArtifactType(artifact?.type, artifact?.chart_type)
+        if (originalType === 'insight_text') return
         const key = `${zi}-${ai}`
         const selection = overrides[key] || {
-          type: localNormalizeArtifactType(artifact?.type, artifact?.chart_type),
+          type: originalType,
           subtype: localArtifactSubtype(artifact)
         }
-        zone.artifacts[ai] = makeDemoManifestArtifact(selection.type, selection.subtype, artifact, zone, modifiedManifestSlide)
+        zone.artifacts[ai] = buildConvertedManifestArtifact(selection.type, selection.subtype, artifact, zone, modifiedManifestSlide)
       })
     })
 
@@ -680,6 +942,8 @@
       subtitle_block: subtitleBlock,
       zones: buildZoneShells(modifiedManifestSlide, originalSlide, bt)
     }
+
+    applyOriginalGeometry(rebuiltSlide, originalSlide)
 
     if ((!rebuiltSlide.zones || rebuiltSlide.zones.length === 0) && typeof buildScratchZoneFrames === 'function') {
       rebuiltSlide.zones = buildScratchZoneFrames(modifiedManifestSlide.zones || [], rebuiltSlide)
@@ -723,6 +987,11 @@
     $('stat-artifacts').textContent = String(artifactCount)
     const issueCount = ((slide?._testing_render?.validation_issues || []).length + (slide?._testing_render?.render_issues || []).length)
     $('stat-issues').textContent = String(issueCount)
+  }
+
+  function formatRect(rect) {
+    if (!rect) return 'unavailable'
+    return `x:${rect.x}, y:${rect.y}, w:${rect.w}, h:${rect.h}`
   }
 
   function renderPreview(slide) {
@@ -881,46 +1150,47 @@
     }).join('')
   }
 
-  function renderZones() {
+  function renderArtifactControls() {
     const slide = state.manifestSlides.find((item) => item.slide_number === state.selectedSlideNumber)
     const overrides = ensureSlideOverride(state.selectedSlideNumber)
-    $('zones-wrap').innerHTML = ((slide?.zones || []).map((zone, zi) => {
-      const artifactsHtml = (zone.artifacts || []).map((artifact, ai) => {
+    const originalSlide = state.agent5Slides.find((item) => item.slide_number === state.selectedSlideNumber)
+    const artifactCards = []
+    ;(slide?.zones || []).forEach((zone, zi) => {
+      ;(zone.artifacts || []).forEach((artifact, ai) => {
+        const currentType = localNormalizeArtifactType(artifact?.type, artifact?.chart_type)
+        if (currentType === 'insight_text') return
         const key = `${zi}-${ai}`
         const selection = overrides[key]
-        const currentType = localNormalizeArtifactType(artifact?.type, artifact?.chart_type)
         const currentSubtype = localArtifactSubtype(artifact)
         const typeOptions = ARTIFACT_CATALOG.map((entry) => entry.type)
         const subtypeOptions = catalogSubtypeOptions(selection?.type || currentType)
-        return `
-          <div class="artifact-row">
-            <div class="artifact-label">Artifact ${ai + 1}</div>
-            <div class="artifact-current">Agent 4 original: <strong>${currentType}</strong>${currentSubtype && currentSubtype !== currentType ? ` / ${currentSubtype}` : ''}</div>
-            <div class="selector-grid">
-              <select data-role="type" data-key="${key}">
-                ${selectorOptionsHtml(typeOptions, selection?.type || currentType)}
-              </select>
-              <select data-role="subtype" data-key="${key}">
-                ${selectorOptionsHtml(subtypeOptions, selection?.subtype || currentSubtype || subtypeOptions[0])}
-              </select>
+        const geometry = collectOriginalArtifactGeometry(originalSlide, zi, ai)
+        artifactCards.push(`
+          <div class="artifact-card">
+            <div class="artifact-head">
+              <div class="artifact-title-row">
+                <div class="artifact-title">Artifact ${artifactCards.length + 1}</div>
+                <div class="zone-badge">${currentType}</div>
+              </div>
+              <div class="zone-copy">${artifactHeaderText(artifact, zone, slide)}</div>
+              <div class="artifact-current">Agent 4 original: <strong>${currentType}</strong>${currentSubtype && currentSubtype !== currentType ? ` / ${currentSubtype}` : ''}</div>
+              <div class="artifact-current">Agent 5 rendered bounds: <strong>${formatRect(geometry.artifactBounds)}</strong></div>
+            </div>
+            <div class="artifact-row">
+              <div class="selector-grid">
+                <select data-role="type" data-key="${key}">
+                  ${selectorOptionsHtml(typeOptions, selection?.type || currentType)}
+                </select>
+                <select data-role="subtype" data-key="${key}">
+                  ${selectorOptionsHtml(subtypeOptions, selection?.subtype || currentSubtype || subtypeOptions[0])}
+                </select>
+              </div>
             </div>
           </div>
-        `
-      }).join('')
-      return `
-        <div class="zone-card">
-          <div class="zone-head">
-            <div class="zone-title-row">
-              <div class="zone-title">${zone.zone_id || `Zone ${zi + 1}`}</div>
-              <div class="zone-badge">${zone.zone_role || 'zone'}</div>
-            </div>
-            <div class="zone-copy">${zone.message_objective || 'No message objective provided.'}</div>
-            <div class="zone-frame">${JSON.stringify(zone.frame || {})}</div>
-          </div>
-          ${artifactsHtml || '<div class="artifact-row">No artifacts</div>'}
-        </div>
-      `
-    }).join('')) || '<div class="zone-card"><div class="zone-head"><div class="zone-copy">This slide has no Agent 4 zones.</div></div></div>'
+        `)
+      })
+    })
+    $('artifact-list').innerHTML = artifactCards.join('') || '<div class="artifact-card"><div class="artifact-head"><div class="zone-copy">This slide has no swappable non-insight artifacts.</div></div></div>'
 
     ;[...document.querySelectorAll('select[data-role="type"]')].forEach((select) => {
       select.addEventListener('change', (event) => {
@@ -948,7 +1218,7 @@
   function renderSelectedSlide() {
     renderSlideList()
     renderSlideMeta(state.selectedSlideNumber)
-    renderZones()
+    renderArtifactControls()
     const slide = state.rebuiltSlides[state.selectedSlideNumber] || buildSlideFromSelections(state.selectedSlideNumber)
     state.rebuiltSlides[state.selectedSlideNumber] = slide
     rebuildOutputObject()
@@ -998,7 +1268,7 @@
     $('results').classList.remove('show')
     $('slide-list').innerHTML = ''
     $('slide-meta').innerHTML = ''
-    $('zones-wrap').innerHTML = ''
+    $('artifact-list').innerHTML = ''
     $('output-json').textContent = ''
     updateStatsForSlide(null)
     $('preview-canvas').getContext('2d').clearRect(0, 0, $('preview-canvas').width, $('preview-canvas').height)

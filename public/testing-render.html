@@ -37,16 +37,15 @@
     .meta-block { min-width: 120px; }
     .meta-label { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; margin-bottom: 4px; }
     .meta-value { font-size: 13px; font-weight: 700; color: #111827; line-height: 1.35; }
-    .zones-wrap { display: flex; flex-direction: column; gap: 14px; }
-    .zone-card { border: 1px solid #dbe2f0; border-radius: 14px; background: #ffffff; overflow: hidden; }
-    .zone-head { padding: 12px 14px; background: #f8fafc; border-bottom: 1px solid #e5e7eb; }
-    .zone-title-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 6px; }
-    .zone-title { font-size: 14px; font-weight: 700; color: #111827; }
+    .artifact-list { display: flex; flex-direction: column; gap: 12px; }
+    .artifact-card { border: 1px solid #dbe2f0; border-radius: 14px; background: #ffffff; overflow: hidden; }
+    .artifact-head { padding: 12px 14px; background: #f8fafc; border-bottom: 1px solid #e5e7eb; }
+    .artifact-title-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 6px; }
+    .artifact-title { font-size: 14px; font-weight: 700; color: #111827; }
     .zone-badge { padding: 3px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; background: #e8ecff; color: #1f299c; white-space: nowrap; }
     .zone-copy { font-size: 12px; color: #4b5563; line-height: 1.45; }
     .zone-frame { margin-top: 6px; font-size: 11px; color: #6b7280; font-family: Consolas, monospace; }
-    .artifact-row { padding: 12px 14px; border-top: 1px solid #eef2f7; }
-    .artifact-row:first-child { border-top: 0; }
+    .artifact-row { padding: 12px 14px; }
     .artifact-label { font-size: 12px; font-weight: 700; color: #374151; margin-bottom: 8px; }
     .artifact-current { margin-bottom: 8px; font-size: 12px; color: #6b7280; }
     .selector-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -67,7 +66,7 @@
   <div class="page">
     <div class="eyebrow">Local Artifact Refurbisher</div>
     <h1>TestingRender</h1>
-    <p class="subhead">Paste existing Agent 4 output and Agent 5 output, inspect the finalized zones from Agent 4, switch any zone artifact or subartifact locally, and regenerate a fresh Agent 5 style slide response without calling Claude.</p>
+    <p class="subhead">Paste existing Agent 4 output and Agent 5 output, inspect the finalized non-insight artifacts, switch any artifact family locally, and regenerate a fresh Agent 5 style slide response without calling Claude. When Agent 4 does not provide enough structure for the chosen artifact, the app fills only the missing pieces with sample data so rendering can still be tested.</p>
 
     <div class="grid grid-2">
       <div class="card">
@@ -103,8 +102,8 @@
 
       <div class="grid grid-main" style="margin-top:16px;">
         <div class="card">
-          <div class="card-title">Agent 4 Zones And Artifact Controls</div>
-          <div class="zones-wrap" id="zones-wrap"></div>
+          <div class="card-title">Artifact Controls</div>
+          <div class="artifact-list" id="artifact-list"></div>
         </div>
 
         <div class="preview-wrap">
