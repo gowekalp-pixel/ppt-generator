@@ -4583,21 +4583,34 @@ function _statBarToBlocks(art, content_y, blocks, bt, r2) {
   const ah = r2((art.y || 0) + (art.h || 0) - content_y)
   if (!items.length || aw <= 0 || ah <= 0) return
 
-  const headerH = r2(Math.min(0.42, Math.max(0.26, ah * 0.12)))
-  const headerGap = 0.06
-  const rowGap = 0.04
-  const rowH = r2(Math.max(0.34, (ah - headerH - headerGap - rowGap * Math.max(0, items.length - 1)) / Math.max(items.length, 1)))
-  const labelW = r2(Math.min(Math.max(1.7, aw * 0.26), 3.0))
-  const valueW = r2(Math.min(Math.max(0.85, aw * 0.12), 1.15))
-  const annotationW = r2(Math.min(Math.max(1.6, aw * 0.25), 3.1))
+  const headerH = r2(Math.min(0.48, Math.max(0.30, ah * 0.11)))
+  const headerGap = r2(Math.max(0.08, Math.min(0.16, ah * 0.03)))
+  const bodyH = Math.max(0.6, ah - headerH - headerGap)
+  const rowGap = items.length > 1
+    ? r2(Math.max(0.14, Math.min(0.28, bodyH * 0.06)))
+    : 0
+  const rowH = r2(Math.max(0.56, (bodyH - rowGap * Math.max(0, items.length - 1)) / Math.max(items.length, 1)))
+  const labelW = r2(Math.min(Math.max(1.9, aw * 0.27), 3.2))
+  const valueW = r2(Math.min(Math.max(0.92, aw * 0.12), 1.2))
+  const annotationW = r2(Math.min(Math.max(1.8, aw * 0.28), 3.25))
   const colGap = 0.12
   const barW = r2(Math.max(1.0, aw - labelW - valueW - annotationW - colGap * 3))
   const values = items.map(r => Math.abs(+r?.value || 0))
   const maxValue = Math.max(...values, 1)
+  const minValue = Math.min(...values, maxValue)
+  const valueSpread = maxValue > 0 ? (maxValue - minValue) / maxValue : 0
   const bodyFont = cs.label_font_family || bt.body_font_family || 'Arial'
   const palette = bt.chart_palette || [bt.primary_color || '#0078AE', bt.secondary_color || '#E0B324']
   const headerColor = cs.annotation_color || '#6B7280'
   const dividerColor = '#CFCFCF'
+  const trackFill = '#EEF1F5'
+  const rowBorder = '#E1E5EF'
+  const highlightFill = '#D9DDEA'
+  const highlightBarFill = '#CFE0A9'
+  const headerFontSize = Math.max(10, Math.min(11, rowH * 11.5))
+  const labelFontSize = Math.max(10.5, Math.min(12, rowH * 10.8))
+  const valueFontSize = Math.max(10.5, Math.min(11.5, rowH * 10.4))
+  const annotationFontSize = Math.max(9.25, Math.min(10.25, rowH * 9.1))
   const labelX = ax
   const barX = r2(labelX + labelW + colGap)
   const valueX = r2(barX + barW + colGap)
@@ -4608,28 +4621,28 @@ function _statBarToBlocks(art, content_y, blocks, bt, r2) {
     block_type: 'text_box',
     x: labelX, y: ay, w: labelW, h: headerH,
     text: String(headers.label || 'PARTNER'),
-    font_family: bodyFont, font_size: 9, bold: true,
+    font_family: bodyFont, font_size: headerFontSize, bold: true,
     color: headerColor, align: 'left', valign: 'middle'
   })
   blocks.push({
     block_type: 'text_box',
     x: barX, y: ay, w: barW, h: headerH,
     text: String(headers.metric || art.metric_header || 'AVG. CHARGE (₹/ORDER)'),
-    font_family: bodyFont, font_size: 9, bold: true,
+    font_family: bodyFont, font_size: headerFontSize, bold: true,
     color: headerColor, align: 'left', valign: 'middle'
   })
   blocks.push({
     block_type: 'text_box',
     x: valueX, y: ay, w: valueW, h: headerH,
     text: String(headers.value || art.value_header || (art.y_label ? String(art.y_label).toUpperCase() : 'VALUE')),
-    font_family: bodyFont, font_size: 9, bold: true,
+    font_family: bodyFont, font_size: headerFontSize, bold: true,
     color: headerColor, align: 'right', valign: 'middle'
   })
   blocks.push({
     block_type: 'text_box',
     x: annotationX, y: ay, w: annotationW, h: headerH,
     text: String(headers.annotation || art.annotation_header || 'USE CASE'),
-    font_family: bodyFont, font_size: 9, bold: true,
+    font_family: bodyFont, font_size: headerFontSize, bold: true,
     color: headerColor, align: 'left', valign: 'middle'
   })
   blocks.push({
@@ -4643,48 +4656,61 @@ function _statBarToBlocks(art, content_y, blocks, bt, r2) {
     const y = r2(bodyTop + ri * (rowH + rowGap))
     const isHighlighted = row?.highlight === true
     const fill = row?.bar_color || (palette[ri % Math.max(palette.length, 1)] || '#7C7C77')
-    const barLen = r2((Math.abs(+row?.value || 0) / maxValue) * barW)
-    const trackY = r2(y + rowH * 0.34)
-    const trackH = r2(Math.max(0.12, rowH * 0.26))
+    const rawValue = Math.abs(+row?.value || 0)
+    const normalized = maxValue > minValue ? (rawValue - minValue) / Math.max(maxValue - minValue, 0.0001) : 1
+    const rankedFallback = [0.22, 0.72, 0.66, 0.50, 0.42, 0.36, 0.31, 0.28, 0.25, 0.22]
+    const fillFrac = valueSpread < 0.08
+      ? (rankedFallback[ri] || 0.22)
+      : (0.24 + normalized * 0.52)
+    const barLen = r2(Math.max(0.12, Math.min(barW * 0.78, barW * fillFrac)))
+    const trackY = r2(y + rowH * 0.40)
+    const trackH = r2(Math.max(0.14, Math.min(0.20, rowH * 0.18)))
 
     if (isHighlighted) {
       blocks.push({
         block_type: 'rect',
         x: ax, y: r2(y + 0.01), w: aw, h: r2(rowH - 0.02),
-        fill_color: '#E5EED3',
+        fill_color: highlightFill,
         border_color: null, border_width: 0, corner_radius: 10
+      })
+    } else {
+      blocks.push({
+        block_type: 'rect',
+        x: ax, y: r2(y + 0.01), w: aw, h: r2(rowH - 0.02),
+        fill_color: '#FFFFFF',
+        border_color: rowBorder, border_width: 0.5, corner_radius: 10
       })
     }
 
     blocks.push({
       block_type: 'text_box',
       x: labelX, y, w: labelW, h: rowH,
-      text: _truncateText(row?.label || '', 28),
-      font_family: bodyFont, font_size: 9, bold: true,
+      text: _truncateText(row?.label || '', 34),
+      font_family: bodyFont, font_size: labelFontSize, bold: true,
       color: isHighlighted ? '#386B2A' : (bt.body_color || '#111111'), align: 'left', valign: 'middle'
     })
     blocks.push({
       block_type: 'rect',
       x: barX, y: trackY, w: barW, h: trackH,
-      fill_color: '#EEF1EA', border_color: null, border_width: 0, corner_radius: 8
+      fill_color: trackFill, border_color: null, border_width: 0, corner_radius: 8
     })
     blocks.push({
       block_type: 'rect',
       x: barX, y: trackY, w: Math.max(0.04, barLen), h: trackH,
-      fill_color: isHighlighted ? '#D7E4BF' : fill, border_color: null, border_width: 0, corner_radius: 8
+      fill_color: isHighlighted ? highlightBarFill : fill, border_color: null, border_width: 0, corner_radius: 8
     })
     blocks.push({
       block_type: 'text_box',
       x: valueX, y, w: valueW, h: rowH,
       text: String(row?.display_value || `${row?.value ?? ''}${row?.unit ? ' ' + row.unit : ''}`.trim()),
-      font_family: bodyFont, font_size: 9, bold: true,
+      font_family: bodyFont, font_size: valueFontSize, bold: true,
       color: isHighlighted ? '#386B2A' : (bt.body_color || '#111111'), align: 'right', valign: 'middle'
     })
     blocks.push({
       block_type: 'text_box',
       x: annotationX, y, w: annotationW, h: rowH,
-      text: _truncateText(row?.annotation || '', 28),
-      font_family: bodyFont, font_size: 8, bold: false,
+      text: _truncateText(row?.annotation || '', 38),
+      font_family: bodyFont, font_size: annotationFontSize, bold: false,
       color: isHighlighted ? '#386B2A' : (cs.annotation_color || '#4B5563'), align: 'left', valign: 'middle'
     })
     if (ri < items.length - 1) {
