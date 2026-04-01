@@ -1,12 +1,6 @@
 // ─── AGENT 4 — SLIDE CONTENT ARCHITECT ────────────────────────────────────────
-// Input:  state.outline             — presentation brief / slide plan from Agent 3
-//         state.contentB64          — original PDF or source document
-//         state.brandRulebook       — Agent 2 brand tokens and layout blueprints
-//         state.preferredArtifacts  — optional string[] — artifact types the user would
-//                                     like to see at least once across the presentation
-//                                     e.g. ["stat_bar", "comparison_table"]
-//                                     Passed as a soft user preference; does not override
-//                                     Agent 4's artifact selection logic.
+// Input:  state.outline    — presentation brief / slide plan from Agent 3
+//         state.contentB64 — original PDF or source document
 // Output: slideManifest    — flat JSON array, one object per slide
 //
 // Agent 4 decides WHAT each slide is trying to say, WHAT zones (messaging arcs)
@@ -3005,7 +2999,7 @@ function buildSlidePlan(brief, slideCount) {
 // BATCH WRITER
 // ═══════════════════════════════════════════════════════════════════════════════
 
-async function writeSlideBatch(batchPlan, brief, contentB64, batchNum, layoutNames, summaryCardRegistry = [], preferredArtifacts = []) {
+async function writeSlideBatch(batchPlan, brief, contentB64, batchNum, layoutNames, summaryCardRegistry = []) {
   console.log('Agent 4 — batch', batchNum, ': slides', batchPlan[0].slide_number, '–', batchPlan[batchPlan.length-1].slide_number)
 
   const hasLayouts = layoutNames.length >= 5
@@ -3030,10 +3024,6 @@ async function writeSlideBatch(batchPlan, brief, contentB64, batchNum, layoutNam
     ? `SUMMARY_CARD_REGISTRY (Phase 3 Step 0B — do not repeat these as cards on proof slides):\n${summaryCardRegistry.map(c => `  { title: "${c.title}", value: "${c.value}" }`).join('\n')}`
     : 'SUMMARY_CARD_REGISTRY: empty — no summary slide processed yet; skip deduplication'
 
-  const preferredLine = preferredArtifacts.length > 0
-    ? `USER PREFERENCE: the following artifact types should appear at least once across the presentation where the data supports it: ${preferredArtifacts.join(', ')}`
-    : ''
-
   const prompt = `PRESENTATION BRIEF:
 Document type:     ${briefSummary.document_type || '—'}
 Governing thought: ${briefSummary.governing_thought || '—'}
@@ -3048,7 +3038,7 @@ Opening guidance:  ${briefSummary.opening_guidance || '—'}
 Closing guidance:  ${briefSummary.closing_guidance || '—'}
 
 ${registryLine}
-${preferredLine ? '\n' + preferredLine + '\n' : ''}
+
 AVAILABLE BRAND LAYOUTS (${layoutNames.length}): ${hasLayouts
   ? layoutNames.join(' | ')
   : layoutNames.length > 0 ? layoutNames.join(' | ') + ' — too few layouts; use zone_split / artifact_arrangement plus per-artifact artifact_coverage_hint for scratch geometry'
@@ -3916,10 +3906,6 @@ async function runAgent4(state) {
   const contentB64          = state.contentB64
   const slideCount          = (brief && brief.total_slides) || state.slideCount
   const brand               = state.brandRulebook || {}
-  const preferredArtifacts  = [...new Set(
-    (Array.isArray(state.preferredArtifacts) ? state.preferredArtifacts : [])
-      .map(t => String(t).toLowerCase().trim()).filter(Boolean)
-  )]
   // Use pre-filtered content_layout_names from Agent 2 when available.
   // This excludes title, section-header, divider, blank, and thank-you layouts
   // so the "5+ layouts → use layout mode" threshold counts only usable content layouts.
@@ -3963,7 +3949,7 @@ async function runAgent4(state) {
       await new Promise(r => setTimeout(r, 65000))
     }
     const batch  = batches[b]
-    const result = await writeSlideBatch(batch, brief, contentB64, b + 1, layoutNames, summaryCardRegistry, preferredArtifacts)
+    const result = await writeSlideBatch(batch, brief, contentB64, b + 1, layoutNames, summaryCardRegistry)
 
     if (!result) {
       batch.forEach(plan => allSlides.push(normaliseSlide({}, plan)))

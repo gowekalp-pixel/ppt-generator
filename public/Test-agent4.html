@@ -231,9 +231,6 @@
           <input type="file" accept=".json" onchange="loadFile('brand', this)">
           <div class="uz">Or upload <span>brand.json</span></div>
         </div>
-        <div class="hint" style="margin-top:10px;">Minimum Artifact Types <span style="color:#888;">(optional — each type must appear at least once in the deck)</span></div>
-        <input id="mandatory-input" type="text" style="width:100%;font-family:monospace;font-size:12px;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;background:#fafafa;color:#333;" placeholder="stat_bar, comparison_table, workflow">
-        <div style="font-size:11px;color:#aaa;margin-top:3px;">Comma-separated artifact type names</div>
       </div>
       <div>
         <div class="hint">Content PDF</div>
@@ -319,10 +316,8 @@
   function setProgress(pct, msg) { document.getElementById('prog-fill').style.width=pct+'%'; document.getElementById('prog-msg').textContent=msg }
 
   async function runTest() {
-    const brief             = safeParseJSON(document.getElementById('brief-input').value, null)
-    const brand             = safeParseJSON(document.getElementById('brand-input').value, {})
-    const preferredArtifacts = (document.getElementById('mandatory-input').value || '')
-      .split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+    const brief = safeParseJSON(document.getElementById('brief-input').value, null)
+    const brand = safeParseJSON(document.getElementById('brand-input').value, {})
     const err   = document.getElementById('error-box')
     if (!brief) { err.textContent='Cannot parse Brief JSON'; err.classList.add('show'); return }
     err.classList.remove('show')
@@ -333,7 +328,7 @@
     setProgress(10, 'Building slide plan...' + (layoutNames.length ? ' (' + layoutNames.length + ' layouts found in brand)' : ' (no brand layouts — using zone splits)'))
     try {
       setProgress(30, 'Writing slides in batches...')
-      const manifest = await runAgent4({ outline: brief, contentB64: pdfB64, slideCount: brief.total_slides || slideCount, brandRulebook: brand, preferredArtifacts })
+      const manifest = await runAgent4({ outline: brief, contentB64: pdfB64, slideCount: brief.total_slides || slideCount, brandRulebook: brand })
       resultManifest = manifest
       setProgress(90, 'Rendering...')
       renderResults(manifest)
