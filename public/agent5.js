@@ -7331,6 +7331,25 @@ async function runAgent5(state) {
     uses_template:      tokens.uses_template        || false
   }
 
+  // Sort slides into the exact sequence defined by Agent 4 (slide_number ascending).
+  // Batches can complete in insertion order but repaired-slide interleaving or any
+  // future parallelism could disturb position — sort here so the renderer always gets
+  // title → content → dividers → closing in the right order.
+  const manifestOrder = new Map((manifest || []).map((s, i) => [s.slide_number, i]))
+  finalDesigned.sort((a, b) => {
+    const ia = manifestOrder.has(a?.slide_number) ? manifestOrder.get(a.slide_number) : 9999
+    const ib = manifestOrder.has(b?.slide_number) ? manifestOrder.get(b.slide_number) : 9999
+    return ia - ib
+  })
+
+  // Verify sequence and warn on any gaps
+  const slideNums = finalDesigned.map(s => s?.slide_number).filter(n => n != null)
+  const missing = (manifest || []).map(s => s.slide_number).filter(n => !slideNums.includes(n))
+  if (missing.length > 0) {
+    console.warn('Agent 5 -- missing slide numbers in output:', missing.join(', '))
+  }
+  console.log('Agent 5 -- final slide sequence:', slideNums.join(', '))
+
   // Strip brand_tokens from every slide — renderer reads from the top-level key.
   const slides = finalDesigned.map(slide => {
     if (!slide) return slide

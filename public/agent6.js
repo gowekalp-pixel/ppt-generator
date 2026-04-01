@@ -278,7 +278,12 @@ async function generatePPTX() {
     progressEl.style.width = '30%'
     statusEl.textContent   = '⏳ python-pptx building ' + slideCount + ' slides on server...'
 
-    let renderSpec = Array.isArray(state.finalSpec) ? state.finalSpec.map(s => slimSlideForRender(s, useTemplate)) : []
+    // Sort by slide_number before rendering to guarantee title → content → closing order,
+    // regardless of which path (Agent 5 / 5.1 / fallback) produced the spec.
+    const sortedFinalSpec = Array.isArray(state.finalSpec)
+      ? [...state.finalSpec].sort((a, b) => (a?.slide_number || 0) - (b?.slide_number || 0))
+      : []
+    let renderSpec = sortedFinalSpec.map(s => slimSlideForRender(s, useTemplate))
 
     // ── Layout-mode sanitisation ─────────────────────────────────────────────
     // layout_mode and selected_layout_name are ONLY meaningful for content slides.

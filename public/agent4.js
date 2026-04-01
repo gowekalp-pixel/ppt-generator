@@ -2966,8 +2966,9 @@ function buildSlidePlan(brief, slideCount) {
 
       const narrativeRole = section.narrative_role || ''
       let slideType = 'content'
-      if (num === 1) slideType = 'title'
+      if (num === 1 || narrativeRole === 'title') slideType = 'title'
       else if (narrativeRole === 'divider' || section.section_type === 'divider') slideType = 'divider'
+      // Closing / thank-you slides stay as 'content' type so Agent 5 renders them normally
 
       plan.push({
         slide_number:             num,
