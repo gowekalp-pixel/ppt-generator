@@ -392,7 +392,8 @@ STEP 1 — ARTIFACT SELECTION
 ──────────────────────────────────────────────────────────
 
 AVAILABLE ARTIFACT TYPES:
-  chart:            bar | clustered_bar | horizontal_bar | line | area | pie | donut | combo | group_pie | stat_bar
+  chart:            bar | clustered_bar | horizontal_bar | line | area | pie | donut | combo | group_pie
+  stat_bar
   insight_text:     standard | grouped
   cards
   profile_card_set
@@ -408,7 +409,7 @@ AVAILABLE ARTIFACT TYPES:
 
   PRIMARY / DOMINANT zones:
   - Must carry a proof or reasoning artifact
-  - Permitted: chart (all subtypes incl. stat_bar), comparison_table, initiative_map, risk_register,
+  - Permitted: chart, stat_bar, comparison_table, initiative_map, risk_register,
                profile_card_set, workflow, driver_tree, matrix, prioritization, grouped insight_text
   - table: only when TABLE GATE passes (A8 path) — never as a first choice
   - Never: standard insight_text alone
@@ -416,7 +417,7 @@ AVAILABLE ARTIFACT TYPES:
 
   SECONDARY zones:
   - Must answer a specific question, not just add detail
-  - Permitted: chart (all subtypes incl. stat_bar), comparison_table, profile_card_set,
+  - Permitted: chart, stat_bar, comparison_table, profile_card_set,
                cards, standard insight_text, grouped insight_text, prioritization
   - table: only when TABLE GATE passes (A8 path)
   - Avoid workflow unless process or sequence is the explicit subject of the zone
@@ -755,7 +756,7 @@ AVAILABLE ARTIFACT TYPES:
   Examples: courier partners ranked by cost with "use case" label; SKUs ranked
   by revenue with "growth trajectory" label; cities ranked by orders with
   "priority tier" label.
-  Subtype of chart — specify as:  artifact_type: "chart", chart_type: "stat_bar"
+  Standalone artifact — specify as: artifact_type: "stat_bar"
   Sizing envelope:
     stat_bar (≤5 rows)    35%  65%   40%  60%
     stat_bar (6–8 rows)   40%  70%   55%  75%
@@ -3639,7 +3640,11 @@ function pruneAgent4SlideForOutput(slide) {
   if (!slide || typeof slide !== 'object') return slide
   const pruneArtifactForOutput = (artifact) => {
     if (!artifact || typeof artifact !== 'object') return artifact
-    const type = String(artifact.type || '').toLowerCase()
+    const rawType = String(artifact.type || '').toLowerCase()
+    const chartType = String(artifact.chart_type || '').toLowerCase()
+    const type = rawType === 'stat_bar' || (rawType === 'chart' && chartType === 'stat_bar')
+      ? 'stat_bar'
+      : rawType
     const coverage = artifact.artifact_coverage_hint != null
       ? { artifact_coverage_hint: artifact.artifact_coverage_hint }
       : {}
@@ -3685,6 +3690,27 @@ function pruneAgent4SlideForOutput(slide) {
         secondary_series: Array.isArray(artifact.secondary_series) ? artifact.secondary_series : [],
         show_data_labels: artifact.show_data_labels !== false,
         show_legend: artifact.show_legend === true,
+        ...coverage
+      }
+    }
+    if (type === 'stat_bar') {
+      return {
+        type: 'stat_bar',
+        stat_header: artifact.stat_header || artifact.chart_header || '',
+        stat_decision: artifact.stat_decision || artifact.chart_insight || '',
+        column_headers: artifact.column_headers || {},
+        rows: Array.isArray(artifact.rows) ? artifact.rows.map((row, idx) => ({
+          id: row?.id || `row_${idx + 1}`,
+          label: row?.label || '',
+          value: row?.value,
+          unit: row?.unit || '',
+          display_value: row?.display_value || '',
+          annotation: row?.annotation || '',
+          annotation_representation: row?.annotation_representation || 'text',
+          bar_color: row?.bar_color || '',
+          highlight: row?.highlight === true
+        })) : [],
+        annotation_style: artifact.annotation_style || 'trailing',
         ...coverage
       }
     }
