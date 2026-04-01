@@ -5595,6 +5595,60 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
     })
   }
 
+  // ── Canvas overflow correction (scratch-mode slides) ────────────────────────
+  // Fixes cases where Claude emits an oversized title_block.h, pushing all zones
+  // below the canvas bottom.  Runs AFTER gap enforcement, BEFORE computeArtifactInternals.
+  if (!isLayoutMode) {
+    const _r2 = v => Math.round(v * 100) / 100
+    const cv = brandedWithLayoutTitle.canvas || {}
+    const canvasH = +cv.height_in || 7.5
+    const mBottom = +(cv.margin && cv.margin.bottom) || 0.37
+    const canvasBottom = _r2(canvasH - mBottom)
+
+    // Step 1: Cap oversized title block height (> 1.2" is always wrong for a title)
+    const _tb = brandedWithLayoutTitle.title_block
+    if (_tb && _tb.h != null && +_tb.h > 1.2) {
+      _tb.h = 1.2
+    }
+
+    // Step 2: Shift + scale zones that overflow canvas bottom
+    const _activeZones = finalZones.filter(z => z.frame && z.frame.y != null && z.frame.h != null)
+    if (_activeZones.length > 0) {
+      const _topY    = Math.min(..._activeZones.map(z => +z.frame.y))
+      const _bottomY = Math.max(..._activeZones.map(z => _r2(+z.frame.y + +z.frame.h)))
+      if (_bottomY > canvasBottom + 0.01) {
+        const _titleBottom = (_tb && _tb.y != null && _tb.h != null) ? _r2(+_tb.y + +_tb.h) : 0.9
+        const _idealTop    = _r2(_titleBottom + 0.20)
+        const _contentH    = _r2(_bottomY - _topY)
+        const _availH      = _r2(canvasBottom - _idealTop)
+        const _scale       = (_availH > 0.1 && _contentH > 0) ? Math.min(1.0, _r2(_availH / _contentH)) : 1.0
+        const _yShift      = _r2(_idealTop - _topY)
+        _activeZones.forEach(zone => {
+          const f    = zone.frame
+          const newY = _r2(_topY + (+f.y - _topY + _yShift) * _scale)
+          f.h = _r2(+f.h * _scale)
+          f.y = newY
+          ;(zone.artifacts || []).forEach(art => {
+            if (art.y != null && art.h != null) {
+              art.y = _r2(_topY + (+art.y - _topY + _yShift) * _scale)
+              art.h = _r2(+art.h * _scale)
+            }
+            if (art.header_block && art.header_block.y != null) {
+              art.header_block.y = _r2(_topY + (+art.header_block.y - _topY + _yShift) * _scale)
+              if (art.header_block.h != null) art.header_block.h = _r2(+art.header_block.h * _scale)
+            }
+            if (art.container && art.container.y != null) {
+              art.container.y = _r2(_topY + (+art.container.y - _topY + _yShift) * _scale)
+              if (art.container.h != null) art.container.h = _r2(+art.container.h * _scale)
+            }
+          })
+        })
+        console.warn('Agent 5 -- canvas overflow corrected: scale=' + _scale + ' yShift=' + _yShift +
+          ' (zones were ' + _r2(_bottomY) + '" > canvas ' + canvasBottom + '")')
+      }
+    }
+  }
+
   // Post-process: fill computed layout/sizing fields (stacking, chart, table, cards, font scaling)
   // so that generate_pptx.py can act as a pure renderer reading pre-computed values.
   computeArtifactInternals(finalZones, branded.canvas || {}, bt)
