@@ -410,6 +410,44 @@
     }
   }
 
+  function deriveProfileCardsFromArtifact(originalArtifact, lines, standardPoints) {
+    if (originalArtifact?.type === 'stat_bar' && Array.isArray(originalArtifact?.rows) && originalArtifact.rows.length) {
+      return originalArtifact.rows.slice(0, 6).map((row, idx) => {
+        const metricText = row?.display_value || `${row?.value ?? ''}${row?.unit ? ` ${row.unit}` : ''}`.trim() || `Value ${idx + 1}`
+        const annotation = String(row?.annotation || '').trim()
+        const costLabel = originalArtifact?.column_headers?.value || 'Value'
+        const annotationLabel = originalArtifact?.column_headers?.annotation || 'Use case'
+        return {
+          entity_name: row?.label || `Profile ${idx + 1}`,
+          subtitle: originalArtifact?.column_headers?.metric || 'Metric',
+          badge_text: metricText,
+          secondary_items: [
+            { label: costLabel, value: metricText },
+            { label: annotationLabel, value: annotation || standardPoints[idx] || lines[idx + 1] || '' }
+          ].filter((item) => String(item.value || '').trim())
+        }
+      })
+    }
+
+    if (originalArtifact?.type === 'table' && Array.isArray(originalArtifact?.rows) && originalArtifact.rows.length) {
+      const headers = Array.isArray(originalArtifact?.headers) ? originalArtifact.headers : []
+      return originalArtifact.rows.slice(0, 6).map((row, idx) => {
+        const cells = Array.isArray(row) ? row : []
+        return {
+          entity_name: String(cells[0] || `Profile ${idx + 1}`),
+          subtitle: headers[1] || 'Value',
+          badge_text: String(cells[1] || ''),
+          secondary_items: cells.slice(2, 5).map((cell, ci) => ({
+            label: headers[ci + 2] || `Field ${ci + 1}`,
+            value: String(cell || '')
+          })).filter((item) => item.value)
+        }
+      })
+    }
+
+    return null
+  }
+
   function buildConvertedManifestArtifact(type, subtype, originalArtifact, zone, slide) {
     const header = artifactHeaderText(originalArtifact, zone, slide)
     const shared = {
@@ -702,12 +740,13 @@
     }
 
     if (type === 'profile_card_set') {
+      const derivedProfiles = deriveProfileCardsFromArtifact(originalArtifact, lines, standardPoints)
       return {
         ...shared,
         type: 'profile_card_set',
         profile_header: header,
         layout_direction: subtype === 'grid' ? 'grid' : 'horizontal',
-        profiles: cardItems.slice(0, 4).map((card, idx) => ({
+        profiles: (derivedProfiles || cardItems.slice(0, 4).map((card, idx) => ({
           entity_name: card.title || `Profile ${idx + 1}`,
           subtitle: card.subtitle || `Segment ${idx + 1}`,
           badge_text: idx === 0 ? 'Core' : 'Test',
@@ -715,6 +754,9 @@
             { label: 'Insight', value: card.body || '' },
             { label: 'Signals', value: lines.slice(idx * 2, idx * 2 + 2), representation_type: 'chip_list' }
           ]
+        }))).map((profile) => ({
+          ...profile,
+          secondary_items: Array.isArray(profile.secondary_items) ? profile.secondary_items.slice(0, 3) : []
         }))
       }
     }
