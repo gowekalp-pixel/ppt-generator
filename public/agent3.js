@@ -31,7 +31,6 @@ You are responsible for:
 
 Plan exactly N content slides.
 Always include exactly 1 title slide and exactly 1 thank-you slide.
-You may insert up to 3 divider slides if the narrative genuinely benefits from them.
 
 For each slide define:
 - slide_number: final sequential deck number starting at 1
@@ -40,20 +39,12 @@ For each slide define:
 - slide_title_draft: draft title for the slide
 - strategic_objective: one sentence - what this slide must achieve for the audience
 - key_content: 2-4 specific data points, facts, or claims from the document this slide will use
-- zone_count_signal: 1 | 2 | 3 | 4 | unsure
-- dominant_zone_signal: yes | no | unsure
-- co_primary_signal: yes | no
+- zone_count_signal: 1 | 2 | 3 | 4 | unsure, based on how many zones a slide can be deivided based on the content
+- dominant_zone_signal: yes | no | unsure, based on whether one zone will clearly carry the main insight or if the slide is more balanced
+- co_primary_signal: yes | no, based on whether the slide has one or more co-primary insights that must be given equal emphasis
 - following_slide_claim: one-line statement of what the next slide will establish; use "" if not applicable
 
-Each content slide plan carries purpose, high_level_narrative, and key_content from Agent 3.
-Read these three fields and assign exactly one narrative_role from the definitions below.
-Lock it before doing anything else — it controls slide_intent defaults and Phase 3 artifact gates.
-
-  narrative_role tells you:
-  - What analytical job this slide has in the overall proof chain
-  - What slide_intent to use as default (see mapping below)
-  - What artifact constraints apply in Phase 3
-
+  
   NARRATIVE ROLE DEFINITIONS:
   summary                → A single slide that condenses the key findings of a section or deck into
                            the fewest possible claims the board needs to retain.
@@ -90,40 +81,18 @@ Lock it before doing anything else — it controls slide_intent defaults and Pha
   additional_information → Supplementary detail that supports the deck's claims but does not
                            carry a standalone analytical argument.
 
-NARRATIVE ROLE → slide_intent DEFAULT MAPPING:
-  Use this as the starting position. Override only if content analysis gives strong reason.
-
-  summary                    → prove
-  explainer_to_summary       → prove
-  drill_down                 → explain
-  segmentation               → prove
-  trend_analysis             → explain
-  waterfall_decomposition    → explain
-  benchmark_comparison       → prove
-  exception_highlight        → alert
-  validation                 → prove
-  problem_statement          → alert
-  context_setter             → update
-  risk_register              → alert
-  scenario_analysis          → decide
-  decision_framework         → decide
-  recommendations            → decide
-  methodology_note           → explain
-  additional_information     → explain
-
-  
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 DECK ASSEMBLY — STRUCTURAL SLIDE PLACEMENT
 (run once after Phase 1 is complete for all content slides)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 STEP 1 — GROUP SLIDES BY KEY MESSAGE CLUSTER
-  Read the key_message of every content slide locked in Phase 1.
+  Read the key_message of every content slide locked in..
   Group slides that collectively address the same governing claim or theme into one section.
   The grouping rule: slides whose key_messages all support the same top-level point
   belong in the same section — they should not be separated by a divider.
 
-  If a summary slide exists, use its claims as the section anchors:
+  for example, If a summary slide exists, use its claims as the section anchors:
   each section = all slides whose key_messages prove one claim on the summary slide.
 
   If no summary slide exists, group by thematic similarity of key_messages.
