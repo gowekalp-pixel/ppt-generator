@@ -411,22 +411,20 @@
   }
 
   function deriveProfileCardsFromArtifact(originalArtifact, lines, standardPoints) {
-    if (originalArtifact?.type === 'stat_bar' && Array.isArray(originalArtifact?.rows) && originalArtifact.rows.length) {
-      return originalArtifact.rows.slice(0, 6).map((row, idx) => {
-        const metricText = row?.display_value || `${row?.value ?? ''}${row?.unit ? ` ${row.unit}` : ''}`.trim() || `Value ${idx + 1}`
-        const annotation = String(row?.annotation || '').trim()
-        const costLabel = originalArtifact?.column_headers?.value || 'Value'
-        const annotationLabel = originalArtifact?.column_headers?.annotation || 'Use case'
-        return {
-          entity_name: row?.label || `Profile ${idx + 1}`,
-          subtitle: originalArtifact?.column_headers?.metric || 'Metric',
-          badge_text: metricText,
-          secondary_items: [
-            { label: costLabel, value: metricText },
-            { label: annotationLabel, value: annotation || standardPoints[idx] || lines[idx + 1] || '' }
-          ].filter((item) => String(item.value || '').trim())
-        }
-      })
+    const statBarRows = deriveStructuredStatBarRows(originalArtifact, lines, standardPoints)
+    if (statBarRows) {
+      const costLabel = originalArtifact?.column_headers?.value || 'Value'
+      const annotationLabel = originalArtifact?.column_headers?.annotation || 'Use case'
+      const metricLabel = originalArtifact?.column_headers?.metric || 'Metric'
+      return statBarRows.map((row, idx) => ({
+        entity_name: row.name || `Profile ${idx + 1}`,
+        subtitle: metricLabel,
+        badge_text: row.metricText || `Value ${idx + 1}`,
+        secondary_items: [
+          { label: costLabel, value: row.cost || 'Sample' },
+          { label: annotationLabel, value: row.useCase || row.annotation || 'Sample' }
+        ]
+      }))
     }
 
     if (originalArtifact?.type === 'table' && Array.isArray(originalArtifact?.rows) && originalArtifact.rows.length) {
@@ -446,6 +444,68 @@
     }
 
     return null
+  }
+
+  function parseStatBarAnnotationParts(annotation) {
+    const raw = String(annotation || '').trim()
+    if (!raw) {
+      return { cost: '', useCase: '' }
+    }
+    const costMatch = raw.match(/₹\s*[\d,.]+(?:\s*\/\s*[A-Za-z]+)?/i)
+    const cost = costMatch ? costMatch[0].replace(/\s+/g, '') : ''
+    let useCase = raw
+    if (costMatch) {
+      useCase = `${raw.slice(0, costMatch.index)} ${raw.slice((costMatch.index || 0) + costMatch[0].length)}`.trim()
+      useCase = useCase.replace(/^[;,\-\s]+|[;,\-\s]+$/g, '').trim()
+    }
+    if (!useCase && raw.includes(';')) {
+      useCase = raw.split(';').slice(1).join(';').trim()
+    }
+    return { cost, useCase }
+  }
+
+  function deriveStructuredStatBarRows(originalArtifact, lines, standardPoints) {
+    if (!(originalArtifact?.type === 'stat_bar' && Array.isArray(originalArtifact?.rows) && originalArtifact.rows.length)) {
+      return null
+    }
+
+    return originalArtifact.rows.slice(0, 6).map((row, idx) => {
+      const annotation = String(row?.annotation || standardPoints[idx] || lines[idx + 1] || '').trim()
+      const parsed = parseStatBarAnnotationParts(annotation)
+      const numericValue = Number(row?.value)
+      const metricText = String(
+        row?.display_value ||
+        `${row?.value ?? ''}${row?.unit ? `${row.unit}` : ''}`.trim() ||
+        `Value ${idx + 1}`
+      ).trim() || `Value ${idx + 1}`
+      return {
+        id: row?.id || `row_${idx + 1}`,
+        rank: idx + 1,
+        name: String(row?.label || `Item ${idx + 1}`),
+        metricValue: Number.isFinite(numericValue) ? numericValue : null,
+        metricText,
+        cost: parsed.cost || 'Sample',
+        useCase: parsed.useCase || annotation || 'Sample',
+        annotation: annotation || 'Sample',
+        highlight: row?.highlight === true
+      }
+    })
+  }
+
+  function comparisonRatingFromRank(rank, total, invert) {
+    const safeRank = Math.max(1, Number(rank) || 1)
+    const safeTotal = Math.max(1, Number(total) || 1)
+    const effectiveRank = invert ? (safeTotal - safeRank + 1) : safeRank
+    if (effectiveRank <= 1) return 'yes'
+    if (effectiveRank === 2) return 'partial'
+    return 'no'
+  }
+
+  function riskSeverityFromRow(row, idx, total) {
+    if (row?.highlight) return 'low'
+    if ((row?.metricValue || 0) >= 99.5) return 'low'
+    if ((row?.metricValue || 0) >= 98.5) return 'medium'
+    return idx >= total - 1 ? 'high' : 'medium'
   }
 
   function buildConvertedManifestArtifact(type, subtype, originalArtifact, zone, slide) {
@@ -685,6 +745,41 @@
     }
 
     if (type === 'comparison_table') {
+      const statBarRows = deriveStructuredStatBarRows(originalArtifact, lines, standardPoints)
+      if (statBarRows) {
+        const metricCriterion = originalArtifact?.column_headers?.metric || 'Metric'
+        const costCriterion = originalArtifact?.column_headers?.value || 'Value'
+        const noteCriterion = originalArtifact?.column_headers?.annotation || 'Use case'
+        const costs = statBarRows.map((row, idx) => ({
+          idx,
+          value: Number(String(row.cost || '').replace(/[^\d.]/g, ''))
+        }))
+        const rankedByCost = costs
+          .map((entry) => ({ ...entry, value: Number.isFinite(entry.value) ? entry.value : Number.POSITIVE_INFINITY }))
+          .sort((a, b) => a.value - b.value)
+        const costRanks = new Map(rankedByCost.map((entry, rank) => [entry.idx, rank + 1]))
+
+        return {
+          ...shared,
+          type: 'comparison_table',
+          comparison_header: header,
+          criteria: [metricCriterion, costCriterion, noteCriterion],
+          options: statBarRows.map((row, idx) => ({
+            name: row.name,
+            ratings: [
+              { criterion: metricCriterion, rating: comparisonRatingFromRank(idx + 1, statBarRows.length, false), note: row.metricText },
+              { criterion: costCriterion, rating: comparisonRatingFromRank(costRanks.get(idx) || idx + 1, statBarRows.length, false), note: row.cost || 'Sample' },
+              {
+                criterion: noteCriterion,
+                rating: row.highlight || /benchmark|best|workhorse/i.test(row.useCase) ? 'yes' : (/premium/i.test(row.useCase) ? 'partial' : 'no'),
+                note: row.useCase || 'Sample'
+              }
+            ]
+          })),
+          recommended_option: (statBarRows.find((row) => row.highlight) || statBarRows[0] || {}).name || 'Sample'
+        }
+      }
+
       return {
         ...shared,
         type: 'comparison_table',
@@ -711,6 +806,32 @@
     }
 
     if (type === 'initiative_map') {
+      const statBarRows = deriveStructuredStatBarRows(originalArtifact, lines, standardPoints)
+      if (statBarRows) {
+        const metricLabel = originalArtifact?.column_headers?.metric || 'Metric'
+        const costLabel = originalArtifact?.column_headers?.value || 'Value'
+        const noteLabel = originalArtifact?.column_headers?.annotation || 'Use case'
+        return {
+          ...shared,
+          type: 'initiative_map',
+          initiative_header: header,
+          dimension_labels: [
+            { id: 'metric', label: metricLabel },
+            { id: 'cost', label: costLabel },
+            { id: 'use_case', label: noteLabel }
+          ],
+          initiatives: statBarRows.map((row) => ({
+            name: row.name,
+            subtitle: row.highlight ? 'Highlighted row' : 'Converted from stat bar row',
+            placements: [
+              { lane_id: 'metric', title: row.metricText || 'Sample', chips: [row.highlight ? 'Highlighted' : 'Standard'], outcome: 'Sample' },
+              { lane_id: 'cost', title: row.cost || 'Sample', chips: ['Cost'], outcome: 'Sample' },
+              { lane_id: 'use_case', title: row.useCase || 'Sample', chips: ['Use case'], outcome: row.metricText || 'Sample' }
+            ]
+          }))
+        }
+      }
+
       return {
         ...shared,
         type: 'initiative_map',
@@ -762,6 +883,26 @@
     }
 
     if (type === 'risk_register') {
+      const statBarRows = deriveStructuredStatBarRows(originalArtifact, lines, standardPoints)
+      if (statBarRows) {
+        return {
+          ...shared,
+          type: 'risk_register',
+          risk_header: header,
+          show_mitigation: true,
+          risks: statBarRows.map((row, idx) => ({
+            severity: riskSeverityFromRow(row, idx, statBarRows.length),
+            title: row.name,
+            detail: `On-time: ${row.metricText || 'Sample'} | Avg cost: ${row.cost || 'Sample'}`,
+            mitigation: row.useCase || 'Sample',
+            owner: 'Sample',
+            status: row.highlight ? 'Contained' : 'Open',
+            likelihood: row.highlight ? 1 : Math.min(3, idx + 1),
+            impact: row.highlight ? 1 : Math.max(1, Math.min(3, statBarRows.length - idx))
+          }))
+        }
+      }
+
       return {
         ...shared,
         type: 'risk_register',
