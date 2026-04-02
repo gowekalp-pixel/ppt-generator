@@ -35,167 +35,9 @@ You DO decide:
 
 Return ONLY a valid JSON array with one object per slide.
 
-═══════════════════════════════════════════════════════════
-MANDATORY PROCESSING ORDER — follow exactly, no exceptions
-  STEP A: Run Phase 1 for every content slide.
-  STEP B: Run DECK ASSEMBLY to place structural slides and assign final slide numbers.
-  STEP C: Run Phase 2–4 for every content slide using the final slide numbers from STEP B.
-═══════════════════════════════════════════════════════════
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PHASE 1 — SLIDE INTELLIGENCE BRIEF (run for ALL content slides before anything else)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Purpose:
-Capture and lock every strategic, audience, and structural input needed downstream.
-Nothing is designed here. This phase captures the burden of proof.
-
-──────────────────────────────────────────────────────────
-STEP 0 — DERIVE AND LOCK NARRATIVE ROLE (execute first)
-──────────────────────────────────────────────────────────
-Each content slide plan carries purpose, high_level_narrative, and key_content from Agent 3.
-Read these three fields and assign exactly one narrative_role from the definitions below.
-Lock it before doing anything else — it controls slide_intent defaults and Phase 3 artifact gates.
-
-  narrative_role tells you:
-  - What analytical job this slide has in the overall proof chain
-  - What slide_intent to use as default (see mapping below)
-  - What artifact constraints apply in Phase 3
-
-  NARRATIVE ROLE DEFINITIONS:
-  summary                → A single slide that condenses the key findings of a section or deck into
-                           the fewest possible claims the board needs to retain.
-  explainer_to_summary   → Unpacks the mechanism or logic behind a summary claim — answers "how
-                           does this number work" before the board asks.
-  drill_down             → Decomposes an aggregate into its components to show where the result
-                           comes from and which component drives it.
-  segmentation           → Splits a total across a meaningful dimension (geography, product,
-                           customer type) to reveal which segment is driving performance.
-  trend_analysis         → Tracks a metric across time to identify direction, inflection points,
-                           and whether the current position is improving or deteriorating.
-  waterfall_decomposition → Shows how a starting value reaches an ending value through a sequence
-                            of additive and subtractive components.
-  benchmark_comparison   → Places a metric against an external or internal reference point to
-                           establish whether performance is strong, weak, or on-par.
-  exception_highlight    → Draws attention to an anomaly, outlier, or threshold breach that
-                           requires the board's awareness or action.
-  validation             → Tests a claim, assumption, or model output against independent
-                           evidence to confirm or challenge its credibility.
-  context_setter         → Establishes the factual baseline — market conditions, prior period,
-                           or structural constraints — before analytical slides make claims.
-  problem_statement      → Defines the problem the deck is responding to: its scale, cause,
-                           and consequence if unaddressed.
-  risk_register          → Catalogues known risks with likelihood and impact, so the board
-                           can prioritise oversight and mitigation.
-  scenario_analysis      → Presents two or more plausible futures under different assumptions
-                           so the board can understand the range of outcomes.
-  decision_framework     → Structures a choice by laying out options, criteria, and trade-offs
-                           so the board can make a well-reasoned decision.
-  recommendations        → States what the team proposes the board approve, fund, or direct —
-                           with the rationale and the ask made explicit.
-  methodology_note       → Documents definitions, data sources, or calculation logic that the
-                           board needs to trust the numbers but does not need to analyse.
-  additional_information → Supplementary detail that supports the deck's claims but does not
-                           carry a standalone analytical argument.
-
-NARRATIVE ROLE → slide_intent DEFAULT MAPPING:
-  Use this as the starting position. Override only if content analysis gives strong reason.
-
-  summary                    → prove
-  explainer_to_summary       → prove
-  drill_down                 → explain
-  segmentation               → prove
-  trend_analysis             → explain
-  waterfall_decomposition    → explain
-  benchmark_comparison       → prove
-  exception_highlight        → alert
-  validation                 → prove
-  problem_statement          → alert
-  context_setter             → update
-  risk_register              → alert
-  scenario_analysis          → decide
-  decision_framework         → decide
-  recommendations            → decide
-  methodology_note           → explain
-  additional_information     → explain
-
-──────────────────────────────────────────────────────────
-Mandatory fields to lock for every content slide:
-──────────────────────────────────────────────────────────
-  - narrative_role: derived in STEP 0 above — do not alter once locked
-  - slide_title_draft
-  - slide_intent: prove | explain | decide | update | alert | plan
-    (start from narrative_role default above; override only with explicit justification)
-  - strategic_objective: one sentence — what the board must believe / decide / feel differently after this slide
-  - key_message: one-sentence corridor takeaway in plain language
-  - audience_prior_belief: aligned | neutral | sceptical | hostile | uninformed
-  - board_ask: yes | no | implicit — plus the actual ask if yes
-  - relationship_type: causal_chain | peer_comparison | option_set | zoom_out | state_change | severity_ranking | narrative_tension | volume_loss
-  - zone_count_signal: 1 | 2 | 3 | 4 | unsure
-  - dominant_zone_signal: yes | no | unsure
-  - co_primary_signal: yes | no
-  - narrative_direction: left_to_right | top_to_bottom | radial | free
-  - evidence_confidence: high | medium | low
-
-Optional but high-value context:
-  - slide_number
-  - following_slide_claim
-  - political_context
-
-Validation gate:
-  Complete Phase 1 for ALL content slides before proceeding to DECK ASSEMBLY.
-  narrative_role must be locked for every slide before DECK ASSEMBLY runs.
-  If slide_intent deviates from the narrative_role default, the reason must be stated explicitly.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-DECK ASSEMBLY — STRUCTURAL SLIDE PLACEMENT
-(run once after Phase 1 is complete for all content slides)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-STEP 1 — GROUP SLIDES BY KEY MESSAGE CLUSTER
-  Read the key_message of every content slide locked in Phase 1.
-  Group slides that collectively address the same governing claim or theme into one section.
-  The grouping rule: slides whose key_messages all support the same top-level point
-  belong in the same section — they should not be separated by a divider.
-
-  If a summary slide exists, use its claims as the section anchors:
-  each section = all slides whose key_messages prove one claim on the summary slide.
-
-  If no summary slide exists, group by thematic similarity of key_messages.
-
-  Maximum 3 sections (= maximum 3 dividers). If more than 3 natural groups exist,
-  merge the smallest adjacent groups until 3 or fewer remain.
-  The first section never gets a preceding divider — it follows the title directly.
-
-STEP 2 — ASSIGN FINAL SLIDE NUMBERS
-  Build the ordered deck:
-  1. Title slide — always position 1 (slide_type: "title")
-  2. For each section after the first: insert one divider, then the section's slides
-  3. Thank-you slide — always last (slide_type: "thank_you")
-  Assign slide_number sequentially across the full deck.
-
-STEP 3 — WRITE STRUCTURAL SLIDES
-
-  title (slide_type: "title"):
-    - title: short presentation name, 4–8 words
-    - subtitle: audience / date / context if relevant
-    - key_message: governing thought of the full deck
-    - zones: []
-
-  divider (slide_type: "divider"):
-    - title: name of the section that follows — derived from the shared theme of its slides, 3–5 words
-    - subtitle: empty string
-    - key_message: one sentence — what this group of slides will collectively prove
-    - zones: []
-
-  thank_you (slide_type: "thank_you"):
-    - title: "Thank You" or equivalent closing phrase
-    - subtitle: presenter name / contact if relevant
-    - key_message: one sentence — what the audience must do next
-    - zones: []
-
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PHASE 2 — ZONE STRUCTURE FINALIZATION
-(run for each content slide using final slide numbers from DECK ASSEMBLY)
+(run for each content slide — slide numbers and narrative_role pre-assigned by Agent 3)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 BOARD REALITIES (govern all decisions in this phase)
@@ -219,25 +61,19 @@ STEP 1 — LOCK THE STRATEGIC OBJECTIVE
   This is the cognitive destination, not the content summary.
 
 STEP 2 — CONFIRM NARRATIVE_ROLE
-  Carry the narrative_role locked in Phase 1 forward. Do NOT re-derive or alter it.
+  Read the narrative_role from Agent 3's slide plan. Do NOT re-derive or alter it.
   It is the primary artifact gate in Phase 3 STEP 0A.
 
 STEP 3 — DERIVE ZONE CONFIGURATION
-  Read these locked fields from Phase 1 and STEP 1–2 above.
+  Read these fields from Agent 3's slide plan and STEP 1–2 above.
   Commit to a zone configuration before assigning individual zones in STEP 4.
 
   INPUTS TO READ:
-  - narrative_role          (from Phase 1 STEP 0)
-  - relationship_type       (from Phase 1 mandatory fields)
-  - slide_intent            (from Phase 1 mandatory fields)
-  - board_ask               (from Phase 1 mandatory fields)
-  - audience_prior_belief   (from Phase 1 mandatory fields)
-  - evidence_confidence     (from Phase 1 mandatory fields)
-  - zone_count_signal       (from Phase 1 — Agent 3 estimate)
-  - dominant_zone_signal    (from Phase 1 — Agent 3 estimate)
-  - co_primary_signal       (from Phase 1 — Agent 3 estimate)
-  - narrative_direction     (from Phase 1 mandatory fields)
-  - strategic_objective     (from Phase 2 STEP 1)
+  - narrative_role          (from Agent 3 slide plan)
+  - zone_count_signal       (from Agent 3 slide plan)
+  - dominant_zone_signal    (from Agent 3 slide plan)
+  - co_primary_signal       (from Agent 3 slide plan)
+  - strategic_objective     (from Phase 2 STEP 1 — refined from Agent 3 draft)
 
   ZONE COUNT RULES (apply in order, first match wins):
   - narrative_role is methodology_note                  → 1 zone, stop
@@ -252,11 +88,8 @@ STEP 3 — DERIVE ZONE CONFIGURATION
   - default                                             → 2 zones
 
   MODIFIERS (adjust the baseline count after rules above):
-  - slide_intent is alert        → Zone 1 must be DOMINANT regardless of count
-  - slide_intent is decide       → minimum 2 zones; options need space
-  - board_ask is yes or implicit → reserve one zone for the ask if not already covered
-  - audience_prior_belief is sceptical or hostile  → add one proof zone if count < 3
-  - evidence_confidence is low   → do not exceed 2 zones; fewer claims, simpler structure
+  - narrative_role is exception_highlight, problem_statement, or risk_register → Zone 1 must be DOMINANT regardless of count
+  - narrative_role is scenario_analysis, decision_framework, or recommendations → minimum 2 zones; options need space
 
   OUTPUT — commit to these four values before proceeding:
   - zone_count:       final number of zones (1–4)
@@ -1208,14 +1041,14 @@ STEP 3 — ARTIFACT SEQUENCE COHERENCE CHECK
   Read Zone 1 → Zone 2 → Zone 3 → Zone 4 artifact assignments in order.
   Does the artifact sequence match the logic of the structural pattern?
 
-  P1 linear chain     → each artifact answers the question raised by the previous artifact
-  P2 parallel peers   → both CO-PRIMARY artifacts are the same class
-  P3 divergent        → Zone 1 frames; Zones 2A/2B are equal; Zone 3 converges
-  P4 layered context  → artifacts widen in scope zone by zone
-  P5 before/after     → Zones 1A and 1B are the same artifact type; Zone 2 names intervention
-  P6 scorecard        → Zone 1 artifacts are highest severity; Zone 3 artifacts subordinate weight
-  P7 narrative arc    → Zone 1 is context-class; Zone 2 is tension-class; Zone 3 is resolution-class
-  P8 funnel           → artifacts narrow in scope and volume zone by zone
+  summary, context_setter             → Zone 1 is the headline claim; subsequent zones prove or qualify it
+  drill_down, segmentation            → Zone 1 is the aggregate; subsequent zones decompose it
+  trend_analysis                      → Zone 1 is the trend chart; Zone 2 interprets the inflection
+  waterfall_decomposition             → Zone 1 is the waterfall; Zone 2 names the key driver
+  benchmark_comparison                → both CO-PRIMARY zones carry the same artifact class
+  recommendations                     → final zone carries the recommendation; earlier zones build the case
+  risk_register, exception_highlight  → Zone 1 is highest-severity item; later zones add context
+  decision_framework, scenario_analysis → Zone 1 establishes criteria or current state; later zones show options
 
   Values: coherent | partially_coherent | broken
   If partially_coherent or broken: state which zone breaks the sequence and why;
@@ -1644,9 +1477,8 @@ Each slide object must contain EXACTLY these top-level fields:
 
 {
   "slide_number": number,
-  "section_name": "string",
-  "section_type": "string",
-  "slide_type": "title" | "divider" | "content",
+  "slide_type": "title" | "divider" | "content" | "thank_you",
+  "narrative_role": "string — carry forward from Agent 3 plan; empty string for structural slides",
   "slide_archetype": "summary" | "trend" | "comparison" | "breakdown" | "driver_analysis" |
                      "process" | "recommendation" | "dashboard" | "proof" | "roadmap",
   "selected_layout_name": "string",
@@ -1670,6 +1502,13 @@ SLIDE TYPE RULES
   - title: section name only
   - subtitle: empty
   - key_message: one-line purpose of the section
+  - slide_archetype: "summary"
+  - zones: []
+
+  Thank-you slide:
+  - title: "Thank You" or equivalent closing phrase
+  - subtitle: presenter name / contact if relevant
+  - key_message: one sentence — what the audience must do next
   - slide_archetype: "summary"
   - zones: []
 
@@ -2076,7 +1915,7 @@ function inferArchetype(sectionType, slideIndex) {
   }
 }
 
-function inferArchetypeFromZones(slide, plan) {
+function inferArchetypeFromZones(slide) {
   const zones = slide?.zones || []
   const artifacts = zones.flatMap(z => z.artifacts || []).map(a => String(a.type || '').toLowerCase())
   const zoneCount = zones.length
@@ -2105,7 +1944,7 @@ function inferArchetypeFromZones(slide, plan) {
   if (hasChart && zoneCount === 2) return 'comparison'
   if (hasTable) return 'proof'
   if (hasOnlyInsight) return 'summary'
-  return slide?.slide_archetype || plan?.suggested_archetype || inferArchetype(plan?.section_type, plan?.slide_index_in_section || 0)
+  return slide?.slide_archetype || 'proof'
 }
 
 function compactList(arr, limit = 6, maxChars = 280) {
@@ -3022,7 +2861,7 @@ function normaliseSlide(slide, plan) {
       zones = slide.zones.map(normaliseZone).filter(Boolean)
     } else {
       // Build default zones from archetype
-      const archetype = slide.slide_archetype || inferArchetype(plan.section_type, plan.slide_index_in_section || 0)
+      const archetype = slide.slide_archetype || 'proof'
       zones = defaultZonesForArchetype(archetype).map(normaliseZone).filter(Boolean)
     }
 
@@ -3033,21 +2872,22 @@ function normaliseSlide(slide, plan) {
   const normalized = {
     slide_number:                 slide.slide_number                 || plan.slide_number,
     slide_type:                   slideType,
-    slide_archetype:              slide.slide_archetype              || inferArchetype(slideType, 0),
+    narrative_role:               slide.narrative_role               || plan.narrative_role  || '',
+    slide_archetype:              slide.slide_archetype              || 'proof',
     zone_structure:               slide.zone_structure               || '',
     selected_layout_name:         slide.selected_layout_name         || '',
-    title:                        slide.title                        || ('Slide ' + plan.slide_number),
+    title:                        slide.title                        || plan.slide_title_draft || ('Slide ' + plan.slide_number),
     subtitle:                     slide.subtitle                     || '',
     key_message:                  slide.key_message                  || '',
     visual_flow_hint:             slide.visual_flow_hint             || '',
     context_from_previous_slide:  slide.context_from_previous_slide  || '',
     zones:                        zones,
-    speaker_note:                 slide.speaker_note                 || plan.purpose        || ''
+    speaker_note:                 slide.speaker_note                 || plan.strategic_objective || ''
   }
   const enforced = applyZoneStructureMetadata(enforceStructuralPatternRules(enforceReasoningArtifactUsage(normalized)))
   return {
     ...enforced,
-    slide_archetype: inferArchetypeFromZones(enforced, plan)
+    slide_archetype: inferArchetypeFromZones(enforced)
   }
 }
 
@@ -3057,16 +2897,20 @@ function normaliseSlide(slide, plan) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function buildSlidePlan(brief) {
-  // Returns content slides only — numbered sequentially.
-  // Structural slides (title, dividers, thank-you) are inserted by the LLM
-  // during DECK ASSEMBLY after Phase 1, and injected into allSlides by runAgent4.
-  const contentSlides = brief.content_slides || []
-  return contentSlides.map((s, i) => ({
-    slide_number:         i + 1,
-    slide_type:           'content',
-    purpose:              s.purpose              || '',
-    high_level_narrative: s.high_level_narrative || '',
-    key_content:          Array.isArray(s.key_content) ? s.key_content : []
+  // Returns the full deck — structural slides (title, dividers, thank-you) pre-assigned
+  // by Agent 3 along with all content slides with their narrative roles.
+  const slides = brief.slides || []
+  return slides.map((s, i) => ({
+    slide_number:          s.slide_number          || (i + 1),
+    slide_type:            s.slide_type            || 'content',
+    narrative_role:        s.narrative_role        || '',
+    slide_title_draft:     s.slide_title_draft     || '',
+    strategic_objective:   s.strategic_objective   || '',
+    key_content:           Array.isArray(s.key_content) ? s.key_content : [],
+    zone_count_signal:     s.zone_count_signal     || 'unsure',
+    dominant_zone_signal:  s.dominant_zone_signal  || 'unsure',
+    co_primary_signal:     s.co_primary_signal     || 'no',
+    following_slide_claim: s.following_slide_claim || ''
   }))
 }
 
@@ -3081,11 +2925,16 @@ async function writeSlideBatch(batchPlan, brief, contentB64, batchNum, layoutNam
   const hasLayouts = layoutNames.length >= 5
   const briefSummary = buildBriefSummaryForAgent4(brief)
   const compactBatchPlan = JSON.stringify((batchPlan || []).map(plan => ({
-    slide_number:         plan.slide_number,
-    slide_type:           plan.slide_type,
-    purpose:              plan.purpose               || '',
-    high_level_narrative: plan.high_level_narrative  || '',
-    key_content:          plan.key_content           || []
+    slide_number:          plan.slide_number,
+    slide_type:            plan.slide_type,
+    narrative_role:        plan.narrative_role        || '',
+    slide_title_draft:     plan.slide_title_draft     || '',
+    strategic_objective:   plan.strategic_objective   || '',
+    key_content:           plan.key_content           || [],
+    zone_count_signal:     plan.zone_count_signal     || 'unsure',
+    dominant_zone_signal:  plan.dominant_zone_signal  || 'unsure',
+    co_primary_signal:     plan.co_primary_signal     || 'no',
+    following_slide_claim: plan.following_slide_claim || ''
   })))
   const keyMsgLines = (briefSummary.key_messages || []).map((m, i) => `  ${i + 1}. ${m}`).join('\n') || '  —'
   const registryLine = summaryCardRegistry.length > 0
@@ -3113,20 +2962,16 @@ ${hasLayouts
 For EVERY content slide you write:
   1. Set selected_layout_name to the best-matching layout name from the list above.
   2. Set layout_hint.split = "full" for ALL zones on that slide.
-  3. Do NOT use split values like left_50, right_50, etc. — those are only for scratch mode.
-Title and divider slides: set selected_layout_name = "" (pipeline assigns their layouts).`
+  3. Do NOT use split values like left_50, right_50, etc. — those are only for scratch mode.`
   : '*** SCRATCH MODE — fewer than 5 content layouts; use zone_split / artifact_arrangement plus per-artifact artifact_coverage_hint for geometry; mirror legacy hints only for compatibility ***'}
 
 SLIDES TO WRITE — batch ${batchNum} (${batchPlan.length} slides):
 ${compactBatchPlan}
 
 SLIDE ORDER RULE (mandatory):
-Output slides in EXACTLY the order listed above. Do NOT reorder slides for any reason —
-not to put a summary first, not to follow top-down logic, not for narrative preference.
+Output slides in EXACTLY the order listed above. Do NOT reorder slides for any reason.
 The slide_number in your output must match the slide_number in the plan entry you are writing.
-A title slide with slide_number 1 must appear first in your JSON array, even if a summary
-or content slide follows it. The downstream renderer assembles slides positionally — any
-reordering produces a deck with the title in the wrong position.
+The downstream renderer assembles slides positionally — any reordering produces a broken deck.
 
 INSTRUCTIONS:
 - For each slide, first derive zones and artifacts from the message, then write the insight-led title and key_message
@@ -3955,6 +3800,7 @@ function pruneAgent4SlideForOutput(slide) {
   return {
     slide_number: slide.slide_number,
     slide_type: slide.slide_type,
+    narrative_role: slide.narrative_role || '',
     slide_archetype: slide.slide_archetype,
     selected_layout_name: slide.selected_layout_name || '',
     title: slide.title || '',
@@ -4087,23 +3933,32 @@ async function runAgent4(state) {
 
   const totalLayouts = (brand.layout_blueprints || brand.slide_layouts || []).length
 
-  // buildSlidePlan returns content slides only — LLM inserts structural slides during DECK ASSEMBLY
-  const slidePlan    = buildSlidePlan(brief)
-  const contentCount = slidePlan.length
+  // buildSlidePlan returns the full deck from Agent 3 (structural + content slides)
+  const slidePlan      = buildSlidePlan(brief)
+  const contentPlan    = slidePlan.filter(s => s.slide_type === 'content')
+  const structuralPlan = slidePlan.filter(s => s.slide_type !== 'content')
+  const contentCount   = contentPlan.length
 
-  console.log('Agent 4 starting — content slides:', contentCount, '| structural slides added by LLM DECK ASSEMBLY')
+  console.log('Agent 4 starting — content slides:', contentCount, '| structural slides from Agent 3:', structuralPlan.length)
   console.log('  Brand layouts total:', totalLayouts, '| content layouts:', layoutNames.length,
     layoutNames.length >= 5 ? '→ layout mode (Agent 4 selects per slide)' : '→ zone-split mode')
 
-  // Batch size capped at 3 slides to reduce model overload from the large Agent 4 system prompt
-  // plus the attached PDF and per-slide structure rules.
+  // Structural slides (title, divider, thank_you) come pre-defined from Agent 3.
+  // Pass them through directly — no zone enrichment needed.
+  let allSlides = structuralPlan.map(plan => normaliseSlide({
+    slide_number: plan.slide_number,
+    slide_type:   plan.slide_type,
+    title:        plan.slide_title_draft || '',
+    key_message:  plan.strategic_objective || ''
+  }, plan))
+
+  let summaryCardRegistry = []  // built from summary slide, threaded through all batches
+
+  // Batch size capped at 3 content slides to reduce model overload.
   // Each batch re-sends the source PDF, so we pause 65 s between batches to reset the window.
   const BATCH_SIZE = 3
   const batches = []
-  for (let i = 0; i < slidePlan.length; i += BATCH_SIZE) batches.push(slidePlan.slice(i, i + BATCH_SIZE))
-
-  let allSlides           = []
-  let summaryCardRegistry = []  // built from summary slide, threaded through all batches
+  for (let i = 0; i < contentPlan.length; i += BATCH_SIZE) batches.push(contentPlan.slice(i, i + BATCH_SIZE))
 
   for (let b = 0; b < batches.length; b++) {
     if (b > 0) {
@@ -4116,23 +3971,14 @@ async function runAgent4(state) {
     if (!result) {
       batch.forEach(plan => allSlides.push(normaliseSlide({}, plan)))
     } else {
-      // LLM output includes structural slides (title, dividers, thank-you) from DECK ASSEMBLY
-      // as well as content slides. Accept all of them — structural slides pass through normaliseSlide
-      // with slide_type preserved. Content slides are matched by slide_number to the plan entry.
       result.forEach(s => {
-        const slideType = s.slide_type || 'content'
-        if (slideType !== 'content') {
-          // Structural slide — normalise directly without a plan entry
-          allSlides.push(normaliseSlide(s, { slide_number: s.slide_number, slide_type: slideType, purpose: '', high_level_narrative: '', key_content: [] }))
-          return
-        }
         // Content slide — match to plan entry by slide_number
         const plan = batch.find(p => p.slide_number === s.slide_number) || batch[0]
         const normalised = normaliseSlide(s, plan)
         allSlides.push(normalised)
 
         // If this is the summary slide, extract cards for deduplication in subsequent batches
-        if (normalised.slide_archetype === 'summary' || (normalised.zones || []).some(z => z.zone_role === 'summary')) {
+        if (normalised.narrative_role === 'summary' || (normalised.zones || []).some(z => z.zone_role === 'summary')) {
           const summaryCards = (normalised.zones || [])
             .flatMap(z => z.artifacts || [])
             .filter(a => a.type === 'cards')
@@ -4156,7 +4002,7 @@ async function runAgent4(state) {
 
   }
 
-  // Sort all slides by slide_number — DECK ASSEMBLY may produce non-sequential output
+  // Sort all slides by slide_number — structural + content batches may arrive out of order
   allSlides.sort((a, b) => (a.slide_number || 0) - (b.slide_number || 0))
 
   // Layout-mode enforcement: when 5+ content layouts exist every content slide must
@@ -4196,7 +4042,7 @@ async function runAgent4(state) {
       const repaired = await repairSlide(slide, brief, contentB64, layoutNames)
       const idx = allSlides.findIndex(s => s.slide_number === slide.slide_number)
       if (repaired && idx >= 0) {
-        const ns = normaliseSlide(repaired, slidePlan.find(p => p.slide_number === slide.slide_number) || {})
+        const ns = normaliseSlide(repaired, slidePlan.find(p => p.slide_number === slide.slide_number) || slidePlan[0] || {})
         ns._was_repaired = true  // signals Agent 5 to process this slide solo to avoid token overflow
         allSlides[idx] = ns
         console.log('  Repaired slide', slide.slide_number)
