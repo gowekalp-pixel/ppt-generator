@@ -36,7 +36,7 @@ You DO decide:
 Return ONLY a valid JSON array with one object per slide.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PHASE 2 — ZONE STRUCTURE FINALIZATION
+PHASE 1 — ZONE STRUCTURE FINALIZATION
 (run for each content slide — slide numbers and narrative_role pre-assigned by Agent 3)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
