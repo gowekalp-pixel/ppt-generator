@@ -17,6 +17,7 @@
   const state = {
     manifestSlides: [],
     agent5Slides: [],
+    agent5SlidesEnhanced: {},
     brandTokens: {},
     selectedSlideNumber: null,
     overrides: {},
@@ -27,6 +28,7 @@
   const $ = (id) => document.getElementById(id)
 
   function deepClone(value) { return value == null ? value : JSON.parse(JSON.stringify(value)) }
+  function round2(value) { return Math.round(Number(value) * 100) / 100 }
 
   function localNormalizeArtifactType(type, chartType) {
     if (typeof normalizeArtifactType === 'function') return normalizeArtifactType(type, chartType)
@@ -901,66 +903,170 @@
     return typeof mergeContentIntoZones === 'function' ? mergeContentIntoZones(shellZones, manifestZones, bt) : shellZones
   }
 
+  // Returns the Agent 5 slide enhanced with _artifact_ids and blocks (generated if missing).
+  // Result is cached in state.agent5SlidesEnhanced so geometry lookups always work.
+  function getEnhancedAgent5Slide(slideNumber) {
+    if (state.agent5SlidesEnhanced[slideNumber]) return state.agent5SlidesEnhanced[slideNumber]
+    const original = state.agent5Slides.find((s) => s.slide_number === slideNumber)
+    if (!original) return null
+    const enhanced = deepClone(original)
+    const bt = deepClone(state.brandTokens || {})
+    // Stamp _artifact_id on every artifact so geometry lookups are consistent
+    ;(enhanced.zones || []).forEach((zone, zi) => {
+      ;(zone.artifacts || []).forEach((artifact, ai) => {
+        if (!artifact._artifact_id) artifact._artifact_id = `s${enhanced.slide_number}_z${zi}_a${ai}`
+      })
+    })
+    // Generate blocks from agent5 zones if the original output didn't include them
+    if (!Array.isArray(enhanced.blocks) || !enhanced.blocks.length) {
+      if (typeof computeArtifactInternals === 'function') computeArtifactInternals(enhanced.zones || [], enhanced.canvas || {}, bt)
+      if (typeof normalizeArtifactHeaderBands === 'function') normalizeArtifactHeaderBands(enhanced.zones || [])
+      enhanced.blocks = typeof flattenToBlocks === 'function'
+        ? (typeof sanitizeBlocks === 'function'
+            ? sanitizeBlocks(flattenToBlocks(enhanced, bt), enhanced)
+            : (flattenToBlocks(enhanced, bt) || []))
+        : []
+    }
+    state.agent5SlidesEnhanced[slideNumber] = enhanced
+    return enhanced
+  }
+
+  // Runs the Agent 5 helper pipeline on a single artifact and returns its primitive blocks.
+  // The artifact must already have x/y/w/h set to the target bounding box.
+  function generateArtifactBlocks(artifact, artifactId, zoneFrame, canvas, bt) {
+    let processed = deepClone(artifact)
+    if (typeof buildSafeArtifactShell === 'function') {
+      processed = buildSafeArtifactShell(processed, bt) || processed
+    }
+    processed._artifact_id = artifactId
+
+    const tempZone = {
+      zone_id: 'tz1',
+      zone_role: 'primary',
+      narrative_weight: 'primary',
+      message_objective: artifact.artifact_coverage_hint || '',
+      frame: deepClone(zoneFrame),
+      artifacts: [processed]
+    }
+
+    // mergeContentIntoZones enriches the artifact shell with zone-aware styling
+    if (typeof mergeContentIntoZones === 'function') {
+      const merged = mergeContentIntoZones([deepClone(tempZone)], [{ artifacts: [deepClone(artifact)] }], bt)
+      if (merged?.[0]?.artifacts?.[0]) {
+        tempZone.artifacts = merged[0].artifacts
+        tempZone.frame = merged[0].frame || tempZone.frame
+      }
+    }
+    // Re-stamp the id — mergeContentIntoZones may have replaced the artifact object
+    if (tempZone.artifacts[0]) tempZone.artifacts[0]._artifact_id = artifactId
+
+    const tempSlide = {
+      slide_number: 9999,
+      slide_type: 'content',
+      slide_archetype: 'dashboard',
+      layout_mode: false,
+      selected_layout_name: '',
+      canvas: deepClone(canvas) || { width_in: 13.33, height_in: 7.5, margin: { left: 0.37, right: 0.37, top: 0.6, bottom: 0.37 } },
+      title_block: null,
+      subtitle_block: null,
+      title: '',
+      subtitle: '',
+      key_message: '',
+      global_elements: {},
+      zones: [tempZone],
+      blocks: []
+    }
+
+    if (typeof computeArtifactInternals === 'function') computeArtifactInternals(tempSlide.zones, tempSlide.canvas, bt)
+    if (typeof normalizeArtifactHeaderBands === 'function') normalizeArtifactHeaderBands(tempSlide.zones)
+    // Re-stamp again after internal layout calculations
+    if (tempSlide.zones[0]?.artifacts?.[0]) tempSlide.zones[0].artifacts[0]._artifact_id = artifactId
+
+    if (typeof flattenToBlocks !== 'function') return []
+    const rawBlocks = flattenToBlocks(tempSlide, bt)
+    const allBlocks = typeof sanitizeBlocks === 'function' ? sanitizeBlocks(rawBlocks || [], tempSlide) : (rawBlocks || [])
+
+    // Strip any slide-level title/subtitle blocks — we only want the artifact's own blocks
+    const artifactBlocks = allBlocks.filter((b) =>
+      b.block_role !== 'slide_header' &&
+      b.block_role !== 'slide_subheader' &&
+      b.artifact_type !== 'slide' &&
+      b.artifact_subtype !== 'title' &&
+      b.artifact_subtype !== 'subtitle'
+    )
+
+    // Ensure every returned block is tagged with the correct artifact_id
+    artifactBlocks.forEach((b) => { b.artifact_id = artifactId })
+    return artifactBlocks
+  }
+
   function buildSlideFromSelections(slideNumber) {
     const manifestSlide = state.manifestSlides.find((slide) => slide.slide_number === slideNumber)
-    const originalSlide = state.agent5Slides.find((slide) => slide.slide_number === slideNumber)
+    const originalSlide = getEnhancedAgent5Slide(slideNumber)
     if (!manifestSlide || !originalSlide) return null
 
     const overrides = ensureSlideOverride(slideNumber)
-    const modifiedManifestSlide = deepClone(manifestSlide)
-
-    ;(modifiedManifestSlide.zones || []).forEach((zone, zi) => {
-      ;(zone.artifacts || []).forEach((artifact, ai) => {
-        const originalType = localNormalizeArtifactType(artifact?.type, artifact?.chart_type)
-        if (originalType === 'insight_text') return
-        const key = `${zi}-${ai}`
-        const selection = overrides[key] || {
-          type: originalType,
-          subtype: localArtifactSubtype(artifact)
-        }
-        zone.artifacts[ai] = buildConvertedManifestArtifact(selection.type, selection.subtype, artifact, zone, modifiedManifestSlide)
-      })
-    })
-
     const bt = deepClone(state.brandTokens || {})
-    const titleBlock = deriveTitleBlock(originalSlide, bt)
-    const subtitleBlock = deriveSubtitleBlock(originalSlide, titleBlock, bt)
 
-    const rebuiltSlide = {
-      slide_number: originalSlide.slide_number,
-      slide_type: originalSlide.slide_type || modifiedManifestSlide.slide_type || 'content',
-      slide_archetype: originalSlide.slide_archetype || modifiedManifestSlide.slide_archetype || 'dashboard',
-      layout_mode: false,
-      selected_layout_name: '',
-      canvas: deepClone(originalSlide.canvas || modifiedManifestSlide.canvas),
-      global_elements: deepClone(originalSlide.global_elements || {}),
-      title: titleBlock?.text || originalSlide.title || modifiedManifestSlide.title || '',
-      subtitle: subtitleBlock?.text || originalSlide.subtitle || modifiedManifestSlide.subtitle || '',
-      key_message: modifiedManifestSlide.key_message || originalSlide.key_message || '',
-      speaker_note: modifiedManifestSlide.speaker_note || originalSlide.speaker_note || '',
-      title_block: titleBlock,
-      subtitle_block: subtitleBlock,
-      zones: buildZoneShells(modifiedManifestSlide, originalSlide, bt)
-    }
+    // Start from the original Agent 5 output as the immutable base
+    const rebuiltSlide = deepClone(originalSlide)
+    if (!Array.isArray(rebuiltSlide.blocks)) rebuiltSlide.blocks = []
 
-    applyOriginalGeometry(rebuiltSlide, originalSlide)
-
-    if ((!rebuiltSlide.zones || rebuiltSlide.zones.length === 0) && typeof buildScratchZoneFrames === 'function') {
-      rebuiltSlide.zones = buildScratchZoneFrames(modifiedManifestSlide.zones || [], rebuiltSlide)
-    }
-
-    if (typeof computeArtifactInternals === 'function') computeArtifactInternals(rebuiltSlide.zones || [], rebuiltSlide.canvas || {}, bt)
-    if (typeof normalizeArtifactHeaderBands === 'function') normalizeArtifactHeaderBands(rebuiltSlide.zones || [])
-
-    ;(rebuiltSlide.zones || []).forEach((zone, zi) => {
+    // For each non-insight artifact, replace blocks only when the user changed its type/subtype
+    ;(manifestSlide.zones || []).forEach((zone, zi) => {
       ;(zone.artifacts || []).forEach((artifact, ai) => {
-        if (!artifact._artifact_id) artifact._artifact_id = `s${slideNumber}_z${zi}_a${ai}`
+        const manifestType = localNormalizeArtifactType(artifact?.type, artifact?.chart_type)
+        if (manifestType === 'insight_text') return
+
+        const key = `${zi}-${ai}`
+        const selection = overrides[key]
+        if (!selection) return
+
+        // If still the same as the manifest default, keep original Agent 5 blocks untouched
+        const manifestSubtype = localArtifactSubtype(artifact)
+        if (selection.type === manifestType && selection.subtype === manifestSubtype) return
+
+        // ── User changed this artifact — surgical replacement ──────────────────
+        const artifactId = inferOriginalArtifactId(originalSlide, zi, ai)
+        const geometry = collectOriginalArtifactGeometry(originalSlide, zi, ai)
+        const zoneFrame = originalSlide?.zones?.[zi]?.frame ||
+          fallbackZoneFrame(zi, manifestSlide.zones.length, originalSlide.canvas)
+
+        // Compute bounds: prefer existing Agent 5 blocks geometry, fall back to zone inner area
+        const pad = zoneFrame.padding || {}
+        const bounds = geometry.artifactBounds || {
+          x: round2((zoneFrame.x || 0) + (pad.left || 0)),
+          y: round2((zoneFrame.y || 0) + (pad.top || 0)),
+          w: round2(Math.max(0.5, (zoneFrame.w || 0) - (pad.left || 0) - (pad.right || 0))),
+          h: round2(Math.max(0.5, (zoneFrame.h || 0) - (pad.top || 0) - (pad.bottom || 0)))
+        }
+
+        // Build the new artifact data from Agent 4 (with sample data where needed)
+        const newArtifact = buildConvertedManifestArtifact(selection.type, selection.subtype, artifact, zone, manifestSlide)
+        // Stamp the existing coordinate bounds onto the new artifact
+        newArtifact.x = bounds.x
+        newArtifact.y = bounds.y
+        newArtifact.w = bounds.w
+        newArtifact.h = bounds.h
+        if (selection.type === 'cards' || selection.type === 'workflow') newArtifact.container = deepClone(bounds)
+        newArtifact._artifact_id = artifactId
+
+        // Generate a full, correctly-structured Agent 5 block set for the new artifact
+        const newBlocks = generateArtifactBlocks(newArtifact, artifactId, zoneFrame, originalSlide.canvas, bt)
+
+        // Swap out old artifact blocks for the new ones; everything else is unchanged
+        rebuiltSlide.blocks = [
+          ...rebuiltSlide.blocks.filter((b) => b.artifact_id !== artifactId),
+          ...newBlocks
+        ]
+
+        // Update the zone artifact spec in the rebuilt slide
+        if (rebuiltSlide.zones?.[zi]) {
+          if (!Array.isArray(rebuiltSlide.zones[zi].artifacts)) rebuiltSlide.zones[zi].artifacts = []
+          rebuiltSlide.zones[zi].artifacts[ai] = newArtifact
+        }
       })
     })
-
-    rebuiltSlide.blocks = typeof sanitizeBlocks === 'function' && typeof flattenToBlocks === 'function'
-      ? sanitizeBlocks(flattenToBlocks(rebuiltSlide, bt), rebuiltSlide)
-      : []
 
     rebuiltSlide.zones_summary = (rebuiltSlide.zones || []).map((zone) => ({
       zone_id: zone.zone_id,
@@ -1153,7 +1259,7 @@
   function renderArtifactControls() {
     const slide = state.manifestSlides.find((item) => item.slide_number === state.selectedSlideNumber)
     const overrides = ensureSlideOverride(state.selectedSlideNumber)
-    const originalSlide = state.agent5Slides.find((item) => item.slide_number === state.selectedSlideNumber)
+    const originalSlide = getEnhancedAgent5Slide(state.selectedSlideNumber)
     const artifactCards = []
     ;(slide?.zones || []).forEach((zone, zi) => {
       ;(zone.artifacts || []).forEach((artifact, ai) => {
@@ -1259,6 +1365,7 @@
   function resetApp() {
     state.manifestSlides = []
     state.agent5Slides = []
+    state.agent5SlidesEnhanced = {}
     state.brandTokens = {}
     state.selectedSlideNumber = null
     state.overrides = {}
