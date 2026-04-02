@@ -852,7 +852,8 @@
         : null
     )
     const headerBounds = unionRects(blocks.filter((block) => block.block_role === 'artifact_header').map(rectFromBlock))
-    return { artifactId, artifactBounds, headerBounds }
+    // allBounds covers header + body — the true footprint of this artifact in the Agent 5 output
+    return { artifactId, artifactBounds, headerBounds, allBounds }
   }
 
   function applyOriginalGeometry(rebuiltSlide, originalSlide) {
@@ -931,9 +932,35 @@
     return enhanced
   }
 
+  // Clamps a single block's x/y/w/h so it sits entirely within bounds.
+  function clampBlockToBounds(block, bounds) {
+    if (!bounds) return block
+    const bx = Number(bounds.x), by = Number(bounds.y)
+    const bx2 = bx + Number(bounds.w), by2 = by + Number(bounds.h)
+    const fields = []
+    if (block.x != null && block.w != null) fields.push(['x', 'w', bx, bx2])
+    if (block.y != null && block.h != null) fields.push(['y', 'h', by, by2])
+    if (block.x1 != null && block.x2 != null) {
+      block.x1 = Math.max(bx, Math.min(bx2, Number(block.x1)))
+      block.x2 = Math.max(bx, Math.min(bx2, Number(block.x2)))
+    }
+    if (block.y1 != null && block.y2 != null) {
+      block.y1 = Math.max(by, Math.min(by2, Number(block.y1)))
+      block.y2 = Math.max(by, Math.min(by2, Number(block.y2)))
+    }
+    fields.forEach(([pos, size, lo, hi]) => {
+      const start = Math.max(lo, Math.min(hi, Number(block[pos])))
+      const end = Math.min(hi, start + Number(block[size]))
+      block[pos] = round2(start)
+      block[size] = round2(Math.max(0, end - start))
+    })
+    return block
+  }
+
   // Runs the Agent 5 helper pipeline on a single artifact and returns its primitive blocks.
   // The artifact must already have x/y/w/h set to the target bounding box.
-  function generateArtifactBlocks(artifact, artifactId, zoneFrame, canvas, bt) {
+  // clampBounds (optional): every generated block is clamped to stay within this rect.
+  function generateArtifactBlocks(artifact, artifactId, zoneFrame, canvas, bt, clampBounds) {
     let processed = deepClone(artifact)
     if (typeof buildSafeArtifactShell === 'function') {
       processed = buildSafeArtifactShell(processed, bt) || processed
@@ -995,8 +1022,11 @@
       b.artifact_subtype !== 'subtitle'
     )
 
-    // Ensure every returned block is tagged with the correct artifact_id
-    artifactBlocks.forEach((b) => { b.artifact_id = artifactId })
+    // Ensure every returned block is tagged with the correct artifact_id, then clamp
+    artifactBlocks.forEach((b) => {
+      b.artifact_id = artifactId
+      if (clampBounds) clampBlockToBounds(b, clampBounds)
+    })
     return artifactBlocks
   }
 
@@ -1029,21 +1059,32 @@
         // ── User changed this artifact — surgical replacement ──────────────────
         const artifactId = inferOriginalArtifactId(originalSlide, zi, ai)
         const geometry = collectOriginalArtifactGeometry(originalSlide, zi, ai)
+
+        // allBounds = union of ALL blocks for this artifact_id in Agent 5 output
+        // (header + body together). This is the true on-slide footprint we must stay within.
+        // Fall back through: zone frame inner area → computed default.
         const zoneFrame = originalSlide?.zones?.[zi]?.frame ||
           fallbackZoneFrame(zi, manifestSlide.zones.length, originalSlide.canvas)
-
-        // Compute bounds: prefer existing Agent 5 blocks geometry, fall back to zone inner area
         const pad = zoneFrame.padding || {}
-        const bounds = geometry.artifactBounds || {
+        const fallbackBounds = {
           x: round2((zoneFrame.x || 0) + (pad.left || 0)),
           y: round2((zoneFrame.y || 0) + (pad.top || 0)),
           w: round2(Math.max(0.5, (zoneFrame.w || 0) - (pad.left || 0) - (pad.right || 0))),
           h: round2(Math.max(0.5, (zoneFrame.h || 0) - (pad.top || 0) - (pad.bottom || 0)))
         }
 
+        // Full footprint (incl. header) — used as the layout frame AND as the clamp fence
+        const footprint = geometry.allBounds || geometry.artifactBounds || fallbackBounds
+        // Body-only bounds (what the artifact itself occupies, excluding header)
+        const bounds = geometry.artifactBounds || footprint
+
+        // Use footprint as the zone frame passed to generateArtifactBlocks so
+        // computeArtifactInternals places everything within the old artifact's slot
+        const tightZoneFrame = { ...zoneFrame, x: footprint.x, y: footprint.y, w: footprint.w, h: footprint.h, padding: {} }
+
         // Build the new artifact data from Agent 4 (with sample data where needed)
         const newArtifact = buildConvertedManifestArtifact(selection.type, selection.subtype, artifact, zone, manifestSlide)
-        // Stamp the existing coordinate bounds onto the new artifact
+        // Stamp body bounds so the artifact itself starts within the old footprint
         newArtifact.x = bounds.x
         newArtifact.y = bounds.y
         newArtifact.w = bounds.w
@@ -1051,8 +1092,8 @@
         if (selection.type === 'cards' || selection.type === 'workflow') newArtifact.container = deepClone(bounds)
         newArtifact._artifact_id = artifactId
 
-        // Generate a full, correctly-structured Agent 5 block set for the new artifact
-        const newBlocks = generateArtifactBlocks(newArtifact, artifactId, zoneFrame, originalSlide.canvas, bt)
+        // Generate blocks, layout within tightZoneFrame, then clamp every block to footprint
+        const newBlocks = generateArtifactBlocks(newArtifact, artifactId, tightZoneFrame, originalSlide.canvas, bt, footprint)
 
         // Swap out old artifact blocks for the new ones; everything else is unchanged
         rebuiltSlide.blocks = [
