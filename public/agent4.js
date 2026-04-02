@@ -2974,7 +2974,34 @@ The slide_number in your output must match the slide_number in the plan entry yo
 The downstream renderer assembles slides positionally — any reordering produces a broken deck.
 
 INSTRUCTIONS:
-- For each slide, first derive zones and artifacts from the message, then write the insight-led title and key_message
+- For each slide, start from the locked Agent 3 plan, then derive zones and artifacts from the message.
+- Use narrative_role, zone_count_signal, dominant_zone_signal, co_primary_signal, and strategic_objective as the primary zone-planning inputs.
+- Do NOT infer structure from relationship_type. Ignore relationship_type entirely even if it appears elsewhere in older instructions.
+- Use this zone-count logic as the authoritative rule set:
+  - narrative_role = methodology_note -> 1 zone, stop
+  - narrative_role = summary -> 1-2 zones; prefer 1 if one dense synthesis artifact can carry the slide
+  - co_primary_signal = yes -> 2 zones, co-primary, side-by-side
+  - narrative_role = benchmark_comparison -> 2 zones, equal weight unless dominant_zone_signal = yes
+  - narrative_role = trend_analysis -> 2 zones, dominant proof plus implication support
+  - narrative_role = segmentation -> 2-3 zones, comparison-led
+  - narrative_role = drill_down -> 2-3 zones, dominant decomposition plus support
+  - narrative_role = waterfall_decomposition -> 2 zones, dominant proof plus explanation
+  - narrative_role = scenario_analysis -> 3-4 zones, grid or structured comparison preferred
+  - narrative_role = decision_framework -> 3-4 zones, option comparison or criteria grid preferred
+  - narrative_role = risk_register -> 2-3 zones, dominant register plus mitigation or implication support
+  - narrative_role = recommendations -> 2-3 zones, recommendation plus rationale or ask support
+  - narrative_role = exception_highlight -> 2 zones, dominant issue plus implication or action support
+  - narrative_role = context_setter or problem_statement -> 2 zones, framing plus consequence or evidence support
+  - zone_count_signal = 1|2|3|4 -> use that count as the baseline when no stronger rule above applies
+  - strategic_objective implies comparing options, scenarios, or alternatives -> 3-4 zones
+  - strategic_objective implies a single core proof with one takeaway -> 2 zones
+  - strategic_objective implies a compact synthesis or note -> 1 zone
+  - default -> 2 zones
+- Apply these modifiers after selecting the baseline:
+  - dominant_zone_signal = yes -> Zone 1 must be dominant
+  - dominant_zone_signal = no and co_primary_signal = no -> prefer balanced weights across zones
+  - scenario_analysis, decision_framework, and recommendations should not collapse below 2 zones
+- Write the title from slide_title_draft and sharpen it only if needed.
 - Before finalizing artifacts for a content slide, choose ONE zone_structure that matches the zone count and narrative geometry:
   - ZS01_single_full
   - ZS02_stacked_equal
