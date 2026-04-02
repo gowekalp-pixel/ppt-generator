@@ -76,27 +76,32 @@ STEP 3 — DERIVE ZONE CONFIGURATION
   - strategic_objective     (from Phase 2 STEP 1 — refined from Agent 3 draft)
 
   ZONE COUNT RULES (apply in order, first match wins):
-  - narrative_role is methodology_note                  → 1 zone, stop
-  - co_primary_signal is yes                            → 2 zones, CO-PRIMARY, side-by-side
-  - relationship_type is peer_comparison                → 2 zones, CO-PRIMARY, side-by-side
-  - relationship_type is state_change                   → 2 zones, equal weight
-  - relationship_type is option_set                     → 3–4 zones, grid preferred
-  - relationship_type is severity_ranking               → Zone 1 DOMINANT, 2–3 zones
-  - relationship_type is causal_chain                   → 2–3 zones, left-to-right sequence
-  - relationship_type is volume_loss                    → 2–3 zones, vertical sequence
-  - zone_count_signal is a number (not unsure)          → use that count as the baseline
-  - default                                             → 2 zones
+  - narrative_role is methodology_note -> 1 zone, stop
+  - narrative_role is summary -> 1-2 zones; prefer 1 if one dense synthesis artifact can carry the slide
+  - co_primary_signal is yes -> 2 zones, CO-PRIMARY, side-by-side
+  - narrative_role is benchmark_comparison -> 2 zones, equal weight unless dominant_zone_signal is yes
+  - narrative_role is trend_analysis -> 2 zones, dominant proof plus implication support
+  - narrative_role is segmentation -> 2-3 zones, comparison-led
+  - narrative_role is drill_down -> 2-3 zones, dominant decomposition plus support
+  - narrative_role is waterfall_decomposition -> 2 zones, dominant proof plus explanation
+  - narrative_role is scenario_analysis -> 3-4 zones, grid or structured comparison preferred
+  - narrative_role is decision_framework -> 3-4 zones, option comparison or criteria grid preferred
+  - narrative_role is risk_register -> 2-3 zones, dominant register plus mitigation / implication support
+  - narrative_role is recommendations -> 2-3 zones, recommendation plus rationale / ask support
+  - narrative_role is exception_highlight -> 2 zones, dominant issue plus implication / action support
+  - narrative_role is context_setter or problem_statement -> 2 zones, framing plus consequence / evidence support
+  - zone_count_signal is a number (not unsure) -> use that count as the baseline when no stronger rule applies
+  - strategic_objective implies comparing options, scenarios, or alternatives -> 3-4 zones
+  - strategic_objective implies a single core proof with one takeaway -> 2 zones
+  - strategic_objective implies a compact synthesis or note -> 1 zone
+  - default -> 2 zones
 
   MODIFIERS (adjust the baseline count after rules above):
-  - narrative_role is exception_highlight, problem_statement, or risk_register → Zone 1 must be DOMINANT regardless of count
-  - narrative_role is scenario_analysis, decision_framework, or recommendations → minimum 2 zones; options need space
-
-  OUTPUT — commit to these four values before proceeding:
-  - zone_count:       final number of zones (1–4)
-  - has_dominant:     yes | no
-  - has_co_primary:   yes | no
-  - reading_direction: left_to_right | top_to_bottom | grid | free
-    (use narrative_direction from Phase 1 as default; override only if relationship_type demands it)
+  - dominant_zone_signal is yes -> Zone 1 must be DOMINANT regardless of count
+  - dominant_zone_signal is no and co_primary_signal is no -> prefer balanced weights across zones
+  - narrative_role is scenario_analysis, decision_framework, or recommendations -> minimum 2 zones; options need space
+  - if strategic_objective is primarily "align" or "understand" one core fact -> do not exceed 2 zones unless zone_count_signal strongly indicates otherwise
+    (choose the reading direction from narrative_role, dominant/co-primary signals, and strategic_objective)
 
 STEP 4 — ASSIGN ZONES WITH STRATEGIC INTENT
   Assign 1 to 4 zones.
@@ -2976,7 +2981,7 @@ The downstream renderer assembles slides positionally — any reordering produce
 INSTRUCTIONS:
 - For each slide, start from the locked Agent 3 plan, then derive zones and artifacts from the message.
 - Use narrative_role, zone_count_signal, dominant_zone_signal, co_primary_signal, and strategic_objective as the primary zone-planning inputs.
-- Do NOT infer structure from relationship_type. Ignore relationship_type entirely even if it appears elsewhere in older instructions.
+- Do NOT infer structure from any legacy field. Use only narrative_role, zone_count_signal, dominant_zone_signal, co_primary_signal, and strategic_objective for zone planning.
 - Use this zone-count logic as the authoritative rule set:
   - narrative_role = methodology_note -> 1 zone, stop
   - narrative_role = summary -> 1-2 zones; prefer 1 if one dense synthesis artifact can carry the slide
