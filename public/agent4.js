@@ -62,7 +62,7 @@ STEP 1 — LOCK THE STRATEGIC OBJECTIVE
 
 STEP 2 — CONFIRM NARRATIVE_ROLE
   Read the narrative_role from Agent 3's slide plan. Do NOT re-derive or alter it.
-  It is the primary artifact gate in Phase 3 STEP 0A.
+  It is the primary artifact gate in Phase 2 STEP 0A.
 
 STEP 3 — DERIVE ZONE CONFIGURATION
   Read these fields from Agent 3's slide plan and STEP 1–2 above.
@@ -70,10 +70,8 @@ STEP 3 — DERIVE ZONE CONFIGURATION
 
   INPUTS TO READ:
   - narrative_role          (from Agent 3 slide plan)
-  - zone_count_signal       (from Agent 3 slide plan)
   - dominant_zone_signal    (from Agent 3 slide plan)
   - co_primary_signal       (from Agent 3 slide plan)
-  - strategic_objective     (from Phase 2 STEP 1 — refined from Agent 3 draft)
 
   ZONE COUNT RULES (apply in order, first match wins):
   - narrative_role is methodology_note -> 1 zone, stop
@@ -90,7 +88,6 @@ STEP 3 — DERIVE ZONE CONFIGURATION
   - narrative_role is recommendations -> 1-2 zones, recommendation plus rationale / ask support
   - narrative_role is exception_highlight -> 2 zones, dominant issue plus implication / action support
   - narrative_role is context_setter or problem_statement -> 2 zones, framing plus consequence / evidence support
-  - zone_count_signal is a number (not unsure) -> use that count as the baseline when no stronger rule applies
   - strategic_objective implies comparing options, scenarios, or alternatives -> 3-4 zones
   - strategic_objective implies a single core proof with one takeaway -> 2 zones
   - strategic_objective implies a compact synthesis or note -> 1 zone
@@ -100,7 +97,7 @@ STEP 3 — DERIVE ZONE CONFIGURATION
   - dominant_zone_signal is yes -> Zone 1 must be DOMINANT regardless of count
   - dominant_zone_signal is no and co_primary_signal is no -> prefer balanced weights across zones
   - narrative_role is scenario_analysis, decision_framework, or recommendations -> minimum 2 zones; options need space
-  - if strategic_objective is primarily "align" or "understand" one core fact -> do not exceed 2 zones unless zone_count_signal strongly indicates otherwise
+  - if strategic_objective is primarily "align" or "understand" one core fact -> do not exceed 2 zones
     (choose the reading direction from narrative_role, dominant/co-primary signals, and strategic_objective)
 
 STEP 4 — ASSIGN ZONES WITH STRATEGIC INTENT
@@ -109,19 +106,10 @@ STEP 4 — ASSIGN ZONES WITH STRATEGIC INTENT
   "If I removed this zone, would the board reach a different and worse conclusion?"
 
   For each zone define:
-  - label: 1–3 words, navigation aid only
   - role: PRIMARY | CO-PRIMARY | SECONDARY | SUPPORTING | OPTIONAL
-  - question: one factual question answerable by evidence alone
-  - weight: FULL | DOMINANT | EQUAL | SUBORDINATE
-  - strategic_purpose: why this zone exists for this board on this slide — cannot be generic
+  - strategic_purpose: 15-20 words on why this zone exists for this board on this slide — cannot be generic
 
-  Hard weight rules:
-  - Only one zone may be FULL or DOMINANT per slide
-  - CO-PRIMARY zones must both be EQUAL
-  - OPTIONAL zones must be SUBORDINATE
-  - Alert slides (exception_highlight, problem_statement, risk_register): Zone 1 is always DOMINANT
-
-STEP 5 — FINALIZE THE ZONE STRUCTURE CODE
+STEP 5 — FINALIZE THE ZONE STRUCTURE 
   Choose exactly one code matching the zone count.
 
   1 zone:  ZS01_single_full
@@ -168,32 +156,88 @@ STEP 6 — CONSULTANT CHALLENGE ROUND
   8. In alert slides (exception_highlight, problem_statement, risk_register), Zone 1 is DOMINANT.
   9. Never choose a structure with more cells than zones assigned.
   10. strategic_purpose cannot be generic.
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PHASE 2 — ARTIFACT FINALIZATION ACROSS ZONES
+PHASE 2 — ZONE CONTENT DERIVATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+You are the Content Architect.
+You have the locked zone structure from Phase 1, Agent 3's key content as
+directional guidance, and the source document as the authoritative evidence base.
+
+Your job: derive the best possible content for each zone.
+Use Agent 3's key content to understand intent and direction.
+Use the source document and your own analytical judgment to surface the
+most compelling, accurate, and board-ready content for that zone.
+You are NOT selecting artifacts. You are NOT designing layouts.
+
+──────────────────────────────────────────────────────────
+STEP 1 — DERIVE ZONE CONTENT
+──────────────────────────────────────────────────────────
+For each zone, working from its question and strategic_purpose:
+
+  - Surface the strongest evidence, arguments, insights, or recommendations
+    from the source document that answer the zone question.
+  - Apply your analytical judgment: synthesise, prioritise, and sharpen.
+    A board deserves the most incisive version of the content, not a transcript.
+  - Ground every data claim in a specific figure from the source.
+    Structure every argument or recommendation as explicit logic —
+    not vague assertions.
+  - Separate what belongs on the slide from what belongs in speaker notes.
+    The slide carries the claim. The notes carry qualification and detail.
+
+──────────────────────────────────────────────────────────
+STEP 2 — PRODUCE ZONE CONTENT BRIEF
+──────────────────────────────────────────────────────────
+  {
+    "slide_number":     1,
+    "narrative_role": "explainer_to_summary",
+    "slide_title_draft":  "string — declarative, specific, conclusion-led, honest",
+    "zones:[
+     {
+      "strategic_purpose": {string"}
+      "zone_role": "primary" | "co-primary" | "secondary" | "supporting" | "optional",
+      "zone_id":          "z1",
+      "zone_content":    ["<sharpest claim or fact with unit>", ...],
+      "speaker_overflow": ["<supporting detail, qualifications, secondary data>", ...],
+      "content_gap":      "string — note if source evidence is thin; null if sufficient"
+      }
+]
+
+  CONSTRAINTS
+  1. Every figure in slide_content[] must include its unit and source basis.
+  2. No two zones on the same slide may carry overlapping slide_content[].
+  3. content_gap is not a licence to invent — it signals Phase 2 to choose
+     a lower-density artifact
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PHASE 3 — ARTIFACT FINALIZATION ACROSS ZONES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 You are the Artifact Architect.
-You receive the completed Zone Brief from Phase 1.
-Your job: assign the right artifact to each zone, enforce spatial and density constraints,
+You receive the completed Zone and Zone Content Brief from Phase 2
+Based on the output of phase 2, Your job is to assign the right artifact to each zone, enforce spatial and density constraints,
 and produce a plan the visual designer can execute without ambiguity.
+if there is a content_gap for a zone - recheck the main document to fill the information
 You are NOT designing charts, colors, fonts, labels, or coordinates.
 Each zone may have a MAXIMUM of 2 artifacts.
 
 ──────────────────────────────────────────────────────────
 STEP 0A — ROLE-BASED ARTIFACT PRE-FILTER (execute before all other steps)
 ──────────────────────────────────────────────────────────
-Read the narrative_role locked in Phase 1.
+Read the slide_narrative_role locked in Phase 1.
 Apply the constraints below before any data-shape or zone-role rules.
 These are HARD constraints — no override permitted regardless of content.
 
   recommendations:
     PERMITTED:  prioritization (primary), initiative_map, comparison_table, insight_text|grouped,
-                cards (target/milestone values only — not actuals), table (milestones — only after TABLE GATE A8)
+                cards (target/milestone values only — not actuals), table (milestone summaries only — max 6 rows, max 4 columns; use comparison_table if options vs criteria)
     FORBIDDEN:  charts showing actuals, workflow, matrix, driver_tree
     Cards rule: card values must be future targets or milestones — do not restate actuals already shown on earlier slides
 
   methodology_note:
-    PERMITTED:  insight_text, table (definitions/rates only — TABLE GATE A8 mandatory)
+    PERMITTED:  insight_text, table (definitions/rates only — max 6 rows, max 4 columns)
     FORBIDDEN:  cards, chart, prioritization, workflow, matrix, driver_tree
     Reason: no analytical claim — data definitions only
 
@@ -203,7 +247,7 @@ These are HARD constraints — no override permitted regardless of content.
     Reason: narrative connector — no new data introduced
 
   context_setter:
-    PERMITTED:  cards (baseline KPIs), insight_text, stat_bar, comparison_table,
+    PERMITTED:  cards (baseline KPIs), insight_text, stat_bar, comparison_table
     FORBIDDEN:  prioritization, workflow, matrix, driver_tree
     Reason: neutral baseline — no verdict, no action, no process
 
@@ -212,55 +256,10 @@ These are HARD constraints — no override permitted regardless of content.
     FORBIDDEN:  prioritization, workflow
     Cards rule: if profile_card_set or cards are used, every card sentiment field must be "negative" or "warning" — positive sentiment cards are blocked
 
-  All other roles (explainer_to_summary, drill_down, segmentation, trend_analysis,
-  waterfall_decomposition, benchmark_comparison, validation, risk_register,
-  scenario_analysis, decision_framework, summary, additional_information):
-    → No pre-filter restrictions. Proceed to Step 0B and then Step 1.
-
-──────────────────────────────────────────────────────────
-STEP 0B — SUMMARY CARD REGISTRY AND DEDUPLICATION
-──────────────────────────────────────────────────────────
-This step prevents the same KPI card from appearing on both the summary slide and a
-downstream proof slide — a top-down deck allows data to recur, but never in the same
-visual form at the same level of aggregation.
-
-IF narrative_role is "summary":
-  → REGISTER every card being emitted on this slide.
-  → Record each card as: { title, value } — e.g. { title: "Outstanding", value: "₹351 Cr" }
-  → This becomes the summary_card_registry for all downstream slides in this batch.
-  → If summary_card_registry is provided in the batch context (from a prior batch),
-    merge new cards into it — do not overwrite.
-
-IF narrative_role is in the proof chain group
-(explainer_to_summary, drill_down, segmentation, trend_analysis,
-waterfall_decomposition, benchmark_comparison, exception_highlight, validation):
-  → Before finalising any card, check its { title, value } against summary_card_registry.
-  → If a match is found — same title AND same value — apply the DEDUPLICATION RESOLUTION:
-
-    RESOLUTION PRIORITY (apply first that is possible):
-    1. Replace with a different visualization of the same data that adds analytical depth
-       — e.g. a waterfall breaking down how the number was reached, a chart showing
-         the number in context of other categories, or a table showing sub-components
-    2. Enrich the card with additional context that makes it analytically additive
-       — e.g. add a trend direction, a benchmark comparison, or a sub-segment callout
-         so the card communicates something the summary card did not
-    3. Drop the card entirely if neither option 1 nor option 2 is possible — a card
-       that only restates the summary adds no value to a proof slide
-
-  → Cards with titles and values NOT in summary_card_registry: proceed without restriction.
-
-IF narrative_role is "context_setter", "problem_statement", or summary_card_registry
-is empty (no summary slide precedes this batch):
-  → Skip deduplication. No registry to check against.
-
-IF narrative_role is "recommendations":
-  → Cards represent future target/milestone values, not actuals — deduplication does not apply.
-    Target values are new data even if the metric name appeared in the summary.
-
 ──────────────────────────────────────────────────────────
 STEP 0C — READ THE ZONE BRIEF STRATEGICALLY
 ──────────────────────────────────────────────────────────
-  For each zone re-read: narrative_role, slide_title_draft, strategic_objective, key_content
+  For each zone re-read the information 
   Ask: what is the MINIMUM artifact that answers this zone's question convincingly for a board?
   Start minimum. Add a second artifact only if the first leaves a material gap in the argument.
 
@@ -275,7 +274,7 @@ AVAILABLE ARTIFACT TYPES:
   cards
   profile_card_set
   workflow:         process_flow | hierarchy | decomposition | timeline
-  table             ← LAST RESORT — only after TABLE GATE passes (see TABLE GATE section below)
+  table             ← LAST RESORT — only permitted for: (1) methodology_note rate/definition lookups; (2) recommendations milestone summaries. ALL other uses FORBIDDEN. Max 6 rows, max 4 columns.
   comparison_table
   initiative_map
   risk_register
@@ -289,7 +288,6 @@ AVAILABLE ARTIFACT TYPES:
   PRIMARY / DOMINANT zones:
   - Can have 2 Artifacts (Primary & Secondary)
   - 50%-100% of Slide's Horizontal or Vertical Area
-  - Must carry a proof or reasoning artifact
 
   SECONDARY zones:
   - Can have 2 artifacts (Primary & Secondary)
@@ -315,25 +313,22 @@ AVAILABLE ARTIFACT TYPES:
     - prioritization
   
   FOR PRIMARY, SECONDARY AND CO-PRIMARY Zones, PERMITTED SECOND ARTIFACT PAIRINGS and Size of the second artifact relative to the zone (e.g. max 30% of zone size):
-  Primary artifact                  Permitted Second Artifact Size  
-  Charts  
-  (Except pie, donut and Group Pie) insight_text (any subtype), max 30% of zone size
-  group_pie (multi-zone slide)      insight_text grouped, max 30% of zone size
-  group_pie (1-zone slide)          insight_text grouped, max 20% of zone size
-  pie / donut                       cards (1–2) or insight_text , max 50% of zone size
-  horizontal_bar                    insight_text (any subtype), max 30% of zone size
-  stat_bar                          no second artifact permitted
-  comparison_table                  insight_text standard, max 30% of zone size
-  initiative_map                    no second artifact permitted
-  profile_card_set                  no second artifact permitted
-  risk_register                     no second artifact permitted
-  matrix                            insight_text grouped, max 30% of zone size
-  driver_tree                       insight_text grouped, max 30% of zone size
-  prioritization                    no second artifact permitted 
-  process_flow / timeline           no second artifact permitted
-  hierarchy / decomposition         insight_text, max 30% of zone size
-  cards (1–3)                       no second artifact permitted
-  cards (4+)                        no second artifact permitted
+  Primary artifact                          Permitted Second Artifact Size  
+  Charts (Except pie, donut and Group Pie)  Insight_text (any subtype), max 30% of zone size
+  group_pie                                 insight_text (any subtype), max 30% of zone size
+  pie / donut                               cards (1–2) or insight_text, max 40% of zone size
+  stat_bar                                  insight_text standard (callout only — 1–2 points), stacked above only, max 25% of zone size
+  comparison_table                          insight_text standard, max 30% of zone size
+  initiative_map                            insight_text standard (framing headline — 1–2 points), stacked above only, max 25% of zone size
+  profile_card_set                          no second artifact permitted
+  risk_register                             no second artifact permitted
+  matrix                                    insight_text grouped, max 30% of zone size
+  driver_tree                               insight_text grouped, max 30% of zone size
+  prioritization                            no second artifact permitted 
+  process_flow / timeline                   no second artifact permitted
+  hierarchy / decomposition                 insight_text, max 30% of zone size
+  cards (1–3)                               no second artifact permitted
+  cards (4+)                                no second artifact permitted
 
 SUPPORTING / SUBORDINATE zones:
   - Can have 1 artifact only
@@ -381,12 +376,53 @@ OPTIONAL zones:
                     If 100% vertical available   → distribute pies across multiple rows
                     If 50–80% allocation         → MAX 4 pies
                     If > 80% allocation          → MAX 8 pies
+ 
+ ─── Other artifacts SELECTION INDICATORS ───────────────────────── 
+  stat_bar        
+  A horizontal bar chart where each bar is accompanied by an inline qualitative
+  annotation (label or descriptor) placed to the right of or alongside the bar.
+  Use when: ranking is the primary message AND each entity needs a one-phrase
+  qualifier that a separate insight_text zone would fail to connect visually.
+  Examples: courier partners ranked by cost with "use case" label; SKUs ranked
+  by revenue with "growth trajectory" label; cities ranked by orders with
+  "priority tier" label.
 
-  MINIMUM category counts:
-  bar / line / clustered_bar / horizontal_bar: minimum 3 categories
-  No zeros-only series. No placeholder values.
+  comparison_table 
+  
+  A structured grid where rows are options/candidates and columns are evaluation
+  criteria. Each cell contains a judgment rating, not a raw number.
+  Use when: the board needs to see WHICH option wins against WHICH criteria.
+  The recommended option must be visually distinguished (recommended_option field).
+  NEVER use plain table for option-vs-criteria data — comparison_table is mandatory.
 
-─── CARDS SELECTION RULES ────────────────────────────────
+  initiative_map
+  A structured grid where each row is a parallel work stream or initiative.
+  Unlike prioritization, rows have NO implied rank between them.
+  Unlike table, each row is a self-contained action block, not a data lookup row.
+  Use when: showing 3–6 parallel initiatives each described by 3–4 structured
+  dimensions (e.g. owner, timeline, budget, KPI, status).
+  NEVER use when rows have a rank order (use prioritization instead).
+  NEVER use when rows are process steps (use workflow instead).
+
+  profile_card_set
+  An entity-first card layout where each card describes one entity using a set
+  of key-value attribute pairs. Attributes may differ per entity (heterogeneous).
+  Unlike cards (which are metric-first and structurally parallel), profile cards
+  are read vertically within each card, not scanned horizontally across cards.
+  Use when: rows describe entities with mixed attribute types (feature type +
+  geography + revenue range + status all on the same entity row).
+  NEVER use when metrics are structurally identical across entities (use cards).
+
+  risk_register
+  A severity-encoded list of risks or issues where row background color IS the
+  primary data channel (not decoration). Multiple rows may have different severity
+  levels simultaneously — this is what distinguishes it from highlight_rows on a
+  plain table (which marks only one row at a time).
+  Use when: risks or issues must be shown with per-row severity variation AND
+  the board's eye must be directed to critical items without reading every cell.
+  NEVER use plain table when severity-by-row is the primary signal.
+
+─── CARDS SELECTION Indicators ────────────────────────────────
 
   Cards are ONLY valid when ALL four conditions are met:
   1. Metrics are independent (no shared denominator, no structural link between them)
@@ -420,7 +456,7 @@ OPTIONAL zones:
   A slide CANNOT contain only cards. Cards must always be paired with at least one of:
   chart | workflow | table | insight_text | Stat_Bar
 
-─── WORKFLOW SELECTION RULES ─────────────────────────────
+─── WORKFLOW SELECTION Indicators ─────────────────────────────
 
   process_flow:   linear sequence of steps; 4–6 nodes; left_to_right only;
                   requires full slide width and at least 50% slide height;
@@ -453,159 +489,7 @@ OPTIONAL zones:
   - Any workflow with ≥ 4 nodes triggers the full-width (left_to_right) or
     full-height (top_to_bottom) rule as a HARD OVERRIDE
 
-─── NEW ARTIFACT SELECTION RULES ──────────────────────────────────────────────
-
-  stat_bar
-  ─────────
-  A horizontal bar chart where each bar is accompanied by an inline qualitative
-  annotation (label or descriptor) placed to the right of or alongside the bar.
-  Use when: ranking is the primary message AND each entity needs a one-phrase
-  qualifier that a separate insight_text zone would fail to connect visually.
-  Examples: courier partners ranked by cost with "use case" label; SKUs ranked
-  by revenue with "growth trajectory" label; cities ranked by orders with
-  "priority tier" label.
-  Standalone artifact — specify as: artifact_type: "stat_bar"
-  Sizing envelope:
-
-  Schema additions:
-    GENERIC HANDOFF (mandatory):
-    Do NOT encode stat_bar as raw table rows. Emit semantic row objects that a renderer
-    can map directly to label / bar / value / annotation regions.
-    rows[]: {
-      id?,                         // stable key if available
-      label,                       // left-side row label
-      value,                       // numeric value driving bar length
-      unit?,                       // unit suffix for the displayed value
-      display_value?,              // optional preformatted value label
-      annotation?,                 // right-side qualifier text
-      annotation_representation?: "text" | "pill",
-      bar_color?,                  // optional override
-      highlight?: true | false     // explicit row emphasis; never infer from rank
-    }
-    column_headers?: {
-      label?: string,
-      metric?: string,
-      value?: string,
-      annotation?: string
-    }
-    annotation_style: "inline" | "trailing"  (default: "trailing")
-
-  comparison_table
-  ─────────────────
-  A structured grid where rows are options/candidates and columns are evaluation
-  criteria. Each cell contains a judgment rating, not a raw number.
-  Use when: the board needs to see WHICH option wins against WHICH criteria.
-  The recommended option must be visually distinguished (recommended_option field).
-  NEVER use plain table for option-vs-criteria data — comparison_table is mandatory.
-
-  Schema additions:
-    GENERIC HANDOFF (mandatory):
-    criteria[]: {
-      id,                          // stable criterion key
-      label                        // display label
-    }
-    options[]: {
-      id?,
-      name,
-      badge_text?,                 // optional row badge such as "recommended"
-      cells[]: {
-        criterion_id,              // matches criteria[].id
-        rating: "yes"|"partial"|"no"|"text",
-        display_value?,            // optional rendered symbol/text if not default
-        note?,                     // supporting note when rating = "text"
-        representation_type?: "icon" | "text"
-      }
-    }
-    recommended_option_id?: option id
-    recommended_option?: name of the preferred option (allowed fallback only if id unavailable)
-
-  initiative_map
-  ───────────────
-  A structured grid where each row is a parallel work stream or initiative.
-  Unlike prioritization, rows have NO implied rank between them.
-  Unlike table, each row is a self-contained action block, not a data lookup row.
-  Use when: showing 3–6 parallel initiatives each described by 3–4 structured
-  dimensions (e.g. owner, timeline, budget, KPI, status).
-  NEVER use when rows have a rank order (use prioritization instead).
-  NEVER use when rows are process steps (use workflow instead).
-
-  Schema additions:
-    GENERIC HANDOFF (mandatory):
-    dimension_labels[]: {
-      id,                          // stable lane / phase key
-      label                        // display header
-    }
-    initiatives[]: {
-      id?,
-      name,                        // track label shown at left
-      subtitle?,                   // optional track subtitle
-      placements[]: {              // preferred; one object per occupied lane
-        lane_id,                   // matches dimension_labels[].id
-        title,                     // block title inside the lane
-        subtitle?,                 // optional short secondary line
-        tags?: string[],           // chips inside the block
-        footer?,                   // bottom line / outcome
-        accent_tone?: "primary" | "secondary" | "neutral"
-      },
-      dimensions[]: { label, value }   // allowed backward-compatible fallback only
-    }
-
-  profile_card_set
-  ─────────────────
-  An entity-first card layout where each card describes one entity using a set
-  of key-value attribute pairs. Attributes may differ per entity (heterogeneous).
-  Unlike cards (which are metric-first and structurally parallel), profile cards
-  are read vertically within each card, not scanned horizontally across cards.
-  Use when: rows describe entities with mixed attribute types (feature type +
-  geography + revenue range + status all on the same entity row).
-  NEVER use when metrics are structurally identical across entities (use cards).
-
-  Schema additions:
-    GENERIC HANDOFF (mandatory):
-    profiles[]: {
-      id?,
-      entity_name,
-      subtitle?,                   // optional line directly below title
-      badge_text?,                 // optional KPI / tag pill at top-right
-      secondary_items[]: [         // preferred; ordered list of rows in the lower region
-        {
-          label,                   // left-side key
-          value,                   // string OR string[]
-          representation_type: "text" | "chip_list" | "pill",
-          sentiment?: "positive" | "negative" | "neutral" | "warning"
-        }
-      ],
-      attributes[]: { key, value, sentiment? }  // allowed backward-compatible fallback only
-    }
-    layout_direction: "horizontal" | "grid"  (default: "horizontal")
-
-  risk_register
-  ──────────────
-  A severity-encoded list of risks or issues where row background color IS the
-  primary data channel (not decoration). Multiple rows may have different severity
-  levels simultaneously — this is what distinguishes it from highlight_rows on a
-  plain table (which marks only one row at a time).
-  Use when: risks or issues must be shown with per-row severity variation AND
-  the board's eye must be directed to critical items without reading every cell.
-  NEVER use plain table when severity-by-row is the primary signal.
-
-  Schema additions:
-    GENERIC HANDOFF (mandatory):
-    risks[]: {
-      id?,
-      title,                       // short risk headline
-      detail,                      // explanatory line under the title
-      severity: "critical"|"high"|"medium"|"low",
-      owner?,
-      status?,
-      likelihood?: 0 | 1 | 2 | 3,  // pip count
-      impact?: 0 | 1 | 2 | 3,      // pip count
-      owner_tag?: string,          // optional display override for owner pill
-      status_tag?: string          // optional display override for status pill
-    }
-    show_mitigation: true | false  (legacy fallback only; avoid if detail already includes mitigation)
-
-─── INSIGHT TEXT SELECTION RULES ─────────────────────────
+─── INSIGHT TEXT SELECTION Indicators ─────────────────────────
 
   ZONE AREA = zone W% × zone H% as a fraction of total slide content area.
   Small zone  = zone area < 25%
@@ -616,8 +500,8 @@ OPTIONAL zones:
   ┌─────────────────┬───────────────┐
   │ Zone area       │ Max points[]  │
   ├─────────────────┼───────────────┤
-  │ Small  (< 25%)  │ 4 points      │
-  │ Medium (25–50%) │ 6 points      │
+  │ Small  (< 25%)  │ 3 points      │
+  │ Medium (25–50%) │ 5 points      │
   │ Large  (> 50%)  │ 8 points      │
   └─────────────────┴───────────────┘
   - Each bullet ≤ 12 words. Count every word — articles, numbers, units each count as 1.
@@ -649,285 +533,6 @@ OPTIONAL zones:
   - GROUPED mode (groups[]): board scans section headers first then reads bullets;
     use for 3+ thematically distinct finding clusters
   - Never use both points[] and groups[] in the same artifact
-
-  When insight_text is paired alongside a chart in a side-by-side zone:
-  - Prefer grouped mode with 2–3 groups reflecting narrative categories
-    (e.g. exposure facts / risk implications / recommended actions)
-  - Do NOT use a column group layout in a narrow side zone (< 45% slide width)
-
-──────────────────────────────────────────────────────────
-STEP 2 — ENFORCE THE ARTIFACT SIZING ENVELOPE
-──────────────────────────────────────────────────────────
-
-Every artifact has a valid spatial envelope.
-  MIN = smallest zone in which it remains legible
-  MAX = largest zone it should occupy before becoming visually wasteful
-Both boundaries are hard constraints.
-Below MIN → illegible. Above MAX → zone implies importance the artifact does not justify.
-
-Slide content area = 100% W × 100% H after title strip is removed.
-
-ZONE DIMENSION LOOKUP (from zone_structure_code)
-  ┌──────────────────────────┬───────┬───────┐
-  │ Zone split               │  W%   │  H%   │
-  ├──────────────────────────┼───────┼───────┤
-  │ full                     │ 100%  │ 100%  │
-  │ left_50 / right_50       │  50%  │ 100%  │
-  │ left_60 / right_40       │  60%  │ 100%  │
-  │ left_40 / right_60       │  40%  │ 100%  │
-  │ top_30 / bottom_70       │ 100%  │ 30/70%│
-  │ top_40 / bottom_60       │ 100%  │ 40/60%│
-  │ top_50 / bottom_50       │ 100%  │  50%  │
-  │ top_left_50/top_right_50 │  50%  │  50%  │
-  │ bottom_full              │ 100%  │  50%  │
-  │ left_full_50             │  50%  │ 100%  │
-  │ top_right_50_h           │  50%  │  50%  │
-  │ bottom_right_50_h        │  50%  │  50%  │
-  │ tl / tr / bl / br        │  50%  │  50%  │
-  └──────────────────────────┴───────┴───────┘
-
-ARTIFACT SIZING ENVELOPE MATRIX
-(all values = % of available content area W and H)
-
-FAMILY 1 — INSIGHT TEXT
-  Subtype                         MIN_W  MAX_W  MIN_H  MAX_H
-  standard (1–2 points)            15%    35%    15%    25%
-  standard (3–4 points)            20%    45%    20%    35%
-  standard (5–6 points)            25%    55%    28%    48%
-  standard (> 6 points)            35%    65%    45%    70%   ⚠ insight_density_warning
-  grouped (2 sec, 2–3 pts each)    30%    60%    30%    50%
-  grouped (3 sec, 2–3 pts each)    40%    70%    38%    60%
-  grouped (4+ sections)            50%    80%    50%    75%
-
-FAMILY 2 — CHARTS
-  bar / line (1–3 cat)             30%    55%    35%    60%
-  bar / line (4–6 cat)             40%    70%    40%    65%
-  bar / line (7–12 cat)            70%   100%    40%    65%
-  bar / line (> 12 cat)            85%   100%    45%    70%   ⚠ category_density_warning
-  clustered_bar (2 series, ≤6 cat) 40%    70%    40%    65%
-  clustered_bar (3+ series, ≤6 cat)60%    90%    45%    70%
-  clustered_bar (any, > 6 cat)     70%   100%    45%    70%   ⚠ clustered_density_warning
-  horizontal_bar (≤4 rows)         35%    60%    35%    55%
-  horizontal_bar (5–6 rows)        40%    65%    45%    65%
-  horizontal_bar (7–10 rows)       40%    65%    65%    85%
-  horizontal_bar (> 10 rows)       40%    65%    80%   100%   ⚠ row_density_warning
-  pie / donut (≤3 segments)        30%    50%    35%    55%
-  pie / donut (4–5 segments)       35%    55%    40%    60%
-  pie / donut (> 5 segments)       HARD REJECT — convert to horizontal_bar
-  combo / dual-axis                55%    90%    40%    65%
-  area (≤6 time periods)           45%    75%    40%    60%
-  area (> 6 time periods)          60%   100%    40%    65%
-  waterfall (≤6 steps)             50%    80%    40%    60%
-  waterfall (> 6 steps)            70%   100%    45%    65%   ⚠ waterfall_density_warning >10
-  group_pie (2–4 pies, 50–80% alloc) 50%  80%   40%    65%
-  group_pie (2–4 pies, >80% alloc) 80%   100%   40%    65%
-  group_pie (5–8 pies, >80% alloc) 80%   100%   45%    70%   ⚠ group_pie_density_warning
-  group_pie (< 50% alloc)          HARD REJECT — insufficient space; use table instead
-
-FAMILY 3 — CARDS
-  cards (1 card)                  15%    35%    15%    28%
-  cards (2 cards)                 30%    55%    18%    30%
-  cards (3 cards)                 50%    75%    20%    32%
-  cards (4 cards)                100%   100%    22%    35%
-  cards (5–6 cards)              100%   100%    30%    48%
-  cards (7–8 cards)              100%   100%    40%    58%   ⚠ card_density_warning
-  cards (9–10 cards)             100%   100%    52%    70%   ⚠ card_density_warning
-
-FAMILY 4 — WORKFLOW
-  process_flow (3 nodes)          55%    85%    28%    48%
-  process_flow (4–6 nodes)        70%   100%    32%    52%
-  process_flow (7–9 nodes)        85%   100%    38%    58%   ⚠ workflow_density_warning
-  process_flow (> 9 nodes)       100%   100%    42%    65%   ⚠ workflow_complexity_warning
-  timeline (3 events)             55%    85%    25%    45%
-  timeline (4–6 events)           70%   100%    28%    50%
-  timeline (7–10 events)          85%   100%    32%    55%   ⚠ timeline_density_warning
-  hierarchy (2 levels)            40%    65%    45%    70%
-  hierarchy (3 levels)            50%    75%    55%    80%
-  hierarchy (4+ levels)           55%    80%    70%    95%   ⚠ hierarchy_depth_warning
-  decomposition (L→R, ≤4 nodes)   65%   100%    35%    55%
-  decomposition (L→R, > 4 nodes)  75%   100%    40%    60%
-  decomposition (T→B, ≤4 nodes)   28%    50%    50%    80%
-  decomposition (T→B, > 4 nodes)  30%    55%    65%    90%
-
-FAMILY 5 — TABLE (last resort — use only when TABLE GATE A8 or B-fallback passes)
-  table (≤3 col, ≤3 row)          30%    55%    22%    40%
-  table (≤4 col, ≤4 row)          40%    65%    25%    45%
-  table (5–6 col, ≤4 row)         60%    85%    28%    48%
-  table (≤4 col, 5–6 row)         40%    65%    45%    65%
-  table (5–6 col, 5–6 row)        70%   100%    48%    70%
-  table (> 6 col OR > 6 row)      80%   100%    55%    85%   ⚠ table_density_warning
-
-FAMILY 5B — STRUCTURED DISPLAY ARTIFACTS (new)
-  stat_bar (≤5 rows)              35%    65%    40%    60%
-  stat_bar (6–8 rows)             40%    70%    55%    75%
-  stat_bar (9–10 rows)            45%    75%    70%    90%
-  comparison_table (≤3 opt, ≤4 crit) 40%  70%  30%   55%
-  comparison_table (4–5 opt, ≤4 crit)55%  80%  40%   65%
-  comparison_table (≤3 opt, 5–6 crit)50%  80%  40%   65%
-  comparison_table (4–5 opt, 5–6 crit)70% 100% 50%   75%
-  initiative_map (≤4 init, ≤4 dim)  55%  85%   40%   65%
-  initiative_map (5–6 init, ≤4 dim)  60%  90%  55%   75%
-  initiative_map (≤4 init, 5–6 dim)  70% 100%  45%   68%
-  profile_card_set (2–3 profiles)   45%   80%   30%   55%
-  profile_card_set (4–5 profiles)   70%  100%   40%   65%
-  profile_card_set (6+ profiles)    85%  100%   50%   75%
-  risk_register (≤4 risks)          40%   70%   35%   55%
-  risk_register (5–6 risks)         45%   75%   50%   70%
-  risk_register (7–8 risks)         50%   80%   65%   85%
-
-FAMILY 6 — REASONING ARTIFACTS
-  matrix (2×2)                    45%    70%    50%    75%
-  driver_tree (≤3 levels)         50%    80%    50%    75%
-  driver_tree (4+ levels)         65%    95%    60%    85%   ⚠ driver_tree_depth_warning >5
-  prioritization (≤5 rows)        35%    60%    35%    55%
-  prioritization (6–8 rows)       40%    65%    55%    75%
-  prioritization (9–10 rows)      45%    68%    68%    88%   ⚠ prioritization_length_warning
-
-DENSITY FLAGS AND HARD REJECTS
-
-  Density warnings (do not block execution; must appear in conflict log):
-  insight_density_warning        insight_text > 6 points
-  category_density_warning       bar/line > 12 categories
-  clustered_density_warning      clustered_bar > 6 cat with > 3 series
-  row_density_warning            horizontal_bar > 10 rows
-  stat_bar_density_warning       stat_bar > 10 rows
-  waterfall_density_warning      waterfall > 10 steps
-  card_density_warning           cards 7–10
-  workflow_density_warning       process_flow 7–9 nodes
-  workflow_complexity_warning    process_flow > 9 nodes
-  timeline_density_warning       timeline > 7 events
-  hierarchy_depth_warning        hierarchy > 4 levels
-  driver_tree_depth_warning      driver_tree > 5 levels
-  table_density_warning          table > 6 col OR > 6 row
-  comparison_table_warning       comparison_table > 5 options OR > 6 criteria
-  initiative_map_warning         initiative_map > 6 initiatives OR > 6 dimensions
-  risk_register_warning          risk_register > 8 risks
-  prioritization_length_warning  prioritization > 8 rows
-  group_pie_density_warning      group_pie > 4 pies in a zone with < 80% allocation
-
-  Hard rejects (block execution — resolve before proceeding):
-  pie > 5 segments               → convert to horizontal_bar automatically
-  donut > 5 segments             → convert to horizontal_bar automatically
-  group_pie entities < 2         → convert to single pie automatically
-  group_pie entities > 8         → convert to comparison_table or clustered_bar automatically
-  group_pie slices > 7           → convert to clustered_bar automatically
-  group_pie zone allocation < 50% → reject; use comparison_table instead
-  clustered_bar with mixed units → HARD REJECT; convert to combo (dual_axis: true) automatically
-                                   Mixed unit examples: Orders(k) + ASP(₹), Revenue(₹) + Volume(units),
-                                   Growth(%) + Revenue(₹), Count + Currency — ANY mismatch triggers this
-  table selected without         → HARD REJECT; must walk TABLE GATE first; resolve to correct
-    running TABLE GATE             Flow A or Flow B artifact before proceeding
-  insight_text > 6 points
-    in a PRIMARY zone            → restructure or split the slide
-
-ENVELOPE CHECK PROCEDURE
-  Step 2a: Estimate zone W% and H% from zone_structure_code using the lookup above
-  Step 2b: MIN boundary check — artifact MIN_W and MIN_H must fit available zone space
-           If FAIL: replace artifact with a smaller equivalent OR flag MIN_ENVELOPE_VIOLATION
-           and request a zone structure upgrade from Phase 2
-  Step 2c: MAX boundary check — zone must not materially exceed artifact MAX_W or MAX_H
-           If FAIL: add a permitted second artifact OR flag MAX_ENVELOPE_VIOLATION
-           and request a zone structure downgrade
-
-  PERMITTED SECOND ARTIFACT PAIRINGS (when MAX boundary triggers addition)
-  Primary artifact                  Permitted second artifact
-  bar / line / combo / clustered    insight_text (any subtype)
-  horizontal_bar                    insight_text (any subtype)
-  stat_bar                          insight_text standard (callout only — 1–2 points)
-  pie / donut                       cards (1–2) or insight_text standard
-  table                             insight_text (any subtype)
-  comparison_table                  insight_text standard (recommendation rationale — 1–3 points)
-  initiative_map                    insight_text standard (framing headline — 1–2 points)
-  profile_card_set                  insight_text standard (1–2 points) or cards (1–2)
-  risk_register                     insight_text standard (top risk callout — 1–2 points)
-  matrix                            insight_text grouped
-  driver_tree                       insight_text grouped
-  prioritization                    insight_text (any subtype)
-  process_flow / timeline           insight_text (stacked above or below only — never beside)
-  hierarchy / decomposition         insight_text (side column only — never stacked)
-  cards (1–3)                       insight_text standard
-  cards (4+)                        no second artifact permitted
-  insight_text grouped              cards (1–3) or simple chart ≤6 cat
-  insight_text standard             cards (1–2) only
-  group_pie (multi-zone slide)      insight_text standard ONLY
-  group_pie (1-zone slide)          insight_text standard, insight_text grouped, cards, or bar chart
-
-──────────────────────────────────────────────────────────
-STEP 3 — ARTIFACT SEQUENCE COHERENCE CHECK
-──────────────────────────────────────────────────────────
-
-  Read Zone 1 → Zone 2 → Zone 3 → Zone 4 artifact assignments in order.
-  Does the artifact sequence match the logic of the structural pattern?
-
-  summary, context_setter             → Zone 1 is the headline claim; subsequent zones prove or qualify it
-  drill_down, segmentation            → Zone 1 is the aggregate; subsequent zones decompose it
-  trend_analysis                      → Zone 1 is the trend chart; Zone 2 interprets the inflection
-  waterfall_decomposition             → Zone 1 is the waterfall; Zone 2 names the key driver
-  benchmark_comparison                → both CO-PRIMARY zones carry the same artifact class
-  recommendations                     → final zone carries the recommendation; earlier zones build the case
-  risk_register, exception_highlight  → Zone 1 is highest-severity item; later zones add context
-  decision_framework, scenario_analysis → Zone 1 establishes criteria or current state; later zones show options
-
-  Values: coherent | partially_coherent | broken
-  If partially_coherent or broken: state which zone breaks the sequence and why;
-  flag to Phase 2 for structural review before proceeding to Phase 4.
-
-──────────────────────────────────────────────────────────
-STEP 4 — ARTIFACT HEADER DIFFERENTIATION CHECK (mandatory)
-──────────────────────────────────────────────────────────
-
-PURPOSE: A slide's title and its artifact headers form a two-level visual hierarchy.
-The title states the SLIDE CLAIM (the board's take-away).
-The artifact header states the CHART/TABLE/ZONE FINDING (the specific data that proves or
-deepens the claim).
-If both say the same thing, the board sees repetition, not depth.
-
-DEFINITION OF "NEAR-REPETITION":
-Two messages are near-repetitions when they share:
-  - the same subject entity (e.g. both name "NorthZone"), AND
-  - the same directional claim (e.g. both say "dominates" / "holds most" / "largest share"), AND
-  - no materially different data dimension, sub-segment, or implication.
-
-EXAMPLE (FAIL):
-  Title:           "NorthZone dominates with 66% of portfolio outstanding"
-  Chart header:    "NorthZone holds two-thirds of total outstanding; WestZone and EastZone severely underweight"
-  → FAIL: both assert NorthZone dominance at roughly the same aggregation level.
-
-EXAMPLE (PASS — zoom in):
-  Title:           "NorthZone dominates with 66% of portfolio outstanding"
-  Chart header:    "Punjab (₹X cr) and Haryana (₹Y cr) together represent 63% of NorthZone exposure"
-  → PASS: header zooms into the within-zone sub-segment not stated in the title.
-
-EXAMPLE (PASS — add dimension):
-  Title:           "NorthZone dominates with 66% of portfolio outstanding"
-  Chart header:    "WestZone and EastZone combined account for only 34% despite comparable borrower count"
-  → PASS: header shifts focus to the underweight zones and introduces a new comparator.
-
-EXECUTION:
-  For every artifact header (chart_header, table_header, workflow_header) in every zone:
-
-  1. Compare the header against the slide title.
-  2. Ask: does the header restate the same entity + same directional claim at the same
-     aggregation level as the title?
-  3. If YES (near-repetition detected):
-     a. Identify what new data dimension, sub-segment, contrast, or implication the
-        underlying data can support.
-     b. Rewrite the header to lead with that new dimension.
-     c. Log: header_differentiation_applied: true
-  4. If NO: retain as-is and log: header_differentiation_applied: false
-
-  REWRITE STRATEGIES (pick first that applies):
-  A. Zoom in  — lead with the specific sub-segment, geographic unit, product, or time period
-                that the title only implies (e.g. state-level breakdown inside a zone)
-  B. Flip     — lead with the underperforming / contrasting entity rather than the dominant one
-  C. Imply    — reframe around the operational or risk implication rather than the raw fact
-  D. Qualify  — add a condition or trend that the title does not capture
-                (e.g. "… but seasoning data shows 73% is <3 years old")
-
-  ABSOLUTE CONSTRAINT:
-  The rewritten header must remain factually supported by the data in the artifact.
-  Do NOT invent numbers or claims not present in the source.
-  If no differentiated claim is supportable from available data, use strategy C or D.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PHASE 4 — LAYOUT FINALIZATION
@@ -1344,10 +949,6 @@ ZONE OBJECT STRUCTURE
   Each zone must contain:
   {
     "zone_id": "z1",
-    "zone_role": "primary_proof" | "supporting_evidence" | "implication" | "summary" |
-                 "comparison" | "breakdown" | "process" | "recommendation",
-    "message_objective": "string — one sentence: what this zone proves or communicates",
-    "narrative_weight": "primary" | "secondary" | "supporting",
     "artifacts": [ ... ],
     "zone_split": "<split value>",
     "artifact_arrangement": "horizontal" | "vertical" | null,
@@ -1532,6 +1133,145 @@ prioritization:
     label: 1 word only (e.g. "Timeline", "Owner", "Impact", "Zone")
     value: ≤ 4 words (e.g. "Q2 2025", "Credit Team", "High")
 
+stat_bar:
+  {
+    "type": "stat_bar",
+    "stat_header": "string — the one-line insight the ranking proves",
+    "annotation_style": "inline" | "trailing",
+    "column_headers": {
+      "label": "string",
+      "metric": "string",
+      "value": "string",
+      "annotation": "string"
+    },
+    "rows": [
+      {
+        "id": "string — optional stable key",
+        "label": "string — left-side row label",
+        "value": number,
+        "unit": "string — unit suffix for the displayed value",
+        "display_value": "string — optional preformatted value label",
+        "annotation": "string — right-side qualifier text",
+        "annotation_representation": "text" | "pill",
+        "bar_color": "string — optional override",
+        "highlight": true | false
+      }
+    ]
+  }
+  annotation_style default: "trailing". Do NOT encode as raw table rows — emit semantic row
+  objects a renderer can map to label / bar / value / annotation regions.
+  highlight: set explicitly — never infer from rank.
+  column_headers: optional; include only when column labels differ from defaults.
+
+comparison_table:
+  {
+    "type": "comparison_table",
+    "comparison_header": "string — the one-line insight the comparison proves",
+    "criteria": [
+      { "id": "string", "label": "string" }
+    ],
+    "options": [
+      {
+        "id": "string",
+        "name": "string",
+        "badge_text": "string — optional row badge e.g. 'recommended'",
+        "cells": [
+          {
+            "criterion_id": "string — matches criteria[].id",
+            "rating": "yes" | "partial" | "no" | "text",
+            "display_value": "string — optional rendered symbol/text if not default",
+            "note": "string — supporting note when rating is 'text'",
+            "representation_type": "icon" | "text"
+          }
+        ]
+      }
+    ],
+    "recommended_option_id": "string — id of the preferred option",
+    "recommended_option": "string — name fallback only if id is unavailable"
+  }
+  recommended_option_id is preferred; recommended_option is a fallback only if id is unavailable.
+  NEVER use plain table for option-vs-criteria data.
+
+initiative_map:
+  {
+    "type": "initiative_map",
+    "initiative_header": "string — the one-line framing of the initiative landscape",
+    "dimension_labels": [
+      { "id": "string", "label": "string" }
+    ],
+    "initiatives": [
+      {
+        "id": "string",
+        "name": "string — track label shown at left",
+        "subtitle": "string — optional track subtitle",
+        "placements": [
+          {
+            "lane_id": "string — matches dimension_labels[].id",
+            "title": "string",
+            "subtitle": "string",
+            "tags": ["string"],
+            "footer": "string",
+            "accent_tone": "primary" | "secondary" | "neutral"
+          }
+        ],
+        "dimensions": [{ "label": "string", "value": "string" }]
+      }
+    ]
+  }
+  placements[] is preferred over dimensions[] (backward-compatible fallback only).
+  NEVER use when rows have a rank order (use prioritization). NEVER use for process steps (use workflow).
+
+profile_card_set:
+  {
+    "type": "profile_card_set",
+    "profile_header": "string — the one-line framing of the entity set",
+    "layout_direction": "horizontal" | "grid",
+    "profiles": [
+      {
+        "id": "string",
+        "entity_name": "string",
+        "subtitle": "string — optional line directly below title",
+        "badge_text": "string — optional KPI/tag pill at top-right",
+        "secondary_items": [
+          {
+            "label": "string — left-side key",
+            "value": "string or string[]",
+            "representation_type": "text" | "chip_list" | "pill",
+            "sentiment": "positive" | "negative" | "neutral" | "warning"
+          }
+        ],
+        "attributes": [{ "key": "string", "value": "string", "sentiment": "string" }]
+      }
+    ]
+  }
+  layout_direction default: "horizontal".
+  secondary_items[] is preferred over attributes[] (backward-compatible fallback only).
+  NEVER use when metrics are structurally identical across entities (use cards instead).
+
+risk_register:
+  {
+    "type": "risk_register",
+    "risk_header": "string — the one-line framing of the risk landscape",
+    "show_mitigation": false,
+    "risks": [
+      {
+        "id": "string",
+        "title": "string — short risk headline",
+        "detail": "string — explanatory line under the title",
+        "severity": "critical" | "high" | "medium" | "low",
+        "owner": "string",
+        "status": "string",
+        "likelihood": 0 | 1 | 2 | 3,
+        "impact": 0 | 1 | 2 | 3,
+        "owner_tag": "string — optional display override for owner pill",
+        "status_tag": "string — optional display override for status pill"
+      }
+    ]
+  }
+  show_mitigation: legacy fallback only — avoid if detail already includes mitigation.
+  likelihood / impact: pip count 0–3; omit fields entirely if not relevant to the slide's message.
+  NEVER use plain table when severity-by-row is the primary signal.
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PRE-OUTPUT QUALITY GATES
 Run ALL gates before emitting JSON. Fix any failure before proceeding.
@@ -1565,7 +1305,7 @@ GATE 3 — ARTIFACT HARD CONSTRAINTS
   [ ] Every artifact has its header field populated (except cards)
   [ ] No cards used for part-of-whole, portfolio mix, or mutually exclusive category data
   [ ] No cards used for status buckets, risk categories, or total-plus-components structures
-  [ ] No cards-only slide — cards must be accompanied by chart/workflow/table/insight_text
+  [ ] No cards-only slide — cards must be accompanied by chart/workflow/insight_text
   [ ] Every group_pie has 2–8 series (entities / pies)
   [ ] Every group_pie has ≤ 7 categories (slices) — HARD MAX 7
   [ ] Every group_pie series values[] length equals categories[] length
@@ -1600,7 +1340,7 @@ GATE 6 — SLIDE COHERENCE
   [ ] Every zone's message_objective directly supports the slide's key_message
   [ ] No zone exists to fill space
   [ ] No text-only slide unless archetype is "summary" or "recommendation"
-  [ ] All other archetypes contain at least one chart, cards, workflow, table,
+  [ ] All other archetypes contain at least one chart, cards, workflow,
       matrix, driver_tree, or prioritization
   [ ] No two zones show the same data in different formats
   [ ] No two zones communicate the same interpretation or implication
