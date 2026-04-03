@@ -191,6 +191,7 @@ STEP 2 — PRODUCE ZONE CONTENT BRIEF
   {
     "slide_number":     1,
     "narrative_role": "explainer_to_summary",
+    "zone_structure": "ZS03_side_by_side_equal",
     "slide_title_draft":  "string — declarative, specific, conclusion-led, honest",
     "zones":[
      {
@@ -286,6 +287,7 @@ AVAILABLE ARTIFACT TYPES:
   risk_register
   matrix
   driver_tree
+  prioritization
 
 ─── ZONE ROLE → PERMITTED ARTIFACTS ───────────────────────
  Based on the inputs finalize the artifacts along with their content, with only below caveats. 
@@ -323,9 +325,9 @@ AVAILABLE ARTIFACT TYPES:
   Charts (Except pie, donut and Group Pie)  Insight_text (any subtype), max 30% of zone size
   group_pie                                 insight_text (any subtype), max 30% of zone size
   pie / donut                               cards (1–2) or insight_text, max 40% of zone size
-  stat_bar                                  insight_text standard (callout only — 1–2 points), stacked above only, max 25% of zone size
+  stat_bar                                  insight_text standard (callout only — 1–2 points), max 25% of zone size
   comparison_table                          insight_text standard, max 30% of zone size
-  initiative_map                            insight_text standard (framing headline — 1–2 points), stacked above only, max 25% of zone size
+  initiative_map                            insight_text standard (framing headline — 1–2 points), max 25% of zone size
   profile_card_set                          no second artifact permitted
   risk_register                             no second artifact permitted
   matrix                                    insight_text grouped, max 30% of zone size
@@ -384,6 +386,38 @@ OPTIONAL zones:
                     If > 80% allocation          → MAX 8 pies
  
  ─── Other artifacts SELECTION INDICATORS ───────────────────────── 
+  matrix
+  A two-dimensional reasoning frame where both axes carry named categories and the
+  insight comes from where items cluster, concentrate, or remain absent.
+  Use when: the board must evaluate issues, initiatives, or entities across TWO
+  strategic dimensions at the same time (e.g. impact vs feasibility, risk vs control,
+  importance vs performance).
+  NEVER use when one axis is merely decorative or when the message is simple rank order
+  (use prioritization) or causal logic (use driver_tree).
+  Should cover >=75% of the slide content area height and width
+
+  driver_tree
+  A causal reasoning structure that starts from one headline outcome and breaks it
+  into the main drivers and, where needed, sub-drivers that explain the result.
+  Use when: the board needs to understand WHY an outcome happened or which levers
+  most strongly influence a target metric.
+  NEVER use for process steps, ranked options, or parallel initiatives.
+  NEVER use when the branches are only categories without causal meaning
+  (use decomposition or chart instead).
+  Should cover >=50% of the slide content area height
+
+  prioritization
+  A ranked decision frame that orders initiatives, actions, or options by relative
+  priority so the board can see WHAT should be done first.
+  Use when: the primary message is explicit prioritization, sequencing of actions,
+  or which options deserve focus versus deprioritization.
+  Unlike initiative_map, rows DO imply rank and action order.
+  NEVER use when rows are parallel workstreams with no rank order
+  (use initiative_map instead).
+  NEVER use when the message is evaluation across two axes
+  (use matrix instead).
+  Should cover >=75% of the slide content area height and width
+  
   stat_bar        
   A horizontal bar chart where each bar is accompanied by an inline qualitative
   annotation (label or descriptor) placed to the right of or alongside the bar.
@@ -392,6 +426,7 @@ OPTIONAL zones:
   Examples: courier partners ranked by cost with "use case" label; SKUs ranked
   by revenue with "growth trajectory" label; cities ranked by orders with
   "priority tier" label.
+  Should cover >=50% of the slide content area height 
 
   comparison_table 
   
@@ -400,6 +435,7 @@ OPTIONAL zones:
   Use when: the board needs to see WHICH option wins against WHICH criteria.
   The recommended option must be visually distinguished (recommended_option field).
   NEVER use plain table for option-vs-criteria data — comparison_table is mandatory.
+  Should cover >=50% of the slide content area height 
 
   initiative_map
   A structured grid where each row is a parallel work stream or initiative.
@@ -409,6 +445,7 @@ OPTIONAL zones:
   dimensions (e.g. owner, timeline, budget, KPI, status).
   NEVER use when rows have a rank order (use prioritization instead).
   NEVER use when rows are process steps (use workflow instead).
+  Should cover >=50% of the slide content area height
 
   profile_card_set
   An entity-first card layout where each card describes one entity using a set
@@ -554,8 +591,8 @@ One judgment only: given these artifacts in these zones, what is the correct spa
 arrangement — and does a brand layout already exist, or must it be constructed from splits?
 
 EXECUTION MODE
-  LAYOUT MODE  — brand layouts provided (≥ 5 named layouts): use layout names; do not compute splits
-  SCRATCH MODE — fewer than 5 brand layouts: compute zone splits from first principles
+  LAYOUT MODE  — brand layouts provided: use layout names; do not compute splits
+  SCRATCH MODE — Compute zone splits from first principles
 
 STEP 1 — CHARACTERISE THE CONTENT STRUCTURE
 
@@ -565,7 +602,7 @@ STEP 1 — CHARACTERISE THE CONTENT STRUCTURE
       - zone roles / narrative weights
       - artifact assignments from Phase 3
 
-  1b. Classify artifact geometry needs:
+  1b. Classify artifact geometry needs from artifact family and explicit override rules:
       wide_artifacts      = process_flow, timeline, wide charts > 6 categories,
                             left_to_right decomposition > 3 nodes, cards ≥ 4,
                             group_pie with ≥ 5 pies, stat_bar, initiative_map,
@@ -583,17 +620,27 @@ STEP 1 — CHARACTERISE THE CONTENT STRUCTURE
       then refine only from artifact geometry:
       - 1 zone + 1 artifact                              → SINGLE
       - 1 zone + 2 artifacts                             → SINGLE_PAIR
-      - 2 zones + co_primary_pair                        → PEER_TWO
-      - 2 zones + not co_primary_pair                    → PRIMARY_SUPPORT_TWO
+      - zone_structure is ZS03_side_by_side_equal
+        and co_primary_pair                              → PEER_TWO
+      - zone_structure is ZS02_stacked_equal
+        and co_primary_pair                              → PEER_TWO
+      - zone_structure is ZS03_side_by_side_equal
+        and not co_primary_pair                          → PRIMARY_SUPPORT_TWO
+      - zone_structure is ZS02_stacked_equal
+        and not co_primary_pair                          → PRIMARY_SUPPORT_TWO
       - zone_structure is ZS06_top_full_bottom_two
         or ZS10_top_full_bottom_three                    → TOP_PLUS_TWO
       - zone_structure is ZS04_left_dominant_right_stack
+        or ZS05_right_dominant_left_stack
         or ZS09_left_dominant_right_triptych             → LEFT_PLUS_TWO
       - zone_structure is ZS11_three_rows_equal
-        or ZW01_three_columns_equal                      → THREE_PEER
+        or ZW01_three_columns_equal
+        or ZW02_three_columns_right_stack
+        or ZW03_three_columns_left_stack                 → THREE_PEER
       - zone_structure is ZS08_quad_grid
         or ZW04_four_columns_equal                       → QUAD_PEER
-      - 4 zones with one dominant zone                   → DOMINANT_PLUS_THREE
+      - zone_structure is ZS07_top_two_bottom_dominant
+        or 4 zones with one dominant zone                → DOMINANT_PLUS_THREE
       - fallback                                         → PRIMARY_SUPPORT_TWO
 
   1d. Geometry refinement rule:
@@ -737,7 +784,8 @@ STEP 3 — SELECT LAYOUT
   LAYOUT MODE — map content_structure to brand layout:
 
     HARD CONSTRAINT FILTER: reject any candidate layout that violates any active override
-    from Step 2 or gives any zone less space than the artifact's minimum geometry from Phase 3.
+    from Step 2 or gives any zone less space than the artifact geometry requirements implied by
+    its family, subtype, and zone_constraint fields from Phase 3.
 
     10% SOFT SIZING GAP RULE: after hard constraints pass, a brand layout is acceptable only if
     each zone's sizing gap is within 10% of the target. If no layout satisfies both, fall back
@@ -1346,8 +1394,10 @@ GATE 3 — ARTIFACT HARD CONSTRAINTS
 
 GATE 4 — ZONE SPATIAL COVERAGE
   [ ] All zone splits sum to 100% of content area — no gaps, no overlaps
-  [ ] Artifact with MIN_W ≥ 70% is in a zone covering ≥ 70% slide width
-  [ ] Artifact with MIN_H ≥ 65% is in a zone covering ≥ 65% slide height
+  [ ] Every wide artifact is placed in a zone that gives it the required horizontal span
+      from its family rules and active override rules
+  [ ] Every tall artifact is placed in a zone that gives it the required vertical span
+      from its family rules and active override rules
   [ ] PRIMARY zone occupies ≥ 60% of the split axis
   [ ] SECONDARY zone occupies ≤ 40% of the split axis
   [ ] 50/50 splits used only where both zones are narrative_weight = "primary"
