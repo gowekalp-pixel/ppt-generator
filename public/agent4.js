@@ -378,12 +378,7 @@ OPTIONAL zones:
                     entities (series) > 8     → convert to clustered_bar or profile_cards
                     slices (categories) > 7   → convert to clustered_bar
                     slices (categories) < 2   → invalid
-                  Zone allocation: requires ≥ 50% of zone horizontal OR vertical axis.
-                  Layout direction:
-                    If 100% horizontal available → arrange pies side-by-side in a single row
-                    If 100% vertical available   → distribute pies across multiple rows
-                    If 50–80% allocation         → MAX 4 pies
-                    If > 80% allocation          → MAX 8 pies
+                  
  
  ─── Other artifacts SELECTION INDICATORS ───────────────────────── 
   matrix
@@ -394,7 +389,7 @@ OPTIONAL zones:
   importance vs performance).
   NEVER use when one axis is merely decorative or when the message is simple rank order
   (use prioritization) or causal logic (use driver_tree).
-  Should cover >=75% of the slide content area height and width
+
 
   driver_tree
   A causal reasoning structure that starts from one headline outcome and breaks it
@@ -404,7 +399,7 @@ OPTIONAL zones:
   NEVER use for process steps, ranked options, or parallel initiatives.
   NEVER use when the branches are only categories without causal meaning
   (use decomposition or chart instead).
-  Should cover >=50% of the slide content area height
+
 
   prioritization
   A ranked decision frame that orders initiatives, actions, or options by relative
@@ -416,7 +411,7 @@ OPTIONAL zones:
   (use initiative_map instead).
   NEVER use when the message is evaluation across two axes
   (use matrix instead).
-  Should cover >=75% of the slide content area height and width
+ 
   
   stat_bar        
   A horizontal bar chart where each bar is accompanied by an inline qualitative
@@ -426,17 +421,15 @@ OPTIONAL zones:
   Examples: courier partners ranked by cost with "use case" label; SKUs ranked
   by revenue with "growth trajectory" label; cities ranked by orders with
   "priority tier" label.
-  Should cover >=50% of the slide content area height 
+
 
   comparison_table 
-  
-  A structured grid where rows are options/candidates and columns are evaluation
+    A structured grid where rows are options/candidates and columns are evaluation
   criteria. Each cell contains a judgment rating, not a raw number.
   Use when: the board needs to see WHICH option wins against WHICH criteria.
   The recommended option must be visually distinguished (recommended_option field).
   NEVER use plain table for option-vs-criteria data — comparison_table is mandatory.
-  Should cover >=50% of the slide content area height 
-
+  
   initiative_map
   A structured grid where each row is a parallel work stream or initiative.
   Unlike prioritization, rows have NO implied rank between them.
@@ -445,7 +438,7 @@ OPTIONAL zones:
   dimensions (e.g. owner, timeline, budget, KPI, status).
   NEVER use when rows have a rank order (use prioritization instead).
   NEVER use when rows are process steps (use workflow instead).
-  Should cover >=50% of the slide content area height
+  
 
   profile_card_set
   An entity-first card layout where each card describes one entity using a set
@@ -491,10 +484,6 @@ OPTIONAL zones:
   → Automatically replace category cards with chart or decomposition workflow
   → At most ONE card may remain: the total / anchor KPI
 
-  Card count limits:
-  - Max 4 cards in full-width zones
-  - Max 2 cards in side zones (left_X, right_X, tl, tr, bl, br)
-  - Cards (4): zone MUST be full-width — no other zones on the same slide
 
   A slide CANNOT contain only cards. Cards must always be paired with at least one of:
   chart | workflow | table | insight_text | Stat_Bar
@@ -502,54 +491,31 @@ OPTIONAL zones:
 ─── WORKFLOW SELECTION Indicators ─────────────────────────────
 
   process_flow:   linear sequence of steps; 4–6 nodes; left_to_right only;
-                  requires full slide width and at least 50% slide height;
                   use when showing HOW something happens step by step
 
   timeline:       phased chronological progression; 4–6 nodes; left_to_right only;
-                  must stretch across full slide width with at least 50% height;
                   use when showing WHEN things happen in sequence
 
   hierarchy:      parent-child reporting structure; minimum 3 levels;
-                  top_down_branching only; requires at least 50% width and full content height;
+                  top_down_branching only; 
                   use when showing WHO reports to whom or structural organisation
 
   decomposition:  top number or concept split into components; max 6 nodes;
                   direction: left_to_right or top_to_bottom or top_down_branching;
-                  left_to_right requires full width; top_to_bottom requires full height;
                   use when showing WHAT something is made of
 
-  Flow direction placement rules:
-  - left_to_right / timeline:   MUST span full horizontal width; companion zones stacked
-                                 above or below only; NEVER side-by-side
-  - top_to_bottom / top_down_branching: MUST span full vertical height; companion zones
-                                        left or right only; NEVER stacked above or below
-
+  
   Node count rules:
   - process_flow: minimum 4 nodes
   - timeline: minimum 4 nodes
   - hierarchy: minimum 3 distinct levels
   - decomposition: max 6 nodes
-  - Any workflow with ≥ 4 nodes triggers the full-width (left_to_right) or
-    full-height (top_to_bottom) rule as a HARD OVERRIDE
 
 ─── INSIGHT TEXT SELECTION Indicators ─────────────────────────
 
-  ZONE AREA = zone W% × zone H% as a fraction of total slide content area.
-  Small zone  = zone area < 25%
-  Medium zone = zone area 25%–50%
-  Large zone  = zone area > 50%
-
-  STANDARD MODE — point count cap by zone area (HARD MAX):
-  ┌─────────────────┬───────────────┐
-  │ Zone area       │ Max points[]  │
-  ├─────────────────┼───────────────┤
-  │ Small  (< 25%)  │ 3 points      │
-  │ Medium (25–50%) │ 5 points      │
-  │ Large  (> 50%)  │ 8 points      │
-  └─────────────────┴───────────────┘
   - Each bullet ≤ 12 words. Count every word — articles, numbers, units each count as 1.
   - 1–2 data points per bullet maximum. Remaining detail goes to speaker notes.
-  - Data-first phrasing: lead with the number or entity. No "This shows that…" preamble.
+  - Data-first phrasing: try to lead with the number or entity. No "This shows that…" preamble.
   - No compound sentences with dashes or semicolons — one idea per bullet.
   - If point count would exceed the zone cap: move lower-priority points to speaker notes.
   - If findings are thematically distinct and would exceed 4: switch to GROUPED mode.
@@ -559,13 +525,6 @@ OPTIONAL zones:
   standard (3 points+):  evidence list; use zone area cap above to determine max
 
   GROUPED MODE — groups × bullets cap by zone area (HARD MAX):
-  ┌─────────────────┬──────────────────────────────┐
-  │ Zone area       │ Max groups × bullets / group  │
-  ├─────────────────┼──────────────────────────────┤
-  │ Small  (< 25%)  │ 2 groups × 2 bullets          │
-  │ Medium (25–50%) │ 3 groups × 3 bullets          │
-  │ Large  (> 50%)  │ 5 groups × 3 bullets          │
-  └─────────────────┴──────────────────────────────┘
   - Each bullet ≤ 12 words. 1–2 data points per bullet. Remainder to speaker notes.
   - Group headers: 2–4 words, no verbs, label the theme not the finding.
   - Board scans section headers first — headers must be self-explanatory at a glance.
@@ -582,387 +541,266 @@ PHASE 4 — LAYOUT STRUCTURE FINALIZATION
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 You are the Layout Architect.
-You receive the completed Slide Artifact Plan from Phase 3.
-Translate the locked zone_structure plus artifact assignments into precise spatial instructions.
-Make NO new strategic decisions. Do NOT change artifacts or zone roles.
-Start from the zone_structure chosen earlier. Only change the spatial interpretation if a hard
-artifact override makes the chosen structure invalid or unreadable.
-One judgment only: given these artifacts in these zones, what is the correct spatial
-arrangement — and does a brand layout already exist, or must it be constructed from splits?
 
-EXECUTION MODE
-  LAYOUT MODE  — brand layouts provided: use layout names; do not compute splits
-  SCRATCH MODE — Compute zone splits from first principles
+You receive the locked outputs from earlier phases:
+- zone_structure from Phase 1
+- zone roles from Phase 1
+- zone content from Phase 2
+- selected primary and secondary artifacts from Phase 3
 
-STEP 1 — CHARACTERISE THE CONTENT STRUCTURE
+Your job in this phase is ONLY to determine the best spatial layout for the already-selected zones and artifacts.
 
-  1a. Read the locked structural inputs from earlier phases:
-      - zone_structure chosen in Phase 1
-      - zone count
-      - zone roles / narrative weights
-      - artifact assignments from Phase 3
+Do NOT change:
+- zone_structure
+- zone roles
+- primary artifact
+- secondary artifact
+- artifact subtype
+- content inside artifacts
 
-  1b. Classify artifact geometry needs from artifact family and explicit override rules:
-      wide_artifacts      = process_flow, timeline, wide charts > 6 categories,
-                            left_to_right decomposition > 3 nodes, cards ≥ 4,
-                            group_pie with ≥ 5 pies, stat_bar, initiative_map,
-                            profile_card_set ≥ 4 profiles
-      tall_artifacts      = hierarchy, top_down / top_to_bottom decomposition,
-                            horizontal_bar > 6 rows, driver_tree, matrix,
-                            prioritization > 5 rows, risk_register,
-                            comparison_table with dense option/criteria grids
-      reasoning_artifacts = matrix | driver_tree | prioritization | comparison_table
-      workflow_artifacts  = process_flow | timeline | hierarchy | decomposition
-      structured_display  = stat_bar | initiative_map | profile_card_set | risk_register | comparison_table
-      co_primary_pair     = exactly 2 zones and both are CO-PRIMARY
+You may only:
+- select the best matching master layout when available
+- determine zone_split, layout_hint, artifact_arrangement, artifact_split_hint
+- fall back to Scratch Mode if no available master layout can satisfy artifact sizing constraints
 
-  1c. Derive the canonical content_structure from the locked zone_structure first,
-      then refine only from artifact geometry:
-      - 1 zone + 1 artifact                              → SINGLE
-      - 1 zone + 2 artifacts                             → SINGLE_PAIR
-      - zone_structure is ZS03_side_by_side_equal
-        and co_primary_pair                              → PEER_TWO
-      - zone_structure is ZS02_stacked_equal
-        and co_primary_pair                              → PEER_TWO
-      - zone_structure is ZS03_side_by_side_equal
-        and not co_primary_pair                          → PRIMARY_SUPPORT_TWO
-      - zone_structure is ZS02_stacked_equal
-        and not co_primary_pair                          → PRIMARY_SUPPORT_TWO
-      - zone_structure is ZS06_top_full_bottom_two
-        or ZS10_top_full_bottom_three                    → TOP_PLUS_TWO
-      - zone_structure is ZS04_left_dominant_right_stack
-        or ZS05_right_dominant_left_stack
-        or ZS09_left_dominant_right_triptych             → LEFT_PLUS_TWO
-      - zone_structure is ZS11_three_rows_equal
-        or ZW01_three_columns_equal
-        or ZW02_three_columns_right_stack
-        or ZW03_three_columns_left_stack                 → THREE_PEER
-      - zone_structure is ZS08_quad_grid
-        or ZW04_four_columns_equal                       → QUAD_PEER
-      - zone_structure is ZS07_top_two_bottom_dominant
-        or 4 zones with one dominant zone                → DOMINANT_PLUS_THREE
-      - fallback                                         → PRIMARY_SUPPORT_TWO
+Core rule:
+- Always try Layout Mode first.
+- Use Scratch Mode only if no available master layout fits the locked zone_structure and artifact constraints.
 
-  1d. Geometry refinement rule:
-      The canonical content_structure above is the default.
-      Override it only when a hard artifact rule in Step 2 forces WIDE_DOMINANT,
-      TALL_DOMINANT, SINGLE, or PRIMARY_SUPPORT_TWO.
 
-STEP 2 — APPLY OVERRIDE RULES (check every artifact in order)
+EXECUTION MODES
 
-  O1. LEFT-TO-RIGHT WORKFLOW
-      Trigger: process_flow, timeline, or left_to_right decomposition
-      → Zone MUST span full horizontal width
-      → Companion (if any) MUST be stacked above or below — NEVER side-by-side
-      → content_structure forced to WIDE_DOMINANT
-      → Mandatory for ≥ 4 nodes
+LAYOUT MODE
+- Search the master layout list first.
+- Select the best valid layout.
+- If no layout is valid, switch to Scratch Mode.
 
-      SELF-CHECK: If a left_to_right workflow shares horizontal space with any other zone
-      → STOP. Discard layout. Redesign: workflow = full-width zone; companion = stacked zone.
+SCRATCH MODE
+- Use when no master layout can satisfy the locked zone_structure and artifact sizing constraints.
+- Also use when no master layout can satisfy the locked zone_structure and artifact sizing constraints.
+- In Scratch Mode, derive zone_split and internal artifact arrangement from first principles.
 
-  O2. TOP-DOWN WORKFLOW
-      Trigger: hierarchy, or top_down / top_to_bottom decomposition
-      → Zone MUST span full vertical height
-      → Companion MUST be placed left or right — NEVER stacked
-      → content_structure forced to TALL_DOMINANT
-      → Mandatory for ≥ 3 levels or ≥ 4 nodes
 
-  O3. WIDE CHART
-      Trigger: any chart with > 6 categories
-      → Zone MUST span full slide width
-      → Companion insight_text embedded INSIDE same zone, not a separate zone
-      → content_structure forced to WIDE_DOMINANT
+STEP 1 — READ LOCKED INPUTS
 
-  O4. FOUR-PLUS CARDS
-      Trigger: cards ≥ 4
-      → Zone MUST span full horizontal width
-      → count = 4: no other zones on slide
-      → count 5–10: companion stacked above or below only
-      → content_structure forced to WIDE_DOMINANT
+For each slide, read:
+- zone_structure
+- zone count
+- zone order
+- zone_role of each zone
+- primary artifact type in each zone
+- secondary artifact type in each zone, if present
+- artifact subtype and density variant
+- artifact-specific hard placement rules from Phase 3
 
-  O5. TALL HORIZONTAL BAR
-      Trigger: horizontal_bar > 6 rows
-      → Zone must occupy ≥ 65% slide height
-      → Companion zone goes in remaining strip above
-      → content_structure forced to TALL_DOMINANT
+Within each zone:
+- the PRIMARY artifact takes precedence
+- the SECONDARY artifact may use only the remaining space
+- if both cannot fit validly, reject the layout
 
-  O6. REASONING ARTIFACT
-      Trigger: matrix, driver_tree, or prioritization
-      → Zone must be DOMINANT — minimum 60% content area
-      → Any companion zone must be subordinate
-      → Side companion permitted only if zone ≥ 60% width
 
-  O7. PORTRAIT / NON-WIDESCREEN
-      Trigger: slide format is portrait or 4:3, OR width:height ratio < 1.5
-      → ZW-series codes are PROHIBITED
-      → Convert any ZW selection to the ZS equivalent
+STEP 2 — ASSIGN ARTIFACT SIZING CONSTRAINTS
 
-  O8. GROUP PIE
-      Trigger: group_pie with ≥ 5 pies
-      → Zone must occupy ≥ 80% of slide width (horizontal layout) OR ≥ 80% height (vertical layout)
-      → content_structure forced to WIDE_DOMINANT (horizontal) or TALL_DOMINANT (vertical)
-      → Companion insight_text MUST be in a separate stacked zone, not side-by-side with group_pie
+All MIN_W / MAX_W / MIN_H / MAX_H values below are percentages of the ASSIGNED ZONE area, not the full slide, unless explicitly stated otherwise.
 
-      Trigger: group_pie with 2–4 pies
-      → Zone must occupy ≥ 50% of slide width or height
-      → Companion artifact may share the same zone or an adjacent zone
+Apply the correct sizing row for every selected artifact.
 
-      Layout direction rule:
-      → If slide width ≥ 1.5× height (widescreen): prefer horizontal arrangement (pies in one row)
-      → If slide height ≥ slide width: prefer vertical arrangement (pies in multiple rows)
+FAMILY 1 — INSIGHT TEXT
+  Subtype                         MIN_W  MAX_W  MIN_H  MAX_H
+  standard (1–2 points)            15%    25%    15%    25%
+  standard (3–6 points)            20%    30%    20%    30%
+  standard (>6 points)             30%    35%    30%    40%
+  grouped (2 sec, 2–3 pts each)    20%    30%    40%    60%
+  grouped (3 sec, 2–3 pts each)    20%    30%    60%    80%
+  grouped (4+ sections)            40%    60%    80%    100%
 
-      SELF-CHECK: If a group_pie with ≥ 5 pies is allocated less than 80% of the slide axis
-      → STOP. Increase zone allocation OR reduce pie count to ≤ 4.
+FAMILY 2 — CHARTS
+  bar / line (1–3 cat)             30%    60%    30%    100%
+  bar / line (4–6 cat)             40%    70%    40%    100%
+  bar / line (>7–12 cat)           70%   100%    40%    65%
+  clustered_bar (2 series, ≤6 cat) 50%    70%    40%    100%
+  clustered_bar (3+ series, ≤6 cat)70%    90%    75%    100%
+  clustered_bar (any, > 6 cat)     70%   100%    90%    100%  
+  horizontal_bar (≤4 rows)         35%    60%    35%    55%
+  horizontal_bar (5–6 rows)        40%    65%    45%    65%
+  horizontal_bar (7–10 rows)       40%    65%    65%    85%
+  horizontal_bar (> 10 rows)       40%    65%    80%   100%   row_density_warning
+  pie / donut (≤3 segments)        30%    50%    35%    55%
+  pie / donut (4–5 segments)       35%    55%    40%    60%
+  pie / donut (> 5 segments)       HARD REJECT — convert to horizontal_bar
+  combo / dual-axis                55%    90%    40%    65%
+  area (≤6 time periods)           45%    75%    40%    60%
+  area (> 6 time periods)          60%   100%    40%    65%
+  waterfall (≤6 steps)             50%    80%    40%    60%
+  waterfall (> 6 steps)            70%   100%    45%    65%   waterfall_density_warning
+  group_pie (2–4 pies, 50–80% alloc) 50%  80%   40%    65%
+  group_pie (2–4 pies, >80% alloc) 80%   100%   40%    65%
+  group_pie (5–8 pies, >80% alloc) 80%   100%   45%    70%   group_pie_density_warning
+  group_pie (< 50% alloc)          HARD REJECT — insufficient space; use table instead
 
-  O9. STAT BAR
-      Trigger: stat_bar (any row count)
-      → Zone MUST span full horizontal slide width — label + bar track + value + annotation
-        all require horizontal space in sequence; truncating width breaks the reading flow
-      → content_structure forced to WIDE_DOMINANT
-      → No zone may sit to the left or right of a stat_bar zone
-      → Companion insight_text (if present) MUST be stacked above only (never below, never beside)
-        — the stat_bar reading direction is top-to-bottom; a zone below steals eye flow
-      → artifact_arrangement: single; artifact_coverage_hint: full; internal_alignment: fill
+FAMILY 3 — CARDS
+  cards (1 card)                  15%    35%    15%    28%
+  cards (2 cards)                 30%    55%    18%    30%
+  cards (3 cards)                 50%    75%    20%    32%
+  cards (4 cards)                100%   100%    22%    35%
+  cards (5–6 cards)              100%   100%    30%    48%
+  cards (7–8 cards)              100%   100%    40%    58%   card_density_warning
+  cards (9–10 cards)             100%   100%    52%    70%   card_density_warning
 
-      SELF-CHECK: If stat_bar is placed in a side zone (left_X, right_X, tl, tr, bl, br)
-      → STOP. Reassign stat_bar to a full-width zone and move any companion to a stacked zone above.
+FAMILY 4 — WORKFLOW
+  process_flow (3 nodes)          55%    85%    28%    48%
+  process_flow (4–6 nodes)        70%   100%    32%    52%
+  process_flow (7–9 nodes)        85%   100%    38%    58%   workflow_density_warning
+  process_flow (> 9 nodes)       100%   100%    42%    65%   workflow_complexity_warning
+  timeline (3 events)             55%    85%    25%    45%
+  timeline (4–6 events)           70%   100%    28%    50%
+  timeline (7–10 events)          85%   100%    32%    55%   timeline_density_warning
+  hierarchy (2 levels)            40%    65%    45%    70%
+  hierarchy (3 levels)            50%    75%    55%    80%
+  hierarchy (4+ levels)           55%    80%    70%    95%   hierarchy_depth_warning
+  decomposition (L→R, ≤4 nodes)   65%   100%    35%    55%
+  decomposition (L→R, > 4 nodes)  75%   100%    40%    60%
+  decomposition (T→B, ≤4 nodes)   28%    50%    50%    80%
+  decomposition (T→B, > 4 nodes)  30%    55%    65%    90%
 
-  O10. INITIATIVE MAP
-      Trigger: initiative_map (any row/column count)
-      → Zone MUST span full horizontal slide width — swim-lane columns require the full width
-        to give each phase/dimension enough space for cell content
-      → content_structure forced to WIDE_DOMINANT
-      → No zone may sit to the left or right of an initiative_map zone
-      → Companion insight_text (if present) MUST be stacked above only — max 25% slide height
-      → artifact_arrangement: single; artifact_coverage_hint: full; internal_alignment: fill
+FAMILY 5 — TABLE
+  table (≤3 col, ≤3 row)          30%    55%    22%    40%
+  table (≤4 col, ≤4 row)          40%    65%    25%    45%
+  table (5–6 col, ≤4 row)         60%    85%    28%    48%
+  table (≤4 col, 5–6 row)         40%    65%    45%    65%
+  table (5–6 col, 5–6 row)        70%   100%    48%    70%
+  table (> 6 col OR > 6 row)      80%   100%    55%    85%   table_density_warning
 
-      SELF-CHECK: If initiative_map is placed in a side zone
-      → STOP. Reassign to full-width zone.
+FAMILY 5B — STRUCTURED DISPLAY ARTIFACTS
+  stat_bar (≤5 rows)                 35%    65%    40%    60%
+  stat_bar (6–8 rows)                40%    70%    55%    75%
+  stat_bar (9–10 rows)               45%    75%    70%    90%
+  comparison_table (≤3 opt, ≤4 crit) 60%   100%    30%    55%
+  comparison_table (4–5 opt, ≤4 crit)55%    80%    40%    65%
+  comparison_table (≤3 opt, 5–6 crit)50%    80%    40%    65%
+  comparison_table (4–5 opt, 5–6 crit)70%   100%    50%    75%
+  initiative_map (≤4 init, ≤4 dim)   55%    85%    40%    65%
+  initiative_map (5–6 init, ≤4 dim)  60%    90%    55%    75%
+  initiative_map (≤4 init, 5–6 dim)  70%   100%    45%    68%
+  profile_card_set (2–3 profiles)    50%    70%    50%    70%
+  profile_card_set (4–5 profiles)    70%   100%    70%   100%
+  profile_card_set (6+ profiles)     70%   100%    70%   100%
+  risk_register (≤4 risks)           50%   100%    50%   100%
 
-  O11. RISK REGISTER
-      Trigger: risk_register (any item count)
-      → Zone must occupy ≥ 65% of slide HEIGHT — severity-banded rows stack vertically;
-        compressing height truncates the pip encoding and status pills
-      → content_structure: SINGLE (no companion) or PRIMARY_SUPPORT_TWO (companion above only)
-      → If companion zone exists: companion takes top 30%; risk_register takes bottom 70%
-      → No zone may sit to the left or right of a risk_register zone
-      → artifact_arrangement: single; artifact_coverage_hint: full; internal_alignment: fill
+FAMILY 6 — REASONING ARTIFACTS
+  matrix (2×2)                    50%    100%    50%    75%
+  driver_tree (≤3 levels)         50%    100%    50%   100%
+  driver_tree (4+ levels)         65%    100%    65%   100%   driver_tree_depth_warning
+  prioritization (≤5 rows)        50%    100%    50%   100%
 
-      SELF-CHECK: If risk_register zone height < 65%
-      → STOP. Remove companion zone OR stack companion above at 25% height, risk_register below at 75%.
 
-  O12. COMPARISON TABLE
-      Trigger: comparison_table (any option/criteria count)
-      → Zone must be DOMINANT — minimum 60% content area
-      → Full width strongly preferred: criteria columns require horizontal space per column;
-        narrow zones compress criteria headers below readability
-      → If slide has two zones: comparison_table takes ≥ 60% width; companion takes ≤ 40%
-        and should contain insight_text only — no second data artifact alongside a comparison_table
-      → If comparison_table is the only artifact: assign full zone (SINGLE)
-      → artifact_arrangement: single; artifact_coverage_hint: full; internal_alignment: fill
+STEP 3 — LAYOUT MODE: SEARCH MASTER LAYOUTS FIRST
 
-      SELF-CHECK: If comparison_table zone width < 55% of slide width
-      → STOP. Either make it full width (SINGLE) or primary-left (left_60 or wider).
+For every candidate brand layout in the master layout list, test in this order:
 
-  O13. PROFILE CARD SET
-      Trigger: profile_card_set ≥ 4 profiles
-      → Zone MUST span full horizontal slide width — grid layout requires 3+ columns
-      → content_structure forced to WIDE_DOMINANT
-      → No companion zone permitted when profiles ≥ 4
-      → artifact_arrangement: single; artifact_coverage_hint: full; internal_alignment: fill
+1. Zone structure fit
+- The layout must match the locked zone_structure.
+- If zone_structure is stacked, reject side-by-side layouts.
+- If zone_structure is side-by-side, reject stacked layouts.
+- If zone_structure has a dominant zone, reject layouts with only equal cells.
+- If zone_structure has equal peer zones, reject layouts with artificial dominance.
 
-      Trigger: profile_card_set 2–3 profiles
-      → Zone must occupy ≥ 50% slide width
-      → Companion insight_text permitted in adjacent zone (right side, ≤ 40% width)
-      → artifact_arrangement: single; artifact_coverage_hint: full; internal_alignment: fill
+2. Artifact packing fit
+- The layout must support the number of artifacts in each zone.
+- If a zone has 1 artifact, the layout must support a single artifact container for that zone.
+- If a zone has 2 artifacts, the layout must support either:
+  - an internal two-artifact container, or
+  - a valid internal split that can host both primary and secondary artifacts.
 
-      SELF-CHECK: If profile_card_set ≥ 4 profiles is not in a full-width zone
-      → STOP. Reassign to full-width zone. Remove companion zone.
+3. Primary artifact fit
+- For each zone, check whether the PRIMARY artifact can fit within its MIN_W / MAX_W / MIN_H / MAX_H range.
 
-STEP 3 — SELECT LAYOUT
+4. Secondary artifact fit
+- If a secondary artifact exists, check whether it can fit in the remaining space while staying within its own valid range.
+- If the primary artifact fits but the secondary artifact does not, reject the layout.
 
-  LAYOUT MODE — map content_structure to brand layout:
+5. Artifact rule fit
+- Apply all artifact-specific hard rules from Phase 3.
+- Examples:
+  - full-width only
+  - top/bottom only
+  - grouped insight_text only
+  - no second artifact allowed
+  - stacked above only
 
-    HARD CONSTRAINT FILTER: reject any candidate layout that violates any active override
-    from Step 2 or gives any zone less space than the artifact geometry requirements implied by
-    its family, subtype, and zone_constraint fields from Phase 3.
+6. Selection tiebreak
+- If multiple layouts are valid, choose the layout that:
+  - best preserves the locked zone hierarchy
+  - gives the primary artifact the strongest readable fit
+  - keeps the secondary artifact within range without compression
+  - minimizes density warnings
 
-    10% SOFT SIZING GAP RULE: after hard constraints pass, a brand layout is acceptable only if
-    each zone's sizing gap is within 10% of the target. If no layout satisfies both, fall back
-    to SCRATCH MODE for this slide.
+If at least one layout is valid:
+- select the best layout
+- set selected_layout_name
+- populate zone_split, layout_hint, artifact_arrangement, and artifact_split_hint from that layout
+- stop here
 
-    content_structure             Artifact config             → Layout name pattern
-    SINGLE                        1 wide artifact             → "Body" / "1 Across"
-    SINGLE_PAIR                   2 artifacts, horizontal     → "2 Across" / "1 on 1"
-    SINGLE_PAIR                   2 artifacts, stacked        → "Body" / "1 Across"
-    PEER_TWO                      1 artifact per zone         → "2 Across" / "1 on 1"
-    PEER_TWO                      2 artifacts per zone (4)    → "2 on 2" / "4 Block"
-    PRIMARY_SUPPORT_TWO           chart primary               → "1 on 1" wide left
-    PRIMARY_SUPPORT_TWO           workflow primary            → widest single-col
-    THREE_PEER                    3 artifacts                 → "3 Across" / "3 Col"
-    TOP_PLUS_TWO                  top wide + 2 below          → "1 on 2" / "1 on 3"
-    LEFT_PLUS_TWO                 left tall + 2 right         → "2 on 1" stacked right
-    QUAD_PEER                     4 peer artifacts            → "2 on 2" / "4 Block" / "4 Across"
-    DOMINANT_PLUS_THREE           1 dominant + 3 support      → "1 on 3" / asymmetric
-    WIDE_DOMINANT                 any wide artifact           → widest single-col layout
-    TALL_DOMINANT                 any tall artifact           → tallest primary col layout
+If no layout is valid:
+- switch to Scratch Mode
 
-    Tiebreak: when two layouts match, select the one where the primary artifact zone is larger.
-    If no brand layout survives hard constraints and 10% gap rule → switch to SCRATCH MODE.
 
-  SCRATCH MODE — derive zone splits:
+STEP 4 — SCRATCH MODE
 
-    ALLOWED SPLIT VALUES:
-    Single zone:            full
-    Two zones, side-by-side: left_50+right_50 | left_60+right_40 | left_40+right_60
-    Two zones, stacked:     top_30+bottom_70 | top_40+bottom_60 | top_50+bottom_50
-    Three zones (top+split): top_left_50 + top_right_50 + bottom_full
-    Three zones (left+split): left_full_50 + top_right_50_h + bottom_right_50_h
-    Four zones:             tl + tr + bl + br
+Scratch Mode is a fallback only.
+Use it only if no master layout can satisfy the locked zone_structure and artifact sizing constraints.
 
-    SPLIT SELECTION LOGIC:
-    SINGLE / WIDE_DOMINANT / TALL_DOMINANT         → split = full
-    SINGLE_PAIR (2 artifacts, 1 zone)              → split = full; resolve via artifact_arrangement
-    PEER_TWO                                       → left_50 + right_50
-                                                     (left_60 + right_40 if one is noticeably wider)
-    PRIMARY_SUPPORT_TWO (chart/table/reasoning)    → left_60 + right_40
-    PRIMARY_SUPPORT_TWO (wide artifact primary)    → top_40 + bottom_60 (primary in bottom)
-    PRIMARY_SUPPORT_TWO (proof + annotation)       → top_30 + bottom_70
-    TOP_PLUS_TWO                                   → top_left_50 + top_right_50 + bottom_full
-    LEFT_PLUS_TWO                                  → left_full_50 + top_right_50_h + bottom_right_50_h
-    THREE_PEER                                     → left_33 + mid_33 + right_33 (flag: three_peer_columns)
-    QUAD_PEER / DOMINANT_PLUS_THREE                → tl + tr + bl + br
+In Scratch Mode:
 
-    STRUCTURED DISPLAY ARTIFACT SPLITS (override generic logic when triggered):
-    stat_bar alone                                 → split = full
-    stat_bar + companion insight_text              → top_30 + bottom_70 (insight_text top, stat_bar bottom)
-    initiative_map alone                           → split = full
-    initiative_map + companion insight_text        → top_25 + bottom_75 (insight_text top, initiative_map bottom)
-    risk_register alone                            → split = full
-    risk_register + companion                      → top_30 + bottom_70 (companion top, risk_register bottom)
-    comparison_table alone                         → split = full
-    comparison_table + companion insight_text      → left_65 + right_35
-    profile_card_set ≥ 4 alone                     → split = full
-    profile_card_set 2–3 + companion insight_text  → left_60 + right_40
+1. Start from the locked zone_structure
+- Preserve the intended reading order and zone dominance.
+- Do NOT invent a new narrative structure.
 
-    VISUAL WEIGHT CORRECTION (apply after assigning splits):
-    PRIMARY zone must occupy ≥ 60% of content area
-    SECONDARY zone must occupy ≤ 40%
-    SUPPORTING zone must occupy ≤ 25%
-    50/50 split only valid when both zones are CO-PRIMARY
+2. Apply zone-level precedence
+- PRIMARY zone gets first claim on space
+- CO-PRIMARY zones must remain balanced unless a hard artifact rule makes that impossible
+- SECONDARY zones get the remaining valid space
+- SUPPORTING / OPTIONAL zones remain compact
 
-    Correction table:
-    primary + secondary side-by-side  → left_60 + right_40
-    primary + secondary stacked       → top_40 + bottom_60
-    primary + supporting stacked      → top_30 + bottom_70
+3. Apply artifact-level precedence inside each zone
+- PRIMARY artifact gets first claim on space
+- SECONDARY artifact may occupy only the remaining valid share
+- If a valid secondary share does not exist, compress or remove the secondary artifact only if Phase 3 rules allow that; otherwise reject the geometry and expand the zone allocation
 
-STEP 4 — ARTIFACT PLACEMENT HINTS (all modes)
+4. Derive zone splits
+- Use the nearest valid split family consistent with zone_structure:
+  - single zone → `full`
+  - 2 stacked zones → `top_50+bottom_50`, `top_40+bottom_60`, or `top_30+bottom_70`
+  - 2 side-by-side zones → `left_50+right_50`, `left_60+right_40`, or `left_40+right_60`
+  - 3 zones top-led → `top_left_50 + top_right_50 + bottom_full`
+  - 3 zones left-led → `left_full_50 + top_right_50_h + bottom_right_50_h`
+  - 4 zones → `tl + tr + bl + br`
 
-  For every artifact in every zone:
+5. Validate each zone against artifact sizing ranges
+- If any primary artifact falls below MIN_W or MIN_H, the split is invalid.
+- If any artifact exceeds MAX_W or MAX_H in a way that creates waste or false hierarchy, prefer a tighter valid split.
+- If no valid split exists within the allowed split family, reject the current family and move to the nearest allowed fallback split that preserves the locked narrative order.
 
-  artifact_arrangement (how multiple artifacts are arranged within the same zone)
-    horizontal — side-by-side within zone
-                 use for: chart+insight_text, cards+insight_text, table+insight_text
-                 preferred internal split: 60/40 (proof left, annotation right)
-    vertical   — stacked within zone
-                 use for: workflow+insight_text (workflow top), chart+table
-                 preferred internal split: 70/30 (proof top) or 60/40
-    single     — one artifact only
+6. Emit final geometry
+For each zone, populate:
+- zone_split
+- layout_hint.split
+- artifact_arrangement
+- artifact_split_hint
 
-  artifact_coverage_hint (approximate % of zone area this artifact should occupy)
-    full      — single artifact in zone
-    75pct     — workflow top in a vertical pair
-    60pct     — primary of a horizontal pair
-    40pct     — secondary of a horizontal pair
-    compact   — annotation below a workflow; reasoning artifacts: never compact
+For each artifact, populate:
+- artifact_coverage_hint
+- internal_alignment
+- any required placement hint from its artifact family
 
-  artifact_split_hint (% of zone width or height this artifact occupies when shared)
-    100 — single artifact
-     70 — workflow (vertical pair, top)
-     60 — primary of horizontal pair
-     50 — CO-PRIMARY pair (each)
-     40 — secondary of horizontal pair
-     30 — annotation (vertical pair, bottom)
-     25 — supporting
 
-  flow_direction (workflow artifacts only)
-    left_to_right | top_to_bottom | top_down_branching
+STEP 5 — FINAL ENFORCEMENT
 
-  internal_alignment
-    fill       — chart, table, workflow, stat_bar, initiative_map, risk_register,
-                 comparison_table, profile_card_set
-    center     — cards (row)
-    top_left   — insight_text (compact)
-    top_center — insight_text (wide)
+- Never change zone_structure unless a hard artifact rule makes the original structure impossible.
+- Never change artifact choice in Phase 4.
+- Never invent additional artifacts.
+- Never ignore a hard artifact placement rule to force a brand layout fit.
 
-  STRUCTURED DISPLAY PLACEMENT HINTS (mandatory when artifact is stat_bar, initiative_map,
-  risk_register, comparison_table, or profile_card_set):
-
-    stat_bar
-      artifact_arrangement:     single
-      artifact_coverage_hint:   full
-      artifact_split_hint:      100
-      internal_alignment:       fill
-      zone_constraint:          full_width  ← emit this field on the zone object
-
-    initiative_map
-      artifact_arrangement:     single
-      artifact_coverage_hint:   full
-      artifact_split_hint:      100
-      internal_alignment:       fill
-      zone_constraint:          full_width  ← emit this field on the zone object
-
-    risk_register
-      artifact_arrangement:     single
-      artifact_coverage_hint:   full
-      artifact_split_hint:      100
-      internal_alignment:       fill
-      zone_constraint:          full_width  ← emit this field on the zone object
-
-    comparison_table
-      artifact_arrangement:     single
-      artifact_coverage_hint:   full
-      artifact_split_hint:      100
-      internal_alignment:       fill
-      zone_constraint:          full_width_preferred  ← full width if alone; dominant-left if paired
-
-    profile_card_set (≥ 4 profiles)
-      artifact_arrangement:     single
-      artifact_coverage_hint:   full
-      artifact_split_hint:      100
-      internal_alignment:       fill
-      zone_constraint:          full_width
-
-    profile_card_set (2–3 profiles)
-      artifact_arrangement:     single
-      artifact_coverage_hint:   full
-      artifact_split_hint:      100
-      internal_alignment:       fill
-      zone_constraint:          dominant_left  ← min 50% width
-
-STEP 5 — SELF-CHECK BEFORE OUTPUT
-
-  [ ] O1 ACTIVE: no left_to_right workflow shares horizontal space with any zone
-  [ ] O2 ACTIVE: no top-down workflow is stacked above or below another zone
-  [ ] O9 ACTIVE: stat_bar is in a full-width zone; no sibling zone shares horizontal space
-  [ ] O10 ACTIVE: initiative_map is in a full-width zone; no sibling zone shares horizontal space
-  [ ] O11 ACTIVE: risk_register zone height ≥ 65% slide height; companion (if any) stacked above only
-  [ ] O12 ACTIVE: comparison_table zone width ≥ 55% slide width; companion (if any) is insight_text only
-  [ ] O13 ACTIVE: profile_card_set ≥ 4 profiles is in full-width zone with no companion
-  [ ] PRIMARY zone occupies ≥ 60% content area (unless both zones are CO-PRIMARY)
-  [ ] No SECONDARY zone is larger than PRIMARY zone
-  [ ] No reasoning artifact (incl. comparison_table) is in a zone < 45% W or < 50% H
-  [ ] No 4-card artifact shares slide with another zone
-  [ ] LAYOUT MODE: selected layout has no more content cells than required
-  [ ] SCRATCH MODE: all split values from the allowed list only
-  [ ] Phase 3 Step 4 executed: every chart_header / table_header / workflow_header /
-      comparison_header / initiative_header / risk_header / profile_header checked
-      against slide title for near-repetition; differentiation applied where needed
-  [ ] Every artifact has artifact_arrangement, artifact_coverage_hint,
-      artifact_split_hint, and internal_alignment populated
-  [ ] Every stat_bar / initiative_map / risk_register / comparison_table / profile_card_set
-      has zone_constraint populated on its parent zone object
-  [ ] ZW codes not used when slide_format width:height < 1.5
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 OUTPUT OBJECT — REQUIRED FIELDS
