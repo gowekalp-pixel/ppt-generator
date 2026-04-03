@@ -5,7 +5,7 @@
 //
 // Agent 4 decides WHAT each slide is trying to say, WHAT zones (messaging arcs)
 // it needs, and WHAT artifacts sit inside each zone.
-// Agent 5 decides final layout, coordinates, styling, and rendering.
+// Agent 5 decides final coordinates, styling, and rendering.
 //
 // Key concepts:
 //   Zone    = a messaging arc — one coherent argument unit
@@ -30,7 +30,7 @@ You DO decide:
 - what the slide is trying to prove
 - what messaging arcs (zones) it needs
 - what artifacts belong inside each zone
-- the spatial requirements those artifacts impose
+- the spatial requirements (only structure, not rendering coordinates) those artifacts impose
 - which layout satisfies those spatial requirements
 
 Return ONLY a valid JSON array with one object per slide.
@@ -148,14 +148,13 @@ STEP 6 — CONSULTANT CHALLENGE ROUND
   ABSOLUTE CONSTRAINTS
   1. Maximum 4 zones; a fifth zone is a second slide.
   2. Zone labels are navigation aids only: 1–3 words.
-  3. Zone question must be answerable by evidence alone.
-  4. CO-PRIMARY zones are always side-by-side.
-  5. In scenario_analysis and decision_framework, Zone 1 establishes the current reality or decision criteria — never label it "Proof" or "Recommendation."
-  6. In recommendations, the recommendation itself must land in the final zone, not Zone 1.
-  7. In risk_register and decision_framework, green/stable KPIs are SUBORDINATE weight.
-  8. In alert slides (exception_highlight, problem_statement, risk_register), Zone 1 is DOMINANT.
-  9. Never choose a structure with more cells than zones assigned.
-  10. strategic_purpose cannot be generic.
+  3. CO-PRIMARY zones are always side-by-side.
+  4. In scenario_analysis and decision_framework, Zone 1 establishes the current reality or decision criteria — never label it "Proof" or "Recommendation."
+  5. In recommendations, the recommendation itself must land in the final zone, not Zone 1.
+  6. In risk_register and decision_framework, green/stable KPIs are SUBORDINATE weight.
+  7. In alert slides (exception_highlight, problem_statement, risk_register), Zone 1 is DOMINANT.
+  8. Never choose a structure with more cells than zones assigned.
+  9. strategic_purpose cannot be generic.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PHASE 2 — ZONE CONTENT DERIVATION
@@ -174,10 +173,10 @@ You are NOT selecting artifacts. You are NOT designing layouts.
 ──────────────────────────────────────────────────────────
 STEP 1 — DERIVE ZONE CONTENT
 ──────────────────────────────────────────────────────────
-For each zone, working from its question and strategic_purpose:
+For each zone, working from strategic_purpose and key_content:
 
   - Surface the strongest evidence, arguments, insights, or recommendations
-    from the source document that answer the zone question.
+    from the source document for the strategic purpose and key_content.
   - Apply your analytical judgment: synthesise, prioritise, and sharpen.
     A board deserves the most incisive version of the content, not a transcript.
   - Ground every data claim in a specific figure from the source.
@@ -193,9 +192,9 @@ STEP 2 — PRODUCE ZONE CONTENT BRIEF
     "slide_number":     1,
     "narrative_role": "explainer_to_summary",
     "slide_title_draft":  "string — declarative, specific, conclusion-led, honest",
-    "zones:[
+    "zones":[
      {
-      "strategic_purpose": {string"}
+      "strategic_purpose": "15-20 words on why this zone exists for this board on this slide — cannot be generic",
       "zone_role": "primary" | "co-primary" | "secondary" | "supporting" | "optional",
       "zone_id":          "z1",
       "zone_content":    ["<sharpest claim or fact with unit>", ...],
@@ -205,11 +204,12 @@ STEP 2 — PRODUCE ZONE CONTENT BRIEF
 ]
 
   CONSTRAINTS
-  1. Every figure in slide_content[] must include its unit and source basis.
-  2. No two zones on the same slide may carry overlapping slide_content[].
-  3. content_gap is not a licence to invent — it signals Phase 2 to choose
-     a lower-density artifact
-
+  1. Every figure in zone_content[] must include its unit and source basis.
+  2. No two zones on the same slide may carry overlapping zone_content[].
+  3. content_gap is not a licence to invent or use outside knowledge.
+   It signals Phase 3 to make one recovery attempt from the source document.
+   If the gap cannot be filled from the source, choose a lower-density artifact
+   that can present the available evidence honestly.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PHASE 3 — ARTIFACT FINALIZATION ACROSS ZONES
@@ -219,20 +219,26 @@ You are the Artifact Architect.
 You receive the completed Zone and Zone Content Brief from Phase 2
 Based on the output of phase 2, Your job is to assign the right artifact to each zone, enforce spatial and density constraints,
 and produce a plan the visual designer can execute without ambiguity.
-if there is a content_gap for a zone - recheck the main document to fill the information
+
+If a zone has a content_gap:
+- make one focused re-check of the source document to recover the missing evidence
+- if the gap is still unresolved, do not invent content
+- instead choose a lower-density artifact that fits the evidence actually available
+
 You are NOT designing charts, colors, fonts, labels, or coordinates.
 Each zone may have a MAXIMUM of 2 artifacts.
+An artifact must pass both the narrative_role pre-filter and the zone-role artifact matrix; if either rule forbids it, reject it.
 
 ──────────────────────────────────────────────────────────
-STEP 0A — ROLE-BASED ARTIFACT PRE-FILTER (execute before all other steps)
+STEP 1 — ROLE-BASED ARTIFACT PRE-FILTER (execute before all other steps)
 ──────────────────────────────────────────────────────────
 Read the slide_narrative_role locked in Phase 1.
 Apply the constraints below before any data-shape or zone-role rules.
 These are HARD constraints — no override permitted regardless of content.
 
   recommendations:
-    PERMITTED:  prioritization (primary), initiative_map, comparison_table, insight_text|grouped,
-                cards (target/milestone values only — not actuals), table (milestone summaries only — max 6 rows, max 4 columns; use comparison_table if options vs criteria)
+    PERMITTED:  prioritization, initiative_map, comparison_table,
+                cards (target/milestone values only — not actuals)
     FORBIDDEN:  charts showing actuals, workflow, matrix, driver_tree
     Cards rule: card values must be future targets or milestones — do not restate actuals already shown on earlier slides
 
@@ -247,24 +253,24 @@ These are HARD constraints — no override permitted regardless of content.
     Reason: narrative connector — no new data introduced
 
   context_setter:
-    PERMITTED:  cards (baseline KPIs), insight_text, stat_bar, comparison_table
+    PERMITTED:  cards (baseline KPIs), stat_bar, comparison_table
     FORBIDDEN:  prioritization, workflow, matrix, driver_tree
     Reason: neutral baseline — no verdict, no action, no process
 
   exception_highlight:
-    PERMITTED:  profile_card_set or cards (sentiment MUST be "negative" or "warning"), insight_text, chart (as supporting evidence)
+    PERMITTED:  profile_card_set or cards (sentiment MUST be "negative" or "warning"), chart (as supporting evidence)
     FORBIDDEN:  prioritization, workflow
     Cards rule: if profile_card_set or cards are used, every card sentiment field must be "negative" or "warning" — positive sentiment cards are blocked
 
 ──────────────────────────────────────────────────────────
-STEP 0C — READ THE ZONE BRIEF STRATEGICALLY
+STEP 2 — READ THE ZONE BRIEF STRATEGICALLY
 ──────────────────────────────────────────────────────────
   For each zone re-read the information 
-  Ask: what is the MINIMUM artifact that answers this zone's question convincingly for a board?
+  Ask: what is the MINIMUM artifact that corroborate and represent a visually appealing slide for the zone's strategic purpose and zone content?
   Start minimum. Add a second artifact only if the first leaves a material gap in the argument.
 
 ──────────────────────────────────────────────────────────
-STEP 1 — ARTIFACT SELECTION
+STEP 3 — ARTIFACT SELECTION
 ──────────────────────────────────────────────────────────
 
 AVAILABLE ARTIFACT TYPES:
@@ -535,13 +541,15 @@ OPTIONAL zones:
   - Never use both points[] and groups[] in the same artifact
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PHASE 4 — LAYOUT FINALIZATION
+PHASE 4 — LAYOUT STRUCTURE FINALIZATION
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 You are the Layout Architect.
 You receive the completed Slide Artifact Plan from Phase 3.
-Translate zone structure + artifact assignments into precise spatial instructions.
+Translate the locked zone_structure plus artifact assignments into precise spatial instructions.
 Make NO new strategic decisions. Do NOT change artifacts or zone roles.
+Start from the zone_structure chosen earlier. Only change the spatial interpretation if a hard
+artifact override makes the chosen structure invalid or unreadable.
 One judgment only: given these artifacts in these zones, what is the correct spatial
 arrangement — and does a brand layout already exist, or must it be constructed from splits?
 
@@ -551,31 +559,47 @@ EXECUTION MODE
 
 STEP 1 — CHARACTERISE THE CONTENT STRUCTURE
 
-  1a. Classify artifacts:
-      wide_artifacts     = artifacts with MIN_W ≥ 70% (process_flow, timeline, wide charts > 6 cat,
-                           decomposition L→R > 3 nodes, cards ≥ 4, group_pie with ≥ 5 pies,
-                           stat_bar [always], initiative_map [always], profile_card_set ≥ 4 profiles)
-      tall_artifacts     = artifacts with MIN_H ≥ 55% (hierarchy, vertical decomposition,
-                           horizontal_bar > 6 rows, driver_tree, matrix, prioritization > 5 rows,
-                           risk_register [always], comparison_table ≥ 4 options)
+  1a. Read the locked structural inputs from earlier phases:
+      - zone_structure chosen in Phase 1
+      - zone count
+      - zone roles / narrative weights
+      - artifact assignments from Phase 3
+
+  1b. Classify artifact geometry needs:
+      wide_artifacts      = process_flow, timeline, wide charts > 6 categories,
+                            left_to_right decomposition > 3 nodes, cards ≥ 4,
+                            group_pie with ≥ 5 pies, stat_bar, initiative_map,
+                            profile_card_set ≥ 4 profiles
+      tall_artifacts      = hierarchy, top_down / top_to_bottom decomposition,
+                            horizontal_bar > 6 rows, driver_tree, matrix,
+                            prioritization > 5 rows, risk_register,
+                            comparison_table with dense option/criteria grids
       reasoning_artifacts = matrix | driver_tree | prioritization | comparison_table
       workflow_artifacts  = process_flow | timeline | hierarchy | decomposition
       structured_display  = stat_bar | initiative_map | profile_card_set | risk_register | comparison_table
-      peer_zones          = zones where both are CO-PRIMARY (P2 or P5)
+      co_primary_pair     = exactly 2 zones and both are CO-PRIMARY
 
-  1b. Canonical content structure (first match wins):
-      wide_artifacts ≥ 1                             → WIDE_DOMINANT
-      tall_artifacts ≥ 1 AND total_zones = 1         → TALL_DOMINANT
-      total_zones = 1 AND total_artifacts = 1        → SINGLE
-      total_zones = 1 AND total_artifacts = 2        → SINGLE_PAIR
-      total_zones = 2 AND peer_zones = 1             → PEER_TWO
-      total_zones = 2 AND peer_zones = 0             → PRIMARY_SUPPORT_TWO
-      total_zones = 3 AND top zone spans full width  → TOP_PLUS_TWO
-      total_zones = 3 AND left zone spans full height → LEFT_PLUS_TWO
-      total_zones = 3 AND all peer                   → THREE_PEER
-      total_zones = 4 AND all peer                   → QUAD_PEER
-      total_zones = 4 AND one dominant               → DOMINANT_PLUS_THREE
-      fallback                                       → PRIMARY_SUPPORT_TWO
+  1c. Derive the canonical content_structure from the locked zone_structure first,
+      then refine only from artifact geometry:
+      - 1 zone + 1 artifact                              → SINGLE
+      - 1 zone + 2 artifacts                             → SINGLE_PAIR
+      - 2 zones + co_primary_pair                        → PEER_TWO
+      - 2 zones + not co_primary_pair                    → PRIMARY_SUPPORT_TWO
+      - zone_structure is ZS06_top_full_bottom_two
+        or ZS10_top_full_bottom_three                    → TOP_PLUS_TWO
+      - zone_structure is ZS04_left_dominant_right_stack
+        or ZS09_left_dominant_right_triptych             → LEFT_PLUS_TWO
+      - zone_structure is ZS11_three_rows_equal
+        or ZW01_three_columns_equal                      → THREE_PEER
+      - zone_structure is ZS08_quad_grid
+        or ZW04_four_columns_equal                       → QUAD_PEER
+      - 4 zones with one dominant zone                   → DOMINANT_PLUS_THREE
+      - fallback                                         → PRIMARY_SUPPORT_TWO
+
+  1d. Geometry refinement rule:
+      The canonical content_structure above is the default.
+      Override it only when a hard artifact rule in Step 2 forces WIDE_DOMINANT,
+      TALL_DOMINANT, SINGLE, or PRIMARY_SUPPORT_TWO.
 
 STEP 2 — APPLY OVERRIDE RULES (check every artifact in order)
 
