@@ -918,7 +918,7 @@ Title slide:
   - narrative_role: ""
   - speaker_note: ""
   - title: short presentation name (4–8 words)
-  - subtitle: audience / context / date
+  - subtitle: "" — leave empty; do NOT populate
   - key_message: governing thought of the deck
 
 Divider slide:
@@ -927,7 +927,7 @@ Divider slide:
   - narrative_role: ""
   - speaker_note: ""
   - title: section name only
-  - subtitle: ""
+  - subtitle: "" — always empty
   - key_message: one-line purpose of the section
 
 Thank-you slide:
@@ -936,7 +936,7 @@ Thank-you slide:
   - narrative_role: ""
   - speaker_note: ""
   - title: "Thank You" or equivalent closing phrase
-  - subtitle: presenter name / contact if relevant
+  - subtitle: "" — leave empty; do NOT populate
   - key_message: one sentence — what the audience must do next
 
 Content slide:
@@ -945,7 +945,7 @@ Content slide:
   - narrative_role: carry forward from Agent 3 plan
   - speaker_note: Phase 2 overflow content (1–4 sentences; "" if none)
   - title: insight-led (see SLIDE TYPE RULES)
-  - subtitle: optional framing note
+  - subtitle: "" in almost all cases — set ONLY when the title alone cannot convey a critical context constraint (e.g. a geographic or time scope the board would otherwise misread). If in doubt, leave empty.
   - key_message: one-line proof claim for this slide
 
 STEP 3 — NORMALIZE LAYOUT FIELDS

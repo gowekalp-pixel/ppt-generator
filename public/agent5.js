@@ -4984,10 +4984,13 @@ function _statBarToBlocks(art, content_y, blocks, bt, r2) {
   const neutralBarColor    = cs.axis_color || '#7B7B7B'
   // Highlighted text: body color guarantees readability on any brand's highlight bg
   const highlightTextColor = bodyTextColor
-  const headerFontSize = Math.max(10, Math.min(11, rowH * 11.5))
-  const labelFontSize = Math.max(10.5, Math.min(12, rowH * 10.8))
-  const valueFontSize = Math.max(10.5, Math.min(11.5, rowH * 10.4))
-  const annotationFontSize = Math.max(9.25, Math.min(10.25, rowH * 9.1))
+  // Dynamic font sizes — multiplier calibrated so scaling is live across rowH range (0.4"–1.2")
+  const headerFontSize     = Math.max(10,   Math.min(13,   rowH * 20))
+  const labelFontSize      = Math.max(11,   Math.min(15,   rowH * 21))
+  const valueFontSize      = Math.max(11,   Math.min(14.5, rowH * 20))
+  const annotationFontSize = Math.max(10,   Math.min(14,   rowH * 19))
+  // Inner horizontal padding so label/annotation text clears the row box rounded corners
+  const rowPadX = r2(Math.max(0.08, Math.min(0.14, aw * 0.018)))
   const labelX = ax
   const barX = r2(labelX + labelW + colGap)
   const valueX = r2(barX + barW + colGap)
@@ -4996,7 +4999,7 @@ function _statBarToBlocks(art, content_y, blocks, bt, r2) {
 
   blocks.push({
     block_type: 'text_box',
-    x: labelX, y: ay, w: labelW, h: headerH,
+    x: labelX + rowPadX, y: ay, w: labelW - rowPadX, h: headerH,
     text: String(headers.label || 'PARTNER'),
     font_family: bodyFont, font_size: headerFontSize, bold: true,
     color: headerColor, align: 'left', valign: 'middle'
@@ -5017,7 +5020,7 @@ function _statBarToBlocks(art, content_y, blocks, bt, r2) {
   })
   blocks.push({
     block_type: 'text_box',
-    x: annotationX, y: ay, w: annotationW, h: headerH,
+    x: annotationX, y: ay, w: annotationW - rowPadX, h: headerH,
     text: String(headers.annotation || art.annotation_header || 'USE CASE'),
     font_family: bodyFont, font_size: headerFontSize, bold: true,
     color: headerColor, align: 'left', valign: 'middle'
@@ -5061,7 +5064,7 @@ function _statBarToBlocks(art, content_y, blocks, bt, r2) {
 
     blocks.push({
       block_type: 'text_box',
-      x: labelX, y, w: labelW, h: rowH,
+      x: labelX + rowPadX, y, w: labelW - rowPadX, h: rowH,
       text: _truncateText(row?.label || '', 34),
       font_family: bodyFont, font_size: labelFontSize, bold: true,
       color: isHighlighted ? highlightTextColor : bodyTextColor, align: 'left', valign: 'middle'
@@ -5085,19 +5088,12 @@ function _statBarToBlocks(art, content_y, blocks, bt, r2) {
     })
     blocks.push({
       block_type: 'text_box',
-      x: annotationX, y, w: annotationW, h: rowH,
+      x: annotationX, y, w: annotationW - rowPadX, h: rowH,
       text: _truncateText(row?.annotation || '', 38),
       font_family: bodyFont, font_size: annotationFontSize, bold: false,
       color: isHighlighted ? highlightBarFill : annotationColor, align: 'left', valign: 'middle'
     })
-    if (ri < items.length - 1) {
-      blocks.push({
-        block_type: 'rule',
-        x: ax, y: r2(y + rowH + 0.01), w: aw, h: 0.005,
-        color: '#D9D9D9',
-        line_width: 0.5
-      })
-    }
+    // No row divider — the border box around each row already separates them
   })
 }
 
@@ -6302,51 +6298,70 @@ function _standardInsightToBlocks(art, content_y, blocks, r2) {
   const aw = art.w || 0
   const ah = art.h || 0
   const st  = art.body_style || {}
-  const sty = art.style || {}   // fill/border live in art.style per schema
+  const sty = art.style || {}
 
   const hasFill   = !!sty.fill_color
   const hasBorder = !!(sty.border_color && sty.border_width)
   const hasBox    = hasFill || hasBorder
   const cr        = sty.corner_radius || 0
 
-  // Issue (b): when a bordered/filled box is present AND the artifact has a header_block,
-  // add extra clearance between the header rule bottom and the box top edge so the
-  // rounded rectangle is visually separated from the header.
-  const hasHeader  = !!(art.header_block && art.header_block.text)
+  const hasHeader     = !!(art.header_block && art.header_block.text)
   const BOX_TOP_GUARD = (hasBox && hasHeader) ? 0.06 : 0
   const body_y = r2(content_y + BOX_TOP_GUARD)
   const body_h = r2(Math.max(0.3, ay + ah - body_y))
 
-  // Container rect (fill/border)
+  // Container rect
   if (hasBox) {
     blocks.push({
       block_type:    'rect',
       x: ax, y: body_y, w: aw, h: body_h,
-      fill_color:    sty.fill_color    || null,
-      border_color:  sty.border_color  || null,
-      border_width:  sty.border_width  || 0.75,
+      fill_color:    sty.fill_color   || null,
+      border_color:  sty.border_color || null,
+      border_width:  sty.border_width || 0.75,
       corner_radius: cr
     })
   }
 
-  // Issue (a): inset the bullet list inside the border so bullet markers and
-  // text never overlay the border stroke.  Extra corner inset avoids rendering
-  // bullets into the visually-rounded corner zone.
-  // When no box exists no padding override is needed — the renderer applies defaults.
   const cornerInset   = cr >= 4 ? 0.04 : 0
+  const padV = hasBox ? (0.10 + cornerInset) : 0.06
+  const padH = hasBox ? (0.12 + cornerInset) : 0.04
   const bulletPadding = hasBox
-    ? { top: 0.10 + cornerInset, bottom: 0.08 + cornerInset,
-        left: 0.12 + cornerInset, right: 0.10 + cornerInset }
+    ? { top: padV, bottom: padV, left: padH, right: padH }
     : {}
 
-  // Bullet list body
+  // ── Dynamic font size ─────────────────────────────────────────────────────
+  // Scale so bullets fill ~80% of the available interior height
+  const points     = art.points || []
+  const nPoints    = Math.max(1, points.length)
+  const innerH     = Math.max(0.2, body_h - 2 * padV)
+  const lineSpacing = st.line_spacing || 1.3
+  // Estimate average chars per bullet; assume ~55 chars per inch at given font size
+  const avgChars   = points.reduce((s, p) => s + String(p?.text || p || '').length, 0) / nPoints
+  const charsPerInch = (fs) => Math.max(1, aw * 72 / (fs * 0.56))
+  const linesPerBullet = (fs) => Math.max(1, Math.ceil(avgChars / charsPerInch(fs)))
+  const lineHIn    = (fs) => (fs / 72) * lineSpacing
+  const estimatedH = (fs) => nPoints * linesPerBullet(fs) * lineHIn(fs) + (nPoints - 1) * 0.04
+
+  let fontSize = st.font_size || 10
+  // Grow font until content fills ~82% of available interior, cap at 18pt
+  for (let tryFs = 18; tryFs >= Math.max(9, fontSize); tryFs--) {
+    if (estimatedH(tryFs) <= innerH * 0.82) { fontSize = tryFs; break }
+  }
+
+  // ── Vertical centering ────────────────────────────────────────────────────
+  // Shrink the bullet_list to its estimated content height, then offset y to centre it
+  const contentH  = Math.min(estimatedH(fontSize) + 2 * padV, body_h)
+  const vOffset   = r2(Math.max(0, (body_h - contentH) / 2))
+  const list_y    = r2(body_y + vOffset)
+  const list_h    = r2(Math.max(0.2, Math.min(contentH, body_h - vOffset)))
+
   blocks.push({
-    block_type:   'bullet_list',
-    x: ax, y: body_y, w: aw, h: body_h,
-    points:       art.points || [],
-    body_style:   st,
-    padding:      bulletPadding,
-    sentiment:    art.sentiment || 'neutral'
+    block_type:  'bullet_list',
+    x: ax, y: list_y, w: aw, h: list_h,
+    points,
+    body_style:  { ...st, font_size: fontSize },
+    padding:     bulletPadding,
+    sentiment:   art.sentiment || 'neutral'
   })
 }
 
@@ -6372,12 +6387,42 @@ function _groupedInsightToBlocks(art, content_y, blocks, bt, r2) {
 
   const total_content_h = r2(ay + ah - content_y)
 
+  // ── Shared bullet-size estimator ─────────────────────────────────────────
+  // Returns the font size (pt) that makes bullets fill ~80% of available height
+  const _bulletFontSize = (bullets, areaW, areaH, styleFs) => {
+    const pts = Array.isArray(bullets) ? bullets : []
+    const n   = Math.max(1, pts.length)
+    const avgChars = pts.reduce((s, p) => s + String(p?.text || p || '').length, 0) / n
+    const lineH    = (fs) => (fs / 72) * 1.3
+    const linesEach = (fs) => Math.max(1, Math.ceil(avgChars / Math.max(1, areaW * 72 / (fs * 0.56))))
+    const totalH   = (fs) => n * linesEach(fs) * lineH(fs) + (n - 1) * 0.04
+    let fs = styleFs || 10
+    for (let tryFs = 18; tryFs >= Math.max(9, fs); tryFs--) {
+      if (totalH(tryFs) <= areaH * 0.82) { fs = tryFs; break }
+    }
+    return fs
+  }
+
+  // Vertical-center helper: offset + height for a bullet_list to sit in the middle of zoneH
+  const _centerBullets = (bullets, areaW, areaH, fs, padV) => {
+    const n = Math.max(1, (Array.isArray(bullets) ? bullets : []).length)
+    const lineH = (fs / 72) * 1.3
+    const linesEach = Math.max(1, Math.ceil(
+      (bullets.reduce((s, p) => s + String(p?.text || p || '').length, 0) / n) /
+      Math.max(1, areaW * 72 / (fs * 0.56))
+    ))
+    const contentH = n * linesEach * lineH + (n - 1) * 0.04 + 2 * padV
+    const clipped  = Math.min(contentH, areaH)
+    const offset   = Math.max(0, (areaH - clipped) / 2)
+    return { offset, h: clipped }
+  }
+
   if (gLayout === 'rows') {
-    const h_w         = ghs.w || 1.2
-    const box_x       = r2(ax + h_w + hb_gap)
-    const box_w       = r2(aw - h_w - hb_gap)
+    const h_w           = ghs.w || 1.2
+    const box_x         = r2(ax + h_w + hb_gap)
+    const box_w         = r2(aw - h_w - hb_gap)
     const total_bullets = Math.max(1, groups.reduce((s, g) => s + (g.bullets || []).length, 0))
-    const total_rh    = Math.max(0.2, total_content_h - (n - 1) * g_gap)
+    const total_rh      = Math.max(0.2, total_content_h - (n - 1) * g_gap)
 
     let cur_y = content_y
     for (let gi = 0; gi < groups.length; gi++) {
@@ -6385,21 +6430,22 @@ function _groupedInsightToBlocks(art, content_y, blocks, bt, r2) {
       const nbullets = Math.max(1, (g.bullets || []).length)
       const row_h    = r2(Math.max(0.25, total_rh * (nbullets / total_bullets)))
 
+      // Dynamic header font: bounded by the narrower dimension (h_w for text wrap, row_h for height)
+      const hdrFs = ghs.font_size || Math.max(9, Math.min(14, Math.min(h_w * 13, row_h * 10)))
+
       if (isBadge) {
-        // circle_badge: circle centered vertically in the header column
-        const dia      = ghs.h || 0.3
-        const badge_y  = r2(cur_y + (row_h - dia) / 2)
+        const dia     = ghs.h || 0.3
+        const badge_y = r2(cur_y + (row_h - dia) / 2)
         blocks.push({
-          block_type:  'circle',
+          block_type: 'circle',
           x: ax, y: badge_y, w: dia, h: dia,
-          fill_color:  h_fill,
-          text:        String(gi + 1),
+          fill_color: h_fill,
+          text: String(gi + 1),
           font_family: ghs.font_family || bt.title_font_family || 'Arial',
-          font_size:   ghs.font_size   || 10,
-          font_color:  ghs.text_color  || '#FFFFFF'
+          font_size: hdrFs,
+          font_color: ghs.text_color || '#FFFFFF'
         })
       } else {
-        // rounded_rect: fills full h_w × row_h
         blocks.push({
           block_type: 'rect',
           x: ax, y: r2(cur_y), w: h_w, h: row_h,
@@ -6410,14 +6456,14 @@ function _groupedInsightToBlocks(art, content_y, blocks, bt, r2) {
           x: r2(ax + 0.06), y: r2(cur_y), w: r2(h_w - 0.12), h: row_h,
           text:        String(g.header || ''),
           font_family: ghs.font_family || bt.title_font_family || 'Arial',
-          font_size:   ghs.font_size   || 10,
+          font_size:   hdrFs,
           bold:        true,
-          color:       ghs.text_color  || '#FFFFFF',
-          align:       'center',
-          valign:      'middle'
+          color:       ghs.text_color || '#FFFFFF',
+          align: 'center', valign: 'middle'
         })
       }
-      // Bullet box — rect (border only)
+
+      // Bullet box background
       if (gbs.fill_color || gbs.border_color) {
         blocks.push({
           block_type:    'rect',
@@ -6428,14 +6474,21 @@ function _groupedInsightToBlocks(art, content_y, blocks, bt, r2) {
           corner_radius: gbs.corner_radius || 4
         })
       }
-      // Bullet box — bullet list
+
+      // Dynamic bullet font + vertical centering within this row
+      const bPadV    = (gbs.padding && gbs.padding.top)  || 0.08
+      const bPadH    = (gbs.padding && gbs.padding.left) || 0.10
+      const bAreaW   = Math.max(0.3, box_w - 2 * bPadH)
+      const bAreaH   = Math.max(0.1, row_h - 2 * bPadV)
+      const bFs      = _bulletFontSize(g.bullets || [], bAreaW, bAreaH, bsty.font_size)
+      const { offset: bOffset, h: bH } = _centerBullets(g.bullets || [], bAreaW, bAreaH, bFs, bPadV)
       blocks.push({
-        block_type:  'bullet_list',
-        x: box_x, y: r2(cur_y), w: box_w, h: row_h,
-        points:      g.bullets || [],
-        body_style:  bsty,
-        padding:     gbs.padding || {},
-        sentiment:   art.sentiment || 'neutral'
+        block_type: 'bullet_list',
+        x: box_x, y: r2(cur_y + bOffset), w: box_w, h: r2(bH),
+        points:     g.bullets || [],
+        body_style: { ...bsty, font_size: bFs },
+        padding:    gbs.padding || {},
+        sentiment:  art.sentiment || 'neutral'
       })
 
       cur_y = r2(cur_y + row_h + g_gap)
@@ -6443,29 +6496,30 @@ function _groupedInsightToBlocks(art, content_y, blocks, bt, r2) {
 
   } else {
     // columns layout
-    const col_w  = r2((aw - (n - 1) * g_gap) / Math.max(n, 1))
-    const h_h    = ghs.h || 0.28
-    const box_h  = r2(total_content_h - h_h - hb_gap)
+    const col_w = r2((aw - (n - 1) * g_gap) / Math.max(n, 1))
+    const h_h   = ghs.h || 0.28
+    const box_h = r2(total_content_h - h_h - hb_gap)
+
+    // Dynamic header font for columns: bounded by header bar height and column width
+    const hdrFs = ghs.font_size || Math.max(9, Math.min(14, Math.min(col_w * 10, h_h * 55)))
 
     let cur_x = ax
     for (let gi = 0; gi < groups.length; gi++) {
       const g = groups[gi]
 
       if (isBadge) {
-        // circle_badge: circle centered horizontally in col_w
         const dia     = h_h
         const badge_x = r2(cur_x + (col_w - dia) / 2)
         blocks.push({
-          block_type:  'circle',
+          block_type: 'circle',
           x: badge_x, y: content_y, w: dia, h: dia,
-          fill_color:  h_fill,
-          text:        String(gi + 1),
+          fill_color: h_fill,
+          text: String(gi + 1),
           font_family: ghs.font_family || bt.title_font_family || 'Arial',
-          font_size:   ghs.font_size   || 10,
-          font_color:  ghs.text_color  || '#FFFFFF'
+          font_size: hdrFs,
+          font_color: ghs.text_color || '#FFFFFF'
         })
       } else {
-        // rounded_rect: spans full col_w as a header bar
         blocks.push({
           block_type: 'rect',
           x: r2(cur_x), y: content_y, w: col_w, h: h_h,
@@ -6476,15 +6530,15 @@ function _groupedInsightToBlocks(art, content_y, blocks, bt, r2) {
           x: r2(cur_x + 0.05), y: content_y, w: r2(col_w - 0.10), h: h_h,
           text:        String(g.header || ''),
           font_family: ghs.font_family || bt.title_font_family || 'Arial',
-          font_size:   ghs.font_size   || 10,
+          font_size:   hdrFs,
           bold:        true,
-          color:       ghs.text_color  || '#FFFFFF',
-          align:       'center',
-          valign:      'middle'
+          color:       ghs.text_color || '#FFFFFF',
+          align: 'center', valign: 'middle'
         })
       }
+
       const bullet_y = r2(content_y + h_h + hb_gap)
-      // Bullet box — rect
+
       if (gbs.fill_color || gbs.border_color) {
         blocks.push({
           block_type:    'rect',
@@ -6495,12 +6549,19 @@ function _groupedInsightToBlocks(art, content_y, blocks, bt, r2) {
           corner_radius: gbs.corner_radius || 4
         })
       }
-      // Bullet box — bullets
+
+      // Dynamic bullet font + vertical centering within box_h
+      const bPadV  = (gbs.padding && gbs.padding.top)  || 0.08
+      const bPadH  = (gbs.padding && gbs.padding.left) || 0.10
+      const bAreaW = Math.max(0.3, col_w - 2 * bPadH)
+      const bAreaH = Math.max(0.1, box_h - 2 * bPadV)
+      const bFs    = _bulletFontSize(g.bullets || [], bAreaW, bAreaH, bsty.font_size)
+      const { offset: bOffset, h: bH } = _centerBullets(g.bullets || [], bAreaW, bAreaH, bFs, bPadV)
       blocks.push({
         block_type: 'bullet_list',
-        x: r2(cur_x), y: bullet_y, w: col_w, h: box_h,
+        x: r2(cur_x), y: r2(bullet_y + bOffset), w: col_w, h: r2(bH),
         points:     g.bullets || [],
-        body_style: bsty,
+        body_style: { ...bsty, font_size: bFs },
         padding:    gbs.padding || {},
         sentiment:  art.sentiment || 'neutral'
       })
@@ -6511,15 +6572,56 @@ function _groupedInsightToBlocks(art, content_y, blocks, bt, r2) {
 }
 
 function _cardsToBlocks(art, content_y, blocks, bt, r2) {
-  const cards  = art.cards  || []
-  const frames = art.card_frames || []   // pre-computed by computeArtifactInternals
-  const cs     = art.card_style || {}
-  const ts     = art.title_style || {}
-  const subs   = art.subtitle_style || {}
-  const bs     = art.body_style || {}
-  const pad    = cs.internal_padding || 0.12
-  const accentW = 0.07
+  const cards = art.cards || []
+  const count = cards.length
+  if (!count) return
+
+  const cs       = art.card_style || {}
+  const ts       = art.title_style || {}
+  const subs     = art.subtitle_style || {}
+  const bs       = art.body_style || {}
+  const pad      = cs.internal_padding || 0.12
+  const accentW  = 0.07
   const accentGap = 0.08
+  const gap      = cs.gap || 0.12
+
+  const ax = art.x || 0
+  const aw = art.w || 0
+  const ab = (art.y || 0) + (art.h || 0)   // bottom of art zone
+
+  // ── Recompute card frames from content_y ─────────────────────────────────
+  // Leave a gap between the artifact header rule and the first card
+  const headerGap = 0.12
+  const cardsTop  = r2(content_y + headerGap)
+  const availH    = r2(Math.max(0.2, ab - cardsTop))
+  const layout    = String(art.cards_layout || 'column').toLowerCase()
+
+  const frames = []
+  if (layout === 'row') {
+    const cw = r2((aw - gap * (count - 1)) / Math.max(count, 1))
+    for (let i = 0; i < count; i++) {
+      frames.push({ x: r2(ax + i * (cw + gap)), y: cardsTop, w: cw, h: availH })
+    }
+  } else if (layout === 'column') {
+    const ch = r2((availH - gap * (count - 1)) / Math.max(count, 1))
+    for (let i = 0; i < count; i++) {
+      frames.push({ x: ax, y: r2(cardsTop + i * (ch + gap)), w: aw, h: ch })
+    }
+  } else {
+    // grid (2 columns)
+    const cols = count > 1 ? 2 : 1
+    const rows = Math.ceil(count / cols)
+    const cw   = r2((aw - gap * (cols - 1)) / Math.max(cols, 1))
+    const ch   = r2((availH - gap * (rows - 1)) / Math.max(rows, 1))
+    for (let i = 0; i < count; i++) {
+      frames.push({
+        x: r2(ax + (i % cols) * (cw + gap)),
+        y: r2(cardsTop + Math.floor(i / cols) * (ch + gap)),
+        w: cw, h: ch
+      })
+    }
+  }
+
   const sentimentAccent = {
     positive: bt.secondary_color || '#2D8A4E',
     negative: '#C0392B',
@@ -6533,81 +6635,90 @@ function _cardsToBlocks(art, content_y, blocks, bt, r2) {
   ].filter(Boolean)
   const accentPalette = [...new Set(paletteBase)]
 
-  for (let i = 0; i < cards.length; i++) {
+  for (let i = 0; i < count; i++) {
     const card = cards[i]
-    const fr   = frames[i] || { x: art.x || 0, y: content_y, w: art.w || 0, h: art.h || 0 }
-    const fx   = fr.x, fy = fr.y, fw = fr.w, fh = fr.h
-    const accentColor = cards.length > 1
-      ? (accentPalette[i] || accentPalette[i % Math.max(accentPalette.length, 1)] || sentimentAccent[card.sentiment] || '#1A3C8F')
+    const fr   = frames[i]
+    const fx = fr.x, fy = fr.y, fw = fr.w, fh = fr.h
+
+    const accentColor = count > 1
+      ? (accentPalette[i % Math.max(accentPalette.length, 1)] || sentimentAccent[card.sentiment] || '#1A3C8F')
       : (sentimentAccent[card.sentiment] || accentPalette[0] || '#1A3C8F')
 
-    // Card background rect
+    // Card background
     blocks.push({
-      block_type:    'rect',
+      block_type: 'rect',
       x: fx, y: fy, w: fw, h: fh,
-      fill_color:    cs.fill_color    || '#F5F5F5',
-      border_color:  cs.border_color  || '#DDDDDD',
-      border_width:  cs.border_width  || 0.75,
+      fill_color:   cs.fill_color   || '#F5F5F5',
+      border_color: cs.border_color || '#DDDDDD',
+      border_width: cs.border_width || 0.75,
       corner_radius: 0
     })
 
-    // Accent strip (left colour rail)
+    // Accent strip
     if (accentColor) {
       blocks.push({
-        block_type:    'rect',
+        block_type: 'rect',
         x: fx, y: fy, w: accentW, h: fh,
-        fill_color:    accentColor,
-        border_color:  null, border_width: 0,
-        corner_radius: 0
+        fill_color: accentColor, border_color: null, border_width: 0, corner_radius: 0
       })
     }
 
-    // Card text sections (title / subtitle / body)
-    const inner_x   = r2(fx + pad + accentW + accentGap)
-    const inner_y   = r2(fy + pad)
-    const inner_w   = r2(Math.max(0.3, fw - (pad * 2) - accentW - accentGap))
-    const inner_h   = r2(fh - 2 * pad)
-    const title_h   = r2(inner_h * 0.20)
-    const sub_h     = r2(inner_h * 0.42)
-    const body_h    = r2(Math.max(0.18, inner_h - title_h - sub_h - 0.08))
+    // ── Inner layout ────────────────────────────────────────────────────────
+    const inner_x = r2(fx + pad + accentW + accentGap)
+    const inner_y = r2(fy + pad)
+    const inner_w = r2(Math.max(0.3, fw - (pad * 2) - accentW - accentGap))
+    const inner_h = r2(fh - 2 * pad)
+
+    // Zone proportions: title 22% | subtitle 40% | gap | body rest
+    const title_h = r2(inner_h * 0.22)
+    const sub_h   = r2(inner_h * 0.40)
+    const body_h  = r2(Math.max(0.16, inner_h - title_h - sub_h - 0.10))
+
     const titleY    = inner_y
-    const subtitleY = r2(titleY + title_h + 0.03)
-    const bodyY     = r2(subtitleY + sub_h + 0.05)
+    const subtitleY = r2(titleY + title_h + 0.04)
+    const bodyY     = r2(subtitleY + sub_h + 0.06)
+
+    // ── Dynamic font sizes ──────────────────────────────────────────────────
+    // 1. Subtitle (centre message) sized first — it is the primary element
+    const subtitleFontSize = Math.max(18, Math.min(38, sub_h * 58))
+    // 2. Title and body scale from their own zones, capped relative to subtitle
+    const titleFontSize    = Math.max(10, Math.min(subtitleFontSize * 0.45, title_h * 55))
+    const bodyFontSize     = Math.max(8,  Math.min(subtitleFontSize * 0.38, body_h  * 42))
 
     if (card.title) {
       blocks.push({
         block_type: 'text_box',
-        x: inner_x, y: inner_y, w: inner_w, h: title_h,
-        text:       card.title,
+        x: inner_x, y: titleY, w: inner_w, h: title_h,
+        text:        card.title,
         font_family: ts.font_family || bt.title_font_family || 'Arial',
-        font_size:   ts.font_size   || 12,
+        font_size:   ts.font_size   || titleFontSize,
         bold:        true,
         color:       ts.color || accentColor,
-        align:       'left', valign: 'top'
+        align: 'left', valign: 'top'
       })
     }
     if (card.subtitle) {
       blocks.push({
         block_type: 'text_box',
         x: inner_x, y: subtitleY, w: inner_w, h: sub_h,
-        text:       card.subtitle,
+        text:        card.subtitle,
         font_family: subs.font_family || bt.body_font_family || 'Arial',
-        font_size:   subs.font_size   || 22,
+        font_size:   subs.font_size   || subtitleFontSize,
         bold:        true,
         color:       subs.color || '#111111',
-        align:       'left', valign: 'middle'
+        align: 'left', valign: 'middle'
       })
     }
     if (card.body) {
       blocks.push({
         block_type: 'text_box',
         x: inner_x, y: bodyY, w: inner_w, h: body_h,
-        text:       card.body,
+        text:        card.body,
         font_family: bs.font_family || bt.body_font_family || 'Arial',
-        font_size:   bs.font_size   || 9,
+        font_size:   bs.font_size   || bodyFontSize,
         bold:        false,
         color:       bs.color || '#333333',
-        align:       'left', valign: 'top'
+        align: 'left', valign: 'top'
       })
     }
   }
