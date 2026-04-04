@@ -4470,11 +4470,7 @@ function _initiativeMapToBlocks(art, content_y, blocks, bt, r2) {
   const secondaryColor  = bt.secondary_color || '#7A6220'
   const labelFontSize   = istyle.label_font_size || 10
   const bodyFontSize    = istyle.body_font_size  || 9
-  const containerFill   = istyle.row_fill_color     || '#FFFFFF'
-  const containerBorder = istyle.row_border_color   || '#D7DEE8'
-  const containerBorderW= istyle.row_border_width != null ? istyle.row_border_width : 0.6
-  const cornerR         = istyle.row_corner_radius  != null ? istyle.row_corner_radius : 8
-  const gridColor       = containerBorder  // column/row separator uses same brand border color
+  const gridColor       = istyle.row_border_color || '#D7DEE8'  // column/row separator
 
   // ── Separate initiative label column from content dimension lanes ───────────
   // Agent 4 always emits the label column as column_headers[0] with id "initiative".
@@ -4487,20 +4483,13 @@ function _initiativeMapToBlocks(art, content_y, blocks, bt, r2) {
   const colHeaderH = r2(Math.min(0.40, Math.max(0.28, ah * 0.09)))
   const bodyH      = Math.max(0.6, ah - colHeaderH)
   const rowH       = r2(Math.max(0.72, bodyH / Math.max(initiatives.length, 1)))
-  const trackW     = r2(Math.min(Math.max(1.8, aw * 0.21), 2.6))
+  // Narrower track column = more room for content lanes
+  const trackW     = r2(Math.min(Math.max(1.3, aw * 0.22), 2.0))
   const laneCount  = Math.max(dims.length, 1)
   const laneW      = r2((aw - trackW) / laneCount)
   const rowStartY  = r2(ay + colHeaderH)
-
-  // ── Outer container shell ──────────────────────────────────────────────────
-  blocks.push({
-    block_type: 'rect',
-    x: ax, y: ay, w: aw, h: ah,
-    fill_color: containerFill,
-    border_color: containerBorder,
-    border_width: containerBorderW,
-    corner_radius: cornerR
-  })
+  // Max chip width: relative to lane width so chips never overflow
+  const maxChipW   = r2(Math.min(laneW - 0.22, 1.60))
 
   // ── Column header row ──────────────────────────────────────────────────────
   blocks.push({
@@ -4575,9 +4564,12 @@ function _initiativeMapToBlocks(art, content_y, blocks, bt, r2) {
 
       // Phase / tag chips — each tag becomes one pill; tags are {label, tone} objects.
       // Per-tag tone overrides the cell-level tone for individual chip color.
+      // When tags are present: tags act as the primary signal — primary_message is suppressed
+      // (agent4 puts any key supporting metric in secondary_message instead).
       if (cellTags.length) {
         let chipX = contentX
         let rowsRendered = 0
+        const maxTagChars = Math.max(12, Math.floor((maxChipW - 0.14) / 0.066))
         cellTags.slice(0, 4).forEach(tagObj => {
           const tagLabel = String(tagObj?.label || tagObj || '')
           const tagTone  = String(tagObj?.tone  || cellTone  || 'neutral').toLowerCase()
@@ -4590,11 +4582,12 @@ function _initiativeMapToBlocks(art, content_y, blocks, bt, r2) {
           const tChipFill   = tagTone === 'primary'   ? (istyle.primary_chip_fill   || '#EBF1FF')
                             : tagTone === 'secondary' ? (istyle.secondary_chip_fill || '#FEF6E4')
                             :                           (istyle.neutral_chip_fill   || '#F3F4F6')
-          const chipW = r2(Math.min(0.95, Math.max(0.48, tagLabel.length * 0.070 + 0.18)))
-          // Wrap to next row of chips if this chip would overflow lane right edge
+          // Chip width: sized to text, capped at maxChipW (lane-relative)
+          const chipW = r2(Math.min(maxChipW, Math.max(0.40, tagLabel.length * 0.066 + 0.14)))
+          // Wrap to next row if this chip overflows the lane right edge
           if (chipX + chipW > laneX + laneW - 0.06) {
             if (rowsRendered >= 1) return  // max 2 chip rows
-            contentY = r2(contentY + 0.28)
+            contentY = r2(contentY + 0.26)
             chipX = contentX
             rowsRendered++
           }
@@ -4605,41 +4598,53 @@ function _initiativeMapToBlocks(art, content_y, blocks, bt, r2) {
           })
           blocks.push({
             block_type: 'text_box',
-            x: r2(chipX + 0.06), y: contentY, w: r2(chipW - 0.12), h: 0.22,
-            text: _truncateText(tagLabel, 14),
+            x: r2(chipX + 0.05), y: contentY, w: r2(chipW - 0.10), h: 0.22,
+            text: _truncateText(tagLabel, maxTagChars),
             font_family: bodyFont, font_size: 8, bold: true,
             color: tChipText, align: 'center', valign: 'middle'
           })
-          chipX = r2(chipX + chipW + 0.06)
+          chipX = r2(chipX + chipW + 0.05)
         })
-        contentY = r2(contentY + 0.28)
-      }
+        contentY = r2(contentY + 0.26)
 
-      // Cell primary message — positive revenue detection (e.g. "+₹0.08 Cr")
-      if (cellTitle) {
-        const isPositive = /^\+/.test(cellTitle.trim())
-        // Positive color: use istyle if set (Claude can override from brand), else body color
-        const textColor = isPositive ? (istyle.positive_color || bodyTextColor) : bodyTextColor
-        blocks.push({
-          block_type: 'text_box',
-          x: contentX, y: contentY,
-          w: contentW, h: r2(Math.max(0.20, Math.min(0.50, rowH - (contentY - rowY) - 0.10))),
-          text: _truncateText(cellTitle, 42),
-          font_family: bodyFont, font_size: bodyFontSize, bold: false,
-          color: textColor, align: 'left', valign: 'top'
-        })
-        contentY = r2(contentY + 0.28)
-      }
+        // Tags present → skip primary_message (tags are the primary signal).
+        // Only render secondary_message as supporting detail below the chips.
+        if (cellSubtitle && contentY + 0.14 < rowY + rowH - 0.05) {
+          blocks.push({
+            block_type: 'text_box',
+            x: contentX, y: contentY, w: contentW,
+            h: r2(Math.min(rowY + rowH - contentY - 0.05, 0.44)),
+            text: cellSubtitle,
+            font_family: bodyFont, font_size: Math.max(8, bodyFontSize - 1), bold: false,
+            color: captionColor, align: 'left', valign: 'top'
+          })
+        }
+      } else {
+        // No tags → render primary message, then secondary below
+        if (cellTitle) {
+          const isPositive = /^\+/.test(cellTitle.trim())
+          const textColor = isPositive ? (istyle.positive_color || bodyTextColor) : bodyTextColor
+          const primaryH = r2(Math.max(0.22, Math.min(0.52, rowH - (contentY - rowY) - 0.10)))
+          blocks.push({
+            block_type: 'text_box',
+            x: contentX, y: contentY, w: contentW, h: primaryH,
+            text: cellTitle,
+            font_family: bodyFont, font_size: bodyFontSize, bold: false,
+            color: textColor, align: 'left', valign: 'top'
+          })
+          contentY = r2(contentY + primaryH + 0.04)
+        }
 
-      // Cell secondary message — muted text below primary
-      if (cellSubtitle && contentY + 0.14 < rowY + rowH - 0.06) {
-        blocks.push({
-          block_type: 'text_box',
-          x: contentX, y: contentY, w: contentW, h: 0.20,
-          text: _truncateText(cellSubtitle, 38),
-          font_family: bodyFont, font_size: Math.max(8, bodyFontSize - 1), bold: false,
-          color: captionColor, align: 'left', valign: 'middle'
-        })
+        if (cellSubtitle && contentY + 0.14 < rowY + rowH - 0.05) {
+          blocks.push({
+            block_type: 'text_box',
+            x: contentX, y: contentY, w: contentW,
+            h: r2(Math.min(rowY + rowH - contentY - 0.05, 0.36)),
+            text: cellSubtitle,
+            font_family: bodyFont, font_size: Math.max(8, bodyFontSize - 1), bold: false,
+            color: captionColor, align: 'left', valign: 'top'
+          })
+        }
       }
     })
 

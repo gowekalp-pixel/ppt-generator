@@ -1388,12 +1388,15 @@ initiative_map:
   }
   initiative_map usage:
   - each row is one initiative / workstream; columns are structured dimensions (phase, owner, KPI, status).
-  - each cell is a self-contained content block: primary_message is the headline action or metric; secondary_message is the supporting note below it.
-  - tags[] are optional pills rendered inside the cell — use them for any per-cell labels such as city names, owners, priority bands, or sub-tags. Any cell can carry tags, not only the first column.
-  - each tag carries its own tone ("primary" | "secondary" | "neutral") so individual pills can be colored differently within the same cell (e.g. one city chip "primary", another "neutral").
-  - cell_tone drives the overall chip fill / border palette for chips that do not have an individual tag tone override.
+  - each cell is a self-contained content block.
+  - tags[] are optional pills rendered inside the cell — city names, owners, priority bands, confidence labels, etc. Any cell can carry tags.
+  - each tag carries its own tone ("primary" | "secondary" | "neutral") for individual chip colour.
+  - cell_tone drives the chip fill / border palette for chips with no individual tone override.
+  - CRITICAL rendering rule: when tags[] is non-empty, primary_message is suppressed by the renderer — the tags ARE the primary visual signal. In this case put the key metric or action into secondary_message, and leave primary_message empty ("").
+  - When tags[] is empty, primary_message is the headline action or metric; secondary_message is the supporting note below it.
   - initiative_subtitle is shown below the initiative_name in a muted style; use it for sub-track or product category labels.
-  - Typical swim-lane roadmap: columns = phases (Phase 1, Phase 2 …), rows = product tracks, each cell has primary_message (action title), secondary_message (revenue target), tags (city or geography chips).
+  - Typical city-tagged cell: tags = [{label:"Bangalore",tone:"primary"}, ...], primary_message = "", secondary_message = "3,981 + 2,810 orders on base SKU".
+  - Typical tag-free cell: primary_message = "~₹0.3–0.4 Cr incremental revenue", secondary_message = "~15% demand capture".
   NEVER use when rows have a rank order (use prioritization). NEVER use for process steps (use workflow).
 
 profile_card_set:
