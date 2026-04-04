@@ -23,6 +23,13 @@ You will receive:
 2. A batch of slide plans
 3. A source document for reference
 
+Execution scope:
+- Phases 1–4 run ONLY for content slides.
+- Title, divider, and thank_you slides do NOT go through Phases 1–4.
+- Phase 5 is the final binding step for ALL slides:
+  - it assembles content slides from Phases 1–4
+  - and inserts title, divider, and thank_you slides using their structural slide rules.
+
 Your role is to define the HIGH-LEVEL CONTENT STRUCTURE for each slide.
 You do NOT design the final slide.
 You do NOT decide coordinates, colors, fonts, or exact visual styling.
@@ -379,7 +386,16 @@ OPTIONAL zones:
                     slices (categories) > 7   → convert to clustered_bar
                     slices (categories) < 2   → invalid
                   
- 
+ ─── Table SELECTION INDICATORS ───────────────────────── 
+
+  Table is the last resort artifact to be selected as the primary artifact in any zone 
+  Ask the question is a dataset for which table was selected can represented better with:
+  - Stat_bar - Replace a plain table with stat_bar when rows are ranked entities, one numeric metric drives the comparison, and one short annotation per row adds meaning. Use it only when the board needs ordered scanning, not cross-row / cross-column lookup. 
+  - profile_card_set - Replace a plain table with profile_card_set when each row is a named entity and the goal is to understand that entity through heterogeneous attributes. Use it when rows are entity-first, not when all columns are the same data type and meant for strict comparison.
+  - comparison_table - Replace a plain table with comparison_table when rows are discrete options and columns are common evaluation criteria applied equally to all options. Use it when the board must judge which option wins on which criteria, ideally with one recommended row visually distinguished.
+  - initiative_map - Replace a plain table with initiative_map when rows are parallel initiatives or workstreams and columns are structured dimensions such as phase, owner, KPI, timeline, or status. Use it when the message is coordinated execution across parallel tracks, not rank ordering or step-by-step dependency.
+  - risk_register - Replace a plain table with risk_register when rows are named risks, issues, or exceptions and each item carries severity / priority plus owner and mitigation status. Use it when the board’s first need is to see severity-banded risk exposure, not flat KPI monitoring or generic issue lists.
+
  ─── Other artifacts SELECTION INDICATORS ───────────────────────── 
   matrix
   A two-dimensional reasoning frame where both axes carry named categories and the
@@ -490,27 +506,52 @@ OPTIONAL zones:
 
 ─── WORKFLOW SELECTION Indicators ─────────────────────────────
 
-  process_flow:   linear sequence of steps; 4–6 nodes; left_to_right only;
-                  use when showing HOW something happens step by step
+─── WORKFLOW SELECTION INDICATORS ───────────────────────
 
-  timeline:       phased chronological progression; 4–6 nodes; left_to_right only;
-                  use when showing WHEN things happen in sequence
+workflow is valid only when the slide’s message depends on structure, sequence, or causal breakdown.
+Do NOT use workflow when a chart, table, cards, or reasoning artifact would explain the message more directly.
 
-  hierarchy:      parent-child reporting structure; minimum 3 levels;
-                  top_down_branching only; 
-                  use when showing WHO reports to whom or structural organisation
+process_flow
+- Use when the message is HOW a process moves through a sequence of operational steps.
+- Steps must be sequential, non-overlapping, and read left_to_right only.
+- Minimum 3 steps. Best for 4–6 steps.
+- Requires full slide width and at least 50% slide height.
+- Do NOT use for dated milestones (use timeline), reporting structure (use hierarchy), or part-of-whole breakdown (use decomposition).
 
-  decomposition:  top number or concept split into components; max 6 nodes;
-                  direction: left_to_right or top_to_bottom or top_down_branching;
-                  use when showing WHAT something is made of
+timeline
+- Use when the message is WHEN events, phases, or milestones occur over time.
+- Events must be chronological and read left_to_right only.
+- Minimum 4 events. Best for 4–6 events.
+- Requires full slide width and at least 50% slide height.
+- Do NOT use when the message is operational process logic (use process_flow) or parallel initiatives (use initiative_map).
+
+hierarchy
+- Use when the message is WHO reports to whom or how an organization / structure branches.
+- Must show parent-child structure with at least 3 distinct levels.
+- Direction must be top_down_branching only.
+- Requires at least 50% slide width and full content height.
+- Do NOT use for sequential flow, prioritization, or causal drivers.
+
+decomposition
+- Use when the message is WHAT a total, concept, or outcome is made of.
+- Branches must be components, not steps and not ranked choices.
+- Allowed directions: left_to_right, top_to_bottom, top_down_branching.
+- left_to_right requires full width; top_to_bottom / top_down_branching require full height.
+- Best for up to 6 nodes.
+- Do NOT use when the branches imply causality (use driver_tree) or process sequence (use process_flow).
+
+Placement rules
+- left_to_right workflows must span full horizontal width; any other zone must be stacked above or below.
+- top_to_bottom / top_down_branching workflows must span full vertical height; any other zone must sit left or right.
+- Never place a workflow in a layout that breaks its reading direction.
+
+Hard rejection rules
+- Fewer than 4 nodes for process_flow or timeline → reject workflow
+- Fewer than 3 levels for hierarchy → reject workflow
+- More than 6 nodes for decomposition → simplify or use another artifact
+- If the board needs comparison, ranking, or quantitative proof more than structure → reject workflow and choose a non-workflow artifact
 
   
-  Node count rules:
-  - process_flow: minimum 4 nodes
-  - timeline: minimum 4 nodes
-  - hierarchy: minimum 3 distinct levels
-  - decomposition: max 6 nodes
-
 ─── INSIGHT TEXT SELECTION Indicators ─────────────────────────
 
   - Each bullet ≤ 12 words. Count every word — articles, numbers, units each count as 1.
@@ -535,6 +576,31 @@ OPTIONAL zones:
   - GROUPED mode (groups[]): board scans section headers first then reads bullets;
     use for 3+ thematically distinct finding clusters
   - Never use both points[] and groups[] in the same artifact
+
+STEP 4 — ASSIGN ARTIFACT HEADERS
+
+For each selected artifact, decide whether it requires a local artifact header.
+
+Rule:
+- The PRIMARY artifact in every zone MUST have a header.
+- The SECONDARY artifact header is OPTIONAL.
+- Add a secondary artifact header only if it improves local clarity and does not repeat the slide title or primary artifact header.
+
+Purpose of the artifact header:
+- It is the local proof statement for that artifact.
+- It should state what this artifact proves, shows, or frames within the zone.
+- It must support the zone’s strategic_purpose and the slide title, not duplicate them verbatim.
+
+Header rules:
+- Keep it specific, concise, and insight-led (max 10 words).
+- Prefer one short sentence or phrase.
+- Do NOT restate the slide title word-for-word.
+- Do NOT use generic labels like "Overview", "Analysis", "Details", or "Key Insight".
+- If the artifact is secondary and purely annotative, the header may be omitted.
+
+Final check:
+- Every PRIMARY artifact must have artifact_header populated.
+- A SECONDARY artifact header should be included only when it adds meaning beyond the slide title and primary artifact header.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PHASE 4 — LAYOUT STRUCTURE FINALIZATION
@@ -617,75 +683,67 @@ FAMILY 1 — INSIGHT TEXT
 FAMILY 2 — CHARTS
   bar / line (1–3 cat)             30%    60%    30%    100%
   bar / line (4–6 cat)             40%    70%    40%    100%
-  bar / line (>7–12 cat)           70%   100%    40%    65%
+  bar / line (>7–12 cat)           70%   100%    60%    100%
   clustered_bar (2 series, ≤6 cat) 50%    70%    40%    100%
   clustered_bar (3+ series, ≤6 cat)70%    90%    75%    100%
   clustered_bar (any, > 6 cat)     70%   100%    90%    100%  
-  horizontal_bar (≤4 rows)         35%    60%    35%    55%
-  horizontal_bar (5–6 rows)        40%    65%    45%    65%
-  horizontal_bar (7–10 rows)       40%    65%    65%    85%
-  horizontal_bar (> 10 rows)       40%    65%    80%   100%   row_density_warning
-  pie / donut (≤3 segments)        30%    50%    35%    55%
-  pie / donut (4–5 segments)       35%    55%    40%    60%
-  pie / donut (> 5 segments)       HARD REJECT — convert to horizontal_bar
-  combo / dual-axis                55%    90%    40%    65%
-  area (≤6 time periods)           45%    75%    40%    60%
-  area (> 6 time periods)          60%   100%    40%    65%
-  waterfall (≤6 steps)             50%    80%    40%    60%
-  waterfall (> 6 steps)            70%   100%    45%    65%   waterfall_density_warning
-  group_pie (2–4 pies, 50–80% alloc) 50%  80%   40%    65%
-  group_pie (2–4 pies, >80% alloc) 80%   100%   40%    65%
-  group_pie (5–8 pies, >80% alloc) 80%   100%   45%    70%   group_pie_density_warning
-  group_pie (< 50% alloc)          HARD REJECT — insufficient space; use table instead
-
+  horizontal_bar (≤4 rows)         25%    70%    40%    60%
+  horizontal_bar (5–6 rows)        40%    80%    60%    80%
+  horizontal_bar (7–10 rows)       40%    65%    75%    100%
+  horizontal_bar (> 10 rows)       40%    65%    75%    100%   
+  pie / donut (≤3 segments)        40%    80%    40%    80%
+  pie / donut (4–6 segments)       40%    60%    60%    80%
+  pie / donut (> 6 segments)       HARD REJECT — convert to horizontal_bar
+  combo / dual-axis                50%   100%    60%    100%
+  area (≤5 time periods)           40%   80%     40%    80%
+  area (> 6 time periods)          50%   100%    50%    100%
+  waterfall (≤6 steps)             60%   100%    40%    80%
+  waterfall (> 6 steps)            80%   100%    60%    100%   
+  group_pie (2–4 pies)             50%   80%     40%    70%
+  group_pie (5–8 pies)             80%   100%    50%    100%   
+  
 FAMILY 3 — CARDS
-  cards (1 card)                  15%    35%    15%    28%
-  cards (2 cards)                 30%    55%    18%    30%
-  cards (3 cards)                 50%    75%    20%    32%
-  cards (4 cards)                100%   100%    22%    35%
-  cards (5–6 cards)              100%   100%    30%    48%
-  cards (7–8 cards)              100%   100%    40%    58%   card_density_warning
-  cards (9–10 cards)             100%   100%    52%    70%   card_density_warning
+  cards (1-2 cards)               25%    50%    25%    50%
+  cards (3 cards)                 40%    60%    30%    50%
+  cards (4 cards)                 60%    100%   40%    60%
+  cards (5–6 cards)               80%    100%   50%    75%
+  cards (7–8 cards)               80%   100%    60%    80%   
+  cards (9–10 cards)              90%   100%    80%    100%   
 
 FAMILY 4 — WORKFLOW
-  process_flow (3 nodes)          55%    85%    28%    48%
-  process_flow (4–6 nodes)        70%   100%    32%    52%
-  process_flow (7–9 nodes)        85%   100%    38%    58%   workflow_density_warning
-  process_flow (> 9 nodes)       100%   100%    42%    65%   workflow_complexity_warning
-  timeline (3 events)             55%    85%    25%    45%
-  timeline (4–6 events)           70%   100%    28%    50%
-  timeline (7–10 events)          85%   100%    32%    55%   timeline_density_warning
-  hierarchy (2 levels)            40%    65%    45%    70%
-  hierarchy (3 levels)            50%    75%    55%    80%
-  hierarchy (4+ levels)           55%    80%    70%    95%   hierarchy_depth_warning
-  decomposition (L→R, ≤4 nodes)   65%   100%    35%    55%
-  decomposition (L→R, > 4 nodes)  75%   100%    40%    60%
-  decomposition (T→B, ≤4 nodes)   28%    50%    50%    80%
-  decomposition (T→B, > 4 nodes)  30%    55%    65%    90%
+  process_flow (3 nodes)          50%    100%    50%    75%
+  process_flow (4–6 nodes)        75%    100%    60%    100%
+  timeline (3 events)             50%    100%    50%    75%
+  timeline (4–6 events)           75%    100%    60%    100%
+  hierarchy (3 levels)            50%    75%     60%    100%
+  hierarchy (4+ levels)           50%    100%    80%    100%
+  decomposition (L→R, ≤4 nodes)   60%   100%     50%    75%
+  decomposition (L→R, > 4 nodes)  80%   100%     50%    100%
+  decomposition (T→B, ≤4 nodes)   50%    80%     60%    100%
+  decomposition (T→B, > 4 nodes)  50%    80%     80%    100%
 
 FAMILY 5 — TABLE
-  table (≤3 col, ≤3 row)          30%    55%    22%    40%
-  table (≤4 col, ≤4 row)          40%    65%    25%    45%
-  table (5–6 col, ≤4 row)         60%    85%    28%    48%
-  table (≤4 col, 5–6 row)         40%    65%    45%    65%
-  table (5–6 col, 5–6 row)        70%   100%    48%    70%
-  table (> 6 col OR > 6 row)      80%   100%    55%    85%   table_density_warning
+  table (≤3 col, ≤3 row)          30%    50%    20%    40%
+  table (≤4 col, ≤4 row)          40%    60%    30%    40%
+  table (5–6 col, ≤4 row)         60%    75%    28%    48%
+  table (≤4 col, 5–6 row)         40%    60%    30%    40%
+  table (5–6 col, 5–6 row)        60%    75%    50%    75%
+  table (> 6 col OR > 6 row)      80%   100%    50%    100%   
 
 FAMILY 5B — STRUCTURED DISPLAY ARTIFACTS
-  stat_bar (≤5 rows)                 35%    65%    40%    60%
-  stat_bar (6–8 rows)                40%    70%    55%    75%
-  stat_bar (9–10 rows)               45%    75%    70%    90%
-  comparison_table (≤3 opt, ≤4 crit) 60%   100%    30%    55%
-  comparison_table (4–5 opt, ≤4 crit)55%    80%    40%    65%
-  comparison_table (≤3 opt, 5–6 crit)50%    80%    40%    65%
-  comparison_table (4–5 opt, 5–6 crit)70%   100%    50%    75%
-  initiative_map (≤4 init, ≤4 dim)   55%    85%    40%    65%
-  initiative_map (5–6 init, ≤4 dim)  60%    90%    55%    75%
-  initiative_map (≤4 init, 5–6 dim)  70%   100%    45%    68%
-  profile_card_set (2–3 profiles)    50%    70%    50%    70%
-  profile_card_set (4–5 profiles)    70%   100%    70%   100%
-  profile_card_set (6+ profiles)     70%   100%    70%   100%
-  risk_register (≤4 risks)           50%   100%    50%   100%
+  stat_bar (≤5 rows)                 50%    100%    50%    100%
+  stat_bar (>6 rows)                 75%    100%    50%    100%
+  comparison_table (≤3 opt, ≤4 crit) 50%    100%    50%    100%
+  comparison_table (4–5 opt, ≤4 crit)75%    100%    40%    70%
+  comparison_table (≤3 opt, 5–6 crit)75%    100%    75%    100%
+  comparison_table (4–5 opt, 5–6 crit)75%   100%    75%    100%
+  initiative_map (≤4 init, ≤4 dim)   55%    100%    40%    65%
+  initiative_map (5–6 init, ≤4 dim)  60%    100%    55%    75%
+  initiative_map (≤4 init, 5–6 dim)  70%    100%    45%    68%
+  profile_card_set (2–3 profiles)    50%    100%    50%    70%
+  profile_card_set (4–5 profiles)    70%    100%    70%   100%
+  profile_card_set (6+ profiles)     70%    100%    70%   100%
+  risk_register (≤4 risks)           50%    100%    50%   100%
 
 FAMILY 6 — REASONING ARTIFACTS
   matrix (2×2)                    50%    100%    50%    75%
@@ -801,6 +859,58 @@ STEP 5 — FINAL ENFORCEMENT
 - Never invent additional artifacts.
 - Never ignore a hard artifact placement rule to force a brand layout fit.
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PHASE 5 — FINAL SLIDE MANIFEST ASSEMBLY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+You are now assembling the final slide manifest for Agent 5.
+
+Your job in this phase is ONLY to bind all slide types into one consistent output structure.
+Do NOT make any new strategic, content, artifact, or layout decisions.
+
+Use:
+- structural slide definitions for title / divider / thank_you slides
+For Content Slides: 
+  - Phase 1 outputs for zone structure
+  - Phase 2 outputs for zone content
+  - Phase 3 outputs for artifact selection
+  - Phase 4 outputs for layout finalization
+
+STEP 1 — ASSEMBLE SLIDE OBJECTS
+For every slide, construct one final slide object using the required output schema.
+Preserve slide order exactly as provided by Agent 3.
+
+STEP 2 — APPLY SLIDE-TYPE RULES
+- Title slide:
+  - zones must be []
+  - use title, subtitle, and key_message only
+- Divider slide:
+  - zones must be []
+  - title = section name
+  - subtitle = ""
+- Thank-you slide:
+  - zones must be []
+  - use closing title, subtitle if needed, and key_message
+- Content slide:
+  - include finalized title, subtitle, key_message, zones, artifacts, and layout fields
+
+STEP 3 — NORMALIZE LAYOUT FIELDS
+- If Layout Mode was used:
+  - set selected_layout_name
+  - set layout_hint.split = "full" for all zones if required for compatibility
+- If Scratch Mode was used:
+  - selected_layout_name = ""
+  - zone_split, layout_hint.split, artifact_arrangement, and artifact_split_hint must be explicit
+
+STEP 4 — FINAL VALIDATION
+Ensure:
+- every slide has all required top-level fields
+- every content slide has valid zones and artifacts
+- every structural slide has zones = []
+- no slide contains fields inconsistent with its slide_type
+- the manifest is directly usable by Agent 5 without further interpretation
+
+Return ONLY the final JSON array.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 OUTPUT OBJECT — REQUIRED FIELDS
@@ -874,7 +984,7 @@ ARTIFACT SCHEMAS
 insight_text:
   {
     "type": "insight_text",
-    "insight_header": "2–4 word specific label that names the implication — e.g. 'Risk Implication', 'Growth Opportunity', 'Action Required', 'Portfolio Risk' — never use generic labels like 'So What' or 'Key Insight'",
+    "artifact_header": "2–4 word specific label that names the implication — e.g. 'Risk Implication', 'Growth Opportunity', 'Action Required', 'Portfolio Risk' — never use generic labels like 'So What' or 'Key Insight'",
     "points": ["specific insight with data"],          ← STANDARD mode (flat list)
     "groups": [                                        ← GROUPED mode (thematic sections)
       { "header": "2–4 word label", "bullets": ["crisp point with data"] }
@@ -904,7 +1014,7 @@ chart:
     "chart_type": "bar" | "line" | "pie" | "waterfall" | "clustered_bar" | "horizontal_bar" | "group_pie",
     "chart_decision": "one line: why this chart type was chosen",
     "chart_title": "",                                 ← leave empty when layout has header placeholder
-    "chart_header": "the one-line insight the chart proves",
+    "artifact_header": "the one-line insight the chart proves",
     "x_label": "string",
     "y_label": "string",
     "categories": ["string"],
@@ -917,7 +1027,7 @@ chart:
     "show_data_labels": true,
     "show_legend": true
   }
-  chart_title is rendered INSIDE the plot area; chart_header is the zone heading.
+  chart_title is rendered INSIDE the plot area; artifact_header is the zone heading.
   When a layout header placeholder exists, set chart_title: "" — never duplicate in both.
 
 group_pie chart — use this schema instead when chart_type is "group_pie":
@@ -926,7 +1036,7 @@ group_pie chart — use this schema instead when chart_type is "group_pie":
     "chart_type": "group_pie",
     "chart_decision": "one line: why group_pie was chosen over table or clustered_bar",
     "chart_title": "",
-    "chart_header": "the one-line insight the group proves",
+    "artifact_header": "the one-line insight the group proves",
     "categories": ["Slice A", "Slice B", "Slice C"],  ← shared slice labels for ALL pies (max 7)
     "series": [                                        ← one entry per entity (pie); max 8 entries
       { "name": "Entity 1", "series_total": "₹39.7L", "values": [60, 25, 15], "unit": "percent" },
@@ -947,7 +1057,7 @@ group_pie chart — use this schema instead when chart_type is "group_pie":
   - Each series values[] must sum to ~100 (percentages) or represent a consistent unit
   - values[] length must equal categories[] length for every series
   - Do NOT use x_label, y_label, dual_axis, secondary_series for group_pie
-  - Legend is always shared and rendered once above the group, below the chart_header
+  - Legend is always shared and rendered once above the group, below the artifact_header
 
 cards:
   {
@@ -969,7 +1079,7 @@ workflow:
     "type": "workflow",
     "workflow_type": "process_flow" | "hierarchy" | "decomposition" | "timeline",
     "flow_direction": "left_to_right" | "top_to_bottom" | "top_down_branching" | "bottom_up",
-    "workflow_header": "string",
+    "artifact_header": "string",
     "workflow_insight": "string",
     "nodes": [
       { "id": "n1", "label": "string", "value": "string", "description": "string", "level": 1 }
@@ -984,7 +1094,7 @@ workflow:
 table:
   {
     "type": "table",
-    "table_header": "string — insight the table proves, not a topic label",
+    "artifact_header": "string — insight the table proves, not a topic label",
     "title": "string",
     "headers": ["string"],
     "rows": [["string"]],
@@ -999,7 +1109,7 @@ matrix:
   {
     "type": "matrix",
     "matrix_type": "2x2",
-    "matrix_header": "string",
+    "artifact_header": "string",
     "x_axis": { "label": "string", "low_label": "string", "high_label": "string" },
     "y_axis": { "label": "string", "low_label": "string", "high_label": "string" },
     "quadrants": [ { "id": "q1", "name": "string", "insight": "string" } ],
@@ -1010,7 +1120,7 @@ matrix:
 driver_tree:
   {
     "type": "driver_tree",
-    "tree_header": "string",
+    "artifact_header": "string",
     "root": { "label": "string", "value": "string" },
     "branches": [ { "label": "string", "value": "string", "children": [] } ]
   }
@@ -1020,7 +1130,7 @@ driver_tree:
 prioritization:
   {
     "type": "prioritization",
-    "priority_header": "string",
+    "artifact_header": "string",
     "items": [
       {
         "rank": 1,
@@ -1046,7 +1156,7 @@ prioritization:
 stat_bar:
   {
     "type": "stat_bar",
-    "stat_header": "string — the one-line insight the ranking proves",
+    "artifact_header": "string — the one-line insight the ranking proves",
     "annotation_style": "inline" | "trailing",
     "column_headers": {
       "label": "string",
@@ -1076,7 +1186,7 @@ stat_bar:
 comparison_table:
   {
     "type": "comparison_table",
-    "comparison_header": "string — the one-line insight the comparison proves",
+    "artifact_header": "string — the one-line insight the comparison proves",
     "criteria": [
       { "id": "string", "label": "string" }
     ],
@@ -1105,7 +1215,7 @@ comparison_table:
 initiative_map:
   {
     "type": "initiative_map",
-    "initiative_header": "string — the one-line framing of the initiative landscape",
+    "artifact_header": "string — the one-line framing of the initiative landscape",
     "dimension_labels": [
       { "id": "string", "label": "string" }
     ],
@@ -1134,7 +1244,7 @@ initiative_map:
 profile_card_set:
   {
     "type": "profile_card_set",
-    "profile_header": "string — the one-line framing of the entity set",
+    "artifact_header": "string — the one-line framing of the entity set",
     "layout_direction": "horizontal" | "grid",
     "profiles": [
       {
@@ -1161,7 +1271,7 @@ profile_card_set:
 risk_register:
   {
     "type": "risk_register",
-    "risk_header": "string — the one-line framing of the risk landscape",
+    "artifact_header": "string — the one-line framing of the risk landscape",
     "show_mitigation": false,
     "risks": [
       {
@@ -1212,7 +1322,7 @@ GATE 3 — ARTIFACT HARD CONSTRAINTS
   [ ] Every pie/donut has ≤ 5 segments
   [ ] dual_axis set to true wherever series have different units
   [ ] Every workflow has coherent, non-crossing nodes and connections
-  [ ] Every artifact has its header field populated (except cards)
+  [ ] Every PRIMARY artifact has artifact_header populated; SECONDARY artifacts use artifact_header only when needed
   [ ] No cards used for part-of-whole, portfolio mix, or mutually exclusive category data
   [ ] No cards used for status buckets, risk categories, or total-plus-components structures
   [ ] No cards-only slide — cards must be accompanied by chart/workflow/insight_text
@@ -1290,7 +1400,7 @@ function defaultZonesForArchetype(archetype) {
         { zone_id: 'z2', zone_role: 'implication', narrative_weight: 'secondary',
           message_objective: 'Interpret the trend',
           layout_hint: { split: 'right_40' },
-          artifacts: [{ type: 'insight_text', insight_header: 'Trend Implication', points: [], sentiment: 'neutral' }] }
+          artifacts: [{ type: 'insight_text', artifact_header: 'Trend Implication', points: [], sentiment: 'neutral' }] }
       ]
 
     case 'comparison':
@@ -1302,7 +1412,7 @@ function defaultZonesForArchetype(archetype) {
         { zone_id: 'z2', zone_role: 'implication', narrative_weight: 'secondary',
           message_objective: 'What the comparison means',
           layout_hint: { split: 'right_40' },
-          artifacts: [{ type: 'insight_text', insight_header: 'Key Insight', points: [], sentiment: 'neutral' }] }
+          artifacts: [{ type: 'insight_text', artifact_header: 'Key Insight', points: [], sentiment: 'neutral' }] }
       ]
 
     case 'breakdown':
@@ -1314,7 +1424,7 @@ function defaultZonesForArchetype(archetype) {
         { zone_id: 'z2', zone_role: 'supporting_evidence', narrative_weight: 'secondary',
           message_objective: 'Detail behind the segments',
           layout_hint: { split: 'right_50' },
-          artifacts: [{ type: 'insight_text', insight_header: 'Key Insight', points: [], sentiment: 'neutral' }] }
+          artifacts: [{ type: 'insight_text', artifact_header: 'Key Insight', points: [], sentiment: 'neutral' }] }
       ]
 
     case 'driver_analysis':
@@ -1326,7 +1436,7 @@ function defaultZonesForArchetype(archetype) {
         { zone_id: 'z2', zone_role: 'implication', narrative_weight: 'secondary',
           message_objective: 'Interpret the key drivers',
           layout_hint: { split: 'right_40' },
-          artifacts: [{ type: 'insight_text', insight_header: 'Key Insight', points: [], sentiment: 'neutral' }] }
+          artifacts: [{ type: 'insight_text', artifact_header: 'Key Insight', points: [], sentiment: 'neutral' }] }
       ]
 
     case 'process':
@@ -1339,7 +1449,7 @@ function defaultZonesForArchetype(archetype) {
         { zone_id: 'z2', zone_role: 'implication', narrative_weight: 'secondary',
           message_objective: 'Key insight or action from the process',
           layout_hint: { split: 'bottom_40' },
-          artifacts: [{ type: 'insight_text', insight_header: 'Process Implication', points: [], sentiment: 'neutral' }] }
+          artifacts: [{ type: 'insight_text', artifact_header: 'Process Implication', points: [], sentiment: 'neutral' }] }
       ]
 
     case 'recommendation':
@@ -1359,7 +1469,7 @@ function defaultZonesForArchetype(archetype) {
         { zone_id: 'z2', zone_role: 'implication', narrative_weight: 'secondary',
           message_objective: 'Interpretation and implication of the evidence',
           layout_hint: { split: 'right_40' },
-          artifacts: [{ type: 'insight_text', insight_header: 'Risk Implication', points: [], sentiment: 'neutral' }] }
+          artifacts: [{ type: 'insight_text', artifact_header: 'Risk Implication', points: [], sentiment: 'neutral' }] }
       ]
 
     default: // summary
@@ -1367,7 +1477,7 @@ function defaultZonesForArchetype(archetype) {
         { zone_id: 'z1', zone_role: 'summary', narrative_weight: 'primary',
           message_objective: 'Key summary of the section',
           layout_hint: { split: 'full' },
-          artifacts: [{ type: 'insight_text', insight_header: 'Key Insight', points: [], sentiment: 'neutral' }] }
+          artifacts: [{ type: 'insight_text', artifact_header: 'Key Insight', points: [], sentiment: 'neutral' }] }
       ]
   }
 }
@@ -2514,20 +2624,20 @@ INSTRUCTIONS:
 - In Scratch Mode, if a zone has 2 artifacts, set artifact_arrangement and set artifact_coverage_hint on EACH artifact so the hints sum to 100.
 - In Scratch Mode, cards with 1–2 items are compact summary anchors only: keep their zone share at or below ~40% of the slide, prefer top strips or narrow side panes, and never let 2 sparse cards occupy a tall dominant zone.
 - Card density rule: unless a single cards artifact contains 8+ cards, no individual card may imply more than ~15% of total slide area.
-- Every chart: MUST have 3+ categories, matching values, no all-zeros; set chart_header to the one-line insight the chart proves
+- Every chart: MUST have 3+ categories, matching values, no all-zeros; set artifact_header to the one-line insight the chart proves
 - clustered_bar: MUST have exactly 2 series
-- Every insight_text: MUST have specific, data-driven points; set insight_header to a 2–4 word specific label naming the implication (e.g. "Risk Implication", "Growth Opportunity", "Action Required") — never use generic labels like "So What" or "Key Insight"
-- Workflows: fully populate nodes and connections; set workflow_header to the one-line insight
+- Every insight_text: MUST have specific, data-driven points; set artifact_header to a 2–4 word specific label naming the implication (e.g. "Risk Implication", "Growth Opportunity", "Action Required") — never use generic labels like "So What" or "Key Insight"
+- Workflows: fully populate nodes and connections; set artifact_header to the one-line insight
 - Workflow restrictions:
   - process_flow: left_to_right only, >=4 nodes, full-width zone, >=50% height
   - hierarchy: top_down_branching only, >=3 levels, >=50% width, full content height
   - decomposition: left_to_right or top_to_bottom / top_down_branching only; if >3 nodes it must own full width (left_to_right) or full height (vertical)
   - timeline: left_to_right only, >=4 nodes, full-width zone, >=50% height
   - information_flow: do not use
-- Tables: set table_header to the one-line insight the table proves
-- Matrix: fully populate axes, all 4 quadrants, and plotted points; set matrix_header
-- Driver_tree: fully populate root and branches; set tree_header
-- Prioritization: fully populate ranked items sorted by importance; set priority_header
+- Tables: set artifact_header to the one-line insight the table proves
+- Matrix: fully populate axes, all 4 quadrants, and plotted points; set artifact_header
+- Driver_tree: fully populate root and branches; set artifact_header
+- Prioritization: fully populate ranked items sorted by importance; set artifact_header
 - If matrix / driver_tree / prioritization is used, it must be in the PRIMARY zone and may be paired only with insight_text
 - If a slide uses matrix / driver_tree / prioritization, do NOT add cards, chart, workflow, or table anywhere else on that slide
 - ZS01_single_full is the only structure that should routinely host reasoning artifacts as the dominant full-slide construct
@@ -3357,19 +3467,19 @@ Fix rules:
   - 2 zones / 3 artifacts should usually be one rich proof zone plus one compact supporting zone
   - 2 zones / 4 artifacts should be used sparingly and only when both zones are dense and balanced
 - All numbers from the source document
-- Charts: 3+ categories, matching values, no all-zeros; ensure chart_header is set
-- insight_text: specific points with data; ensure insight_header is set
-- Workflows: fully populated nodes and connections; ensure workflow_header is set
+- Charts: 3+ categories, matching values, no all-zeros; ensure artifact_header is set
+- insight_text: specific points with data; ensure artifact_header is set
+- Workflows: fully populated nodes and connections; ensure artifact_header is set
 - Enforce workflow restrictions:
   - process_flow: left_to_right only, >=4 nodes, full-width zone, >=50% height
   - hierarchy: top_down_branching only, >=3 levels, >=50% width, full content height
   - decomposition: left_to_right or top_to_bottom / top_down_branching only; if >3 nodes it must own full width (left_to_right) or full height (vertical)
   - timeline: left_to_right only, >=4 nodes, full-width zone, >=50% height
   - information_flow: do not use
-- Tables: ensure table_header is set
-- Matrix: fully populate x_axis, y_axis, all 4 quadrants, and points; ensure matrix_header is set
-- Driver_tree: fully populate root and branches; ensure tree_header is set
-- Prioritization: fully populate ranked action items; ensure priority_header is set
+- Tables: ensure artifact_header is set
+- Matrix: fully populate x_axis, y_axis, all 4 quadrants, and points; ensure artifact_header is set
+- Driver_tree: fully populate root and branches; ensure artifact_header is set
+- Prioritization: fully populate ranked action items; ensure artifact_header is set
 - If matrix / driver_tree / prioritization is present, keep it only in the PRIMARY zone and pair it only with insight_text
 - If a slide uses matrix / driver_tree / prioritization, do NOT add cards, chart, workflow, or table anywhere else on that slide
 - selected_layout_name: choose from available layouts; set to "" if none available
