@@ -240,6 +240,13 @@
         </div>
       </div>
     </div>
+    <div class="hint" style="margin-top:10px;">Slide range <span style="color:#888;">(optional — leave blank to run all slides)</span></div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:4px;">
+      <input type="number" id="range-from" placeholder="From" min="1" style="width:80px;padding:6px 8px;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;">
+      <span style="font-size:12px;color:#888;">to</span>
+      <input type="number" id="range-to" placeholder="To" min="1" style="width:80px;padding:6px 8px;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;">
+      <span id="range-hint" style="font-size:11px;color:#888;"></span>
+    </div>
     <div class="btn-row">
       <button class="btn btn-amber" id="run-btn" onclick="runTest()" disabled>▶ Run Agent 4</button>
       <button class="btn btn-gray" onclick="resetAll()">↺ Reset</button>
@@ -305,7 +312,15 @@
   }
 
   function checkReady() { document.getElementById('run-btn').disabled = !((document.getElementById('brief-input').value||'').trim().length > 10 && pdfB64) }
-  document.getElementById('brief-input').addEventListener('input', checkReady)
+  document.getElementById('brief-input').addEventListener('input', () => {
+    checkReady()
+    // Update range hint with total slide count from brief
+    try {
+      const b = JSON.parse(document.getElementById('brief-input').value)
+      const total = (b.slides || []).length
+      if (total) document.getElementById('range-hint').textContent = total + ' slides in brief'
+    } catch(e) {}
+  })
 
   function setProgress(pct, msg) { document.getElementById('prog-fill').style.width=pct+'%'; document.getElementById('prog-msg').textContent=msg }
 
@@ -318,16 +333,38 @@
     document.getElementById('run-btn').disabled = true
     document.getElementById('results').classList.remove('show')
     document.getElementById('prog-wrap').classList.add('show')
+
+    // Apply slide range filter
+    const fromVal = parseInt(document.getElementById('range-from').value, 10)
+    const toVal   = parseInt(document.getElementById('range-to').value, 10)
+    const filteredBrief = { ...brief }
+    const allSlides = brief.slides || []
+    if (!isNaN(fromVal) || !isNaN(toVal)) {
+      const lo = isNaN(fromVal) ? 1 : fromVal
+      const hi = isNaN(toVal)   ? allSlides.length : toVal
+      filteredBrief.slides = allSlides.filter(s => {
+        const n = s.slot_index || s.slide_number || 0
+        return n >= lo && n <= hi
+      })
+      if (!filteredBrief.slides.length) {
+        err.textContent = 'Slide range ' + lo + '–' + hi + ' matched 0 slides. Check slot_index values in the brief.'
+        err.classList.add('show')
+        document.getElementById('run-btn').disabled = false
+        return
+      }
+    }
+
     const layoutNames = ((brand.layout_blueprints || brand.slide_layouts || []).map(l => l.name || l.layout_name || '').filter(Boolean))
-    setProgress(10, 'Building slide plan...' + (layoutNames.length ? ' (' + layoutNames.length + ' layouts found in brand)' : ' (no brand layouts — using zone splits)'))
+    const rangeLabel = filteredBrief.slides.length < allSlides.length ? ' · slides ' + filteredBrief.slides[0].slot_index + '–' + filteredBrief.slides[filteredBrief.slides.length-1].slot_index : ''
+    setProgress(10, 'Building slide plan' + rangeLabel + '...' + (layoutNames.length ? ' (' + layoutNames.length + ' layouts found in brand)' : ' (no brand layouts — using zone splits)'))
     try {
       setProgress(30, 'Writing slides in batches...')
-      const manifest = await runAgent4({ outline: brief, contentB64: pdfB64, brandRulebook: brand })
+      const manifest = await runAgent4({ outline: filteredBrief, contentB64: pdfB64, brandRulebook: brand })
       resultManifest = manifest
       setProgress(90, 'Rendering...')
       renderResults(manifest)
       const totalArtifacts = manifest.reduce((s,sl) => s + (sl.zones||[]).reduce((zs,z) => zs+(z.artifacts||[]).length, 0), 0)
-      setProgress(100, '✅ '+manifest.length+' slides · '+manifest.reduce((s,sl)=>s+(sl.zones||[]).length,0)+' zones · '+totalArtifacts+' artifacts')
+      setProgress(100, '✅ '+manifest.length+' slides'+rangeLabel+' · '+manifest.reduce((s,sl)=>s+(sl.zones||[]).length,0)+' zones · '+totalArtifacts+' artifacts')
     } catch(e) { err.textContent='Error: '+e.message; err.classList.add('show'); console.error(e) }
     document.getElementById('run-btn').disabled = false
   }
