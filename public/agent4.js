@@ -1232,58 +1232,66 @@ comparison_table:
   {
     "type": "comparison_table",
     "artifact_header": "string — the one-line insight the comparison proves",
-    "criteria": [
-      { "id": "string", "label": "string" }
+    "column_headers": [
+      { "id": "option", "label": "Option" },
+      { "id": "c1", "label": "string" }
     ],
-    "options": [
+    "rows": [
       {
         "id": "string",
-        "name": "string",
+        "option_name": "string",
         "badge_text": "string — optional row badge e.g. 'recommended'",
+        "row_tone": "recommended" | "neutral",
         "cells": [
           {
-            "criterion_id": "string — matches criteria[].id",
+            "column_id": "string — matches column_headers[].id",
             "rating": "yes" | "partial" | "no" | "text",
             "display_value": "string — optional rendered symbol/text if not default",
-            "note": "string — supporting note when rating is 'text'",
-            "representation_type": "icon" | "text"
+            "secondary_message": "string — optional subtext when needed",
+            "representation_type": "icon" | "text" | "icon_with_text"
           }
         ]
       }
     ],
-    "recommended_option_id": "string — id of the preferred option",
+    "recommended_row_id": "string — id of the preferred row",
     "recommended_option": "string — name fallback only if id is unavailable"
   }
-  recommended_option_id is preferred; recommended_option is a fallback only if id is unavailable.
+  comparison_table usage:
+  - column_headers[] defines the evaluation criteria columns; first column is the option label column.
+  - each row is one option being evaluated.
+  - row_tone = "recommended" visually distinguishes the selected row.
+  - cells[] should usually be icon-led judgments with optional supporting text.
   NEVER use plain table for option-vs-criteria data.
 
 initiative_map:
   {
     "type": "initiative_map",
     "artifact_header": "string — the one-line framing of the initiative landscape",
-    "dimension_labels": [
-      { "id": "string", "label": "string" }
+    "column_headers": [
+      { "id": "initiative", "label": "Initiative" },
+      { "id": "c1", "label": "string" }
     ],
-    "initiatives": [
+    "rows": [
       {
         "id": "string",
-        "name": "string — track label shown at left",
-        "subtitle": "string — optional track subtitle",
-        "placements": [
+        "initiative_name": "string — row label shown at left",
+        "cells": [
           {
-            "lane_id": "string — matches dimension_labels[].id",
-            "title": "string",
-            "subtitle": "string",
+            "column_id": "string — matches column_headers[].id",
+            "primary_message": "string",
+            "secondary_message": "string",
             "tags": ["string"],
-            "footer": "string",
-            "accent_tone": "primary" | "secondary" | "neutral"
+            "cell_tone": "primary" | "secondary" | "neutral"
           }
-        ],
-        "dimensions": [{ "label": "string", "value": "string" }]
+        ]
       }
     ]
   }
-  placements[] is preferred over dimensions[] (backward-compatible fallback only).
+  initiative_map usage:
+  - each row is one initiative / workstream.
+  - each cell is a structured content block, not a raw table value.
+  - primary_message is the main content of the cell; secondary_message is the supporting line below.
+  - tags[] are optional pills such as phase, priority band, or workstream marker.
   NEVER use when rows have a rank order (use prioritization). NEVER use for process steps (use workflow).
 
 profile_card_set:
@@ -1317,24 +1325,38 @@ risk_register:
   {
     "type": "risk_register",
     "artifact_header": "string — the one-line framing of the risk landscape",
-    "show_mitigation": false,
-    "risks": [
+    "column_headers": [
+      { "id": "risk", "label": "Risk" },
+      { "id": "likelihood", "label": "Likelihood" },
+      { "id": "impact", "label": "Impact" },
+      { "id": "owner", "label": "Owner" },
+      { "id": "status", "label": "Status" }
+    ],
+    "rows": [
       {
         "id": "string",
-        "title": "string — short risk headline",
-        "detail": "string — explanatory line under the title",
         "severity": "critical" | "high" | "medium" | "low",
+        "risk_title": "string — short risk headline",
+        "risk_detail": "string — explanatory line under the title",
+        "likelihood": "High" | "Medium" | "Low",
+        "impact": "High" | "Medium" | "Low",
         "owner": "string",
         "status": "string",
-        "likelihood": 0 | 1 | 2 | 3,
-        "impact": 0 | 1 | 2 | 3,
-        "owner_tag": "string — optional display override for owner pill",
+        "status_tone": "open" | "in_progress" | "mitigated" | "closed",
+        "status_representation": "pill" | "text",
+        "severity_dot": true | false,
+        "severity_color_override": "string — optional hex override",
+        "owner_tag": "string — optional display override for owner text",
         "status_tag": "string — optional display override for status pill"
       }
     ]
   }
-  show_mitigation: legacy fallback only — avoid if detail already includes mitigation.
-  likelihood / impact: pip count 0–3; omit fields entirely if not relevant to the slide's message.
+  risk_register usage:
+  - each row is one named risk / issue / exception.
+  - severity drives row color banding and optional leading dot marker.
+  - risk_title is the main row headline; risk_detail is the smaller supporting line below.
+  - likelihood / impact / owner / status are rendered as explicit columns.
+  - status_tone controls the visual treatment of the status chip.
   NEVER use plain table when severity-by-row is the primary signal.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
