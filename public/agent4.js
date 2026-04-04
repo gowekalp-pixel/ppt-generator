@@ -82,19 +82,23 @@ STEP 3 — DERIVE ZONE CONFIGURATION
 
   ZONE COUNT RULES (apply in order, first match wins):
   - narrative_role is methodology_note -> 1 zone, stop
-  - narrative_role is summary -> 1-3 zones; prefer 1 if one dense synthesis artifact can carry the slide
+  - narrative_role is transition_narrative -> 1 zone; insight_text only; no data artifacts permitted
+  - narrative_role is summary -> 1-2 zones; prefer 1 if one dense synthesis artifact can carry the slide
   - co_primary_signal is yes -> 2 zones, CO-PRIMARY, side-by-side
-  - narrative_role is explainer_to_summary, validation or drill_down -> 3-4 zones; dominant decomposition and supporting proof
+  - narrative_role is explainer_to_summary -> 3-4 zones; dominant decomposition plus supporting proof
+  - narrative_role is validation -> 2-3 zones; dominant proof plus supporting evidence
+  - narrative_role is drill_down -> 2-3 zones; dominant decomposition plus support
   - narrative_role is benchmark_comparison -> 2 zones, equal weight unless dominant_zone_signal is yes
   - narrative_role is trend_analysis -> 2 zones, dominant proof plus implication support
   - narrative_role is segmentation -> 2-3 zones, comparison-led
   - narrative_role is waterfall_decomposition -> 2 zones, dominant proof plus explanation
   - narrative_role is scenario_analysis -> 3-4 zones, grid or structured comparison preferred
   - narrative_role is decision_framework -> 3-4 zones, option comparison or criteria grid preferred
-  - narrative_role is risk_register -> 1-2 zones, dominant register plus mitigation / implication support
-  - narrative_role is recommendations -> 1-2 zones, recommendation plus rationale / ask support
+  - narrative_role is risk_register -> 2-3 zones, dominant register plus mitigation / implication support
+  - narrative_role is recommendations -> 2-3 zones, recommendation plus rationale / ask support
   - narrative_role is exception_highlight -> 2 zones, dominant issue plus implication / action support
   - narrative_role is context_setter or problem_statement -> 2 zones, framing plus consequence / evidence support
+  - zone_count_signal is 1, 2, 3, or 4 -> use that count as the baseline when no stronger rule above applies
   - strategic_objective implies comparing options, scenarios, or alternatives -> 3-4 zones
   - strategic_objective implies a single core proof with one takeaway -> 2 zones
   - strategic_objective implies a compact synthesis or note -> 1 zone
@@ -125,11 +129,11 @@ STEP 5 — FINALIZE THE ZONE STRUCTURE
 
   3 zones: ZS04_left_dominant_right_stack | ZS05_right_dominant_left_stack |
            ZS06_top_full_bottom_two | ZS07_top_two_bottom_dominant |
-           ZS11_three_rows_equal | ZW01_three_columns_equal |
-           ZW02_three_columns_right_stack | ZW03_three_columns_left_stack
+           ZS11_three_rows_equal | ZW01_three_columns_equal
 
   4 zones: ZS08_quad_grid | ZS09_left_dominant_right_triptych |
-           ZS10_top_full_bottom_three | ZW04_four_columns_equal
+           ZS10_top_full_bottom_three | ZW04_four_columns_equal |
+           ZW02_three_columns_right_stack | ZW03_three_columns_left_stack
 
   Selection rules:
   - CO-PRIMARY → always side-by-side, never stacked
@@ -139,6 +143,7 @@ STEP 5 — FINALIZE THE ZONE STRUCTURE
   - scenario_analysis → prefer left-to-right codes: ZW01, ZS06
   - context_setter, explainer_to_summary → prefer stacked codes: ZS11, ZS02
   - benchmark_comparison → prefer side-by-side codes: ZS03, ZW01
+  - ZW02 / ZW03 → wide canvas 4-zone layouts; dominant left or right column with a stacked pair on the opposite side; require wide canvas (width/height > 1.5)
   - OPTIONAL zone → choose a structure that degrades gracefully if the zone is skimmed
   - Wide canvas (width/height > 1.5): may use ZS.. and ZW.. structures
   - Standard canvas: prefer ZS.. structures
@@ -193,40 +198,33 @@ For each zone, working from strategic_purpose and key_content:
     The slide carries the claim. The notes carry qualification and detail.
 
 ──────────────────────────────────────────────────────────
-STEP 2 — PRODUCE ZONE CONTENT BRIEF
+STEP 2 — CARRY CONTENT FORWARD INTO PHASE 3
 ──────────────────────────────────────────────────────────
-  {
-    "slide_number":     1,
-    "narrative_role": "explainer_to_summary",
-    "zone_structure": "ZS03_side_by_side_equal",
-    "slide_title_draft":  "string — declarative, specific, conclusion-led, honest",
-    "zones":[
-     {
-      "strategic_purpose": "15-20 words on why this zone exists for this board on this slide — cannot be generic",
-      "zone_role": "primary" | "co-primary" | "secondary" | "supporting" | "optional",
-      "zone_id":          "z1",
-      "zone_content":    ["<sharpest claim or fact with unit>", ...],
-      "speaker_overflow": ["<supporting detail, qualifications, secondary data>", ...],
-      "content_gap":      "string — note if source evidence is thin; null if sufficient"
-      }
-]
+Do NOT emit a Phase 2 output object. This step is internal reasoning only.
+Carry the sharpened claims and evidence directly into Phase 3 artifact fields
+(chart series values, insight_text points, card subtitles, workflow node labels, etc.).
 
-  CONSTRAINTS
-  1. Every figure in zone_content[] must include its unit and source basis.
-  2. No two zones on the same slide may carry overlapping zone_content[].
-  3. content_gap is not a licence to invent or use outside knowledge.
-   It signals Phase 3 to make one recovery attempt from the source document.
-   If the gap cannot be filled from the source, choose a lower-density artifact
-   that can present the available evidence honestly.
+  CONTENT RULES (apply while reasoning, before Phase 3):
+  1. Every figure carried forward must include its unit and source basis.
+  2. No two zones on the same slide may carry overlapping claims.
+  3. Any qualification, secondary data, or supporting detail that does not belong
+     on the slide surface must be noted mentally as speaker overflow — fold it into
+     the slide-level speaker_note during Phase 5 binding.
+
+  CONTENT GAP SIGNAL:
+  If evidence for a zone is thin after exhausting the source document, flag it
+  as a content_gap internally. This is not a licence to invent or use outside
+  knowledge. It signals Phase 3 to choose a lower-density artifact that presents
+  the available evidence honestly. If no gap exists, proceed normally.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PHASE 3 — ARTIFACT FINALIZATION ACROSS ZONES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 You are the Artifact Architect.
-You receive the completed Zone and Zone Content Brief from Phase 2
-Based on the output of phase 2, Your job is to assign the right artifact to each zone, enforce spatial and density constraints,
-and produce a plan the visual designer can execute without ambiguity.
+You have the sharpened claims and evidence from Phase 2 reasoning in context.
+Your job is to assign the right artifact to each zone, enforce spatial and density constraints,
+and materialise the Phase 2 content directly into each artifact's data fields.
 
 If a zone has a content_gap:
 - make one focused re-check of the source document to recover the missing evidence
@@ -282,7 +280,7 @@ STEP 3 — ARTIFACT SELECTION
 ──────────────────────────────────────────────────────────
 
 AVAILABLE ARTIFACT TYPES:
-  chart:            bar | clustered_bar | horizontal_bar | line | area | pie | donut | combo | group_pie
+  chart:            bar | clustered_bar | horizontal_bar | line | area | pie | donut | combo | waterfall | group_pie
   stat_bar
   insight_text:     standard | grouped
   cards
@@ -360,6 +358,9 @@ OPTIONAL zones:
   bar:            3+ categories, one series, no time axis (vertical columns)
   horizontal_bar: same as bar but rotated — prefer when labels are long OR categories > 6
   line:           trend over time (months/quarters/years as categories)
+  area:           same as line but fills area under the curve — use when cumulative volume or
+                  magnitude over time is the message, not point-to-point change.
+                  Do NOT use area when multiple overlapping series obscure each other; use line instead.
   pie:            composition — values sum to ~100%, HARD MAX 5 segments
                   If > 5 segments: HARD REJECT → convert to horizontal_bar automatically
   donut:          same as pie with centre callout; HARD MAX 5 segments
@@ -606,6 +607,91 @@ Final check:
 PHASE 4 — LAYOUT STRUCTURE FINALIZATION
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+PHASE 4 REFERENCE TABLES
+─────────────────────────────────────────────────────────────
+
+TABLE A — ZONE CAPACITY TIER
+Derived from zone_count (Phase 1) + zone_role. No pixel knowledge required.
+
+  zone_count  zone_role                          capacity_tier
+  ─────────────────────────────────────────────────────────────
+  1           any                                large
+  2           primary / co-primary               large
+  2           secondary / supporting / optional  medium
+  3           primary / co-primary               Large
+  3           secondary                          Medium
+  3           Supporting / optional              small
+  4           primary / co-primary               Large
+  4           secondary / supporting / optional  small
+
+
+TABLE B — ARTIFACT CONTENT DENSITY
+Count content items from the Phase 3 artifact object. Assign density_tier: compact / standard / dense.
+
+  FAMILY 1 — INSIGHT TEXT
+    compact   standard subtype, ≤3 points; no groups
+    standard  standard subtype, 4–6 points; OR grouped ≤2 sections × ≤3 pts each
+    dense     standard >6 points; OR grouped ≥3 sections
+
+  FAMILY 2 — CHARTS
+    compact   ≤4 categories, ≤2 series; pie/donut ≤4 segments; group_pie 2–4 pies
+    standard  5–7 categories, ≤3 series; pie/donut 5–6 segments; waterfall 6 steps; group_pie 5–6 pies
+    dense     ≥8 categories OR ≥4 series; waterfall >6 steps; group_pie 7–8 pies
+
+  FAMILY 3 — CARDS
+    compact   1–3 cards
+    standard  4–6 cards
+    dense     7–10 cards
+
+  FAMILY 4 — WORKFLOW
+    compact   ≤3 nodes/events/steps; hierarchy ≤2 levels
+    standard  5–7 nodes/events; hierarchy 3 levels; decomposition ≤4 nodes
+    dense     ≥8 nodes; hierarchy 4+ levels; decomposition >4 nodes
+
+  FAMILY 5 — TABLE
+    compact   ≤3 cols × ≤4 rows
+    standard  ≤5 cols × ≤6 rows
+    dense     >5 cols OR >6 rows
+
+  FAMILY 5B — STRUCTURED DISPLAY
+    stat_bar:          compact ≤3 rows;   standard 4–5 rows;   dense 6–8 rows
+    comparison_table:  compact ≤3 opt × ≤3 crit;  standard ≤4 opt × ≤4 crit;  dense larger
+    initiative_map:    compact ≤3 rows × ≤3 dims;  standard ≤5 rows × ≤4 dims;  dense larger
+    profile_card_set:  compact 2–3;  standard 4–5;  dense 6+
+    risk_register:     compact ≤4 risks;  standard 5–6;  dense 7–8
+
+  FAMILY 6 — REASONING ARTIFACTS
+    matrix:          No compact;  standard <4-8>;  dense >8
+    driver_tree:     compact ≤2 levels;  standard 3 levels ≤6 branches;  dense 4+ levels OR 7+ branches
+    prioritization:  compact ≤4 items;  standard 5–7;  dense 8+
+
+
+TABLE C — DENSITY-CAPACITY COMPATIBILITY MATRIX
+
+SINGLE-ARTIFACT ZONE
+  capacity_tier   max density
+  ──────────────────────────
+  large           dense
+  medium          standard
+  small           compact
+
+TWO-ARTIFACT ZONE — primary takes the lead share; secondary fills the remainder
+  capacity_tier   primary max   secondary max   pattern
+  ──────────────────────────────────────────────────────────────────────────────
+  large           dense         compact         primary dominates; secondary annotates
+  large           standard      standard        co-equal — neither artifact dominates
+  medium          standard      compact         primary leads; secondary supports
+  small           compact       compact         prefer single artifact; both must be compact
+
+  Selection rule: default to the "dense / compact" row. Use "standard / standard" only when
+  both artifacts carry equal narrative weight (co-equal zone_role or deliberate pairing).
+
+RESOLUTION — apply in order when density exceeds the allowed max:
+  1. Trim      — reduce content items until density_tier drops to the allowed max
+  2. Swap type — replace with a lower-density artifact that serves the same narrative role
+  3. Reassign  — if a lighter artifact sits in a larger zone, swap zone assignments
+  4. Overflow  — move excess content to speaker_note; downgrade artifact to compact
+
 You are the Layout Architect.
 
 You receive the locked outputs from earlier phases:
@@ -627,11 +713,11 @@ Do NOT change:
 You may only:
 - select the best matching master layout when available
 - determine zone_split, layout_hint, artifact_arrangement, artifact_split_hint
-- fall back to Scratch Mode if no available master layout can satisfy artifact sizing constraints
+- fall back to Scratch Mode if no available master layout can satisfy the locked zone_structure and artifact density requirements
 
 Core rule:
 - Always try Layout Mode first.
-- Use Scratch Mode only if no available master layout fits the locked zone_structure and artifact constraints.
+- Use Scratch Mode only if no available master layout fits the locked zone_structure and artifact density requirements.
 
 
 EXECUTION MODES
@@ -642,8 +728,7 @@ LAYOUT MODE
 - If no layout is valid, switch to Scratch Mode.
 
 SCRATCH MODE
-- Use when no master layout can satisfy the locked zone_structure and artifact sizing constraints.
-- Also use when no master layout can satisfy the locked zone_structure and artifact sizing constraints.
+- Use when no master layout can satisfy the locked zone_structure and artifact density requirements.
 - In Scratch Mode, derive zone_split and internal artifact arrangement from first principles.
 
 
@@ -665,94 +750,33 @@ Within each zone:
 - if both cannot fit validly, reject the layout
 
 
-STEP 2 — ASSIGN ARTIFACT SIZING CONSTRAINTS
+STEP 2 — ASSIGN ZONE CAPACITY TIERS
 
-All MIN_W / MAX_W / MIN_H / MAX_H values below are percentages of the ASSIGNED ZONE area, not the full slide, unless explicitly stated otherwise.
-
-Apply the correct sizing row for every selected artifact.
-
-FAMILY 1 — INSIGHT TEXT
-  Subtype                         MIN_W  MAX_W  MIN_H  MAX_H
-  standard (1–2 points)            15%    25%    15%    25%
-  standard (3–6 points)            20%    30%    20%    30%
-  standard (>6 points)             30%    35%    30%    40%
-  grouped (2 sec, 2–3 pts each)    20%    30%    40%    60%
-  grouped (3 sec, 2–3 pts each)    20%    30%    60%    80%
-  grouped (4+ sections)            40%    60%    80%    100%
-
-FAMILY 2 — CHARTS
-  bar / line (1–3 cat)             30%    60%    30%    100%
-  bar / line (4–6 cat)             40%    70%    40%    100%
-  bar / line (>7–12 cat)           70%   100%    60%    100%
-  clustered_bar (2 series, ≤6 cat) 50%    70%    40%    100%
-  clustered_bar (3+ series, ≤6 cat)70%    90%    75%    100%
-  clustered_bar (any, > 6 cat)     70%   100%    90%    100%  
-  horizontal_bar (≤4 rows)         25%    70%    40%    60%
-  horizontal_bar (5–6 rows)        40%    80%    60%    80%
-  horizontal_bar (7–10 rows)       40%    65%    75%    100%
-  horizontal_bar (> 10 rows)       40%    65%    75%    100%   
-  pie / donut (≤3 segments)        40%    80%    40%    80%
-  pie / donut (4–6 segments)       40%    60%    60%    80%
-  pie / donut (> 6 segments)       HARD REJECT — convert to horizontal_bar
-  combo / dual-axis                50%   100%    60%    100%
-  area (≤5 time periods)           40%   80%     40%    80%
-  area (> 6 time periods)          50%   100%    50%    100%
-  waterfall (≤6 steps)             60%   100%    40%    80%
-  waterfall (> 6 steps)            80%   100%    60%    100%   
-  group_pie (2–4 pies)             50%   80%     40%    70%
-  group_pie (5–8 pies)             80%   100%    50%    100%   
-  
-FAMILY 3 — CARDS
-  cards (1-2 cards)               25%    50%    25%    50%
-  cards (3 cards)                 40%    60%    30%    50%
-  cards (4 cards)                 60%    100%   40%    60%
-  cards (5–6 cards)               80%    100%   50%    75%
-  cards (7–8 cards)               80%   100%    60%    80%   
-  cards (9–10 cards)              90%   100%    80%    100%   
-
-FAMILY 4 — WORKFLOW
-  process_flow (3 nodes)          50%    100%    50%    75%
-  process_flow (4–6 nodes)        75%    100%    60%    100%
-  timeline (3 events)             50%    100%    50%    75%
-  timeline (4–6 events)           75%    100%    60%    100%
-  hierarchy (3 levels)            50%    75%     60%    100%
-  hierarchy (4+ levels)           50%    100%    80%    100%
-  decomposition (L→R, ≤4 nodes)   60%   100%     50%    75%
-  decomposition (L→R, > 4 nodes)  80%   100%     50%    100%
-  decomposition (T→B, ≤4 nodes)   50%    80%     60%    100%
-  decomposition (T→B, > 4 nodes)  50%    80%     80%    100%
-
-FAMILY 5 — TABLE
-  table (≤3 col, ≤3 row)          30%    50%    20%    40%
-  table (≤4 col, ≤4 row)          40%    60%    30%    40%
-  table (5–6 col, ≤4 row)         60%    75%    28%    48%
-  table (≤4 col, 5–6 row)         40%    60%    30%    40%
-  table (5–6 col, 5–6 row)        60%    75%    50%    75%
-  table (> 6 col OR > 6 row)      80%   100%    50%    100%   
-
-FAMILY 5B — STRUCTURED DISPLAY ARTIFACTS
-  stat_bar (≤5 rows)                 50%    100%    50%    100%
-  stat_bar (>6 rows)                 75%    100%    50%    100%
-  comparison_table (≤3 opt, ≤4 crit) 50%    100%    50%    100%
-  comparison_table (4–5 opt, ≤4 crit)75%    100%    40%    70%
-  comparison_table (≤3 opt, 5–6 crit)75%    100%    75%    100%
-  comparison_table (4–5 opt, 5–6 crit)75%   100%    75%    100%
-  initiative_map (≤4 init, ≤4 dim)   55%    100%    40%    65%
-  initiative_map (5–6 init, ≤4 dim)  60%    100%    55%    75%
-  initiative_map (≤4 init, 5–6 dim)  70%    100%    45%    68%
-  profile_card_set (2–3 profiles)    50%    100%    50%    70%
-  profile_card_set (4–5 profiles)    70%    100%    70%   100%
-  profile_card_set (6+ profiles)     70%    100%    70%   100%
-  risk_register (≤4 risks)           50%    100%    50%   100%
-
-FAMILY 6 — REASONING ARTIFACTS
-  matrix (2×2)                    50%    100%    50%    75%
-  driver_tree (≤3 levels)         50%    100%    50%   100%
-  driver_tree (4+ levels)         65%    100%    65%   100%   driver_tree_depth_warning
-  prioritization (≤5 rows)        50%    100%    50%   100%
+For each zone: look up capacity_tier in TABLE A using zone_count and zone_role.
+Record the capacity_tier for every zone before proceeding to Step 3.
 
 
-STEP 3 — LAYOUT MODE: SEARCH MASTER LAYOUTS FIRST
+STEP 3 — MEASURE ARTIFACT CONTENT DENSITY
+
+For each artifact in every zone: count content items from the Phase 3 artifact object.
+Apply TABLE B thresholds → assign density_tier: compact / standard / dense.
+
+
+STEP 4 — DENSITY-CAPACITY MATCH
+
+For each zone, look up the correct row in TABLE C using zone capacity_tier + artifact count:
+- Single artifact: confirm density_tier ≤ single-artifact max for that capacity_tier.
+- Two artifacts: select the dominant or co-equal row (see TABLE C selection rule), then
+  confirm primary density_tier ≤ primary max AND secondary density_tier ≤ secondary max.
+
+If any artifact fails, apply RESOLUTION from TABLE C in order.
+Re-measure density_tier after trimming. If still failing after all resolution steps: note the
+conflict in speaker_note and continue — do not invent new artifacts.
+
+Special hard rule — pie/donut >6 segments: HARD REJECT. Convert to horizontal_bar.
+
+
+STEP 5 — LAYOUT MODE: SEARCH MASTER LAYOUTS FIRST
 
 For every candidate brand layout in the master layout list, test in this order:
 
@@ -770,12 +794,14 @@ For every candidate brand layout in the master layout list, test in this order:
   - an internal two-artifact container, or
   - a valid internal split that can host both primary and secondary artifacts.
 
-3. Primary artifact fit
-- For each zone, check whether the PRIMARY artifact can fit within its MIN_W / MAX_W / MIN_H / MAX_H range.
+3. Primary artifact density fit
+- For each zone, confirm the primary artifact density_tier is allowed by the zone capacity_tier (TABLE C).
+- If not allowed: this layout is invalid for this zone.
 
-4. Secondary artifact fit
-- If a secondary artifact exists, check whether it can fit in the remaining space while staying within its own valid range.
-- If the primary artifact fits but the secondary artifact does not, reject the layout.
+4. Secondary artifact density fit
+- If a secondary artifact exists, look up TABLE C (two-artifact row) for this zone's capacity_tier.
+- Confirm secondary density_tier ≤ secondary max from TABLE C.
+- If the primary artifact passes but the secondary does not: reject the layout.
 
 5. Artifact rule fit
 - Apply all artifact-specific hard rules from Phase 3.
@@ -790,7 +816,7 @@ For every candidate brand layout in the master layout list, test in this order:
 - If multiple layouts are valid, choose the layout that:
   - best preserves the locked zone hierarchy
   - gives the primary artifact the strongest readable fit
-  - keeps the secondary artifact within range without compression
+  - keeps the secondary artifact within its allowed density
   - minimizes density warnings
 
 If at least one layout is valid:
@@ -803,10 +829,10 @@ If no layout is valid:
 - switch to Scratch Mode
 
 
-STEP 4 — SCRATCH MODE
+STEP 6 — SCRATCH MODE
 
 Scratch Mode is a fallback only.
-Use it only if no master layout can satisfy the locked zone_structure and artifact sizing constraints.
+Use it only if no master layout can satisfy the locked zone_structure and artifact density requirements.
 
 In Scratch Mode:
 
@@ -834,10 +860,10 @@ In Scratch Mode:
   - 3 zones left-led → left_full_50 + top_right_50_h + bottom_right_50_h
   - 4 zones → tl + tr + bl + br
 
-5. Validate each zone against artifact sizing ranges
-- If any primary artifact falls below MIN_W or MIN_H, the split is invalid.
-- If any artifact exceeds MAX_W or MAX_H in a way that creates waste or false hierarchy, prefer a tighter valid split.
-- If no valid split exists within the allowed split family, reject the current family and move to the nearest allowed fallback split that preserves the locked narrative order.
+5. Density fit check
+- For each zone, confirm the primary artifact density_tier is allowed by the zone capacity_tier (TABLE C).
+- For zones with two artifacts, look up TABLE C (two-artifact row) and confirm secondary density_tier ≤ secondary max for this zone's capacity_tier.
+- If any zone fails: apply RESOLUTION from TABLE C. If still unresolvable, reject the current split family and try the next allowed split family that preserves the locked narrative order.
 
 6. Emit final geometry
 For each zone, populate:
@@ -847,12 +873,16 @@ For each zone, populate:
 - artifact_split_hint
 
 For each artifact, populate:
-- artifact_coverage_hint
+- artifact_coverage_hint — one of: full | dominant | co-equal | compact
+    full      = single artifact fills its entire zone
+    dominant  = primary artifact in a two-artifact zone (takes the leading share)
+    co-equal  = both artifacts share the zone at similar density and importance
+    compact   = secondary artifact, or a low-density artifact in a large zone
 - internal_alignment
 - any required placement hint from its artifact family
 
 
-STEP 5 — FINAL ENFORCEMENT
+STEP 7 — FINAL ENFORCEMENT
 
 - Never change zone_structure unless a hard artifact rule makes the original structure impossible.
 - Never change artifact choice in Phase 4.
@@ -927,7 +957,10 @@ Each slide object must contain EXACTLY these top-level fields:
   "subtitle": "string",
   "key_message": "string",
   "zones": [ ... ],
-  "speaker_note": "string"
+  "speaker_note": "string — consolidate all speaker overflow from Phase 2 reasoning here:
+    qualifications, secondary data points, assumptions, and context that support the
+    slide's claims but do not belong on the slide surface. 1–4 sentences. Leave empty
+    string if there is no meaningful overflow."
 }
 
 SLIDE TYPE RULES
@@ -997,8 +1030,7 @@ insight_text:
 chart:
   {
     "type": "chart",
-    "chart_type": "bar" | "line" | "pie" | "waterfall" | "clustered_bar" | "horizontal_bar" | "group_pie",
-    "chart_decision": "one line: why this chart type was chosen",
+    "chart_type": "bar" | "line" | "area" | "pie" | "donut" | "waterfall" | "clustered_bar" | "horizontal_bar" | "combo" | "group_pie",
     "chart_title": "",                                 ← leave empty when layout has header placeholder
     "artifact_header": "the one-line insight the chart proves",
     "x_label": "string",
@@ -1014,12 +1046,61 @@ chart:
     "show_legend": true
   }
   chart_title is rendered INSIDE the plot area; artifact_header is the zone heading.
+  Use the base schema above for: bar, line, area, pie, waterfall, clustered_bar, horizontal_bar.
+  Use the variant schemas below for donut, combo, and group_pie.
+
+donut chart — use this schema instead when chart_type is "donut":
+  {
+    "type": "chart",
+    "chart_type": "donut",
+    "chart_title": "",
+    "artifact_header": "the one-line insight the donut proves",
+    "categories": ["Segment A", "Segment B"],          ← max 5 segments; HARD REJECT if > 5 → convert to horizontal_bar
+    "series": [
+      { "name": "string", "values": [number], "unit": "percent" }
+    ],
+    "center_label": "string — main callout in the donut centre; typically the total or anchor KPI",
+    "show_data_labels": true,
+    "show_legend": true
+  }
+  donut rules:
+  - Use donut over pie when a centre callout (total, key metric, or anchor KPI) materially improves the message.
+  - Do NOT use x_label, y_label, dual_axis, or secondary_series for donut.
+  - center_label is mandatory for donut — if there is no meaningful centre value, use pie instead.
+  - HARD MAX 5 segments; if > 5 → automatically convert to horizontal_bar.
+
+combo chart — use this schema instead when chart_type is "combo":
+  {
+    "type": "chart",
+    "chart_type": "combo",
+    "chart_title": "",
+    "artifact_header": "the one-line insight the dual-axis chart proves",
+    "x_label": "string",
+    "y_label": "string — left axis label (primary series unit)",
+    "y2_label": "string — right axis label (secondary series unit)",
+    "categories": ["string"],
+    "series": [
+      { "name": "string", "values": [number], "unit": "string" }  ← rendered as BARS on left axis
+    ],
+    "dual_axis": true,                                 ← always true for combo
+    "secondary_series": [
+      { "name": "string", "values": [number], "unit": "string" }  ← rendered as LINE on right axis
+    ],
+    "show_data_labels": true,
+    "show_legend": true
+  }
+  combo rules:
+  - dual_axis MUST be true — a combo chart without dual_axis is invalid.
+  - series[] = primary data rendered as bars (left Y axis).
+  - secondary_series[] = secondary data rendered as a line (right Y axis).
+  - The two series MUST have different units (e.g. ₹ revenue on bars, % margin on line).
+  - If both series share the same unit → reject combo → use clustered_bar instead.
+  - y2_label is mandatory — always populate the right axis label.
   
 group_pie chart — use this schema instead when chart_type is "group_pie":
   {
     "type": "chart",
     "chart_type": "group_pie",
-    "chart_decision": "one line: why group_pie was chosen over table or clustered_bar",
     "chart_title": "",
     "artifact_header": "the one-line insight the group proves",
     "categories": ["Slice A", "Slice B", "Slice C"],  ← shared slice labels for ALL pies (max 7)
@@ -1046,6 +1127,7 @@ group_pie chart — use this schema instead when chart_type is "group_pie":
 cards:
   {
     "type": "cards",
+    "artifact_header": "string — one-line framing of the card set; required for primary zones",
     "cards": [
       {
         "title": "string — metric/category label, max 4 words, no verbs",
@@ -1063,7 +1145,7 @@ workflow:
     "type": "workflow",
     "workflow_type": "process_flow" | "hierarchy" | "decomposition" | "timeline",
     "flow_direction": "left_to_right" | "top_to_bottom" | "top_down_branching" | "bottom_up",
-    "artifact_header": "string",
+    "artifact_header": "string — one-line insight the workflow proves",
     "nodes": [
       {
         "id": "n1",
@@ -1370,9 +1452,9 @@ GATE 1 — CONTENT INTEGRITY
   [ ] No vague wording — every point specific and actionable
   [ ] All content slides have insight-led titles
   [ ] Every slide title ≤ 10 words — count every word; rewrite if over
-  [ ] Every insight_text standard: bullet count within zone-area cap (< 25% → ≤4; 25–50% → ≤6; > 50% → ≤8)
+  [ ] Every insight_text standard: bullet count within density cap (compact zone → ≤3; standard zone → ≤6; dense zone → ≤8)
   [ ] Every insight_text standard: each bullet ≤ 12 words — rewrite if over; excess detail to speaker notes
-  [ ] Every insight_text grouped: group × bullet count within zone-area cap (< 25% → 2×2; 25–50% → 3×3; > 50% → 5×3)
+  [ ] Every insight_text grouped: group × bullet count within density cap (compact → no groups allowed; standard → 2 sections × 3 pts; dense → 5 sections × 3 pts)
   [ ] Every insight_text grouped: each bullet ≤ 12 words — rewrite if over; excess detail to speaker notes
   [ ] Every prioritization: ≤ 5 items; title ≤ 8 words and NO numbers/% /currency; description ≤ 15 words
   [ ] Every prioritization qualifier: label = 1 word; value ≤ 4 words
@@ -1415,7 +1497,7 @@ GATE 4 — ZONE SPATIAL COVERAGE
       from its family rules and active override rules
   [ ] PRIMARY zone occupies ≥ 60% of the split axis
   [ ] SECONDARY zone occupies ≤ 40% of the split axis
-  [ ] 50/50 splits used only where both zones are narrative_weight = "primary"
+  [ ] 50/50 splits used only where both zones are CO-PRIMARY (zone_role = "co-primary") or both carry equal PRIMARY weight with no dominant zone
 
 GATE 5 — LAYOUT CONSISTENCY (Layout Mode only)
   [ ] selected_layout_name is a valid name from the available layouts list
@@ -1448,11 +1530,11 @@ function defaultZonesForArchetype(archetype) {
 
     case 'dashboard':
       return [
-        { zone_id: 'z1', zone_role: 'summary', narrative_weight: 'primary',
+        { zone_id: 'z1', zone_role: 'primary',
           message_objective: 'Headline metrics at a glance',
           layout_hint: { split: 'top_30' },
           artifacts: [{ type: 'cards', cards: [] }] },
-        { zone_id: 'z2', zone_role: 'supporting_evidence', narrative_weight: 'secondary',
+        { zone_id: 'z2', zone_role: 'secondary',
           message_objective: 'Supporting detail',
           layout_hint: { split: 'bottom_70' },
           artifacts: [{ type: 'chart', chart_type: 'bar', categories: [], series: [] }] }
@@ -1460,11 +1542,11 @@ function defaultZonesForArchetype(archetype) {
 
     case 'trend':
       return [
-        { zone_id: 'z1', zone_role: 'primary_proof', narrative_weight: 'primary',
+        { zone_id: 'z1', zone_role: 'primary',
           message_objective: 'Show trend over time',
           layout_hint: { split: 'left_60' },
           artifacts: [{ type: 'chart', chart_type: 'line', categories: [], series: [] }] },
-        { zone_id: 'z2', zone_role: 'implication', narrative_weight: 'secondary',
+        { zone_id: 'z2', zone_role: 'secondary',
           message_objective: 'Interpret the trend',
           layout_hint: { split: 'right_40' },
           artifacts: [{ type: 'insight_text', artifact_header: 'Trend Implication', points: [], sentiment: 'neutral' }] }
@@ -1472,11 +1554,11 @@ function defaultZonesForArchetype(archetype) {
 
     case 'comparison':
       return [
-        { zone_id: 'z1', zone_role: 'primary_proof', narrative_weight: 'primary',
+        { zone_id: 'z1', zone_role: 'primary',
           message_objective: 'Visual comparison across categories',
           layout_hint: { split: 'left_60' },
           artifacts: [{ type: 'chart', chart_type: 'bar', categories: [], series: [] }] },
-        { zone_id: 'z2', zone_role: 'implication', narrative_weight: 'secondary',
+        { zone_id: 'z2', zone_role: 'secondary',
           message_objective: 'What the comparison means',
           layout_hint: { split: 'right_40' },
           artifacts: [{ type: 'insight_text', artifact_header: 'Key Insight', points: [], sentiment: 'neutral' }] }
@@ -1484,11 +1566,11 @@ function defaultZonesForArchetype(archetype) {
 
     case 'breakdown':
       return [
-        { zone_id: 'z1', zone_role: 'primary_proof', narrative_weight: 'primary',
+        { zone_id: 'z1', zone_role: 'primary',
           message_objective: 'Show composition or segmentation',
           layout_hint: { split: 'left_50' },
           artifacts: [{ type: 'chart', chart_type: 'pie', categories: [], series: [] }] },
-        { zone_id: 'z2', zone_role: 'supporting_evidence', narrative_weight: 'secondary',
+        { zone_id: 'z2', zone_role: 'secondary',
           message_objective: 'Detail behind the segments',
           layout_hint: { split: 'right_50' },
           artifacts: [{ type: 'insight_text', artifact_header: 'Key Insight', points: [], sentiment: 'neutral' }] }
@@ -1496,11 +1578,11 @@ function defaultZonesForArchetype(archetype) {
 
     case 'driver_analysis':
       return [
-        { zone_id: 'z1', zone_role: 'primary_proof', narrative_weight: 'primary',
+        { zone_id: 'z1', zone_role: 'primary',
           message_objective: 'Show movement from baseline to result',
           layout_hint: { split: 'left_60' },
           artifacts: [{ type: 'chart', chart_type: 'waterfall', categories: [], series: [] }] },
-        { zone_id: 'z2', zone_role: 'implication', narrative_weight: 'secondary',
+        { zone_id: 'z2', zone_role: 'secondary',
           message_objective: 'Interpret the key drivers',
           layout_hint: { split: 'right_40' },
           artifacts: [{ type: 'insight_text', artifact_header: 'Key Insight', points: [], sentiment: 'neutral' }] }
@@ -1509,11 +1591,11 @@ function defaultZonesForArchetype(archetype) {
     case 'process':
     case 'roadmap':
       return [
-        { zone_id: 'z1', zone_role: 'process', narrative_weight: 'primary',
+        { zone_id: 'z1', zone_role: 'primary',
           message_objective: 'Show process or roadmap structure',
           layout_hint: { split: 'top_60' },
           artifacts: [{ type: 'workflow', workflow_type: 'process_flow', flow_direction: 'left_to_right', nodes: [], connections: [] }] },
-        { zone_id: 'z2', zone_role: 'implication', narrative_weight: 'secondary',
+        { zone_id: 'z2', zone_role: 'secondary',
           message_objective: 'Key insight or action from the process',
           layout_hint: { split: 'bottom_40' },
           artifacts: [{ type: 'insight_text', artifact_header: 'Process Implication', points: [], sentiment: 'neutral' }] }
@@ -1521,7 +1603,7 @@ function defaultZonesForArchetype(archetype) {
 
     case 'recommendation':
       return [
-        { zone_id: 'z1', zone_role: 'recommendation', narrative_weight: 'primary',
+        { zone_id: 'z1', zone_role: 'primary',
           message_objective: 'Recommended actions or priorities',
           layout_hint: { split: 'full' },
           artifacts: [{ type: 'cards', cards: [] }] }
@@ -1529,11 +1611,11 @@ function defaultZonesForArchetype(archetype) {
 
     case 'proof':
       return [
-        { zone_id: 'z1', zone_role: 'primary_proof', narrative_weight: 'primary',
+        { zone_id: 'z1', zone_role: 'primary',
           message_objective: 'Evidence supporting the claim',
           layout_hint: { split: 'left_60' },
           artifacts: [{ type: 'chart', chart_type: 'bar', categories: [], series: [] }] },
-        { zone_id: 'z2', zone_role: 'implication', narrative_weight: 'secondary',
+        { zone_id: 'z2', zone_role: 'secondary',
           message_objective: 'Interpretation and implication of the evidence',
           layout_hint: { split: 'right_40' },
           artifacts: [{ type: 'insight_text', artifact_header: 'Risk Implication', points: [], sentiment: 'neutral' }] }
@@ -1541,7 +1623,7 @@ function defaultZonesForArchetype(archetype) {
 
     default: // summary
       return [
-        { zone_id: 'z1', zone_role: 'summary', narrative_weight: 'primary',
+        { zone_id: 'z1', zone_role: 'primary',
           message_objective: 'Key summary of the section',
           layout_hint: { split: 'full' },
           artifacts: [{ type: 'insight_text', artifact_header: 'Key Insight', points: [], sentiment: 'neutral' }] }
@@ -1723,7 +1805,7 @@ function validateArtifact(artifact) {
   }
 
   if (t === 'driver_tree') {
-    if (!artifact.root?.label) return { valid: false, reason: 'driver_tree missing root label' }
+    if (!artifact.root?.node_label) return { valid: false, reason: 'driver_tree missing root node_label' }
     if (!(artifact.branches || []).length) return { valid: false, reason: 'driver_tree has no branches' }
     return { valid: true }
   }
@@ -1735,15 +1817,18 @@ function validateArtifact(artifact) {
   }
 
   if (t === 'comparison_table') {
-    if (!(artifact.criteria || []).length) return { valid: false, reason: 'comparison_table has no criteria' }
-    if (!(artifact.options || []).length) return { valid: false, reason: 'comparison_table has no options' }
-    if ((artifact.options || []).some(o => !(o.cells || []).length)) return { valid: false, reason: 'comparison_table option missing cells' }
+    const hasNewSchema = (artifact.column_headers || []).length > 0 && (artifact.rows || []).length > 0
+    const hasLegacySchema = (artifact.criteria || []).length > 0 && (artifact.options || []).length > 0
+    if (!hasNewSchema && !hasLegacySchema) return { valid: false, reason: 'comparison_table has no column_headers/rows' }
+    if (hasNewSchema && (artifact.rows || []).some(r => !(r.cells || []).length)) return { valid: false, reason: 'comparison_table row missing cells' }
+    if (hasLegacySchema && (artifact.options || []).some(o => !(o.cells || []).length)) return { valid: false, reason: 'comparison_table option missing cells' }
     return { valid: true }
   }
 
   if (t === 'initiative_map') {
-    if (!(artifact.dimension_labels || []).length) return { valid: false, reason: 'initiative_map has no dimension_labels' }
-    if (!(artifact.initiatives || []).length) return { valid: false, reason: 'initiative_map has no initiatives' }
+    const hasNewSchema = (artifact.column_headers || []).length > 0 && (artifact.rows || []).length > 0
+    const hasLegacySchema = (artifact.dimension_labels || []).length > 0 && (artifact.initiatives || []).length > 0
+    if (!hasNewSchema && !hasLegacySchema) return { valid: false, reason: 'initiative_map has no column_headers/rows' }
     return { valid: true }
   }
 
@@ -2335,12 +2420,13 @@ function normaliseArtifact(a) {
   }
   const t = a.type.toLowerCase()
   if (a.artifact_coverage_hint != null) {
-    const n = parseFloat(a.artifact_coverage_hint)
-    a.artifact_coverage_hint = Number.isFinite(n) ? Math.max(1, Math.min(100, n)) : undefined
+    const valid = ['full', 'dominant', 'co-equal', 'compact']
+    const v = String(a.artifact_coverage_hint).toLowerCase().trim()
+    a.artifact_coverage_hint = valid.includes(v) ? v : undefined
   }
 
   if (t === 'stat_bar') {
-    if (!a.stat_header) a.stat_header = a.chart_header || ''
+    if (!a.stat_header) a.stat_header = a.artifact_header || a.chart_header || ''
     if (!a.stat_decision) a.stat_decision = a.chart_decision || ''
     if (!a.rows) a.rows = []
     if (!a.column_headers) a.column_headers = {}
@@ -2363,7 +2449,7 @@ function normaliseArtifact(a) {
     if (!a.series) a.series = []
     if (!a.chart_type) a.chart_type = 'bar'
     if (!a.chart_title) a.chart_title = ''
-    if (!a.chart_header) a.chart_header = ''
+    if (!a.chart_header) a.chart_header = a.artifact_header || ''
     if (!a.chart_insight) a.chart_insight = ''
     if (a.show_data_labels === undefined) a.show_data_labels = true
 
@@ -2401,6 +2487,7 @@ function normaliseArtifact(a) {
   if (t === 'insight_text') {
     if (!a.points) a.points = []
     // Map insight_header → heading for backward compatibility with Agent 5/6
+    if (!a.insight_header) a.insight_header = a.artifact_header || ''
     if (!a.heading) a.heading = a.insight_header || ''
     if (!a.insight_header) a.insight_header = a.heading
     if (!a.sentiment) a.sentiment = 'neutral'
@@ -2423,21 +2510,19 @@ function normaliseArtifact(a) {
     if (!a.connections) a.connections = []
     if (!a.workflow_type) a.workflow_type = 'process_flow'
     if (!a.flow_direction) a.flow_direction = 'left_to_right'
-    if (!a.workflow_header) a.workflow_header = ''
-    if (!a.workflow_title) a.workflow_title = ''
-    if (!a.workflow_insight) a.workflow_insight = ''
+    if (!a.workflow_header) a.workflow_header = a.artifact_header || ''
   }
 
   if (t === 'table') {
     if (!a.headers) a.headers = []
     if (!a.rows) a.rows = []
     if (!a.title) a.title = ''
-    if (!a.table_header) a.table_header = ''
+    if (!a.table_header) a.table_header = a.artifact_header || ''
   }
 
   if (t === 'matrix') {
     if (!a.matrix_type) a.matrix_type = '2x2'
-    if (!a.matrix_header) a.matrix_header = ''
+    if (!a.matrix_header) a.matrix_header = a.artifact_header || ''
     if (!a.x_axis) a.x_axis = { label: '', low_label: '', high_label: '' }
     if (!a.y_axis) a.y_axis = { label: '', low_label: '', high_label: '' }
     if (!a.quadrants) a.quadrants = []
@@ -2445,13 +2530,13 @@ function normaliseArtifact(a) {
   }
 
   if (t === 'driver_tree') {
-    if (!a.tree_header) a.tree_header = ''
-    if (!a.root) a.root = { label: '', value: '' }
+    if (!a.tree_header) a.tree_header = a.artifact_header || ''
+    if (!a.root) a.root = { node_label: '', primary_message: '', secondary_message: '' }
     if (!a.branches) a.branches = []
   }
 
   if (t === 'prioritization') {
-    if (!a.priority_header) a.priority_header = ''
+    if (!a.priority_header) a.priority_header = a.artifact_header || ''
     if (!a.items) a.items = []
     a.items = a.items.map((item, idx) => ({
       rank: item.rank != null ? item.rank : (idx + 1),
@@ -2472,6 +2557,15 @@ function normaliseArtifact(a) {
   return a
 }
 
+function zoneRoleToWeight(zoneRole) {
+  // Derives narrative_weight from zone_role — never read from LLM output.
+  // PRIMARY and CO-PRIMARY map to 'primary'; everything else maps to 'secondary'.
+  const r = String(zoneRole || '').toLowerCase()
+  return /^primary|co.?primary|primary_proof|^summary|^recommendation|^process/.test(r)
+    ? 'primary'
+    : 'secondary'
+}
+
 function normaliseZone(z) {
   if (!z) return null
   const zoneSplit = z.zone_split || (z.layout_hint || {}).split || 'full'
@@ -2479,12 +2573,13 @@ function normaliseZone(z) {
   const artifactSplitHint = Array.isArray(z.artifact_split_hint)
     ? z.artifact_split_hint
     : (Array.isArray((z.layout_hint || {}).split_hint) ? (z.layout_hint || {}).split_hint : (Array.isArray(z.split_hint) ? z.split_hint : null))
+  const zoneRole = z.zone_role || 'primary'
   return {
     zone_id:          z.zone_id          || 'z1',
     zone_slot:        z.zone_slot        || '',
-    zone_role:        z.zone_role        || 'primary_proof',
+    zone_role:        zoneRole,
     message_objective:z.message_objective|| '',
-    narrative_weight: z.narrative_weight || 'primary',
+    narrative_weight: zoneRoleToWeight(zoneRole),
     artifacts:        (z.artifacts || []).map(normaliseArtifact).filter(Boolean),
     zone_split:       zoneSplit,
     artifact_arrangement: artifactArrangement,
@@ -2624,22 +2719,25 @@ INSTRUCTIONS:
 - For each slide, start from the locked Agent 3 plan, then derive zones and artifacts from the message.
 - Use narrative_role, zone_count_signal, dominant_zone_signal, co_primary_signal, and strategic_objective as the primary zone-planning inputs.
 - Do NOT infer structure from any legacy field. Use only narrative_role, zone_count_signal, dominant_zone_signal, co_primary_signal, and strategic_objective for zone planning.
-- Use this zone-count logic as the authoritative rule set:
+- Use this zone-count logic as the authoritative rule set (apply in order, first match wins):
   - narrative_role = methodology_note -> 1 zone, stop
+  - narrative_role = transition_narrative -> 1 zone; insight_text only; no data artifacts permitted
   - narrative_role = summary -> 1-2 zones; prefer 1 if one dense synthesis artifact can carry the slide
-  - co_primary_signal = yes -> 2 zones, co-primary, side-by-side
+  - co_primary_signal = yes -> 2 zones, CO-PRIMARY, side-by-side
+  - narrative_role = explainer_to_summary -> 3-4 zones; dominant decomposition plus supporting proof
+  - narrative_role = validation -> 2-3 zones; dominant proof plus supporting evidence
+  - narrative_role = drill_down -> 2-3 zones; dominant decomposition plus support
   - narrative_role = benchmark_comparison -> 2 zones, equal weight unless dominant_zone_signal = yes
   - narrative_role = trend_analysis -> 2 zones, dominant proof plus implication support
   - narrative_role = segmentation -> 2-3 zones, comparison-led
-  - narrative_role = drill_down -> 2-3 zones, dominant decomposition plus support
   - narrative_role = waterfall_decomposition -> 2 zones, dominant proof plus explanation
   - narrative_role = scenario_analysis -> 3-4 zones, grid or structured comparison preferred
   - narrative_role = decision_framework -> 3-4 zones, option comparison or criteria grid preferred
-  - narrative_role = risk_register -> 2-3 zones, dominant register plus mitigation or implication support
-  - narrative_role = recommendations -> 2-3 zones, recommendation plus rationale or ask support
-  - narrative_role = exception_highlight -> 2 zones, dominant issue plus implication or action support
-  - narrative_role = context_setter or problem_statement -> 2 zones, framing plus consequence or evidence support
-  - zone_count_signal = 1|2|3|4 -> use that count as the baseline when no stronger rule above applies
+  - narrative_role = risk_register -> 2-3 zones, dominant register plus mitigation / implication support
+  - narrative_role = recommendations -> 2-3 zones, recommendation plus rationale / ask support
+  - narrative_role = exception_highlight -> 2 zones, dominant issue plus implication / action support
+  - narrative_role = context_setter or problem_statement -> 2 zones, framing plus consequence / evidence support
+  - zone_count_signal = 1, 2, 3, or 4 -> use that count as the baseline when no stronger rule above applies
   - strategic_objective implies comparing options, scenarios, or alternatives -> 3-4 zones
   - strategic_objective implies a single core proof with one takeaway -> 2 zones
   - strategic_objective implies a compact synthesis or note -> 1 zone
@@ -2650,21 +2748,14 @@ INSTRUCTIONS:
   - scenario_analysis, decision_framework, and recommendations should not collapse below 2 zones
 - Write the title from slide_title_draft and sharpen it only if needed.
 - Before finalizing artifacts for a content slide, choose ONE zone_structure that matches the zone count and narrative geometry:
-  - ZS01_single_full
-  - ZS02_stacked_equal
-  - ZS03_side_by_side_equal
-  - ZS04_left_dominant_right_stack
-  - ZS05_right_dominant_left_stack
-  - ZS06_top_full_bottom_two
-  - ZS07_top_two_bottom_dominant
-  - ZS08_quad_grid
-  - ZS09_left_dominant_right_triptych
-  - ZS10_top_full_bottom_three
-  - ZS11_three_rows_equal
-  - ZW01_three_columns_equal
-  - ZW02_three_columns_right_stack
-  - ZW03_three_columns_left_stack
-  - ZW04_four_columns_equal
+  1-zone:  ZS01_single_full
+  2-zone:  ZS02_stacked_equal | ZS03_side_by_side_equal
+  3-zone:  ZS04_left_dominant_right_stack | ZS05_right_dominant_left_stack |
+           ZS06_top_full_bottom_two | ZS07_top_two_bottom_dominant |
+           ZS11_three_rows_equal | ZW01_three_columns_equal
+  4-zone:  ZS08_quad_grid | ZS09_left_dominant_right_triptych |
+           ZS10_top_full_bottom_three | ZW04_four_columns_equal |
+           ZW02_three_columns_right_stack | ZW03_three_columns_left_stack
 - After choosing zone_structure, decide which slot is dominant vs support, then pick allowed artifacts for each slot. For asymmetric structures, dominant slots may carry chart / workflow / table / reasoning artifacts, while support slots should prefer insight_text, grouped insight_text, compact cards, or compact charts.
 - slide_archetype is a descriptive label only; it must summarize the final zone/artifact structure and must never drive artifact selection or layout choice
 - Pull all numbers from the attached source document — no invented figures
@@ -2688,7 +2779,7 @@ INSTRUCTIONS:
   - 3 zones / 3 artifacts examples: cards | workflow | insight_text, cards | chart | insight_text, chart | chart | insight_text
   - 3 zones / 4 artifacts examples: cards | workflow + insight_text | prioritization, chart | workflow + insight_text | insight_text, cards | chart + insight_text | insight_text
 - In Scratch Mode, zone_split must be explicit for every zone.
-- In Scratch Mode, if a zone has 2 artifacts, set artifact_arrangement and set artifact_coverage_hint on EACH artifact so the hints sum to 100.
+- In Scratch Mode, if a zone has 2 artifacts, set artifact_arrangement and set artifact_coverage_hint on EACH artifact using semantic tokens: primary artifact → "dominant"; secondary artifact → "compact" (use "co-equal" if both are similar density and neither clearly dominates).
 - In Scratch Mode, cards with 1–2 items are compact summary anchors only: keep their zone share at or below ~40% of the slide, prefer top strips or narrow side panes, and never let 2 sparse cards occupy a tall dominant zone.
 - Card density rule: unless a single cards artifact contains 8+ cards, no individual card may imply more than ~15% of total slide area.
 - Every chart: MUST have 3+ categories, matching values, no all-zeros; set artifact_header to the one-line insight the chart proves
@@ -3051,16 +3142,17 @@ function applyArtifactArrangementForScratch(zone, dominantShare = 60) {
     secondShare = Math.min(secondShare, 40)
   }
 
-  const coverage = artifacts.map((_, idx) => {
+  const numericCoverage = artifacts.map((_, idx) => {
     if (artifacts.length === 2) return idx === 0 ? firstShare : secondShare
     if (idx === 0) return firstShare
     const rem = Math.max(0, 100 - firstShare)
     return rem / Math.max(artifacts.length - 1, 1)
   })
-  const normalizedCoverage = coverage.map(v => Math.round(v * 100) / 100)
+  const normalizedCoverage = numericCoverage.map(v => Math.round(v * 100) / 100)
+  const coverageToken = (share) => share >= 65 ? 'dominant' : share >= 45 ? 'co-equal' : 'compact'
   const artifactsWithCoverage = artifacts.map((art, idx) => ({
     ...art,
-    artifact_coverage_hint: normalizedCoverage[idx]
+    artifact_coverage_hint: coverageToken(normalizedCoverage[idx])
   }))
 
   return {
@@ -3269,7 +3361,7 @@ function pruneAgent4SlideForOutput(slide) {
     if (type === 'stat_bar') {
       return {
         type: 'stat_bar',
-        stat_header: artifact.stat_header || artifact.chart_header || '',
+        stat_header: artifact.stat_header || artifact.artifact_header || artifact.chart_header || '',
         stat_decision: artifact.stat_decision || artifact.chart_insight || '',
         column_headers: artifact.column_headers || {},
         rows: Array.isArray(artifact.rows) ? artifact.rows.map((row, idx) => ({
@@ -3290,7 +3382,7 @@ function pruneAgent4SlideForOutput(slide) {
     if (type === 'cards') {
       return {
         type: 'cards',
-        artifact_header_text: artifact.artifact_header_text || '',
+        artifact_header: artifact.artifact_header || artifact.artifact_header_text || '',
         cards: Array.isArray(artifact.cards) ? artifact.cards.map(card => ({
           title: card?.title || '',
           subtitle: card?.subtitle || '',
@@ -3306,13 +3398,11 @@ function pruneAgent4SlideForOutput(slide) {
         workflow_type: artifact.workflow_type || 'process_flow',
         flow_direction: artifact.flow_direction || 'left_to_right',
         workflow_header: artifact.workflow_header || '',
-        workflow_title: artifact.workflow_title || '',
-        workflow_insight: artifact.workflow_insight || '',
         nodes: Array.isArray(artifact.nodes) ? artifact.nodes.map(node => ({
           id: node?.id || '',
-          label: node?.label || '',
-          value: node?.value || '',
-          description: node?.description || '',
+          node_label: node?.node_label || node?.label || '',
+          primary_message: node?.primary_message || node?.value || '',
+          secondary_message: node?.secondary_message || node?.description || '',
           level: node?.level != null ? node.level : 1
         })) : [],
         connections: Array.isArray(artifact.connections) ? artifact.connections.map(conn => ({
@@ -3348,10 +3438,15 @@ function pruneAgent4SlideForOutput(slide) {
       }
     }
     if (type === 'driver_tree') {
+      const root = artifact.root || {}
       return {
         type: 'driver_tree',
         tree_header: artifact.tree_header || '',
-        root: artifact.root || { label: '', value: '' },
+        root: {
+          node_label:        root.node_label        || root.label || '',
+          primary_message:   root.primary_message   || root.value || '',
+          secondary_message: root.secondary_message || ''
+        },
         branches: Array.isArray(artifact.branches) ? artifact.branches : [],
         ...coverage
       }
@@ -3373,81 +3468,139 @@ function pruneAgent4SlideForOutput(slide) {
       }
     }
     if (type === 'comparison_table') {
+      // Normalise: new schema uses column_headers/rows; legacy schema used criteria/options
+      const columnHeaders = Array.isArray(artifact.column_headers) && artifact.column_headers.length
+        ? artifact.column_headers.map(c => ({ id: c?.id || '', label: c?.label || '' }))
+        : Array.isArray(artifact.criteria)
+          ? [{ id: 'option', label: 'Option' }, ...artifact.criteria.map(c => ({ id: c?.id || '', label: c?.label || '' }))]
+          : []
+      const rows = Array.isArray(artifact.rows) && artifact.rows.length
+        ? artifact.rows.map(r => ({
+            id: r?.id || '',
+            option_name: r?.option_name || r?.name || '',
+            badge_text: r?.badge_text || undefined,
+            row_tone: r?.row_tone || 'neutral',
+            cells: Array.isArray(r?.cells) ? r.cells.map(cell => ({
+              column_id: cell?.column_id || '',
+              rating: cell?.rating || 'text',
+              display_value: cell?.display_value || undefined,
+              secondary_message: cell?.secondary_message || cell?.note || undefined,
+              representation_type: cell?.representation_type || undefined
+            })) : []
+          }))
+        : Array.isArray(artifact.options)
+          ? artifact.options.map(o => ({
+              id: o?.id,
+              option_name: o?.name || '',
+              badge_text: o?.badge_text || undefined,
+              row_tone: o?.badge_text ? 'recommended' : 'neutral',
+              cells: Array.isArray(o?.cells) ? o.cells.map(cell => ({
+                column_id: cell?.criterion_id || '',
+                rating: cell?.rating || 'text',
+                display_value: cell?.display_value || undefined,
+                secondary_message: cell?.note || undefined,
+                representation_type: cell?.representation_type || undefined
+              })) : []
+            }))
+          : []
       return {
         type: 'comparison_table',
-        comparison_header: artifact.comparison_header || artifact.table_header || '',
-        criteria: Array.isArray(artifact.criteria) ? artifact.criteria.map(c => ({
-          id: c?.id || '',
-          label: c?.label || ''
-        })) : [],
-        options: Array.isArray(artifact.options) ? artifact.options.map(o => ({
-          id: o?.id,
-          name: o?.name || '',
-          badge_text: o?.badge_text || undefined,
-          cells: Array.isArray(o?.cells) ? o.cells.map(cell => ({
-            criterion_id: cell?.criterion_id || '',
-            rating: cell?.rating || 'text',
-            display_value: cell?.display_value || undefined,
-            note: cell?.note || undefined,
-            representation_type: cell?.representation_type || undefined
-          })) : []
-        })) : [],
-        recommended_option_id: artifact.recommended_option_id || undefined,
+        artifact_header: artifact.artifact_header || artifact.comparison_header || artifact.table_header || '',
+        column_headers: columnHeaders,
+        rows,
+        recommended_row_id: artifact.recommended_row_id || artifact.recommended_option_id || undefined,
         recommended_option: artifact.recommended_option || undefined,
         ...coverage
       }
     }
     if (type === 'initiative_map') {
+      // Normalise: new schema uses column_headers/rows; legacy schema used dimension_labels/initiatives
+      const columnHeaders = Array.isArray(artifact.column_headers) && artifact.column_headers.length
+        ? artifact.column_headers.map(c => ({ id: c?.id || '', label: c?.label || '' }))
+        : Array.isArray(artifact.dimension_labels)
+          ? [{ id: 'initiative', label: 'Initiative' }, ...artifact.dimension_labels.map(d => ({ id: d?.id || '', label: d?.label || '' }))]
+          : []
+      const rows = Array.isArray(artifact.rows) && artifact.rows.length
+        ? artifact.rows.map(r => ({
+            id: r?.id || '',
+            initiative_name: r?.initiative_name || r?.name || '',
+            cells: Array.isArray(r?.cells) ? r.cells.map(cell => ({
+              column_id: cell?.column_id || '',
+              primary_message: cell?.primary_message || '',
+              secondary_message: cell?.secondary_message || undefined,
+              tags: Array.isArray(cell?.tags) ? cell.tags : undefined,
+              cell_tone: cell?.cell_tone || 'neutral'
+            })) : []
+          }))
+        : Array.isArray(artifact.initiatives)
+          ? artifact.initiatives.map(init => ({
+              id: init?.id || undefined,
+              initiative_name: init?.name || '',
+              cells: Array.isArray(init?.placements)
+                ? init.placements.map(p => ({
+                    column_id: p?.lane_id || '',
+                    primary_message: p?.title || '',
+                    secondary_message: p?.subtitle || undefined,
+                    tags: Array.isArray(p?.tags) ? p.tags : undefined,
+                    cell_tone: p?.accent_tone || 'neutral'
+                  }))
+                : Array.isArray(init?.dimensions)
+                  ? init.dimensions.map(d => ({
+                      column_id: d?.label || '',
+                      primary_message: d?.value || ''
+                    }))
+                  : []
+            }))
+          : []
       return {
         type: 'initiative_map',
-        initiative_header: artifact.initiative_header || artifact.table_header || '',
-        dimension_labels: Array.isArray(artifact.dimension_labels) ? artifact.dimension_labels.map(d => ({
-          id: d?.id || '',
-          label: d?.label || ''
-        })) : [],
-        initiatives: Array.isArray(artifact.initiatives) ? artifact.initiatives.map(init => ({
-          id: init?.id || undefined,
-          name: init?.name || '',
-          subtitle: init?.subtitle || undefined,
-          placements: Array.isArray(init?.placements) ? init.placements.map(p => ({
-            lane_id: p?.lane_id || '',
-            title: p?.title || '',
-            subtitle: p?.subtitle || undefined,
-            tags: Array.isArray(p?.tags) ? p.tags : undefined,
-            footer: p?.footer || undefined,
-            accent_tone: p?.accent_tone || undefined
-          })) : (Array.isArray(init?.dimensions) ? init.dimensions.map(d => ({
-            lane_id: d?.label || '',
-            title: d?.value || ''
-          })) : [])
-        })) : [],
+        artifact_header: artifact.artifact_header || artifact.initiative_header || artifact.table_header || '',
+        column_headers: columnHeaders,
+        rows,
         ...coverage
       }
     }
     if (type === 'risk_register') {
+      // New schema uses rows[] with risk_title/risk_detail; legacy used risks[] with title/detail
+      const riskRows = Array.isArray(artifact.rows) && artifact.rows.length
+        ? artifact.rows
+        : Array.isArray(artifact.risks) ? artifact.risks : []
+      const defaultColumnHeaders = [
+        { id: 'risk', label: 'Risk' },
+        { id: 'likelihood', label: 'Likelihood' },
+        { id: 'impact', label: 'Impact' },
+        { id: 'owner', label: 'Owner' },
+        { id: 'status', label: 'Status' }
+      ]
       return {
         type: 'risk_register',
-        risk_header: artifact.risk_header || artifact.table_header || '',
-        show_mitigation: artifact.show_mitigation !== false,
-        risks: Array.isArray(artifact.risks) ? artifact.risks.map(r => ({
+        risk_header: artifact.risk_header || artifact.artifact_header || artifact.table_header || '',
+        column_headers: Array.isArray(artifact.column_headers) && artifact.column_headers.length
+          ? artifact.column_headers.map(c => ({ id: c?.id || '', label: c?.label || '' }))
+          : defaultColumnHeaders,
+        rows: riskRows.map(r => ({
           id: r?.id || undefined,
-          title: r?.title || '',
-          detail: r?.detail || r?.description || '',
           severity: r?.severity || 'medium',
-          owner: r?.owner || undefined,
-          status: r?.status || undefined,
+          risk_title: r?.risk_title || r?.title || '',
+          risk_detail: r?.risk_detail || r?.detail || r?.description || '',
           likelihood: r?.likelihood != null ? r.likelihood : undefined,
           impact: r?.impact != null ? r.impact : undefined,
+          owner: r?.owner || undefined,
+          status: r?.status || undefined,
+          status_tone: r?.status_tone || undefined,
+          status_representation: r?.status_representation || 'pill',
+          severity_dot: r?.severity_dot === true,
+          severity_color_override: r?.severity_color_override || undefined,
           owner_tag: r?.owner_tag || undefined,
           status_tag: r?.status_tag || undefined
-        })) : [],
+        })),
         ...coverage
       }
     }
     if (type === 'profile_card_set') {
       return {
         type: 'profile_card_set',
-        profile_header: artifact.profile_header || artifact.artifact_header_text || '',
+        profile_header: artifact.profile_header || artifact.artifact_header || artifact.artifact_header_text || '',
         layout_direction: artifact.layout_direction || 'horizontal',
         profiles: Array.isArray(artifact.profiles) ? artifact.profiles.map(p => ({
           id: p?.id || undefined,
@@ -3490,7 +3643,6 @@ function pruneAgent4SlideForOutput(slide) {
         zone_id: zone.zone_id,
         zone_role: zone.zone_role,
         message_objective: zone.message_objective,
-        narrative_weight: zone.narrative_weight,
         artifacts: (zone.artifacts || []).map(pruneArtifactForOutput),
         zone_split: split,
         artifact_arrangement: arrangement,
@@ -3550,7 +3702,7 @@ Fix rules:
 - If matrix / driver_tree / prioritization is present, keep it only in the PRIMARY zone and pair it only with insight_text
 - If a slide uses matrix / driver_tree / prioritization, do NOT add cards, chart, workflow, or table anywhere else on that slide
 - selected_layout_name: choose from available layouts; set to "" if none available
-- zone_split / artifact_arrangement / artifact_coverage_hint: ${layoutNames && layoutNames.length >= 5 ? 'set zone_split="full" for all zones; artifact arrangement only when a zone has 2 artifacts' : 'must be explicit for scratch composition; use artifact_coverage_hint on each artifact when a zone has 2+ artifacts'}
+- zone_split / artifact_arrangement / artifact_coverage_hint: ${layoutNames && layoutNames.length >= 5 ? 'set zone_split="full" for all zones; artifact arrangement only when a zone has 2 artifacts' : 'must be explicit for scratch composition; set artifact_coverage_hint on each artifact (dominant/compact/co-equal) when a zone has 2+ artifacts; single-artifact zones use "full"'}
 - layout_hint.split: ${layoutNames && layoutNames.length >= 5 ? 'set to "full" (Agent 5 uses selected_layout_name for positioning)' : 'mirror zone_split into layout_hint.split for compatibility'}
 - In scratch composition, cards with 1–2 items must stay compact and must not occupy a dominant tall zone
 - Unless a cards artifact has 8+ cards, no individual card may imply more than ~15% of total slide area
