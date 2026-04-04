@@ -1336,7 +1336,8 @@ comparison_table:
             "rating": "yes" | "partial" | "no" | "text",
             "display_value": "string — optional rendered symbol/text if not default",
             "secondary_message": "string — optional subtext when needed",
-            "representation_type": "icon" | "text" | "icon_with_text"
+            "representation_type": "icon" | "text" | "icon_with_text",
+            "tonality": "positive" | "negative" | "neutral"
           }
         ]
       }
@@ -1349,6 +1350,9 @@ comparison_table:
   - each row is one option being evaluated.
   - row_tone = "recommended" visually distinguishes the selected row.
   - cells[] should usually be icon-led judgments with optional supporting text.
+  - tonality: set on cells with representation_type "text" when display_value is a metric meant for
+    cross-row comparison (e.g. variance, %, delta). "positive" = green pill, "negative" = red pill,
+    "neutral" = grey pill. Omit when the cell is icon-only or the value carries no directional signal.
   NEVER use plain table for option-vs-criteria data.
 
 initiative_map:
@@ -3503,7 +3507,8 @@ function pruneAgent4SlideForOutput(slide) {
               rating: cell?.rating || 'text',
               display_value: cell?.display_value || undefined,
               secondary_message: cell?.secondary_message || cell?.note || undefined,
-              representation_type: cell?.representation_type || undefined
+              representation_type: cell?.representation_type || undefined,
+              tonality: cell?.tonality || undefined
             })) : []
           }))
         : Array.isArray(artifact.options)
@@ -3517,7 +3522,8 @@ function pruneAgent4SlideForOutput(slide) {
                 rating: cell?.rating || 'text',
                 display_value: cell?.display_value || undefined,
                 secondary_message: cell?.note || undefined,
-                representation_type: cell?.representation_type || undefined
+                representation_type: cell?.representation_type || undefined,
+                tonality: cell?.tonality || undefined
               })) : []
             }))
           : []

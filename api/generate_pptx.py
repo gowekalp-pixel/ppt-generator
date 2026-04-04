@@ -1012,7 +1012,8 @@ def _estimate_legend_text_width(label, font_size_pt):
     return max(0.40, min(2.20, len(text) * max(font_size_pt, 8) * 0.0105))
 
 
-def _chart_legend_entries(chart_type_str, categories, series_data, series_styles, chart_palette, allow_fallback):
+def _chart_legend_entries(chart_type_str, categories, series_data, series_styles, chart_palette, allow_fallback,
+                           secondary_series_data=None):
     entries = []
     # pie, donut, and group_pie: legend entries represent SLICES (categories), colored per series_style[i]
     if chart_type_str in ('pie', 'donut', 'group_pie'):
@@ -1027,9 +1028,15 @@ def _chart_legend_entries(chart_type_str, categories, series_data, series_styles
             })
         return entries
 
-    for i, series in enumerate(series_data or []):
+    all_series = list(series_data or [])
+    # For combo charts, append secondary series so the legend shows both bar and line entries
+    if chart_type_str == 'combo' and secondary_series_data:
+        all_series = all_series + list(secondary_series_data)
+
+    for i, series in enumerate(all_series):
         style = series_styles[i] if i < len(series_styles) else {}
-        color = style.get('fill_color')
+        # secondary series style uses line_color for the line marker
+        color = style.get('fill_color') or style.get('line_color')
         if not color and allow_fallback:
             color = chart_palette[i % len(chart_palette)]
         entries.append({
@@ -1362,9 +1369,12 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
     series_data     = artifact.get('series', [])
     chart_title     = artifact.get('chart_title', '')
     show_labels     = artifact.get('show_data_labels', True)
-    show_legend     = artifact.get('show_legend', False)
+    # combo charts always require a legend to distinguish bar vs line series
+    show_legend     = True if chart_type_str == 'combo' else artifact.get('show_legend', False)
     series_styles   = artifact.get('series_style', [])
     cs              = artifact.get('chart_style', {})
+    y_label           = artifact.get('y_label', '')
+    secondary_y_label = artifact.get('secondary_y_label', '')
     dual_axis            = artifact.get('dual_axis', False)
     secondary_series_raw = artifact.get('secondary_series', [])
     # secondary_series may be a list of objects {name, values, ...} or a list of strings
@@ -1464,7 +1474,8 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
     legend_font_size = int(cs.get('legend_font_size', header_font_size) or header_font_size)
     legend_font_size = min(legend_font_size, max(8, header_font_size - 1), 9)
     legend_entries = _chart_legend_entries(
-        chart_type_str, categories, series_data, series_styles, chart_palette, allow_chart_fallback
+        chart_type_str, categories, series_data, series_styles, chart_palette, allow_chart_fallback,
+        secondary_series_data=secondary_series_data
     ) if _effective_show_legend else []
     (chart_x, chart_y, chart_w, chart_h), custom_legend_box = _compute_chart_legend_layout(
         float(x), float(y), float(w), float(h), resolved_legend_position, legend_entries, legend_font_size
@@ -1585,6 +1596,58 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
             chart.value_axis.has_minor_gridlines = False
     except Exception:
         pass
+
+    # Y-axis title (primary)
+    if y_label:
+        try:
+            ax = chart.value_axis
+            ax.has_title = True
+            ax.axis_title.text_frame.text = y_label
+            run = ax.axis_title.text_frame.paragraphs[0].runs[0]
+            set_font(run,
+                     cs.get('axis_font_family', bt.get('body_font_family', 'Arial')),
+                     cs.get('axis_font_size', 9),
+                     False, False,
+                     cs.get('axis_color', bt.get('body_color', '#000000')))
+        except Exception:
+            pass
+
+    # Secondary Y-axis title (combo dual-axis)
+    if secondary_y_label and dual_axis:
+        try:
+            from pptx.oxml.ns import qn as _qn
+            plot_area = chart._element.find(_qn('c:plotArea'))
+            if plot_area is not None:
+                val_ax_els = plot_area.findall(_qn('c:valAx'))
+                # The second valAx element is the secondary (right-hand) axis
+                if len(val_ax_els) >= 2:
+                    sec_ax_el = val_ax_els[1]
+                    title_el = sec_ax_el.find(_qn('c:title'))
+                    if title_el is None:
+                        from lxml import etree as _et
+                        title_el = _et.SubElement(sec_ax_el, _qn('c:title'))
+                    # Build a minimal title XML: tx > rich > p > r > t
+                    tx_el = title_el.find(_qn('c:tx'))
+                    if tx_el is None:
+                        from lxml import etree as _et
+                        tx_el = _et.SubElement(title_el, _qn('c:tx'))
+                        rich_el = _et.SubElement(tx_el, _qn('c:rich'))
+                        _et.SubElement(rich_el, _qn('a:bodyPr'))
+                        _et.SubElement(rich_el, _qn('a:lstStyle'))
+                        p_el = _et.SubElement(rich_el, _qn('a:p'))
+                        r_el = _et.SubElement(p_el, _qn('a:r'))
+                        rPr_el = _et.SubElement(r_el, _qn('a:rPr'), {'lang': 'en-US'})
+                        rPr_el.set('sz', str(int(cs.get('axis_font_size', 9) * 100)))
+                        t_el = _et.SubElement(r_el, _qn('a:t'))
+                        t_el.text = secondary_y_label
+                    # Ensure overlay is off
+                    overlay_el = title_el.find(_qn('c:overlay'))
+                    if overlay_el is None:
+                        from lxml import etree as _et
+                        overlay_el = _et.SubElement(title_el, _qn('c:overlay'))
+                    overlay_el.set('val', '0')
+        except Exception as e:
+            print(f'secondary_y_label error: {e}')
 
     if _effective_show_legend and custom_legend_box:
         _render_custom_chart_legend(
@@ -2569,8 +2632,8 @@ def render_table(slide, artifact, bt):
         for ci, hdr in enumerate(headers):
             cell = table.cell(0, ci)
             cell.text = str(hdr)
-            enable_text_fit(cell.text_frame)
             try:
+                cell.text_frame.word_wrap = True
                 cell.text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
             except Exception:
                 pass
@@ -2603,8 +2666,8 @@ def render_table(slide, artifact, bt):
                 cell = table.cell(row_idx, ci)
                 cell_text = str(row[ci]) if ci < len(row) else ''
                 cell.text = cell_text
-                enable_text_fit(cell.text_frame)
                 try:
+                    cell.text_frame.word_wrap = True
                     cell.text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
                 except Exception:
                     pass
@@ -3182,7 +3245,8 @@ def render_block_text_box(slide, block, bt):
         block.get('bold', False),
         block.get('color', '#000000'),
         block.get('align', 'left'),
-        block.get('valign', 'middle'))
+        block.get('valign', 'middle'),
+        block.get('wrap', True))
     rotation = block.get('rotation')
     if rotation is not None and txBox is not None:
         try:

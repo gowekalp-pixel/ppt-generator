@@ -110,7 +110,7 @@ function slimBlockForRender(block) {
     'align', 'valign', 'fill_color', 'border_color', 'border_width', 'corner_radius',
     'line_width', 'line_style', 'arrowhead', 'rotation', 'padding', 'body_style', 'heading_style', 'style',
     'chart_type', 'chart_header', 'chart_title', 'categories', 'series', 'dual_axis', 'secondary_series',
-    'show_data_labels', 'show_legend', 'x_label', 'y_label', 'chart_style', 'series_style',
+    'show_data_labels', 'show_legend', 'x_label', 'y_label', 'secondary_y_label', 'chart_style', 'series_style',
     'legend_position', 'data_label_size', 'category_label_rotation',
     'table_header', 'table_style', 'column_widths', 'column_x_positions', 'row_heights', 'row_y_positions',
     'header_row_height', 'header_cell_frames', 'body_cell_frames', 'column_types', 'column_alignments',

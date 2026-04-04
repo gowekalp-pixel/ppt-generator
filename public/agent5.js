@@ -2064,7 +2064,8 @@ function normalizeComparisonTableManifest(artifact) {
             rating: cell?.rating || '',
             display_value: cell?.display_value || cell?.rating || '',
             note: cell?.secondary_message || cell?.note || '',
-            representation_type: cell?.representation_type || ''
+            representation_type: cell?.representation_type || '',
+            tonality: cell?.tonality || ''
           }
         })
       }))
@@ -2247,9 +2248,11 @@ function buildSafeArtifactShell(manifestArt, bt) {
       chart_header:     manifestArt?.chart_header || artifact_header || manifestArt?.stat_header || '',
       chart_insight:    manifestArt?.chart_insight || manifestArt?.stat_decision || '',
       show_data_labels: manifestArt?.show_data_labels !== false,
-      show_legend:      !!(manifestArt?.show_legend),
+      // combo charts always need a legend to distinguish bar vs line series
+      show_legend:      chartType === 'combo' ? true : !!(manifestArt?.show_legend),
       x_label:          manifestArt?.x_label || '',
       y_label:          manifestArt?.y_label || '',
+      secondary_y_label: manifestArt?.secondary_y_label || '',
       chart_style: {
         title_font_family: bt.title_font_family || 'Arial',
         title_font_size: 12,
@@ -2919,9 +2922,14 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
         const cs = art.chart_style || {}
 
         // legend_position
+        // combo charts always need a legend — force show_legend true here as a safety net
+        if (art.chart_type === 'combo') art.show_legend = true
         if (art.show_legend) {
           if (art.chart_type === 'group_pie') {
             // group_pie always uses a single shared legend at the top
+            computed.legend_position = 'top'
+          } else if (art.chart_type === 'combo') {
+            // combo: legend always at top to label bar vs line series
             computed.legend_position = 'top'
           } else {
             const widthRatio = (art.w || 0) / Math.max(canvasW, 0.1)
@@ -3982,7 +3990,7 @@ function _comparisonTableToBlocks(art, content_y, blocks, bt, r2) {
   const ah = r2((art.y || 0) + (art.h || 0) - content_y)
   if (!criteria.length || !options.length || aw <= 0 || ah <= 0) return
 
-  const headerH = 0.34
+  const headerH = 0.44  // tall enough for 2-line column header text at font size 10
   const rowH = r2(Math.max(0.44, (ah - headerH) / Math.max(options.length, 1)))
   const labelW = r2(Math.min(Math.max(1.9, aw * 0.24), 2.7))
   const colW = r2(Math.max(0.75, (aw - labelW) / Math.max(criteria.length, 1)))
@@ -4023,7 +4031,7 @@ function _comparisonTableToBlocks(art, content_y, blocks, bt, r2) {
   // ── Column header row ──────────────────────────────────────────────────────
   blocks.push({
     block_type: 'text_box',
-    x: r2(ax + 0.14), y: r2(ay + 0.06), w: r2(labelW - 0.18), h: 0.22,
+    x: r2(ax + 0.14), y: ay, w: r2(labelW - 0.18), h: headerH,
     text: 'Option',
     font_family: titleFont, font_size: cs.label_font_size || 10, bold: true,
     color: captionColor, align: 'left', valign: 'middle'
@@ -4032,8 +4040,9 @@ function _comparisonTableToBlocks(art, content_y, blocks, bt, r2) {
     const x = r2(ax + labelW + ci * colW)
     blocks.push({
       block_type: 'text_box',
-      x, y: r2(ay + 0.06), w: colW, h: 0.22,
-      text: _truncateText(criterion, 18),
+      x: r2(x + 0.04), y: r2(ay + 0.03), w: r2(colW - 0.08), h: r2(headerH - 0.04),
+      text: String(criterion || ''),
+      wrap: true,
       font_family: titleFont, font_size: cs.label_font_size || 10, bold: true,
       color: captionColor, align: 'center', valign: 'middle'
     })
@@ -4061,10 +4070,10 @@ function _comparisonTableToBlocks(art, content_y, blocks, bt, r2) {
       })
     }
 
-    // Option name label
+    // Option name label — spans full row height so it is always vertically centred
     blocks.push({
       block_type: 'text_box',
-      x: r2(ax + 0.14), y: r2(rowY + 0.08), w: r2(labelW - 0.24), h: 0.22,
+      x: r2(ax + 0.14), y: rowY, w: r2(labelW - 0.24), h: rowH,
       text: String(option?.name || ''),
       font_family: titleFont, font_size: cs.label_font_size || 11, bold: true,
       color: isRecommended ? recommendedTextColor : bodyTextColor,
@@ -4122,15 +4131,47 @@ function _comparisonTableToBlocks(art, content_y, blocks, bt, r2) {
         // Text cell — span the full column width so values aren't clipped
         const colX = r2(ax + labelW + ci * colW)
         const textPad = 0.06
-        blocks.push({
-          block_type: 'text_box',
-          x: r2(colX + textPad), y: r2(rowY + 0.04), w: r2(colW - 2 * textPad), h: r2(rowH - 0.08),
-          text: visual.text,
-          font_family: bodyFont, font_size: cs.body_font_size || 10,
-          bold: false,
-          color: isRecommended ? recommendedTextColor : bodyTextColor,
-          align: 'center', valign: 'middle'
-        })
+        const tonality = String(ratingObj?.tonality || '').toLowerCase()
+        // Tonality pill: render a colored rounded-rect behind the value when tonality is set
+        const tonalityFill = tonality === 'positive' ? (cs.yes_fill_color   || '#E4F2DE')
+                           : tonality === 'negative' ? (cs.no_fill_color    || '#FDE8E8')
+                           : tonality === 'neutral'  ? (cs.neutral_fill_color || '#F4F5F7')
+                           : null
+        const tonalityText = tonality === 'positive' ? (cs.yes_text_color     || '#386B2A')
+                           : tonality === 'negative' ? (cs.no_text_color      || '#8B2C23')
+                           : tonality === 'neutral'  ? (cs.neutral_text_color || bodyTextColor)
+                           : null
+        if (tonalityFill && visual.text) {
+          // Pill sized to the text, centred in the cell
+          const pillW = r2(Math.min(colW - 2 * textPad, Math.max(0.42, visual.text.length * 0.072 + 0.18)))
+          const pillH = 0.24
+          const pillX = r2(colX + (colW - pillW) / 2)
+          const pillY = r2(rowY + (rowH - pillH) / 2)
+          blocks.push({
+            block_type: 'rect',
+            x: pillX, y: pillY, w: pillW, h: pillH,
+            fill_color: tonalityFill,
+            border_color: null, border_width: 0, corner_radius: 8
+          })
+          blocks.push({
+            block_type: 'text_box',
+            x: r2(pillX + 0.05), y: pillY, w: r2(pillW - 0.10), h: pillH,
+            text: visual.text,
+            font_family: bodyFont, font_size: cs.body_font_size || 9,
+            bold: true,
+            color: tonalityText, align: 'center', valign: 'middle'
+          })
+        } else {
+          blocks.push({
+            block_type: 'text_box',
+            x: r2(colX + textPad), y: r2(rowY + 0.04), w: r2(colW - 2 * textPad), h: r2(rowH - 0.08),
+            text: visual.text,
+            font_family: bodyFont, font_size: cs.body_font_size || 10,
+            bold: false,
+            color: isRecommended ? recommendedTextColor : bodyTextColor,
+            align: 'center', valign: 'middle'
+          })
+        }
       }
     })
 
@@ -5690,7 +5731,7 @@ function _estimateLegendTextWidth(label, fontSizePt) {
   return Math.max(0.40, Math.min(2.20, text.length * Math.max(fontSizePt, 8) * 0.0105))
 }
 
-function _chartLegendEntries(chartType, categories, seriesData, seriesStyles, palette, allowFallback) {
+function _chartLegendEntries(chartType, categories, seriesData, seriesStyles, palette, allowFallback, secondarySeriesData) {
   const entries = []
   // pie, donut, and group_pie: legend represents SLICES (categories), colored per series_style[i]
   if (chartType === 'pie' || chartType === 'donut' || chartType === 'group_pie') {
@@ -5702,9 +5743,15 @@ function _chartLegendEntries(chartType, categories, seriesData, seriesStyles, pa
     })
     return entries
   }
-  ;(seriesData || []).forEach((series, i) => {
+  // For combo charts, include both primary (bar) and secondary (line) series
+  const allSeries = (chartType === 'combo' && secondarySeriesData?.length)
+    ? [...(seriesData || []), ...secondarySeriesData]
+    : (seriesData || [])
+  allSeries.forEach((series, i) => {
     const style = i < (seriesStyles || []).length ? seriesStyles[i] : {}
-    let color = style.fill_color
+    // Secondary series (lines) use line_color; primary series (bars) use fill_color
+    const isPrimary = i < (seriesData || []).length
+    let color = isPrimary ? style.fill_color : (style.line_color || style.fill_color)
     if (!color && allowFallback) color = palette[i % Math.max(palette.length, 1)]
     entries.push({ label: String(series?.name || ('Series ' + (i + 1))), color: color || '#666666' })
   })
@@ -6141,7 +6188,8 @@ function _artifactToBlocks(art, blocks, bt, r2, fontSizeFloor) {
             art.series || [],
             art.series_style || [],
             bt.chart_palette || [],
-            allowLegendFallback
+            allowLegendFallback,
+            art.secondary_series || []
           )
         : []
       const legendLayout = _computeChartLegendLayout(ax, content_y, aw, r2(ay + ah - content_y), legendPos, legendEntries, legendFontSize)
@@ -6161,6 +6209,7 @@ function _artifactToBlocks(art, blocks, bt, r2, fontSizeFloor) {
         show_legend:             false,
         x_label:                 art.x_label || '',
         y_label:                 art.y_label || '',
+        secondary_y_label:       art.secondary_y_label || '',
         chart_style:             {
           ...chartStyle,
           legend_position: 'none'
