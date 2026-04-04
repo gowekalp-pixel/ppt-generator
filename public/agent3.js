@@ -159,7 +159,7 @@ CRITICAL OUTPUT RULES:
 - Your response must start with { and end with }.
 - slides must contain the full ordered deck.
 - The deck must contain exactly 1 title slide, exactly N content slides, and exactly 1 thank_you slide.
-- Divider slides are optional, but use them only at genuine section boundaries and never more than 3.
+- Divider slides are optional, but use them only at genuine section boundaries; follow the Limits on Dividers table in DECK ASSEMBLY.
 - slide_number must be final deck numbering after structural slides are inserted.
 - Every key_content item must reference actual content from the document - no generic placeholders.
 - slide_title_draft must be specific and insight-led for content slides, not a topic label.
@@ -199,12 +199,26 @@ Return ONLY valid JSON.`
     ]
   }]
 
-  const raw = await callClaude(AGENT3_SYSTEM, messages, 8000)
+  // ~600 tokens per slide (slide_title_draft + strategic_objective + key_content × 3-4 items + following_slide_claim)
+  // + 2500 overhead (top-level fields, key_messages, structural slides, JSON formatting)
+  // Floor at 10000 (safe minimum for any deck), ceil at 16000
+  const maxTokens = Math.min(16000, Math.max(10000, contentCount * 600 + 2500))
+  console.log('Agent 3 - requesting max_tokens:', maxTokens)
+
+  const raw = await callClaude(AGENT3_SYSTEM, messages, maxTokens)
 
   console.log('Agent 3 - raw response length:', raw.length)
   if (raw.length < 200) console.warn('Agent 3 - suspiciously short response:', raw)
+  if (raw.length > maxTokens * 3.5) console.warn('Agent 3 - response may be truncated (chars:', raw.length, 'tokens est:', Math.round(raw.length/4), ')')
 
   const fallback = buildFallbackBrief(contentCount)
+
+  // Detect truncation: valid JSON always ends with }
+  const trimmed = raw.trimEnd()
+  if (trimmed && trimmed[trimmed.length - 1] !== '}') {
+    console.warn('Agent 3 - response appears truncated (does not end with }). Last 100 chars:', trimmed.slice(-100))
+  }
+
   const brief = safeParseJSON(raw, fallback)
 
   if (!brief.slides || !Array.isArray(brief.slides) || brief.slides.length === 0) {
@@ -232,11 +246,13 @@ Return ONLY valid JSON.`
   }, {})
 
   if (contentSlides.length !== contentCount) {
-    console.warn('Agent 3 - content slide count is', contentSlides.length, 'not', contentCount, '- using fallback')
+    console.warn('Agent 3 - content slide count mismatch: got', contentSlides.length, 'expected', contentCount, '— using fallback')
+    console.warn('Agent 3 - slide types returned:', slides.map(s => s.slide_type))
     return fallback
   }
-  if ((structuralCounts.title || 0) !== 1 || (structuralCounts.thank_you || 0) !== 1 || (structuralCounts.divider || 0) > 3) {
-    console.warn('Agent 3 - invalid structural slide counts, using fallback')
+  const maxDividers = contentCount < 10 ? 2 : contentCount <= 15 ? 3 : contentCount <= 25 ? 4 : 6
+  if ((structuralCounts.title || 0) !== 1 || (structuralCounts.thank_you || 0) !== 1 || (structuralCounts.divider || 0) > maxDividers) {
+    console.warn('Agent 3 - invalid structural slide counts (dividers:', structuralCounts.divider || 0, 'max:', maxDividers, '), using fallback')
     return fallback
   }
 

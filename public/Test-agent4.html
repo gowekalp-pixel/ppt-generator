@@ -238,11 +238,6 @@
           <input type="file" accept=".pdf" onchange="loadPDF(this)">
           <div class="uz" id="pdf-label">Click to upload <span>.pdf</span></div>
         </div>
-        <div class="slider-row">
-          <label>Slides</label>
-          <input type="range" min="5" max="40" value="12" step="1" oninput="updateSlides(this.value)">
-          <div class="slide-num" id="slide-num">12</div>
-        </div>
       </div>
     </div>
     <div class="btn-row">
@@ -288,7 +283,7 @@
 <script>
 
   const COLORS = ['#0F2FB5','#FF8E00','#2D962D','#D60202','#2E046C','#0092D0']
-  let pdfB64 = null, slideCount = 12, resultManifest = null
+  let pdfB64 = null, resultManifest = null
 
   function loadPDF(input) {
     const file = input.files[0]; if (!file) return
@@ -309,7 +304,6 @@
     reader.readAsText(file)
   }
 
-  function updateSlides(val) { slideCount = parseInt(val); document.getElementById('slide-num').textContent = val }
   function checkReady() { document.getElementById('run-btn').disabled = !((document.getElementById('brief-input').value||'').trim().length > 10 && pdfB64) }
   document.getElementById('brief-input').addEventListener('input', checkReady)
 
@@ -328,7 +322,7 @@
     setProgress(10, 'Building slide plan...' + (layoutNames.length ? ' (' + layoutNames.length + ' layouts found in brand)' : ' (no brand layouts — using zone splits)'))
     try {
       setProgress(30, 'Writing slides in batches...')
-      const manifest = await runAgent4({ outline: brief, contentB64: pdfB64, slideCount: brief.total_slides || slideCount, brandRulebook: brand })
+      const manifest = await runAgent4({ outline: brief, contentB64: pdfB64, brandRulebook: brand })
       resultManifest = manifest
       setProgress(90, 'Rendering...')
       renderResults(manifest)
