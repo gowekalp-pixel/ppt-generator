@@ -57,14 +57,9 @@
     .section-flow { display: flex; flex-direction: column; gap: 10px; }
     .section-card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px 16px; }
     .section-card.type-title                { border-left: 4px solid #6366f1; }
-    .section-card.type-executive_summary    { border-left: 4px solid #0f2fb5; }
     .section-card.type-divider              { border-left: 4px solid #9ca3af; background: #f9fafb; }
-    .section-card.type-financial_data       { border-left: 4px solid #16a34a; }
-    .section-card.type-market_analysis      { border-left: 4px solid #0092d0; }
-    .section-card.type-strategic_analysis   { border-left: 4px solid #ff8e00; }
-    .section-card.type-operational_review   { border-left: 4px solid #d60202; }
-    .section-card.type-recommendations      { border-left: 4px solid #2d962d; }
-    .section-card.type-conclusion           { border-left: 4px solid #2e046c; }
+    .section-card.type-content              { border-left: 4px solid #16a34a; }
+    .section-card.type-thank_you            { border-left: 4px solid #2e046c; }
     .sc-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; flex-wrap: wrap; }
     .sc-num { width: 24px; height: 24px; border-radius: 50%; background: #f3f4f6; color: #555; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
     .sc-name { font-size: 14px; font-weight: 700; color: #111; flex: 1; }
@@ -121,17 +116,12 @@
     </div>
 
     <div class="meta-grid">
-      <div class="meta-item"><div class="mi-label">Document Type</div><div class="mi-value" id="m-doctype">—</div></div>
       <div class="meta-item"><div class="mi-label">Narrative Flow</div><div class="mi-value" id="m-flow">—</div></div>
       <div class="meta-item"><div class="mi-label">Audience</div><div class="mi-value" id="m-audience">—</div></div>
-      <div class="meta-item"><div class="mi-label">Total Slides</div><div class="mi-value" id="m-slides">—</div></div>
       <div class="meta-item"><div class="mi-label">Tone</div><div class="mi-value" id="m-tone">—</div></div>
+      <div class="meta-item"><div class="mi-label">Total Slides</div><div class="mi-value" id="m-slides">—</div></div>
+      <div class="meta-item"><div class="mi-label">Content Slides</div><div class="mi-value" id="m-content">—</div></div>
       <div class="meta-item"><div class="mi-label">Data Heavy</div><div class="mi-value" id="m-data">—</div></div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">Document Summary</div>
-      <p style="font-size:13px;color:#333;line-height:1.7;" id="r-summary">—</p>
     </div>
 
     <div class="card">
@@ -140,30 +130,8 @@
     </div>
 
     <div class="card">
-      <div class="card-title">Key Data Points & Metrics</div>
-      <div class="data-list" id="r-datapoints"></div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">Risks & Issues Identified</div>
-      <ul class="risk-list" id="r-risks"></ul>
-    </div>
-
-    <div class="card">
-      <div class="card-title">Presentation Structure — Section by Section</div>
+      <div class="card-title">Slide Plan — Full Deck Structure</div>
       <div class="section-flow" id="r-sections"></div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">Opening & Closing Guidance for Agent 4</div>
-      <div style="margin-bottom:12px;">
-        <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Opening</div>
-        <p style="font-size:13px;color:#333;line-height:1.6;" id="r-opening">—</p>
-      </div>
-      <div>
-        <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Closing</div>
-        <p style="font-size:13px;color:#333;line-height:1.6;" id="r-closing">—</p>
-      </div>
     </div>
 
     <div class="card">
@@ -230,51 +198,54 @@
   function renderResults(b) {
     document.getElementById('results').classList.add('show')
     document.getElementById('gov-thought').textContent = b.governing_thought || '—'
-    document.getElementById('gov-type').textContent    = (b.document_type || '') + ' · ' + (b.narrative_flow || '')
-    document.getElementById('m-doctype').textContent   = b.document_type   || '—'
+    document.getElementById('gov-type').textContent    = (b.narrative_flow || '') + (b.tone ? ' · ' + b.tone : '')
     document.getElementById('m-flow').textContent      = b.narrative_flow  || '—'
     document.getElementById('m-audience').textContent  = b.audience        || '—'
-    document.getElementById('m-slides').textContent    = b.total_slides    || '—'
     document.getElementById('m-tone').textContent      = b.tone            || '—'
-    document.getElementById('m-data').textContent      = b.data_heavy ? '✅ Yes' : '❌ No'
-    document.getElementById('r-summary').textContent   = b.document_summary || '—'
+
+    const slides  = b.slides || []
+    document.getElementById('m-slides').textContent  = slides.length || '—'
+    document.getElementById('m-content').textContent = slides.filter(s => s.slide_type === 'content').length || '—'
+    document.getElementById('m-data').textContent    = b.data_heavy ? '✅ Yes' : '❌ No'
 
     const msgs = b.key_messages || []
     document.getElementById('r-messages').innerHTML = msgs.length
       ? msgs.map(m => '<li>' + m + '</li>').join('')
       : '<li style="color:#aaa">No key messages extracted</li>'
 
-    const dps = b.key_data_points || []
-    document.getElementById('r-datapoints').innerHTML = dps.length
-      ? dps.map(d => '<div class="data-pill">' + d + '</div>').join('')
-      : '<span style="color:#aaa;font-size:13px;">No data points extracted</span>'
-
-    const risks = b.risks_and_issues || []
-    document.getElementById('r-risks').innerHTML = risks.length
-      ? risks.map(r => '<li>' + r + '</li>').join('')
-      : '<li style="color:#aaa">No risks identified</li>'
-
-    const sections = b.sections || []
-    document.getElementById('r-sections').innerHTML = sections.map(s => {
-      const typeClass = 'type-' + (s.section_type || 'content').replace(/[^a-z_]/g, '_')
-      const content   = (s.key_content || []).slice(0, 5)
+    const ROLE_COLORS = {
+      summary: '#e0e7ff', drill_down: '#dcfce7', trend_analysis: '#dbeafe',
+      recommendations: '#fdf4ff', context_setter: '#fff7ed', benchmark_comparison: '#fce7f3',
+      waterfall_decomposition: '#f0f9ff', segmentation: '#fef3c7', exception_highlight: '#fee2e2',
+      problem_statement: '#fef2f2', risk_register: '#fff1f2', scenario_analysis: '#f0fdf4'
+    }
+    const ROLE_TEXT = {
+      summary: '#3730a3', drill_down: '#15803d', trend_analysis: '#1d4ed8',
+      recommendations: '#6b21a8', context_setter: '#7c2d12', benchmark_comparison: '#9d174d',
+      waterfall_decomposition: '#0369a1', segmentation: '#92400e', exception_highlight: '#991b1b',
+      problem_statement: '#dc2626', risk_register: '#be123c', scenario_analysis: '#166534'
+    }
+    document.getElementById('r-sections').innerHTML = slides.map(s => {
+      const typeClass = 'type-' + (s.slide_type || 'content')
+      const role      = s.narrative_role || ''
+      const roleBg    = ROLE_COLORS[role] || '#f3f4f6'
+      const roleColor = ROLE_TEXT[role]   || '#374151'
+      const content   = (s.key_content || []).slice(0, 4)
+      const roleTag   = role ? `<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;background:${roleBg};color:${roleColor};">${role.replace(/_/g,' ')}</span>` : ''
+      const zoneTag   = s.zone_count_signal && s.zone_count_signal !== 'unsure'
+        ? `<span style="font-size:10px;background:#f1f5f9;color:#475569;padding:2px 8px;border-radius:20px;font-family:monospace;">${s.zone_count_signal} zone${s.zone_count_signal!=='1'?'s':''}</span>` : ''
       return `<div class="section-card ${typeClass}">
         <div class="sc-header">
-          <div class="sc-num">${s.section_number}</div>
-          <div class="sc-name">${s.section_name}</div>
-          <div class="sc-slides">${s.suggested_slide_count} slide${s.suggested_slide_count !== 1 ? 's' : ''}</div>
-          <span class="sc-data-badge ${s.data_available ? 'has-data' : 'no-data'}">${s.data_available ? 'Data ✓' : 'No data'}</span>
+          <div class="sc-num">${s.slide_number}</div>
+          <div class="sc-name">${s.slide_title_draft || ('(' + (s.slide_type || 'slide') + ')')}</div>
+          ${roleTag}${zoneTag}
         </div>
-        <div class="sc-type">${(s.section_type || '').replace(/_/g, ' ')}</div>
-        ${s.purpose  ? '<div class="sc-purpose">' + s.purpose + '</div>' : ''}
-        ${s.so_what  ? '<div class="sc-sowhat">'  + s.so_what + '</div>' : ''}
+        ${s.strategic_objective ? '<div class="sc-purpose">' + s.strategic_objective + '</div>' : ''}
         ${content.length ? '<div class="sc-content">' + content.map(c => '<span class="sc-content-pill">' + c + '</span>').join('') + '</div>' : ''}
       </div>`
     }).join('')
 
-    document.getElementById('r-opening').textContent = b.opening_guidance || '—'
-    document.getElementById('r-closing').textContent = b.closing_guidance || '—'
-    document.getElementById('raw-json').textContent  = JSON.stringify(b, null, 2)
+    document.getElementById('raw-json').textContent = JSON.stringify(b, null, 2)
   }
 
   function copyJSON() {

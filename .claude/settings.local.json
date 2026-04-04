@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(python3 -c \":*)",
-      "Bash(node test_statbar.js)"
+      "Bash(node test_statbar.js)",
+      "Bash(node -e ':*)"
     ]
   }
 }

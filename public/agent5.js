@@ -347,7 +347,7 @@ Inspect the Agent 4 artifact:
     "vertical_distribution": "spread"
   },
   "header_block": null or {
-    "text": "string — the insight_header value from Agent 4",
+    "text": "string — the artifact_header value from Agent 4",
     "x": number, "y": number, "w": number, "h": number,
     "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
     "style": "underline" | "brand_fill",
@@ -538,7 +538,7 @@ GEOMETRY — rows layout (renderer uses these formulas):
     }
   ],
   "header_block": null or {
-    "text": "string — the chart_header value from Agent 4",
+    "text": "string — the artifact_header value from Agent 4",
     "x": number, "y": number, "w": number, "h": number,
     "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
     "style": "underline" | "brand_fill",
@@ -749,7 +749,7 @@ Card styling rules:
     }
   ],
   "header_block": null or {
-    "text": "string — the workflow_header value from Agent 4",
+    "text": "string — the artifact_header value from Agent 4",
     "x": number, "y": number, "w": number, "h": number,
     "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
     "style": "underline" | "brand_fill",
@@ -829,7 +829,7 @@ WORKFLOW MICRO-LAYOUT OWNERSHIP:
   "header_row_height": number,
   "row_heights": [number],
   "header_block": null or {
-    "text": "string — the table_header value from Agent 4",
+    "text": "string — the artifact_header value from Agent 4",
     "x": number, "y": number, "w": number, "h": number,
     "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
     "style": "underline" | "brand_fill",
@@ -870,25 +870,30 @@ TABLE MICRO-LAYOUT OWNERSHIP:
     "border_width": number,
     "divider_color": "hex",
     "divider_width": number,
-    "axis_color": "hex",
-    "axis_width": number,
     "axis_label_font_family": "string",
     "axis_label_font_size": number,
     "axis_label_color": "hex",
     "quadrant_title_font_family": "string",
     "quadrant_title_font_size": number,
-    "quadrant_title_color": "hex",
     "quadrant_body_font_family": "string",
     "quadrant_body_font_size": number,
-    "quadrant_body_color": "hex",
+    "positive_quadrant_fill": "hex — light tint for favourable quadrants",
+    "negative_quadrant_fill": "hex — light tint for unfavourable quadrants",
+    "neutral_quadrant_fill":  "hex — light tint for neutral/monitor quadrants",
+    "positive_title_color": "hex — quadrant title text color for positive tone",
+    "negative_title_color": "hex — quadrant title text color for negative tone",
+    "neutral_title_color":  "hex — quadrant title text color for neutral tone",
+    "positive_body_color":  "hex — quadrant body text color for positive tone",
+    "negative_body_color":  "hex — quadrant body text color for negative tone",
+    "neutral_body_color":   "hex — quadrant body text color for neutral tone",
+    "positive_point_fill":  "hex — dot fill for points in positive quadrants",
+    "negative_point_fill":  "hex — dot fill for points in negative quadrants",
+    "neutral_point_fill":   "hex — dot fill for points in neutral quadrants",
     "point_label_font_family": "string",
-    "point_label_font_size": number,
-    "point_label_color": "hex",
-    "point_palette": ["hex"],
-    "quadrant_fills": ["hex", "hex", "hex", "hex"]
+    "point_label_font_size": number
   },
   "header_block": null or {
-    "text": "string — the matrix_header value from Agent 4",
+    "text": "string — the artifact_header value from Agent 4",
     "x": number, "y": number, "w": number, "h": number,
     "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
     "style": "underline" | "brand_fill",
@@ -897,19 +902,17 @@ TABLE MICRO-LAYOUT OWNERSHIP:
 }
 
 Matrix rules:
-- Use ONLY primitive geometry in the final blocks: rect, text_box, rule, circle
-- Reserve space for:
-  - x axis title + low/high labels
-  - y axis title + low/high labels
-  - quadrant titles + quadrant insight lines
-- Quadrant fills must be subtle light tints with clear contrast against labels and points
-- Plot point positions semantically:
-  - low = 25% of axis span
-  - medium = 50%
-  - high = 75%
-- Y increases upward conceptually: y=high must plot nearer the TOP of the matrix
-- Point labels must not collide with quadrant headings; offset labels around the marker if needed
-- Use brand colors for points in sequence; max 6 points
+- Quadrant fills are tone-driven (positive/negative/neutral set on each quadrant in Agent 4)
+- Quadrant text colors (title, body) also driven by tone — not a single global color
+- Center dividers are dashed thin lines (not solid bars)
+- Each point renders as two shapes: filled abbreviation circle + outlined label bubble below
+- Point dot color comes from the quadrant tone the point falls in (not a palette index)
+- short_label (2-3 chars) goes inside the filled dot; full label goes in the bubble below
+- emphasis=high → larger dot (0.26"), medium=0.20", low=0.16"
+- Axis mid-labels (high/low) position at the center divider crosshair, NOT at the grid outer edges
+- Y-axis label is rotated 270° (reads bottom-to-top)
+- Plot point positions semantically: low=25%, medium=50%, high=75% of axis span
+- Y increases upward: y=high plots near the TOP of the matrix grid
 
 7. DRIVER_TREE
 ═══════════════════════════
@@ -934,7 +937,7 @@ Matrix rules:
     "corner_radius": number
   },
   "header_block": null or {
-    "text": "string — the tree_header value from Agent 4",
+    "text": "string — the artifact_header value from Agent 4",
     "x": number, "y": number, "w": number, "h": number,
     "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
     "style": "underline" | "brand_fill",
@@ -982,7 +985,7 @@ Driver tree rules:
     "qualifier_value_font_size": number
   },
   "header_block": null or {
-    "text": "string — the priority_header value from Agent 4",
+    "text": "string — the artifact_header value from Agent 4",
     "x": number, "y": number, "w": number, "h": number,
     "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
     "style": "underline" | "brand_fill",
@@ -1009,10 +1012,7 @@ Every artifact except cards gets a header_block — a one-line label above the a
 that names the insight it proves.
 
 Source text from Agent 4:
-  insight_text → insight_header   chart → chart_header
-  workflow     → workflow_header  table → table_header
-  matrix       → matrix_header    driver_tree → tree_header
-  prioritization → priority_header
+  use artifact_header for the local artifact heading across all artifact types
 
 If header text is empty or null: set header_block to null.
 
@@ -1296,7 +1296,7 @@ function validateDesignedSlide(slide) {
       if (normalizedType === 'chart'    && a.chart_style && a.chart_style.category_label_rotation == null) issues.push(p + ': chart missing category_label_rotation')
       if (normalizedType === 'stat_bar' && !Array.isArray(a.rows)) issues.push(p + ': stat_bar missing rows')
       if (normalizedType === 'stat_bar' && (a.rows || []).length < 2) issues.push(p + ': stat_bar needs 2+ rows')
-      if (normalizedType === 'stat_bar' && !a.stat_header && !a.chart_header) issues.push(p + ': stat_bar missing stat_header')
+      if (normalizedType === 'stat_bar' && !a.artifact_header && !a.stat_header && !a.chart_header) issues.push(p + ': stat_bar missing artifact_header/stat_header')
       if (normalizedType === 'stat_bar' && !a.annotation_style) issues.push(p + ': stat_bar missing annotation_style')
       if (normalizedType === 'chart'    && normalizedChartType === 'pie' && Array.isArray(a.series_style) && Array.isArray(a.categories) && a.series_style.length !== a.categories.length) issues.push(p + ': pie chart series_style.length (' + a.series_style.length + ') must equal categories.length (' + a.categories.length + ')')
       if (normalizedType === 'chart'    && normalizedChartType === 'group_pie' && Array.isArray(a.series_style) && Array.isArray(a.categories) && a.series_style.length !== a.categories.length) issues.push(p + ': group_pie series_style.length (' + a.series_style.length + ') must equal categories.length (' + a.categories.length + ') — one style entry per slice')
@@ -1332,7 +1332,7 @@ function validateDesignedSlide(slide) {
       if (normalizedType === 'matrix'   && (a.quadrants || []).length !== 4) issues.push(p + ': matrix must define 4 quadrants')
       if (normalizedType === 'matrix'   && !(a.points || []).length) issues.push(p + ': matrix missing points')
       if (normalizedType === 'driver_tree' && !a.tree_style)   issues.push(p + ': driver_tree missing tree_style')
-      if (normalizedType === 'driver_tree' && !a.root?.label)  issues.push(p + ': driver_tree missing root.label')
+      if (normalizedType === 'driver_tree' && !a.root?.label && !a.root?.node_label)  issues.push(p + ': driver_tree missing root.label/root.node_label')
       if (normalizedType === 'driver_tree' && !(a.branches || []).length) issues.push(p + ': driver_tree missing branches')
       if (normalizedType === 'prioritization' && !a.priority_style) issues.push(p + ': prioritization missing priority_style')
       if (normalizedType === 'prioritization' && !(a.items || []).length) issues.push(p + ': prioritization missing items')
@@ -1817,26 +1817,6 @@ function applyLayoutTitleFrames(slide, layoutName, brand) {
       return (a.x_in || 0) - (b.x_in || 0)
     })
   const topContentY = contentAreas.length ? Math.min(...contentAreas.map(p => p.y_in || 99)) : null
-  const estimateTextBlockHeight = (text, widthIn, fontSizePt, lineHeight = 1.3, minH = 0.32) => {
-    const textStr = String(text || '').trim()
-    if (!textStr) return minH
-    const usableWidth = Math.max(0.6, Number(widthIn) || 0.6)
-    const fontSize = Math.max(8, Number(fontSizePt) || 18)
-    const charsPerLine = Math.max(8, Math.floor((usableWidth * 72) / (fontSize * 0.52)))
-    const words = textStr.split(/\s+/).filter(Boolean)
-    let lines = 1
-    let lineLen = 0
-    for (const word of words) {
-      const nextLen = lineLen === 0 ? word.length : lineLen + 1 + word.length
-      if (nextLen <= charsPerLine) lineLen = nextLen
-      else {
-        lines += 1
-        lineLen = word.length
-      }
-    }
-    return r2(Math.max(minH, lines * (fontSize * lineHeight / 72) + 0.06))
-  }
-
   if (out.title_block) {
     const titleX = r2(titlePh.x_in != null ? titlePh.x_in : out.title_block.x || 0.4)
     const titleY = r2(titlePh.y_in != null ? titlePh.y_in : out.title_block.y || 0.15)
@@ -1959,8 +1939,10 @@ function manifestZoneArtifactSignature(slideLike) {
 }
 
 function normalizeArtifactType(type, chartType) {
-  if (String(type || '').toLowerCase() === 'stat_bar') return 'stat_bar'
-  if (String(type || '').toLowerCase() === 'star_bar') return 'stat_bar'
+  const t = String(type || '').toLowerCase()
+  const ct = String(chartType || '').toLowerCase()
+  if (t === 'stat_bar' || t === 'star_bar') return 'stat_bar'
+  if (t === 'chart' && (ct === 'stat_bar' || ct === 'star_bar')) return 'stat_bar'
   return type || 'unknown'
 }
 
@@ -2011,8 +1993,9 @@ function validateFallbackStructure(candidate, manifestSlide) {
   return issues
 }
 
-function makeHeaderBlockFromManifestArtifact(artifact, bt) {
-  const text = (
+function getArtifactHeader(artifact) {
+  return (
+    artifact?.artifact_header ||
     artifact?.insight_header ||
     artifact?.stat_header ||
     artifact?.chart_header ||
@@ -2028,6 +2011,177 @@ function makeHeaderBlockFromManifestArtifact(artifact, bt) {
     artifact?.heading ||
     ''
   )
+}
+
+function syncArtifactHeaderBlock(artifact, headerText) {
+  if (!artifact || !headerText) return artifact
+  return {
+    ...artifact,
+    artifact_header: artifact.artifact_header || headerText,
+    header_block: artifact.header_block
+      ? { ...artifact.header_block, text: headerText }
+      : artifact.header_block
+  }
+}
+
+function normalizeWorkflowNodes(nodes) {
+  return (Array.isArray(nodes) ? nodes : []).map((node, i) => ({
+    id: node?.id || `n${i + 1}`,
+    node_label: node?.node_label || node?.label || '',
+    primary_message: node?.primary_message || node?.value || '',
+    secondary_message: node?.secondary_message || node?.description || '',
+    level: node?.level != null ? node.level : 1
+  }))
+}
+
+function normalizeComparisonTableManifest(artifact) {
+  const legacyCriteria = Array.isArray(artifact?.criteria)
+    ? artifact.criteria.map(c => ({ id: String(c?.id || c?.label || c?.name || c || ''), label: _displayLabel(c) }))
+    : []
+  const rawHeaders = Array.isArray(artifact?.column_headers)
+    ? artifact.column_headers.map(c => ({ id: String(c?.id || c?.label || c?.name || ''), label: _displayLabel(c) }))
+    : []
+  const rows = Array.isArray(artifact?.rows) ? artifact.rows : []
+  const cellIds = new Set(rows.flatMap(r => (Array.isArray(r?.cells) ? r.cells : []).map(c => String(c?.column_id || ''))))
+  const firstHeaderId = String(rawHeaders[0]?.id || rawHeaders[0]?.label || '').toLowerCase()
+  const dropFirstLabelColumn = rawHeaders.length > 0
+    && !cellIds.has(String(rawHeaders[0]?.id || ''))
+    && /(option|name|label)/.test(firstHeaderId)
+  const criteriaHeaders = rawHeaders.length
+    ? (dropFirstLabelColumn ? rawHeaders.slice(1) : rawHeaders)
+    : legacyCriteria
+  const options = rows.length
+    ? rows.map((row, ri) => ({
+        id: row?.id || `row_${ri + 1}`,
+        name: row?.option_name || row?.name || '',
+        badge_text: row?.badge_text || '',
+        row_tone: row?.row_tone || '',
+        ratings: (Array.isArray(row?.cells) ? row.cells : []).map((cell, ci) => {
+          const header = criteriaHeaders.find(h => String(h.id) === String(cell?.column_id || '')) || criteriaHeaders[ci] || {}
+          return {
+            criterion: header.label || header.id || String(cell?.column_id || ''),
+            column_id: cell?.column_id || header.id || '',
+            rating: cell?.rating || cell?.display_value || '',
+            note: cell?.secondary_message || cell?.note || '',
+            representation_type: cell?.representation_type || ''
+          }
+        })
+      }))
+    : (Array.isArray(artifact?.options) ? artifact.options : [])
+  const recommendedRow = rows.find(r => String(r?.id || '') === String(artifact?.recommended_row_id || ''))
+  return {
+    criteria: criteriaHeaders.map(h => h.label || h.id || ''),
+    options,
+    recommended_option: recommendedRow?.option_name || artifact?.recommended_option || '',
+    recommended_row_id: artifact?.recommended_row_id || ''
+  }
+}
+
+function normalizeInitiativeMapManifest(artifact) {
+  const dimension_labels = Array.isArray(artifact?.column_headers) && artifact.column_headers.length
+    ? artifact.column_headers.map(c => ({ id: String(c?.id || c?.label || c?.name || ''), label: _displayLabel(c) }))
+    : (Array.isArray(artifact?.dimension_labels)
+        ? artifact.dimension_labels.map(d => (
+            typeof d === 'object' && d !== null
+              ? { id: String(d.id || d.label || d.name || ''), label: _displayLabel(d) }
+              : { id: String(d), label: String(d) }
+          ))
+        : [])
+  // Normalize a tags entry to {label, tone} regardless of agent4 format (string or object)
+  const normInitTag = t => typeof t === 'string'
+    ? { label: t, tone: 'neutral' }
+    : { label: String(t?.label || t?.text || t?.name || ''), tone: String(t?.tone || 'neutral') }
+  const initiatives = Array.isArray(artifact?.rows) && artifact.rows.length
+    ? artifact.rows.map((row, ri) => ({
+        id: row?.id || `initiative_${ri + 1}`,
+        name: row?.initiative_name || row?.name || '',
+        subtitle: row?.initiative_subtitle || row?.subtitle || '',
+        placements: (Array.isArray(row?.cells) ? row.cells : []).map((cell, ci) => ({
+          lane_id: cell?.column_id || dimension_labels[ci]?.id || '',
+          title: cell?.primary_message || '',
+          subtitle: cell?.secondary_message || '',
+          tags: Array.isArray(cell?.tags) ? cell.tags.map(normInitTag) : [],
+          cell_tone: cell?.cell_tone || ''
+        })),
+        dimensions: (Array.isArray(row?.cells) ? row.cells : []).map((cell, ci) => ({
+          label: dimension_labels.find(h => String(h.id) === String(cell?.column_id || ''))?.label || dimension_labels[ci]?.label || '',
+          lane_id: cell?.column_id || dimension_labels[ci]?.id || '',
+          value: cell?.primary_message || '',
+          subtitle: cell?.secondary_message || '',
+          tags: Array.isArray(cell?.tags) ? cell.tags.map(normInitTag) : [],
+          cell_tone: cell?.cell_tone || ''
+        }))
+      }))
+    : (Array.isArray(artifact?.initiatives) ? artifact.initiatives : [])
+  return { dimension_labels, initiatives }
+}
+
+function normalizeRiskRegisterManifest(artifact) {
+  const rows = Array.isArray(artifact?.rows) ? artifact.rows : []
+  const risks = rows.length
+    ? rows.map((row, ri) => ({
+        id: row?.id || `risk_${ri + 1}`,
+        severity: String(row?.severity || '').toLowerCase() || 'low',
+        title: row?.risk_title || row?.title || '',
+        detail: row?.risk_detail || row?.detail || row?.description || '',
+        description: row?.risk_detail || row?.detail || row?.description || '',
+        likelihood: row?.likelihood || '',
+        impact: row?.impact || '',
+        owner: row?.owner || '',
+        owner_tag: _truncateText(row?.owner_tag || row?.owner || '', 15),
+        status: row?.status || '',
+        status_tag: row?.status_tag || row?.status || '',
+        status_tone: row?.status_tone || '',
+        status_representation: row?.status_representation || 'pill',
+        severity_dot: row?.severity_dot === true,
+        severity_color_override: row?.severity_color_override || null
+      }))
+    : (Array.isArray(artifact?.risks) ? artifact.risks : [])
+  return { risks }
+}
+
+function normalizeMatrixManifest(artifact) {
+  const quadrants = (Array.isArray(artifact?.quadrants) ? artifact.quadrants : []).map((q, i) => ({
+    id: q?.id || `q${i + 1}`,
+    name: q?.title || q?.name || '',
+    primary_message: q?.primary_message || '',
+    secondary_message: q?.secondary_message || '',
+    insight: [q?.primary_message, q?.secondary_message, q?.insight].filter(Boolean).join(' — '),
+    tone: String(q?.tone || 'neutral').toLowerCase()
+  }))
+  const points = (Array.isArray(artifact?.points) ? artifact.points : []).map((pt) => ({
+    label: pt?.label || '',
+    short_label: pt?.short_label || '',
+    x: pt?.x || 'medium',
+    y: pt?.y || 'medium',
+    primary_message: pt?.primary_message || '',
+    secondary_message: pt?.secondary_message || '',
+    emphasis: pt?.emphasis || 'medium'
+  }))
+  return { quadrants, points }
+}
+
+function normalizeDriverTreeNode(node) {
+  if (!node || typeof node !== 'object') return { label: '', value: '', description: '' }
+  return {
+    ...node,
+    label: node?.node_label || node?.label || '',
+    value: node?.primary_message || node?.value || '',
+    description: node?.secondary_message || node?.description || ''
+  }
+}
+
+function normalizeDriverTreeManifest(artifact) {
+  const root = normalizeDriverTreeNode(artifact?.root)
+  const branches = (Array.isArray(artifact?.branches) ? artifact.branches : []).map((branch) => ({
+    ...normalizeDriverTreeNode(branch),
+    children: (Array.isArray(branch?.children) ? branch.children : []).map(child => normalizeDriverTreeNode(child))
+  }))
+  return { root, branches }
+}
+
+function makeHeaderBlockFromManifestArtifact(artifact, bt) {
+  const text = getArtifactHeader(artifact)
   if (!text) return null
   return {
     text,
@@ -2045,12 +2199,14 @@ function buildSafeArtifactShell(manifestArt, bt) {
   const t = normalizeArtifactType(manifestArt?.type, manifestArt?.chart_type) || 'insight_text'
   const header_block = makeHeaderBlockFromManifestArtifact(manifestArt, bt)
   const artifact_coverage_hint = manifestArt?.artifact_coverage_hint
+  const artifact_header = getArtifactHeader(manifestArt)
   if (t === 'stat_bar') {
     return {
       type: 'stat_bar',
       artifact_coverage_hint,
       x: null, y: null, w: null, h: null,
-      stat_header: manifestArt?.stat_header || manifestArt?.chart_header || '',
+      artifact_header,
+      stat_header: manifestArt?.stat_header || artifact_header || manifestArt?.chart_header || '',
       stat_decision: manifestArt?.stat_decision || manifestArt?.chart_insight || '',
       column_headers: manifestArt?.column_headers || {},
       rows: Array.isArray(manifestArt?.rows) ? manifestArt.rows : [],
@@ -2079,6 +2235,7 @@ function buildSafeArtifactShell(manifestArt, bt) {
     return {
       type: 'chart',
       artifact_coverage_hint,
+      artifact_header,
       x: null, y: null, w: null, h: null,
       chart_type:       chartType,
       rows:             Array.isArray(manifestArt?.rows) ? manifestArt.rows : [],
@@ -2086,7 +2243,7 @@ function buildSafeArtifactShell(manifestArt, bt) {
       categories:       categories,
       series:           seriesArr,
       chart_title:      manifestArt?.chart_title  || '',
-      chart_header:     manifestArt?.chart_header || manifestArt?.stat_header || '',
+      chart_header:     manifestArt?.chart_header || artifact_header || manifestArt?.stat_header || '',
       chart_insight:    manifestArt?.chart_insight || manifestArt?.stat_decision || '',
       show_data_labels: manifestArt?.show_data_labels !== false,
       show_legend:      !!(manifestArt?.show_legend),
@@ -2121,8 +2278,9 @@ function buildSafeArtifactShell(manifestArt, bt) {
     return {
       type: 'table',
       artifact_coverage_hint,
+      artifact_header,
       x: null, y: null, w: null, h: null,
-      table_header:    manifestArt?.table_header  || '',
+      table_header:    manifestArt?.table_header  || artifact_header || '',
       headers:         Array.isArray(manifestArt?.headers)        ? manifestArt.headers        : [],
       rows:            Array.isArray(manifestArt?.rows)           ? manifestArt.rows           : [],
       highlight_rows:  Array.isArray(manifestArt?.highlight_rows) ? manifestArt.highlight_rows : [],
@@ -2151,14 +2309,16 @@ function buildSafeArtifactShell(manifestArt, bt) {
     }
   }
   if (t === 'comparison_table') {
+    const normalized = normalizeComparisonTableManifest(manifestArt)
     return {
       type: 'comparison_table',
       artifact_coverage_hint,
+      artifact_header,
       x: null, y: null, w: null, h: null,
-      comparison_header: manifestArt?.comparison_header || manifestArt?.table_header || '',
-      criteria: Array.isArray(manifestArt?.criteria) ? manifestArt.criteria : [],
-      options: Array.isArray(manifestArt?.options) ? manifestArt.options : [],
-      recommended_option: manifestArt?.recommended_option || '',
+      comparison_header: manifestArt?.comparison_header || artifact_header || manifestArt?.table_header || '',
+      criteria: normalized.criteria,
+      options: normalized.options,
+      recommended_option: normalized.recommended_option,
       comparison_style: {
         container_fill_color: '#FFFFFF',
         container_border_color: '#D7DEE8',
@@ -2183,13 +2343,15 @@ function buildSafeArtifactShell(manifestArt, bt) {
     }
   }
   if (t === 'initiative_map') {
+    const normalized = normalizeInitiativeMapManifest(manifestArt)
     return {
       type: 'initiative_map',
       artifact_coverage_hint,
+      artifact_header,
       x: null, y: null, w: null, h: null,
-      initiative_header: manifestArt?.initiative_header || manifestArt?.table_header || '',
-      dimension_labels: Array.isArray(manifestArt?.dimension_labels) ? manifestArt.dimension_labels : [],
-      initiatives: Array.isArray(manifestArt?.initiatives) ? manifestArt.initiatives : [],
+      initiative_header: manifestArt?.initiative_header || artifact_header || manifestArt?.table_header || '',
+      dimension_labels: normalized.dimension_labels,
+      initiatives: normalized.initiatives,
       initiative_style: {
         row_fill_color: '#FFFFFF',
         row_border_color: '#D7DEE8',
@@ -2210,8 +2372,9 @@ function buildSafeArtifactShell(manifestArt, bt) {
     return {
       type: 'profile_card_set',
       artifact_coverage_hint,
+      artifact_header,
       x: null, y: null, w: null, h: null,
-      profile_header: manifestArt?.profile_header || manifestArt?.heading || '',
+      profile_header: manifestArt?.profile_header || artifact_header || manifestArt?.heading || '',
       profiles: Array.isArray(manifestArt?.profiles) ? manifestArt.profiles : [],
       layout_direction: manifestArt?.layout_direction || 'horizontal',
       profile_style: {
@@ -2236,22 +2399,56 @@ function buildSafeArtifactShell(manifestArt, bt) {
     }
   }
   if (t === 'risk_register') {
+    const normalized = normalizeRiskRegisterManifest(manifestArt)
     return {
       type: 'risk_register',
       artifact_coverage_hint,
+      artifact_header,
       x: null, y: null, w: null, h: null,
-      risk_header: manifestArt?.risk_header || manifestArt?.table_header || '',
-      risks: Array.isArray(manifestArt?.risks) ? manifestArt.risks : [],
+      risk_header: manifestArt?.risk_header || artifact_header || manifestArt?.table_header || '',
+      risks: normalized.risks,
       show_mitigation: manifestArt?.show_mitigation !== false,
       risk_style: {
         row_border_color: '#D7DEE8',
         row_border_width: 0.6,
         row_corner_radius: 8,
+        // Severity band fill colors (semantic tint — not brand-driven)
         critical_fill_color: '#FDE8E8',
         high_fill_color: '#FFF1F2',
         medium_fill_color: '#FFF7E5',
-        low_fill_color: '#EEFBF3',
+        low_fill_color: '#F3F4F6',
+        // Severity dot + badge colors (semantic — not brand-driven)
+        critical_badge_color: '#DC2626',
+        high_badge_color:     '#EA580C',
+        medium_badge_color:   '#D97706',
+        low_badge_color:      '#6B7280',
         badge_text_color: '#FFFFFF',
+        // Severity band text colors — match dot color for visual coherence
+        critical_text_color: '#8B2C23',
+        high_text_color:     '#8B2C23',
+        medium_text_color:   '#6E5712',
+        low_text_color:      '#6B7280',
+        // Pip square fill colors — match band text
+        critical_pip_fill: '#8B2C23',
+        high_pip_fill:     '#8B2C23',
+        medium_pip_fill:   '#6E5712',
+        low_pip_fill:      '#7A7A72',
+        // Owner chip — neutral, non-brand
+        owner_fill_color:   '#F5F5F5',
+        owner_border_color: '#D1D5DB',
+        // Status chip colors by tone
+        status_open_fill:      '#FFF7F6',
+        status_open_border:    '#A33B32',
+        status_open_text:      '#A33B32',
+        status_progress_fill:  '#FFF8E8',
+        status_progress_border:'#9A6B10',
+        status_progress_text:  '#6E5712',
+        status_mitigated_fill: '#F1F8E8',
+        status_mitigated_border:'#7AA243',
+        status_mitigated_text: '#386B2A',
+        status_closed_fill:    '#F3F4F6',
+        status_closed_border:  '#6B7280',
+        status_closed_text:    '#6B7280',
         label_font_family: bt.title_font_family || 'Arial',
         label_font_size: 10,
         body_font_family: bt.body_font_family || 'Arial',
@@ -2261,11 +2458,12 @@ function buildSafeArtifactShell(manifestArt, bt) {
     }
   }
   if (t === 'workflow') {
-    const manifestNodes = Array.isArray(manifestArt?.nodes) ? manifestArt.nodes : []
+    const manifestNodes = normalizeWorkflowNodes(manifestArt?.nodes)
     const manifestConns = Array.isArray(manifestArt?.connections) ? manifestArt.connections : []
     return {
       type: 'workflow',
       artifact_coverage_hint,
+      artifact_header,
       x: null, y: null, w: null, h: null,
       flow_direction:  manifestArt?.flow_direction  || 'left_to_right',
       workflow_type:   manifestArt?.workflow_type   || 'process_flow',
@@ -2287,9 +2485,9 @@ function buildSafeArtifactShell(manifestArt, bt) {
       },
       nodes: manifestNodes.map((node, i) => ({
         id: node?.id || `n${i + 1}`,
-        label: node?.label || '',
-        value: node?.value || '',
-        description: node?.description || '',
+        label: node?.node_label || node?.label || '',
+        value: node?.primary_message || node?.value || '',
+        description: node?.secondary_message || node?.description || '',
         level: node?.level != null ? node.level : 1
       })),
       connections: manifestConns.map(conn => ({
@@ -2305,6 +2503,7 @@ function buildSafeArtifactShell(manifestArt, bt) {
     return {
       type: 'cards',
       artifact_coverage_hint,
+      artifact_header,
       x: null, y: null, w: null, h: null,
       cards_layout: manifestArt.cards_layout || 'column',
       container: null,
@@ -2339,20 +2538,67 @@ function buildSafeArtifactShell(manifestArt, bt) {
     }
   }
   if (t === 'matrix') {
+    const normalized = normalizeMatrixManifest(manifestArt)
     return {
       type: 'matrix',
       artifact_coverage_hint,
+      artifact_header,
       x: null, y: null, w: null, h: null,
-      matrix_style: {},
+      matrix_style: {
+        // Outer grid
+        border_color:    '#D7DEE8',
+        border_width:    0.8,
+        // Center dividers (thin dashed)
+        divider_color:   '#AAAAAA',
+        divider_width:   0.5,
+        // Quadrant fills — tone-driven; can override per quadrant
+        positive_quadrant_fill: '#E8F5E9',
+        negative_quadrant_fill: '#FEE2E2',
+        neutral_quadrant_fill:  '#F3F4F6',
+        // Quadrant text colors
+        positive_title_color:   bt.primary_color || '#1B5E20',
+        negative_title_color:   '#B91C1C',
+        neutral_title_color:    bt.body_color || '#374151',
+        positive_body_color:    bt.primary_color || '#2D7F5E',
+        negative_body_color:    '#B91C1C',
+        neutral_body_color:     bt.body_color || '#374151',
+        // Point dot fills — tone-driven
+        positive_point_fill:    bt.primary_color || '#2D7F5E',
+        negative_point_fill:    '#C53030',
+        neutral_point_fill:     bt.secondary_color || '#6B7280',
+        // Axis labels
+        axis_label_font_family: bt.body_font_family || 'Arial',
+        axis_label_font_size:   9,
+        axis_label_color:       bt.caption_color || bt.body_color || '#6B7280',
+        // Quadrant labels
+        quadrant_title_font_family: bt.title_font_family || 'Arial',
+        quadrant_title_font_size:   11,
+        quadrant_body_font_family:  bt.body_font_family  || 'Arial',
+        quadrant_body_font_size:    9,
+        // Point label bubble
+        point_label_font_family: bt.body_font_family || 'Arial',
+        point_label_font_size:   9
+      },
+      matrix_type: manifestArt?.matrix_type || '2x2',
+      matrix_header: manifestArt?.matrix_header || artifact_header || '',
+      x_axis: manifestArt?.x_axis || { label: '', low_label: '', high_label: '' },
+      y_axis: manifestArt?.y_axis || { label: '', low_label: '', high_label: '' },
+      quadrants: normalized.quadrants,
+      points: normalized.points,
       header_block
     }
   }
   if (t === 'driver_tree') {
+    const normalized = normalizeDriverTreeManifest(manifestArt)
     return {
       type: 'driver_tree',
       artifact_coverage_hint,
+      artifact_header,
       x: null, y: null, w: null, h: null,
       tree_style: {},
+      tree_header: manifestArt?.tree_header || artifact_header || '',
+      root: normalized.root,
+      branches: normalized.branches,
       header_block
     }
   }
@@ -2360,8 +2606,11 @@ function buildSafeArtifactShell(manifestArt, bt) {
     return {
       type: 'prioritization',
       artifact_coverage_hint,
+      artifact_header,
       x: null, y: null, w: null, h: null,
       priority_style: {},
+      priority_header: manifestArt?.priority_header || artifact_header || '',
+      items: Array.isArray(manifestArt?.items) ? manifestArt.items : [],
       header_block
     }
   }
@@ -2370,6 +2619,7 @@ function buildSafeArtifactShell(manifestArt, bt) {
   return grouped ? {
     type: 'insight_text',
     artifact_coverage_hint,
+    artifact_header,
     insight_mode: 'grouped',
     x: null, y: null, w: null, h: null,
     style: { fill_color: null, border_color: null, border_width: 0, corner_radius: 0 },
@@ -2380,19 +2630,20 @@ function buildSafeArtifactShell(manifestArt, bt) {
     bullet_style: { font_family: bt.body_font_family || 'Arial', font_size: 10, font_weight: 'regular', color: bt.body_color || '#111111', line_spacing: 1.35, indent_inches: 0.1, space_before_pt: 3, char: '▶' },
     group_gap_in: 0.08,
     header_to_box_gap_in: 0.04,
-    heading: manifestArt?.heading || manifestArt?.insight_header || '',
+    heading: manifestArt?.heading || artifact_header || manifestArt?.insight_header || '',
     groups: Array.isArray(manifestArt?.groups) ? manifestArt.groups : [],
     sentiment: manifestArt?.sentiment || 'neutral',
     header_block
   } : {
     type: 'insight_text',
     artifact_coverage_hint,
+    artifact_header,
     insight_mode: 'standard',
     x: null, y: null, w: null, h: null,
     style: { fill_color: null, border_color: (bt.primary_color || '#0078AE') + '33', border_width: 0.5, corner_radius: 3 },
     heading_style: { font_family: bt.title_font_family || 'Arial', font_size: 12, font_weight: 'bold', color: bt.primary_color || '#0078AE' },
     body_style: { font_family: bt.body_font_family || 'Arial', font_size: 11, font_weight: 'regular', color: bt.body_color || '#111111', line_spacing: 1.4, indent_inches: 0.15, list_style: 'bullet', space_before_pt: 5, vertical_distribution: 'spread' },
-    heading: manifestArt?.heading || manifestArt?.insight_header || 'Key Insight',
+    heading: manifestArt?.heading || artifact_header || manifestArt?.insight_header || 'Key Insight',
     points: Array.isArray(manifestArt?.points) ? manifestArt.points : [],
     sentiment: manifestArt?.sentiment || 'neutral',
     header_block
@@ -2538,16 +2789,16 @@ function buildMinimalSafeSlide(manifestSlide, tokens) {
 // produce the same number of artifacts per zone in the same order).
 //
 // Content fields injected per artifact type:
-//   insight_text : heading, insight_header, insight_mode, points[] (standard), groups[] (grouped), sentiment
+//   insight_text : heading, artifact_header, insight_mode, points[] (standard), groups[] (grouped), sentiment
 //   chart        : chart_type, chart_title, chart_insight, x_label, y_label,
 //                  categories[], series[], show_data_labels, show_legend
 //   cards        : cards[] (title, subtitle, body, sentiment per card)
 //   workflow     : workflow_type, flow_direction, workflow_title, workflow_insight,
-//                  node labels/values/descriptions/levels, connection from/to/type
+//                  node_label/primary_message/secondary_message mapped into node labels/values/descriptions/levels, connection from/to/type
 //   table        : title, headers[], rows[][], highlight_rows[], note
-//   matrix       : matrix_type, matrix_header, x_axis, y_axis, quadrants[], points[]
-//   driver_tree  : tree_header, root, branches[]
-//   prioritization: priority_header, items[]
+//   matrix       : matrix_type, artifact_header, x_axis, y_axis, quadrants[], points[]
+//   driver_tree  : artifact_header, root, branches[]
+//   prioritization: artifact_header, items[]
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ─── computeArtifactInternals ────────────────────────────────────────────────
@@ -3014,20 +3265,30 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
         const nodes = Array.isArray(art.nodes) ? art.nodes : []
         const ws = art.workflow_style || {}
         art.workflow_style = {
-          node_fill_color: ws.node_fill_color || bt.primary_color || '#0078AE',
-          node_border_color: ws.node_border_color || '#FFFFFF',
-          node_border_width: ws.node_border_width != null ? ws.node_border_width : 1,
-          node_title_font_family: ws.node_title_font_family || bt.title_font_family || 'Arial',
-          node_title_font_size: ws.node_title_font_size || 10,
-          node_title_color: ws.node_title_color || '#FFFFFF',
-          node_value_font_family: ws.node_value_font_family || bt.body_font_family || 'Arial',
-          node_value_font_size: ws.node_value_font_size || 9,
-          node_value_color: ws.node_value_color || bt.body_color || '#111111',
-          node_inner_padding: ws.node_inner_padding != null ? ws.node_inner_padding : 0.08,
-          external_label_gap: ws.external_label_gap != null ? ws.external_label_gap : 0.08,
-          connector_color: ws.connector_color || bt.primary_color || '#0078AE',
-          connector_width: ws.connector_width != null ? ws.connector_width : 0.5,
-          node_corner_radius: ws.node_corner_radius != null ? ws.node_corner_radius : 4
+          // Level-1 (root / all process_flow nodes) — brand primary
+          node_fill_color:           ws.node_fill_color           || bt.primary_color   || '#0078AE',
+          // Level-2 nodes (hierarchy/decomposition children) — secondary brand or tinted
+          node_fill_color_secondary: ws.node_fill_color_secondary || bt.secondary_color || '#3A6EA5',
+          // Level-3+ nodes (leaves) — very light neutral
+          node_fill_color_leaf:      ws.node_fill_color_leaf      || '#EAF2FB',
+          node_border_color:         ws.node_border_color         || '#FFFFFF',
+          node_border_width:         ws.node_border_width    != null ? ws.node_border_width    : 1,
+          node_corner_radius:        ws.node_corner_radius   != null ? ws.node_corner_radius   : 4,
+          node_title_font_family:    ws.node_title_font_family    || bt.title_font_family || 'Arial',
+          node_title_font_size:      ws.node_title_font_size      || 10,
+          node_title_color:          ws.node_title_color          || '#FFFFFF',
+          // Leaf nodes have dark text on light fill
+          node_title_color_leaf:     ws.node_title_color_leaf     || bt.body_color || '#111111',
+          node_value_font_family:    ws.node_value_font_family    || bt.body_font_family || 'Arial',
+          node_value_font_size:      ws.node_value_font_size      || 9,
+          node_value_color:          ws.node_value_color          || bt.body_color || '#111111',
+          node_inner_padding:        ws.node_inner_padding   != null ? ws.node_inner_padding   : 0.08,
+          external_label_gap:        ws.external_label_gap   != null ? ws.external_label_gap   : 0.08,
+          connector_color:           ws.connector_color           || bt.primary_color   || '#0078AE',
+          connector_width:           ws.connector_width      != null ? ws.connector_width      : 0.5,
+          arrowhead_style:           ws.arrowhead_style           || 'triangle',
+          // Timeline baseline bar color
+          timeline_line_color:       ws.timeline_line_color       || bt.primary_color   || '#0078AE'
         }
         art.container = { x: art.x || 0, y: art.y || 0, w: art.w || 0, h: art.h || 0 }
 
@@ -3182,7 +3443,7 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
 
           const placedById = new Map((art.nodes || []).map(n => [n.id, n]))
           const originalConns = Array.isArray(art.connections) ? art.connections : []
-          art.connections = originalConns.map((conn, ci) => {
+          art.connections = originalConns.map((conn) => {
             const fromNode = placedById.get(conn.from)
             const toNode = placedById.get(conn.to)
             if (!fromNode || !toNode) return {
@@ -3261,35 +3522,36 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
       // ── 5. insight_text (standard): font scaling ───────────────────────────
       if (artType === 'matrix') {
         const ms = art.matrix_style || {}
-        const pointPalette = [
-          bt.primary_color,
-          bt.secondary_color,
-          ...(bt.accent_colors || []),
-          ...(bt.chart_palette || [])
-        ].filter(Boolean)
         art.matrix_style = {
-          border_color: ms.border_color || '#D7DEE8',
-          border_width: ms.border_width != null ? ms.border_width : 0.8,
-          divider_color: ms.divider_color || '#7B8794',
-          divider_width: ms.divider_width != null ? ms.divider_width : 0.6,
-          axis_color: ms.axis_color || '#4B5563',
-          axis_width: ms.axis_width != null ? ms.axis_width : 0.7,
-          axis_label_font_family: ms.axis_label_font_family || bt.body_font_family || 'Arial',
-          axis_label_font_size: ms.axis_label_font_size || 10,
-          axis_label_color: ms.axis_label_color || bt.body_color || '#374151',
+          border_color:    ms.border_color    || '#D7DEE8',
+          border_width:    ms.border_width    != null ? ms.border_width    : 0.8,
+          divider_color:   ms.divider_color   || '#AAAAAA',
+          divider_width:   ms.divider_width   != null ? ms.divider_width   : 0.5,
+          axis_label_font_family: ms.axis_label_font_family || bt.body_font_family   || 'Arial',
+          axis_label_font_size:   ms.axis_label_font_size   || 9,
+          axis_label_color:       ms.axis_label_color || bt.caption_color || bt.body_color || '#6B7280',
           quadrant_title_font_family: ms.quadrant_title_font_family || bt.title_font_family || 'Arial',
-          quadrant_title_font_size: ms.quadrant_title_font_size || 12,
-          quadrant_title_color: ms.quadrant_title_color || '#2D3748',
-          quadrant_body_font_family: ms.quadrant_body_font_family || bt.body_font_family || 'Arial',
-          quadrant_body_font_size: ms.quadrant_body_font_size || 9,
-          quadrant_body_color: ms.quadrant_body_color || '#374151',
+          quadrant_title_font_size:   ms.quadrant_title_font_size   || 11,
+          quadrant_body_font_family:  ms.quadrant_body_font_family  || bt.body_font_family  || 'Arial',
+          quadrant_body_font_size:    ms.quadrant_body_font_size    || 9,
+          // Tone-driven quadrant fills
+          positive_quadrant_fill: ms.positive_quadrant_fill || '#E8F5E9',
+          negative_quadrant_fill: ms.negative_quadrant_fill || '#FEE2E2',
+          neutral_quadrant_fill:  ms.neutral_quadrant_fill  || '#F3F4F6',
+          // Tone-driven quadrant text colors
+          positive_title_color:  ms.positive_title_color || bt.primary_color || '#1B5E20',
+          negative_title_color:  ms.negative_title_color || '#B91C1C',
+          neutral_title_color:   ms.neutral_title_color  || bt.body_color    || '#374151',
+          positive_body_color:   ms.positive_body_color  || bt.primary_color || '#2D7F5E',
+          negative_body_color:   ms.negative_body_color  || '#B91C1C',
+          neutral_body_color:    ms.neutral_body_color   || bt.body_color    || '#374151',
+          // Tone-driven point dot colors
+          positive_point_fill:  ms.positive_point_fill || bt.primary_color  || '#2D7F5E',
+          negative_point_fill:  ms.negative_point_fill || '#C53030',
+          neutral_point_fill:   ms.neutral_point_fill  || bt.secondary_color || '#6B7280',
+          // Point label bubble
           point_label_font_family: ms.point_label_font_family || bt.body_font_family || 'Arial',
-          point_label_font_size: ms.point_label_font_size || 10,
-          point_label_color: ms.point_label_color || '#111111',
-          point_palette: (ms.point_palette && ms.point_palette.length ? ms.point_palette : pointPalette),
-          quadrant_fills: (ms.quadrant_fills && ms.quadrant_fills.length === 4)
-            ? ms.quadrant_fills
-            : ['#FFF4BF', '#E4F2DE', '#F4F5F7', '#DDEFF5']
+          point_label_font_size:   ms.point_label_font_size   || 9
         }
       }
 
@@ -3415,7 +3677,9 @@ function resolveArtifactSubtype(art) {
 
 function resolveArtifactHeaderText(art) {
   if (!art || typeof art !== 'object') return ''
-  return ((art.header_block || {}).text ||
+  return (
+    art.artifact_header ||
+    ((art.header_block || {}).text) ||
     art.insight_header ||
     art.chart_header ||
     art.table_header ||
@@ -3710,7 +3974,7 @@ function _comparisonTableToBlocks(art, content_y, blocks, bt, r2) {
   const cs = art.comparison_style || {}
   const criteria = (art.criteria || []).slice(0, 6)
   const options = (art.options || []).slice(0, 5)
-  const recommended = String(art.recommended_option || '').trim().toLowerCase()
+  const recommendedNameFallback = String(art.recommended_option || '').trim().toLowerCase()
   const ax = art.x || 0
   const ay = content_y
   const aw = art.w || 0
@@ -3721,109 +3985,137 @@ function _comparisonTableToBlocks(art, content_y, blocks, bt, r2) {
   const rowH = r2(Math.max(0.44, (ah - headerH) / Math.max(options.length, 1)))
   const labelW = r2(Math.min(Math.max(1.9, aw * 0.24), 2.7))
   const colW = r2(Math.max(0.75, (aw - labelW) / Math.max(criteria.length, 1)))
-  const titleFont = cs.label_font_family || bt.title_font_family || 'Arial'
-  const bodyFont = cs.body_font_family || bt.body_font_family || 'Arial'
-  const shellBorder = cs.container_border_color || '#D7DEE8'
-  const recommendedFill = cs.recommended_fill_color || '#E8F0D9'
 
-  const iconFor = (rating) => {
+  // ── Brand-sourced tokens ───────────────────────────────────────────────────
+  const titleFont       = cs.label_font_family || bt.title_font_family || 'Arial'
+  const bodyFont        = cs.body_font_family  || bt.body_font_family  || 'Arial'
+  const bodyTextColor   = bt.body_color || '#111111'
+  const captionColor    = bt.caption_color || bodyTextColor
+  const shellFill       = cs.container_fill_color || '#FFFFFF'
+  const shellBorder     = cs.container_border_color || '#D7DEE8'
+  const shellBorderW    = cs.container_border_width != null ? cs.container_border_width : 0.6
+  const shellCornerR    = cs.container_corner_radius != null ? cs.container_corner_radius : 8
+  const gridColor       = cs.grid_color || shellBorder
+  const recommendedFill = cs.recommended_fill_color || '#EEF4E2'
+  const recommendedTextColor = bt.primary_color || bodyTextColor  // brand primary reads well on light green fill
+
+  // Icon semantic fills from cs (pre-populated from brand in defaults)
+  const iconFor = (rating, displayValue) => {
     const token = String(rating || '').toLowerCase()
-    if (token === 'yes') return { fill: '#EEF4E2', text: '✓', color: '#386B2A' }
-    if (token === 'no') return { fill: '#F8EAEA', text: '✖', color: '#8B2C23' }
-    if (token === 'partial') return { fill: '#FBF4E2', text: '~', color: '#7A6220' }
-    return { fill: '#F4F5F7', text: String(rating || ''), color: bt.body_color || '#111111' }
+    const overrideText = String(displayValue || '')
+    if (token === 'yes')     return { fill: cs.yes_fill_color     || '#EEF4E2', text: overrideText || '✓', color: cs.yes_text_color     || '#386B2A' }
+    if (token === 'no')      return { fill: cs.no_fill_color      || '#F8EAEA', text: overrideText || '✖', color: cs.no_text_color      || '#8B2C23' }
+    if (token === 'partial') return { fill: cs.partial_fill_color || '#FBF4E2', text: overrideText || '~', color: cs.partial_text_color || '#7A6220' }
+    return { fill: cs.neutral_fill_color || '#F4F5F7', text: overrideText || String(rating || ''), color: bodyTextColor }
   }
 
+  // ── Outer shell ────────────────────────────────────────────────────────────
   blocks.push({
     block_type: 'rect',
     x: ax, y: ay, w: aw, h: ah,
-    fill_color: '#FFFFFF',
+    fill_color: shellFill,
     border_color: shellBorder,
-    border_width: 0.6,
-    corner_radius: 10
+    border_width: shellBorderW,
+    corner_radius: shellCornerR
   })
 
+  // ── Column header row ──────────────────────────────────────────────────────
   blocks.push({
     block_type: 'text_box',
-    x: r2(ax + 0.14), y: r2(ay + 0.05), w: r2(labelW - 0.18), h: 0.22,
+    x: r2(ax + 0.14), y: r2(ay + 0.06), w: r2(labelW - 0.18), h: 0.22,
     text: 'Option',
-    font_family: titleFont, font_size: 10, bold: true,
-    color: '#555555', align: 'left', valign: 'middle'
+    font_family: titleFont, font_size: cs.label_font_size || 10, bold: true,
+    color: captionColor, align: 'left', valign: 'middle'
   })
   criteria.forEach((criterion, ci) => {
     const x = r2(ax + labelW + ci * colW)
     blocks.push({
       block_type: 'text_box',
-      x, y: r2(ay + 0.05), w: colW, h: 0.22,
+      x, y: r2(ay + 0.06), w: colW, h: 0.22,
       text: _truncateText(criterion, 18),
-      font_family: titleFont, font_size: 10, bold: true,
-      color: '#555555', align: 'center', valign: 'middle'
+      font_family: titleFont, font_size: cs.label_font_size || 10, bold: true,
+      color: captionColor, align: 'center', valign: 'middle'
     })
   })
   blocks.push({
     block_type: 'rule',
     x: ax, y: r2(ay + headerH), w: aw, h: 0.005,
-    color: '#BDBDBD',
-    line_width: 0.6
+    color: gridColor, line_width: 0.6
   })
 
+  // ── Data rows ──────────────────────────────────────────────────────────────
   options.forEach((option, oi) => {
     const rowY = r2(ay + headerH + oi * rowH)
-    const isRecommended = recommended && String(option?.name || '').trim().toLowerCase() === recommended
+
+    // Recommended detection: prefer explicit row_tone field, fall back to name match
+    const isRecommended = option?.row_tone === 'recommended'
+      || (recommendedNameFallback && String(option?.name || '').trim().toLowerCase() === recommendedNameFallback)
+
     if (isRecommended) {
       blocks.push({
         block_type: 'rect',
         x: ax, y: rowY, w: aw, h: rowH,
         fill_color: recommendedFill,
-        border_color: null, border_width: 0,
-        corner_radius: 0
+        border_color: null, border_width: 0, corner_radius: 0
       })
     }
 
+    // Option name label
     blocks.push({
       block_type: 'text_box',
       x: r2(ax + 0.14), y: r2(rowY + 0.08), w: r2(labelW - 0.24), h: 0.22,
       text: String(option?.name || ''),
-      font_family: titleFont, font_size: 11, bold: true,
-      color: isRecommended ? '#386B2A' : (bt.body_color || '#111111'),
+      font_family: titleFont, font_size: cs.label_font_size || 11, bold: true,
+      color: isRecommended ? recommendedTextColor : bodyTextColor,
       align: 'left', valign: 'middle'
     })
+
+    // "recommended" badge — uses badge_text from schema if provided
     if (isRecommended) {
+      const badgeLabel = String(option?.badge_text || 'recommended')
+      const badgeW = r2(Math.min(1.10, Math.max(0.72, badgeLabel.length * 0.072 + 0.18)))
+      const badgeX = r2(ax + 0.14 + String(option?.name || '').length * 0.068 + 0.10)
       blocks.push({
         block_type: 'rect',
-        x: r2(ax + 0.98), y: r2(rowY + 0.07), w: 0.92, h: 0.24,
-        fill_color: '#E3EDCF',
-        border_color: '#7AA243',
+        x: badgeX, y: r2(rowY + 0.08), w: badgeW, h: 0.22,
+        fill_color: recommendedFill,
+        border_color: shellBorder,
         border_width: 0.6,
         corner_radius: 10
       })
       blocks.push({
         block_type: 'text_box',
-        x: r2(ax + 1.06), y: r2(rowY + 0.11), w: 0.76, h: 0.14,
-        text: 'recommended',
+        x: r2(badgeX + 0.06), y: r2(rowY + 0.11), w: r2(badgeW - 0.12), h: 0.14,
+        text: badgeLabel,
         font_family: bodyFont, font_size: 8, bold: true,
-        color: '#4A4A4A', align: 'center', valign: 'middle'
+        color: recommendedTextColor, align: 'center', valign: 'middle'
       })
     }
 
+    // Icon cells
     criteria.forEach((criterion, ci) => {
-      const rating = (option?.ratings || []).find(r => String(r?.criterion || '') === String(criterion)) || (option?.ratings || [])[ci] || {}
-      const visual = iconFor(rating?.rating || rating?.note || '')
+      const ratingObj = (option?.ratings || []).find(r => String(r?.criterion || '') === String(criterion)) || (option?.ratings || [])[ci] || {}
+      // Honour display_value and representation_type from Agent 4 schema
+      const reprType = String(ratingObj?.representation_type || 'icon').toLowerCase()
+      const visual = iconFor(ratingObj?.rating || ratingObj?.note || '', reprType === 'text' ? (ratingObj?.display_value || ratingObj?.rating) : ratingObj?.display_value)
       const cx = r2(ax + labelW + ci * colW + colW / 2)
       const cy = r2(rowY + rowH / 2)
+      const iconR = 0.11  // circle radius in inches
 
-      blocks.push({
-        block_type: 'circle',
-        x: r2(cx - 0.10), y: r2(cy - 0.10), w: 0.20, h: 0.20,
-        fill_color: visual.fill,
-        font_color: '#FFFFFF',
-        text: ''
-      })
+      if (reprType !== 'text') {
+        blocks.push({
+          block_type: 'circle',
+          x: r2(cx - iconR), y: r2(cy - iconR), w: r2(iconR * 2), h: r2(iconR * 2),
+          fill_color: visual.fill,
+          border_color: null, border_width: 0
+        })
+      }
       blocks.push({
         block_type: 'text_box',
-        x: r2(cx - 0.12), y: r2(cy - 0.11), w: 0.24, h: 0.20,
+        x: r2(cx - iconR - 0.02), y: r2(cy - iconR), w: r2(iconR * 2 + 0.04), h: r2(iconR * 2),
         text: visual.text,
-        font_family: titleFont, font_size: 10, bold: true,
+        font_family: titleFont, font_size: reprType === 'text' ? (cs.body_font_size || 9) : 10,
+        bold: reprType !== 'text',
         color: visual.color, align: 'center', valign: 'middle'
       })
     })
@@ -3832,8 +4124,7 @@ function _comparisonTableToBlocks(art, content_y, blocks, bt, r2) {
       blocks.push({
         block_type: 'rule',
         x: ax, y: r2(rowY + rowH), w: aw, h: 0.005,
-        color: '#D9D9D9',
-        line_width: 0.5
+        color: gridColor, line_width: 0.5
       })
     }
   })
@@ -3962,7 +4253,9 @@ function _profileCardSetToBlocks(art, content_y, blocks, bt, r2) {
   if (!profiles.length || aw <= 0 || ah <= 0) return
 
   const gap = 0.12
-  const cols = direction === 'grid'
+  // Auto-correct layout direction: 4 profiles must be 2×2 grid regardless of what Claude set
+  const resolvedDirection = (profiles.length === 4 && direction !== 'grid') ? 'grid' : direction
+  const cols = resolvedDirection === 'grid'
     ? Math.min(3, Math.max(2, Math.ceil(Math.sqrt(profiles.length))))
     : profiles.length <= 3 ? profiles.length : Math.min(3, profiles.length)
   const rows = Math.ceil(profiles.length / cols)
@@ -3985,7 +4278,6 @@ function _profileCardSetToBlocks(art, content_y, blocks, bt, r2) {
     const attrGap = 0.05
     const attrH = r2(Math.max(0.24, (cardH - (bodyStartY - y) - 0.12 - attrGap * Math.max(0, attrs.length - 1)) / Math.max(attrs.length, 1)))
     const cardCornerR = ps.card_corner_radius != null ? ps.card_corner_radius : 10
-    const primaryColor = bt.primary_color || '#0078AE'
     const mutedColor = '#6B7280'
     const dividerColor = '#D9D9D9'
     const subtitle = String(profile?.subtitle || profile?.entity_type || profile?.category || profile?.subtype || '')
@@ -4094,163 +4386,209 @@ function _profileCardSetToBlocks(art, content_y, blocks, bt, r2) {
   })
 }
 
-// Override: initiative_map should render as a swim-lane scaffold with placed
-// "lego blocks", not as a row table. This later declaration intentionally
-// replaces the earlier helper.
+// initiative_map renders as a clean bordered table: column headers, vertical lane
+// separators, horizontal row dividers, inline phase chips per cell, and plain text
+// content. This matches the preview design (no swim-lane colored cards).
 function _initiativeMapToBlocks(art, content_y, blocks, bt, r2) {
   const istyle = art.initiative_style || {}
-  const initiatives = (art.initiatives || []).slice(0, 6)
-  const dims = (art.dimension_labels || []).slice(0, 6)
+  const allDims = (art.dimension_labels || []).slice(0, 6)
+  const initiatives = (art.initiatives || []).slice(0, 8)
   const ax = art.x || 0
   const ay = content_y
   const aw = art.w || 0
   const ah = r2((art.y || 0) + (art.h || 0) - content_y)
   if (!initiatives.length || aw <= 0 || ah <= 0) return
 
-  const colHeaderH = 0.30
-  const headerGap = 0.08
-  const rowGap = 0.10
-  const totalRowH = ah - colHeaderH - headerGap
-  const rowH = r2(Math.max(0.82, (totalRowH - rowGap * Math.max(0, initiatives.length - 1)) / Math.max(initiatives.length, 1)))
-  const trackW = r2(Math.min(Math.max(1.9, aw * 0.22), 2.55))
-  const laneGap = 0.16
-  const laneCount = Math.max(dims.length, 1)
-  const laneW = r2(Math.max(1.4, (aw - trackW - laneGap * laneCount) / laneCount))
-  const titleFont = istyle.label_font_family || bt.title_font_family || 'Arial'
-  const bodyFont = istyle.body_font_family || bt.body_font_family || 'Arial'
-  const dividerColor = '#D9D9D9'
-  const primaryColor = bt.primary_color || '#3F66C4'
-  const secondaryColor = bt.secondary_color || '#7A6220'
-  const rowStartY = r2(ay + colHeaderH + headerGap)
+  // ── Brand tokens ───────────────────────────────────────────────────────────
+  const titleFont       = istyle.label_font_family || bt.title_font_family || 'Arial'
+  const bodyFont        = istyle.body_font_family  || bt.body_font_family  || 'Arial'
+  const bodyTextColor   = bt.body_color || '#111111'
+  const captionColor    = bt.caption_color || bodyTextColor
+  const primaryColor    = bt.primary_color || '#3F66C4'
+  const secondaryColor  = bt.secondary_color || '#7A6220'
+  const labelFontSize   = istyle.label_font_size || 10
+  const bodyFontSize    = istyle.body_font_size  || 9
+  const containerFill   = istyle.row_fill_color     || '#FFFFFF'
+  const containerBorder = istyle.row_border_color   || '#D7DEE8'
+  const containerBorderW= istyle.row_border_width != null ? istyle.row_border_width : 0.6
+  const cornerR         = istyle.row_corner_radius  != null ? istyle.row_corner_radius : 8
+  const gridColor       = containerBorder  // column/row separator uses same brand border color
 
+  // ── Separate initiative label column from content dimension lanes ───────────
+  // Agent 4 always emits the label column as column_headers[0] with id "initiative".
+  // Filter it out so it doesn't become an extra empty content lane.
+  const initiativeDim      = allDims.find(d => /^initiative/i.test(String(d.id || '')))
+  const initiativeColLabel = (initiativeDim?.label || 'INITIATIVE').toUpperCase()
+  const dims               = allDims.filter(d => d !== initiativeDim).slice(0, 5)
+
+  // ── Layout ─────────────────────────────────────────────────────────────────
+  const colHeaderH = r2(Math.min(0.40, Math.max(0.28, ah * 0.09)))
+  const bodyH      = Math.max(0.6, ah - colHeaderH)
+  const rowH       = r2(Math.max(0.72, bodyH / Math.max(initiatives.length, 1)))
+  const trackW     = r2(Math.min(Math.max(1.8, aw * 0.21), 2.6))
+  const laneCount  = Math.max(dims.length, 1)
+  const laneW      = r2((aw - trackW) / laneCount)
+  const rowStartY  = r2(ay + colHeaderH)
+
+  // ── Outer container shell ──────────────────────────────────────────────────
+  blocks.push({
+    block_type: 'rect',
+    x: ax, y: ay, w: aw, h: ah,
+    fill_color: containerFill,
+    border_color: containerBorder,
+    border_width: containerBorderW,
+    corner_radius: cornerR
+  })
+
+  // ── Column header row ──────────────────────────────────────────────────────
   blocks.push({
     block_type: 'text_box',
-    x: ax, y: ay, w: trackW, h: colHeaderH,
-    text: 'TRACK',
-    font_family: titleFont, font_size: (istyle.label_font_size || 10) - 1, bold: true,
-    color: '#6B7280', align: 'left', valign: 'middle'
+    x: r2(ax + 0.14), y: ay, w: r2(trackW - 0.18), h: colHeaderH,
+    text: initiativeColLabel,
+    font_family: titleFont, font_size: labelFontSize - 1, bold: true,
+    color: captionColor, align: 'left', valign: 'middle'
   })
-
   dims.forEach((dim, di) => {
-    const laneX = r2(ax + trackW + laneGap + di * (laneW + laneGap))
+    const laneX = r2(ax + trackW + di * laneW)
+    // Vertical column separator spanning full table height
+    blocks.push({
+      block_type: 'rect',
+      x: laneX, y: ay, w: 0.007, h: ah,
+      fill_color: gridColor, border_color: null, border_width: 0, corner_radius: 0
+    })
     blocks.push({
       block_type: 'text_box',
-      x: laneX, y: ay, w: laneW, h: colHeaderH,
-      text: _truncateText(dim.label, 24),
-      font_family: titleFont, font_size: (istyle.label_font_size || 10) - 1, bold: true,
-      color: di === 0 ? primaryColor : secondaryColor, align: 'center', valign: 'middle'
+      x: r2(laneX + 0.12), y: ay, w: r2(laneW - 0.18), h: colHeaderH,
+      text: _truncateText((dim.label || '').toUpperCase(), 22),
+      font_family: titleFont, font_size: labelFontSize - 1, bold: true,
+      color: captionColor, align: 'left', valign: 'middle'
     })
   })
-
+  // Header divider rule
   blocks.push({
     block_type: 'rule',
-    x: ax, y: r2(ay + colHeaderH + 0.02), w: aw, h: 0.005,
-    color: dividerColor,
-    line_width: 0.5
+    x: ax, y: r2(ay + colHeaderH), w: aw, h: 0.005,
+    color: gridColor, line_width: 0.6
   })
 
+  // ── Data rows ──────────────────────────────────────────────────────────────
   initiatives.forEach((initiative, ii) => {
-    const rowY = r2(rowStartY + ii * (rowH + rowGap))
-    const subtitle = String(initiative?.subtitle || initiative?.entity_type || initiative?.category || initiative?.subtype || '')
+    const rowY = r2(rowStartY + ii * rowH)
 
+    // Initiative name + subtitle in left track column
+    const hasSubtitle = Boolean(initiative?.subtitle)
+    const nameH = hasSubtitle ? 0.26 : r2(Math.min(0.52, rowH - 0.20))
     blocks.push({
       block_type: 'text_box',
-      x: ax, y: r2(rowY + 0.10), w: trackW, h: 0.28,
+      x: r2(ax + 0.14), y: r2(rowY + 0.10), w: r2(trackW - 0.22), h: nameH,
       text: String(initiative?.name || ''),
-      font_family: titleFont, font_size: istyle.label_font_size || 10, bold: true,
-      color: bt.body_color || '#111111', align: 'left', valign: 'middle'
+      font_family: titleFont, font_size: labelFontSize, bold: true,
+      color: bodyTextColor, align: 'left', valign: 'top'
     })
-    if (subtitle) {
+    if (hasSubtitle) {
       blocks.push({
         block_type: 'text_box',
-        x: ax, y: r2(rowY + 0.40), w: trackW, h: 0.22,
-        text: subtitle,
-        font_family: bodyFont, font_size: 9, bold: false,
-        color: '#6B7280', align: 'left', valign: 'middle'
+        x: r2(ax + 0.14), y: r2(rowY + 0.10 + nameH + 0.04), w: r2(trackW - 0.22), h: 0.20,
+        text: _truncateText(String(initiative.subtitle), 36),
+        font_family: bodyFont, font_size: Math.max(8, bodyFontSize - 1), bold: false,
+        color: captionColor, align: 'left', valign: 'middle'
       })
     }
 
+    // Dimension cells
     dims.forEach((dim, di) => {
-      const laneX = r2(ax + trackW + laneGap + di * (laneW + laneGap))
+      const laneX = r2(ax + trackW + di * laneW)
+      const contentX = r2(laneX + 0.12)
+      const contentW = r2(laneW - 0.20)
+
       const placement = (initiative?.placements || []).find(p =>
         String(p?.lane_id || '') === String(dim.id)
-      )
-      const dimValue = placement || (initiative?.dimensions || []).find(d =>
-        String(d?.label || d?.lane_id || '') === String(dim.id || dim.label)
-      ) || (initiative?.dimensions || [])[di] || {}
-      const raw = placement || dimValue?.value
-      if (!raw || (Array.isArray(raw) && raw.length === 0)) return
+      ) || {}
+      const cellTitle    = String(placement?.title    || '')
+      const cellSubtitle = String(placement?.subtitle || '')
+      const cellTone     = String(placement?.cell_tone || '').toLowerCase()
+      const cellTags     = Array.isArray(placement?.tags) ? placement.tags : []
 
-      const cardFill = di === 0 ? '#C8D7F1' : '#F3EBD6'
-      const accentFill = di === 0 ? primaryColor : secondaryColor
-      const titleColor = di === 0 ? primaryColor : secondaryColor
-      const cardH = r2(Math.min(Math.max(0.92, rowH - 0.12), rowH))
-      const cardY = r2(rowY + (rowH - cardH) / 2)
-      const cardCorner = 8
+      let contentY = r2(rowY + 0.09)
 
-      const cellObj = (typeof raw === 'object' && raw !== null && !Array.isArray(raw)) ? raw : { title: String(raw) }
-      const cellTitle = String(cellObj.title || cellObj.name || raw || '')
-      const chipsSource = cellObj.chips || cellObj.tags || cellObj.cities || cellObj.locations || []
-      const chips = Array.isArray(chipsSource)
-        ? chipsSource.map(v => String(v || '')).filter(Boolean)
-        : String(chipsSource || '').split(',').map(s => s.trim()).filter(Boolean)
-      const outcome = String(cellObj.outcome || cellObj.value || cellObj.metric || cellObj.footer || '')
-
-      blocks.push({
-        block_type: 'rect',
-        x: laneX, y: cardY, w: laneW, h: cardH,
-        fill_color: cardFill,
-        border_color: null, border_width: 0, corner_radius: cardCorner
-      })
-      blocks.push({
-        block_type: 'rect',
-        x: laneX, y: cardY, w: 0.04, h: cardH,
-        fill_color: accentFill,
-        border_color: null, border_width: 0, corner_radius: cardCorner
-      })
-      blocks.push({
-        block_type: 'text_box',
-        x: r2(laneX + 0.14), y: r2(cardY + 0.10), w: r2(laneW - 0.20), h: 0.24,
-        text: _truncateText(cellTitle, 34),
-        font_family: titleFont, font_size: 10, bold: true,
-        color: titleColor, align: 'left', valign: 'middle'
-      })
-
-      if (chips.length) {
-        let chipX = r2(laneX + 0.14)
-        const chipY = r2(cardY + 0.42)
-        chips.slice(0, 4).forEach(chip => {
-          const chipW = r2(Math.min(1.05, Math.max(0.56, chip.length * 0.07 + 0.16)))
-          if (chipX + chipW > laneX + laneW - 0.08) return
+      // Phase / tag chips — each tag becomes one pill; tags are {label, tone} objects.
+      // Per-tag tone overrides the cell-level tone for individual chip color.
+      if (cellTags.length) {
+        let chipX = contentX
+        let rowsRendered = 0
+        cellTags.slice(0, 4).forEach(tagObj => {
+          const tagLabel = String(tagObj?.label || tagObj || '')
+          const tagTone  = String(tagObj?.tone  || cellTone  || 'neutral').toLowerCase()
+          const tChipBorder = tagTone === 'primary'   ? primaryColor
+                            : tagTone === 'secondary' ? secondaryColor
+                            : gridColor
+          const tChipText   = tagTone === 'primary'   ? primaryColor
+                            : tagTone === 'secondary' ? secondaryColor
+                            : captionColor
+          const tChipFill   = tagTone === 'primary'   ? (istyle.primary_chip_fill   || '#EBF1FF')
+                            : tagTone === 'secondary' ? (istyle.secondary_chip_fill || '#FEF6E4')
+                            :                           (istyle.neutral_chip_fill   || '#F3F4F6')
+          const chipW = r2(Math.min(0.95, Math.max(0.48, tagLabel.length * 0.070 + 0.18)))
+          // Wrap to next row of chips if this chip would overflow lane right edge
+          if (chipX + chipW > laneX + laneW - 0.06) {
+            if (rowsRendered >= 1) return  // max 2 chip rows
+            contentY = r2(contentY + 0.28)
+            chipX = contentX
+            rowsRendered++
+          }
           blocks.push({
             block_type: 'rect',
-            x: chipX, y: chipY, w: chipW, h: 0.24,
-            fill_color: '#FFFFFF',
-            border_color: '#B8B8B8',
-            border_width: 0.5,
-            corner_radius: 8
+            x: chipX, y: contentY, w: chipW, h: 0.22,
+            fill_color: tChipFill, border_color: tChipBorder, border_width: 0.6, corner_radius: 8
           })
           blocks.push({
             block_type: 'text_box',
-            x: r2(chipX + 0.05), y: r2(chipY + 0.03), w: r2(chipW - 0.10), h: 0.14,
-            text: _truncateText(chip, 14),
-            font_family: bodyFont, font_size: 8, bold: false,
-            color: '#4B5563', align: 'center', valign: 'middle'
+            x: r2(chipX + 0.06), y: contentY, w: r2(chipW - 0.12), h: 0.22,
+            text: _truncateText(tagLabel, 14),
+            font_family: bodyFont, font_size: 8, bold: true,
+            color: tChipText, align: 'center', valign: 'middle'
           })
           chipX = r2(chipX + chipW + 0.06)
         })
+        contentY = r2(contentY + 0.28)
       }
 
-      if (outcome) {
+      // Cell primary message — positive revenue detection (e.g. "+₹0.08 Cr")
+      if (cellTitle) {
+        const isPositive = /^\+/.test(cellTitle.trim())
+        // Positive color: use istyle if set (Claude can override from brand), else body color
+        const textColor = isPositive ? (istyle.positive_color || bodyTextColor) : bodyTextColor
         blocks.push({
           block_type: 'text_box',
-          x: r2(laneX + 0.14), y: r2(cardY + cardH - 0.32), w: r2(laneW - 0.20), h: 0.22,
-          text: _truncateText(outcome, 34),
-          font_family: bodyFont, font_size: 9, bold: true,
-          color: '#386B2A', align: 'left', valign: 'middle'
+          x: contentX, y: contentY,
+          w: contentW, h: r2(Math.max(0.20, Math.min(0.50, rowH - (contentY - rowY) - 0.10))),
+          text: _truncateText(cellTitle, 42),
+          font_family: bodyFont, font_size: bodyFontSize, bold: false,
+          color: textColor, align: 'left', valign: 'top'
+        })
+        contentY = r2(contentY + 0.28)
+      }
+
+      // Cell secondary message — muted text below primary
+      if (cellSubtitle && contentY + 0.14 < rowY + rowH - 0.06) {
+        blocks.push({
+          block_type: 'text_box',
+          x: contentX, y: contentY, w: contentW, h: 0.20,
+          text: _truncateText(cellSubtitle, 38),
+          font_family: bodyFont, font_size: Math.max(8, bodyFontSize - 1), bold: false,
+          color: captionColor, align: 'left', valign: 'middle'
         })
       }
     })
+
+    // Horizontal row divider (not after last row)
+    if (ii < initiatives.length - 1) {
+      blocks.push({
+        block_type: 'rule',
+        x: ax, y: r2(rowY + rowH), w: aw, h: 0.005,
+        color: gridColor, line_width: 0.5
+      })
+    }
   })
 }
 
@@ -4354,8 +4692,10 @@ function _riskRegisterToBlocks_legacy(art, content_y, blocks, bt, r2) {
   })
 }
 
-// Override: risk_register should render as a severity-banded stack with
-// simple section bands, item rows, owner/status pills, and pip encodings.
+// risk_register renders as a severity-banded stack:
+// - Full-width colored band per severity group with dot marker + label + item count
+// - Item rows: bold title + muted detail (left), owner pill + status pill + pip grid (right)
+// - Thin divider between items; section gap between groups
 function _riskRegisterToBlocks(art, content_y, blocks, bt, r2) {
   const rs = art.risk_style || {}
   const risks = (art.risks || []).slice(0, 8)
@@ -4365,38 +4705,60 @@ function _riskRegisterToBlocks(art, content_y, blocks, bt, r2) {
   const ah = r2((art.y || 0) + (art.h || 0) - content_y)
   if (!risks.length || aw <= 0 || ah <= 0) return
 
-  const titleFont = rs.label_font_family || bt.title_font_family || 'Arial'
-  const bodyFont = rs.body_font_family || bt.body_font_family || 'Arial'
-  const pipSize = 0.10
-  const pipGap = 0.04
-  const bandH = 0.34
-  const rowH = 0.92
-  const dividerH = 0.005
-  const sectionGap = 0.16
-  const severityOrder = ['high', 'medium', 'low', 'critical']
+  const titleFont   = rs.label_font_family || bt.title_font_family || 'Arial'
+  const bodyFont    = rs.body_font_family  || bt.body_font_family  || 'Arial'
+  const bodyColor   = bt.body_color   || '#111111'
+  const captionColor= bt.caption_color || bodyColor
+
+  const pipSize   = 0.10
+  const pipGap    = 0.04
+  const bandH     = 0.34
+  const rowH      = 0.92
+  const dividerH  = 0.005
+  const sectionGap= 0.20
+
+  // Critical always first, then high, medium, low
+  const severityOrder = ['critical', 'high', 'medium', 'low']
   const severityLabel = {
     critical: 'Critical severity',
-    high: 'High severity',
-    medium: 'Medium severity',
-    low: 'Low severity'
+    high:     'High severity',
+    medium:   'Medium severity',
+    low:      'Low severity'
   }
   const severitySuffix = {
     critical: 'immediate action required',
-    high: 'immediate action required',
-    medium: 'monitor closely',
-    low: 'resolved or contained'
+    high:     'immediate action required',
+    medium:   'monitor closely',
+    low:      'resolved or contained'
   }
-  const bandTextColor = {
-    critical: '#8B2C23',
-    high: '#8B2C23',
-    medium: '#6E5712',
-    low: '#6B7280'
+
+  // All severity colors resolved through rs.* (set by batch call defaults above)
+  const bandText = sev => rs[`${sev}_text_color`] || (sev === 'medium' ? '#6E5712' : sev === 'low' ? '#6B7280' : '#8B2C23')
+  const pipColor = sev => rs[`${sev}_pip_fill`]   || (sev === 'medium' ? '#6E5712' : sev === 'low' ? '#7A7A72'  : '#8B2C23')
+  const pipEmpty = '#FFFFFF'
+  const pipBorder= '#B8B8B8'
+
+  // Convert "High"|"Medium"|"Low" string → numeric pip count (1–3). Numbers pass through.
+  const toNum = v => {
+    if (typeof v === 'number') return Math.max(0, Math.min(3, v))
+    const t = String(v || '').toLowerCase()
+    if (t === 'high')   return 3
+    if (t === 'medium') return 2
+    if (t === 'low')    return 1
+    const n = Number(v)
+    return isNaN(n) ? 0 : Math.max(0, Math.min(3, Math.round(n)))
   }
-  const pipFill = {
-    critical: '#8B2C23',
-    high: '#8B2C23',
-    medium: '#6E5712',
-    low: '#7A7A72'
+
+  // Status chip colors resolved from rs.* tokens
+  const statusColors = tone => {
+    if (tone === 'open')
+      return { fill: rs.status_open_fill || '#FFF7F6', border: rs.status_open_border || '#A33B32', text: rs.status_open_text || '#A33B32' }
+    if (tone === 'in_progress' || tone === 'progress')
+      return { fill: rs.status_progress_fill || '#FFF8E8', border: rs.status_progress_border || '#9A6B10', text: rs.status_progress_text || '#6E5712' }
+    if (tone === 'mitigated')
+      return { fill: rs.status_mitigated_fill || '#F1F8E8', border: rs.status_mitigated_border || '#7AA243', text: rs.status_mitigated_text || '#386B2A' }
+    // closed / default
+    return { fill: rs.status_closed_fill || '#F3F4F6', border: rs.status_closed_border || '#6B7280', text: rs.status_closed_text || '#6B7280' }
   }
 
   const groups = severityOrder
@@ -4408,138 +4770,139 @@ function _riskRegisterToBlocks(art, content_y, blocks, bt, r2) {
 
   let cursorY = ay
   groups.forEach((group, gi) => {
-    const sev = group.severity
-    const fill = _riskSeverityFill(sev, rs)
+    const sev      = group.severity
+    const bandFill = _riskSeverityFill(sev, rs)
     const dotColor = _riskSeverityBadgeColor(sev, rs)
+    const txtColor = bandText(sev)
 
+    // Severity band
     blocks.push({
       block_type: 'rect',
       x: ax, y: cursorY, w: aw, h: bandH,
-      fill_color: fill,
-      border_color: null, border_width: 0,
-      corner_radius: 10
+      fill_color: bandFill,
+      border_color: null, border_width: 0, corner_radius: 10
     })
     blocks.push({
       block_type: 'circle',
-      x: r2(ax + 0.16), y: r2(cursorY + 0.11), w: 0.10, h: 0.10,
-      fill_color: dotColor,
-      font_color: '#FFFFFF',
-      text: ''
+      x: r2(ax + 0.16), y: r2(cursorY + 0.12), w: 0.10, h: 0.10,
+      fill_color: dotColor, text: ''
     })
     blocks.push({
       block_type: 'text_box',
-      x: r2(ax + 0.40), y: r2(cursorY + 0.06), w: r2(aw - 1.6), h: 0.20,
+      x: r2(ax + 0.40), y: r2(cursorY + 0.06), w: r2(aw - 1.6), h: 0.22,
       text: `${severityLabel[sev] || 'Severity'} — ${severitySuffix[sev] || ''}`,
       font_family: titleFont, font_size: 10, bold: true,
-      color: bandTextColor[sev] || '#111111', align: 'left', valign: 'middle'
+      color: txtColor, align: 'left', valign: 'middle'
     })
     blocks.push({
       block_type: 'text_box',
-      x: r2(ax + aw - 0.90), y: r2(cursorY + 0.06), w: 0.74, h: 0.20,
+      x: r2(ax + aw - 0.90), y: r2(cursorY + 0.06), w: 0.74, h: 0.22,
       text: `${group.items.length} item${group.items.length > 1 ? 's' : ''}`,
       font_family: bodyFont, font_size: 9, bold: false,
-      color: bandTextColor[sev] || '#111111', align: 'right', valign: 'middle'
+      color: txtColor, align: 'right', valign: 'middle'
     })
     cursorY = r2(cursorY + bandH + 0.08)
 
     group.items.forEach((risk, ri) => {
-      const rowY = cursorY
-      const leftX = r2(ax + 0.16)
+      const rowY      = cursorY
+      const leftX     = r2(ax + 0.16)
       const rightColW = 1.95
-      const leftW = r2(aw - rightColW - 0.32)
-      const rightX = r2(ax + aw - rightColW)
-      const owner = String(risk?.owner_tag || risk?.owner || '')
-      const status = String(risk?.status_tag || risk?.status || '')
-      const title = String(risk?.title || risk?.description || '')
-      const detail = String(risk?.detail || risk?.mitigation || '')
+      const leftW     = r2(aw - rightColW - 0.32)
+      const rightX    = r2(ax + aw - rightColW)
+      const owner     = String(risk?.owner_tag  || risk?.owner  || '')
+      const status    = String(risk?.status_tag || risk?.status || '')
+      const title     = String(risk?.title      || risk?.description || '')
+      const detail    = String(risk?.detail     || risk?.mitigation  || '')
 
+      // Left column: title + detail
       blocks.push({
         block_type: 'text_box',
         x: leftX, y: r2(rowY + 0.06), w: leftW, h: 0.24,
         text: _truncateText(title, 64),
         font_family: titleFont, font_size: 11, bold: true,
-        color: bt.body_color || '#111111', align: 'left', valign: 'middle'
+        color: bodyColor, align: 'left', valign: 'middle'
       })
-      blocks.push({
-        block_type: 'text_box',
-        x: leftX, y: r2(rowY + 0.34), w: leftW, h: 0.22,
-        text: _truncateText(detail, 96),
-        font_family: bodyFont, font_size: 9, bold: false,
-        color: '#404040', align: 'left', valign: 'middle'
-      })
+      if (detail) {
+        blocks.push({
+          block_type: 'text_box',
+          x: leftX, y: r2(rowY + 0.34), w: leftW, h: 0.22,
+          text: _truncateText(detail, 96),
+          font_family: bodyFont, font_size: 9, bold: false,
+          color: captionColor, align: 'left', valign: 'middle'
+        })
+      }
 
-      let pillCursorX = r2(rightX + 0.02)
+      // Right column: owner pill + status pill (top row)
+      let pillX = r2(rightX + 0.02)
       if (owner) {
-        const ownerW = r2(Math.min(1.10, Math.max(0.70, owner.length * 0.07 + 0.20)))
+        const oW = r2(Math.min(1.10, Math.max(0.70, owner.length * 0.07 + 0.20)))
         blocks.push({
           block_type: 'rect',
-          x: pillCursorX, y: r2(rowY + 0.04), w: ownerW, h: 0.26,
-          fill_color: '#FAF7EF',
-          border_color: '#D1D5DB',
-          border_width: 0.5,
-          corner_radius: 10
+          x: pillX, y: r2(rowY + 0.04), w: oW, h: 0.26,
+          fill_color: rs.owner_fill_color   || '#F5F5F5',
+          border_color: rs.owner_border_color || '#D1D5DB',
+          border_width: 0.5, corner_radius: 10
         })
         blocks.push({
           block_type: 'text_box',
-          x: r2(pillCursorX + 0.08), y: r2(rowY + 0.08), w: r2(ownerW - 0.12), h: 0.16,
+          x: r2(pillX + 0.08), y: r2(rowY + 0.08), w: r2(oW - 0.12), h: 0.16,
           text: _truncateText(owner, 16),
           font_family: bodyFont, font_size: 8.5, bold: false,
-          color: '#404040', align: 'center', valign: 'middle'
+          color: captionColor, align: 'center', valign: 'middle'
         })
-        pillCursorX = r2(pillCursorX + ownerW + 0.08)
+        pillX = r2(pillX + oW + 0.08)
       }
 
       if (status) {
-        const statusW = r2(Math.min(1.05, Math.max(0.74, status.length * 0.07 + 0.22)))
-        const statusBorder = status.toLowerCase().includes('open') ? '#A33B32'
-          : status.toLowerCase().includes('progress') ? '#9A6B10'
-          : '#7AA243'
-        const statusText = status.toLowerCase().includes('open') ? '#A33B32'
-          : status.toLowerCase().includes('progress') ? '#6E5712'
-          : '#386B2A'
-        const statusFill = status.toLowerCase().includes('open') ? '#FFF7F6'
-          : status.toLowerCase().includes('progress') ? '#FFF8E8'
-          : '#F1F8E8'
+        const rawTone  = String(risk?.status_tone || '').toLowerCase()
+        // Normalise "in_progress" / "in progress" → canonical token
+        const tone = rawTone.includes('progress') ? 'in_progress'
+                   : rawTone.includes('mitigat') ? 'mitigated'
+                   : rawTone.includes('clos') ? 'closed'
+                   : rawTone === 'open' ? 'open'
+                   : (status.toLowerCase().includes('progress') ? 'in_progress'
+                      : status.toLowerCase().includes('mitigat') ? 'mitigated'
+                      : status.toLowerCase().includes('open') ? 'open' : 'closed')
+        const sc   = statusColors(tone)
+        const sW   = r2(Math.min(1.05, Math.max(0.74, status.length * 0.07 + 0.22)))
         blocks.push({
           block_type: 'rect',
-          x: pillCursorX, y: r2(rowY + 0.04), w: statusW, h: 0.26,
-          fill_color: statusFill,
-          border_color: statusBorder,
-          border_width: 0.6,
-          corner_radius: 10
+          x: pillX, y: r2(rowY + 0.04), w: sW, h: 0.26,
+          fill_color: sc.fill, border_color: sc.border, border_width: 0.6, corner_radius: 10
         })
         blocks.push({
           block_type: 'text_box',
-          x: r2(pillCursorX + 0.08), y: r2(rowY + 0.08), w: r2(statusW - 0.12), h: 0.16,
+          x: r2(pillX + 0.08), y: r2(rowY + 0.08), w: r2(sW - 0.12), h: 0.16,
           text: _truncateText(status, 14),
           font_family: bodyFont, font_size: 8.5, bold: true,
-          color: statusText, align: 'center', valign: 'middle'
+          color: sc.text, align: 'center', valign: 'middle'
         })
       }
 
-      const likelihood = Math.max(0, Math.min(3, Number(risk?.likelihood ?? 0)))
-      const impact = Math.max(0, Math.min(3, Number(risk?.impact ?? 0)))
-      const pipLabelX = r2(rightX + 0.38)
-      const pipStartX = r2(rightX + 1.16)
-      const likY = r2(rowY + 0.40)
-      const impY = r2(rowY + 0.64)
+      // Pip grid: Likelihood + Impact (bottom of right column)
+      const likVal   = toNum(risk?.likelihood)
+      const impVal   = toNum(risk?.impact)
+      const pipLblX  = r2(rightX + 0.30)
+      const pipStartX= r2(rightX + 1.10)
+      const likY     = r2(rowY + 0.40)
+      const impY     = r2(rowY + 0.64)
       ;[
-        { label: 'Likelihood', value: likelihood, y: likY },
-        { label: 'Impact', value: impact, y: impY }
-      ].forEach(row => {
+        { label: 'Likelihood', value: likVal, y: likY },
+        { label: 'Impact',     value: impVal, y: impY }
+      ].forEach(pip => {
         blocks.push({
           block_type: 'text_box',
-          x: pipLabelX, y: row.y, w: 0.70, h: 0.16,
-          text: row.label,
+          x: pipLblX, y: pip.y, w: 0.72, h: 0.16,
+          text: pip.label,
           font_family: bodyFont, font_size: 8.5, bold: false,
-          color: '#6B7280', align: 'right', valign: 'middle'
+          color: captionColor, align: 'right', valign: 'middle'
         })
         for (let i = 0; i < 3; i++) {
           blocks.push({
             block_type: 'rect',
-            x: r2(pipStartX + i * (pipSize + pipGap)), y: r2(row.y + 0.02), w: pipSize, h: pipSize,
-            fill_color: i < row.value ? pipFill[sev] : '#FFFFFF',
-            border_color: '#B8B8B8',
+            x: r2(pipStartX + i * (pipSize + pipGap)), y: r2(pip.y + 0.02), w: pipSize, h: pipSize,
+            fill_color: i < pip.value ? pipColor(sev) : pipEmpty,
+            border_color: pipBorder,
             border_width: 0.5,
             corner_radius: 2
           })
@@ -4551,7 +4914,7 @@ function _riskRegisterToBlocks(art, content_y, blocks, bt, r2) {
         blocks.push({
           block_type: 'rule',
           x: r2(ax + 0.16), y: r2(cursorY - 0.04), w: r2(aw - 0.32), h: dividerH,
-          color: '#D9D9D9',
+          color: rs.row_border_color || '#D9D9D9',
           line_width: 0.5
         })
       }
@@ -4595,14 +4958,32 @@ function _statBarToBlocks(art, content_y, blocks, bt, r2) {
   const maxValue = Math.max(...values, 1)
   const minValue = Math.min(...values, maxValue)
   const valueSpread = maxValue > 0 ? (maxValue - minValue) / maxValue : 0
-  const bodyFont = cs.label_font_family || bt.body_font_family || 'Arial'
-  const palette = bt.chart_palette || [bt.primary_color || '#0078AE', bt.secondary_color || '#E0B324']
-  const headerColor = cs.annotation_color || '#6B7280'
-  const dividerColor = '#CFCFCF'
-  const trackFill = '#EEF1F5'
-  const rowBorder = '#E1E5EF'
-  const highlightFill = '#D9DDEA'
-  const highlightBarFill = '#CFE0A9'
+  const bodyFont         = cs.label_font_family || bt.body_font_family || 'Arial'
+  const bodyTextColor    = bt.body_color || '#111111'
+  const captionColor     = bt.caption_color || bodyTextColor
+
+  // ── All colors from brand tokens / Claude-set chart_style ─────────────────
+  // cs.* fields are populated by Claude from the brand rulebook in Agent 5's batch call
+  const headerColor     = cs.axis_color || captionColor               // muted column header labels
+  const annotationColor = cs.annotation_color || cs.axis_color || captionColor
+  const dividerColor    = cs.gridline_color || cs.border_color || '#CFCFCF'  // header divider rule
+  const rowBorder       = cs.border_color || cs.gridline_color || '#E1E5EF'  // non-highlighted row border
+  const trackFill       = cs.background_color || '#EEF1F5'            // empty bar track background
+
+  // Highlight bar: first brand chart color; falls back to first accent, then primary
+  const highlightBarFill = (bt.chart_palette && bt.chart_palette[0])
+    || (bt.accent_colors && bt.accent_colors[0])
+    || bt.primary_color || '#CFE0A9'
+
+  // Highlight row bg: lighter tint — use chart background_color if light, else surface neutral
+  // (A full tint-computation utility is not yet available; background_color is brand-sourced)
+  const highlightFill   = cs.background_color || '#EBF4E2'
+
+  // Neutral bar: use chart_style axis color (Claude sets this muted from brand);
+  // avoid bt.secondary_color — it can be a vibrant brand accent (e.g. EY yellow)
+  const neutralBarColor    = cs.axis_color || '#7B7B7B'
+  // Highlighted text: body color guarantees readability on any brand's highlight bg
+  const highlightTextColor = bodyTextColor
   const headerFontSize = Math.max(10, Math.min(11, rowH * 11.5))
   const labelFontSize = Math.max(10.5, Math.min(12, rowH * 10.8))
   const valueFontSize = Math.max(10.5, Math.min(11.5, rowH * 10.4))
@@ -4651,14 +5032,14 @@ function _statBarToBlocks(art, content_y, blocks, bt, r2) {
   items.forEach((row, ri) => {
     const y = r2(bodyTop + ri * (rowH + rowGap))
     const isHighlighted = row?.highlight === true
-    const fill = row?.bar_color || (palette[ri % Math.max(palette.length, 1)] || '#7C7C77')
+    const fill = row?.bar_color || (isHighlighted ? highlightBarFill : neutralBarColor)
     const rawValue = Math.abs(+row?.value || 0)
     const normalized = maxValue > minValue ? (rawValue - minValue) / Math.max(maxValue - minValue, 0.0001) : 1
-    const rankedFallback = [0.22, 0.72, 0.66, 0.50, 0.42, 0.36, 0.31, 0.28, 0.25, 0.22]
+    const rankedFallback = [0.04, 0.72, 0.66, 0.50, 0.42, 0.36, 0.31, 0.28, 0.25, 0.22]
     const fillFrac = valueSpread < 0.08
       ? (rankedFallback[ri] || 0.22)
-      : (0.24 + normalized * 0.52)
-    const barLen = r2(Math.max(0.12, Math.min(barW * 0.78, barW * fillFrac)))
+      : Math.max(0.04, normalized * 0.76)   // true proportional — 4% min sliver, no artificial floor
+    const barLen = r2(Math.max(0.06, Math.min(barW * 0.78, barW * fillFrac)))
     const trackY = r2(y + rowH * 0.40)
     const trackH = r2(Math.max(0.14, Math.min(0.20, rowH * 0.18)))
 
@@ -4683,7 +5064,7 @@ function _statBarToBlocks(art, content_y, blocks, bt, r2) {
       x: labelX, y, w: labelW, h: rowH,
       text: _truncateText(row?.label || '', 34),
       font_family: bodyFont, font_size: labelFontSize, bold: true,
-      color: isHighlighted ? '#386B2A' : (bt.body_color || '#111111'), align: 'left', valign: 'middle'
+      color: isHighlighted ? highlightTextColor : bodyTextColor, align: 'left', valign: 'middle'
     })
     blocks.push({
       block_type: 'rect',
@@ -4700,14 +5081,14 @@ function _statBarToBlocks(art, content_y, blocks, bt, r2) {
       x: valueX, y, w: valueW, h: rowH,
       text: String(row?.display_value || `${row?.value ?? ''}${row?.unit ? ' ' + row.unit : ''}`.trim()),
       font_family: bodyFont, font_size: valueFontSize, bold: true,
-      color: isHighlighted ? '#386B2A' : (bt.body_color || '#111111'), align: 'right', valign: 'middle'
+      color: isHighlighted ? highlightTextColor : bodyTextColor, align: 'right', valign: 'middle'
     })
     blocks.push({
       block_type: 'text_box',
       x: annotationX, y, w: annotationW, h: rowH,
       text: _truncateText(row?.annotation || '', 38),
       font_family: bodyFont, font_size: annotationFontSize, bold: false,
-      color: isHighlighted ? '#386B2A' : (cs.annotation_color || '#4B5563'), align: 'left', valign: 'middle'
+      color: isHighlighted ? highlightBarFill : annotationColor, align: 'left', valign: 'middle'
     })
     if (ri < items.length - 1) {
       blocks.push({
@@ -4720,252 +5101,280 @@ function _statBarToBlocks(art, content_y, blocks, bt, r2) {
   })
 }
 
+// matrix renders as a 2×2 grid:
+// - Quadrant fill color per tone (positive/negative/neutral)
+// - Dashed center dividers
+// - Quadrant label + primary_message + secondary_message (per-tone text color)
+// - Each point: filled abbreviation circle + outlined label bubble below
+// - Axis mid-labels at the divider crosshair; rotated Y-axis label
 function _matrixToBlocks(art, content_y, blocks, bt, r2) {
   const ms = art.matrix_style || {}
   const xAxis = art.x_axis || {}
   const yAxis = art.y_axis || {}
   const quadrants = art.quadrants || []
   const points = art.points || []
-  const palette = ms.point_palette || [bt.primary_color, bt.secondary_color, ...(bt.accent_colors || []), ...(bt.chart_palette || [])].filter(Boolean)
 
   const ax = art.x || 0
   const ay = content_y
   const aw = art.w || 0
   const ah = r2((art.y || 0) + (art.h || 0) - content_y)
+  if (aw <= 0 || ah <= 0) return
 
-  const leftBand = r2(Math.min(Math.max(0.72, aw * 0.18), 1.05))
-  const bottomBand = r2(Math.min(Math.max(0.62, ah * 0.16), 0.95))
-  const topPad = 0.04
-  const rightPad = 0.05
+  // ── Layout bands ──────────────────────────────────────────────────────────
+  const leftBand  = r2(Math.min(Math.max(0.80, aw * 0.16), 1.10))
+  const bottomBand= r2(Math.min(Math.max(0.58, ah * 0.16), 0.90))
+  const topPad    = 0.02
+  const rightPad  = 0.04
 
   const gridX = r2(ax + leftBand)
   const gridY = r2(ay + topPad)
   const gridW = r2(Math.max(1.6, aw - leftBand - rightPad))
   const gridH = r2(Math.max(1.4, ah - bottomBand - topPad))
-  const midX = r2(gridX + gridW / 2)
-  const midY = r2(gridY + gridH / 2)
+  const midX  = r2(gridX + gridW / 2)
+  const midY  = r2(gridY + gridH / 2)
   const quadW = r2(gridW / 2)
   const quadH = r2(gridH / 2)
 
-  const fills = ms.quadrant_fills || ['#FFF4BF', '#E4F2DE', '#F4F5F7', '#DDEFF5']
-  const quadRects = [
-    { id: 'q1', x: gridX, y: gridY, w: quadW, h: quadH, fill: fills[0] },
-    { id: 'q2', x: midX, y: gridY, w: quadW, h: quadH, fill: fills[1] },
-    { id: 'q3', x: gridX, y: midY, w: quadW, h: quadH, fill: fills[2] },
-    { id: 'q4', x: midX, y: midY, w: quadW, h: quadH, fill: fills[3] }
+  // ── Brand tokens ──────────────────────────────────────────────────────────
+  const axisFont      = ms.axis_label_font_family || bt.body_font_family   || 'Arial'
+  const titleFont     = ms.quadrant_title_font_family || bt.title_font_family || 'Arial'
+  const bodyFont      = ms.quadrant_body_font_family  || bt.body_font_family  || 'Arial'
+  const axisFs        = ms.axis_label_font_size || 9
+  const axisTextColor = ms.axis_label_color || bt.caption_color || bt.body_color || '#6B7280'
+
+  // Per-tone helpers
+  const toneQuadFill   = t => t === 'positive' ? (ms.positive_quadrant_fill || '#E8F5E9')
+                            : t === 'negative' ? (ms.negative_quadrant_fill || '#FEE2E2')
+                            :                    (ms.neutral_quadrant_fill  || '#F3F4F6')
+  const toneTitleColor = t => t === 'positive' ? (ms.positive_title_color || bt.primary_color || '#1B5E20')
+                            : t === 'negative' ? (ms.negative_title_color || '#B91C1C')
+                            :                    (ms.neutral_title_color  || bt.body_color || '#374151')
+  const toneBodyColor  = t => t === 'positive' ? (ms.positive_body_color || bt.primary_color || '#2D7F5E')
+                            : t === 'negative' ? (ms.negative_body_color || '#B91C1C')
+                            :                    (ms.neutral_body_color  || bt.body_color || '#374151')
+  const tonePointFill  = t => t === 'positive' ? (ms.positive_point_fill || bt.primary_color || '#2D7F5E')
+                            : t === 'negative' ? (ms.negative_point_fill || '#C53030')
+                            :                    (ms.neutral_point_fill  || bt.secondary_color || '#6B7280')
+
+  // ── Quadrant data lookup ───────────────────────────────────────────────────
+  // q1=top-left, q2=top-right, q3=bottom-left, q4=bottom-right
+  const quadMap = Object.fromEntries(quadrants.map(q => [String(q.id || '').toLowerCase(), q]))
+  const quadDefs = [
+    { id: 'q1', x: gridX, y: gridY },
+    { id: 'q2', x: midX,  y: gridY },
+    { id: 'q3', x: gridX, y: midY  },
+    { id: 'q4', x: midX,  y: midY  }
   ]
 
+  // ── Outer grid border ──────────────────────────────────────────────────────
   blocks.push({
     block_type: 'rect',
     x: gridX, y: gridY, w: gridW, h: gridH,
     fill_color: '#FFFFFF',
     border_color: ms.border_color || '#D7DEE8',
     border_width: ms.border_width != null ? ms.border_width : 0.8,
-    corner_radius: 0
+    corner_radius: 10
   })
 
-  quadRects.forEach(q => {
+  // ── Quadrant fills ─────────────────────────────────────────────────────────
+  quadDefs.forEach((def, idx) => {
+    const q    = quadMap[def.id] || quadrants[idx] || {}
+    const tone = String(q.tone || 'neutral').toLowerCase()
     blocks.push({
       block_type: 'rect',
-      x: q.x, y: q.y, w: q.w, h: q.h,
-      fill_color: q.fill,
-      border_color: null,
-      border_width: 0,
-      corner_radius: 0
+      x: def.x, y: def.y, w: quadW, h: quadH,
+      fill_color: toneQuadFill(tone),
+      border_color: null, border_width: 0, corner_radius: 0
     })
   })
 
+  // ── Center dividers — thin dashed lines ────────────────────────────────────
+  const divColor = ms.divider_color || '#AAAAAA'
+  const divW     = ms.divider_width != null ? ms.divider_width : 0.5
+  // Vertical center divider
   blocks.push({
-    block_type: 'rect',
-    x: midX, y: gridY, w: 0.02, h: gridH,
-    fill_color: ms.divider_color || '#7B8794',
-    border_color: null,
-    border_width: 0,
-    corner_radius: 0
+    block_type: 'line',
+    x1: midX, y1: gridY, x2: midX, y2: r2(gridY + gridH),
+    color: divColor, line_width: divW, line_style: 'dashed'
   })
+  // Horizontal center divider
   blocks.push({
-    block_type: 'rect',
-    x: gridX, y: midY, w: gridW, h: 0.02,
-    fill_color: ms.divider_color || '#7B8794',
-    border_color: null,
-    border_width: 0,
-    corner_radius: 0
-  })
-
-  const axisColor = ms.axis_color || '#4B5563'
-  blocks.push({
-    block_type: 'rect',
-    x: gridX, y: r2(gridY + gridH), w: gridW, h: 0.02,
-    fill_color: axisColor,
-    border_color: null,
-    border_width: 0,
-    corner_radius: 0
-  })
-  blocks.push({
-    block_type: 'rect',
-    x: gridX, y: gridY, w: 0.02, h: gridH,
-    fill_color: axisColor,
-    border_color: null,
-    border_width: 0,
-    corner_radius: 0
+    block_type: 'line',
+    x1: gridX, y1: midY, x2: r2(gridX + gridW), y2: midY,
+    color: divColor, line_width: divW, line_style: 'dashed'
   })
 
-  const axisFont = ms.axis_label_font_family || bt.body_font_family || 'Arial'
-  const axisFs = ms.axis_label_font_size || 10
-  const axisTextColor = ms.axis_label_color || bt.body_color || '#374151'
-
-  blocks.push({
-    block_type: 'text_box',
-    x: gridX,
-    y: r2(gridY + gridH + 0.06),
-    w: gridW,
-    h: 0.22,
-    text: xAxis.label || '',
-    font_family: axisFont,
-    font_size: axisFs + 1,
-    bold: true,
-    color: axisTextColor,
-    align: 'center',
-    valign: 'middle'
-  })
-  blocks.push({
-    block_type: 'text_box',
-    x: gridX,
-    y: r2(gridY + gridH + 0.28),
-    w: 0.6,
-    h: 0.2,
-    text: xAxis.low_label || 'Low',
-    font_family: axisFont,
-    font_size: axisFs,
-    bold: false,
-    color: axisTextColor,
-    align: 'left',
-    valign: 'middle'
-  })
-  blocks.push({
-    block_type: 'text_box',
-    x: r2(gridX + gridW - 0.6),
-    y: r2(gridY + gridH + 0.28),
-    w: 0.6,
-    h: 0.2,
-    text: xAxis.high_label || 'High',
-    font_family: axisFont,
-    font_size: axisFs,
-    bold: false,
-    color: axisTextColor,
-    align: 'right',
-    valign: 'middle'
-  })
-
-  blocks.push({
-    block_type: 'text_box',
-    x: ax,
-    y: r2(gridY + gridH / 2 - 0.32),
-    w: r2(Math.max(0.55, leftBand - 0.1)),
-    h: 0.64,
-    text: yAxis.label || '',
-    font_family: axisFont,
-    font_size: axisFs + 1,
-    bold: true,
-    color: axisTextColor,
-    align: 'center',
-    valign: 'middle'
-  })
-  blocks.push({
-    block_type: 'text_box',
-    x: r2(gridX - 0.52),
-    y: gridY,
-    w: 0.42,
-    h: 0.2,
-    text: yAxis.high_label || 'High',
-    font_family: axisFont,
-    font_size: axisFs,
-    bold: false,
-    color: axisTextColor,
-    align: 'right',
-    valign: 'middle'
-  })
-  blocks.push({
-    block_type: 'text_box',
-    x: r2(gridX - 0.52),
-    y: r2(gridY + gridH - 0.2),
-    w: 0.42,
-    h: 0.2,
-    text: yAxis.low_label || 'Low',
-    font_family: axisFont,
-    font_size: axisFs,
-    bold: false,
-    color: axisTextColor,
-    align: 'right',
-    valign: 'middle'
-  })
-
-  const quadMap = Object.fromEntries(quadrants.map(q => [String(q.id || '').toLowerCase(), q]))
-  quadRects.forEach((rect, idx) => {
-    const q = quadMap[rect.id] || quadrants[idx] || {}
+  // ── Axis mid-labels (at the divider crosshair) ────────────────────────────
+  // Y-axis high/low labels at the vertical center divider
+  if (yAxis.high_label) {
     blocks.push({
       block_type: 'text_box',
-      x: r2(rect.x + 0.14),
-      y: r2(rect.y + 0.12),
-      w: r2(rect.w - 0.28),
-      h: 0.24,
+      x: r2(midX + 0.06), y: r2(gridY + 0.04), w: r2(quadW - 0.12), h: 0.18,
+      text: yAxis.high_label,
+      font_family: axisFont, font_size: axisFs, bold: false,
+      color: axisTextColor, align: 'left', valign: 'middle'
+    })
+  }
+  if (yAxis.low_label) {
+    blocks.push({
+      block_type: 'text_box',
+      x: r2(midX + 0.06), y: r2(gridY + gridH - 0.22), w: r2(quadW - 0.12), h: 0.18,
+      text: yAxis.low_label,
+      font_family: axisFont, font_size: axisFs, bold: false,
+      color: axisTextColor, align: 'left', valign: 'middle'
+    })
+  }
+  // X-axis low/high labels at the horizontal center divider
+  if (xAxis.low_label) {
+    blocks.push({
+      block_type: 'text_box',
+      x: r2(gridX + 0.06), y: r2(midY + 0.04), w: r2(quadW - 0.12), h: 0.18,
+      text: xAxis.low_label,
+      font_family: axisFont, font_size: axisFs, bold: false,
+      color: axisTextColor, align: 'left', valign: 'middle'
+    })
+  }
+  if (xAxis.high_label) {
+    blocks.push({
+      block_type: 'text_box',
+      x: r2(midX + 0.06), y: r2(midY + 0.04), w: r2(quadW - 0.12), h: 0.18,
+      text: xAxis.high_label,
+      font_family: axisFont, font_size: axisFs, bold: false,
+      color: axisTextColor, align: 'right', valign: 'middle'
+    })
+  }
+
+  // ── Outer axis labels ─────────────────────────────────────────────────────
+  // X-axis label below grid (centered, bold)
+  if (xAxis.label) {
+    blocks.push({
+      block_type: 'text_box',
+      x: gridX, y: r2(gridY + gridH + 0.10), w: gridW, h: 0.22,
+      text: xAxis.label,
+      font_family: axisFont, font_size: axisFs + 1, bold: true,
+      color: axisTextColor, align: 'center', valign: 'middle'
+    })
+  }
+  // Y-axis label (rotated 270° = reads bottom-to-top)
+  // The text_box is sized in PRE-rotation coordinates:
+  //   pre-rotation w = visual height (gridH * 0.80 span of the label)
+  //   pre-rotation h = visual width  (leftBand width)
+  // Center of rotation = (ax + leftBand/2, gridY + gridH/2)
+  if (yAxis.label) {
+    const yLblW = r2(gridH * 0.80)
+    const yLblH = r2(leftBand * 0.60)
+    const yLblCX= r2(ax + leftBand / 2)
+    const yLblCY= r2(gridY + gridH / 2)
+    blocks.push({
+      block_type: 'text_box',
+      x: r2(yLblCX - yLblW / 2),
+      y: r2(yLblCY - yLblH / 2),
+      w: yLblW, h: yLblH,
+      text: yAxis.label,
+      rotation: 270,
+      font_family: axisFont, font_size: axisFs + 1, bold: true,
+      color: axisTextColor, align: 'center', valign: 'middle'
+    })
+  }
+
+  // ── Quadrant labels ────────────────────────────────────────────────────────
+  quadDefs.forEach((def, idx) => {
+    const q    = quadMap[def.id] || quadrants[idx] || {}
+    const tone = String(q.tone || 'neutral').toLowerCase()
+    const tc   = toneTitleColor(tone)
+    const bc   = toneBodyColor(tone)
+    // Title
+    blocks.push({
+      block_type: 'text_box',
+      x: r2(def.x + 0.14), y: r2(def.y + 0.12), w: r2(quadW - 0.28), h: 0.24,
       text: q.name || '',
-      font_family: ms.quadrant_title_font_family || bt.title_font_family || 'Arial',
-      font_size: ms.quadrant_title_font_size || 12,
-      bold: true,
-      color: ms.quadrant_title_color || '#2D3748',
-      align: 'left',
-      valign: 'top'
+      font_family: titleFont, font_size: ms.quadrant_title_font_size || 11, bold: true,
+      color: tc, align: 'left', valign: 'top'
     })
-    blocks.push({
-      block_type: 'text_box',
-      x: r2(rect.x + 0.14),
-      y: r2(rect.y + 0.4),
-      w: r2(rect.w - 0.28),
-      h: 0.46,
-      text: q.insight || '',
-      font_family: ms.quadrant_body_font_family || bt.body_font_family || 'Arial',
-      font_size: ms.quadrant_body_font_size || 9,
-      bold: false,
-      color: ms.quadrant_body_color || '#374151',
-      align: 'left',
-      valign: 'top'
-    })
+    // Primary message (italic axis descriptor)
+    if (q.primary_message) {
+      blocks.push({
+        block_type: 'text_box',
+        x: r2(def.x + 0.14), y: r2(def.y + 0.40), w: r2(quadW - 0.28), h: 0.20,
+        text: q.primary_message,
+        font_family: bodyFont, font_size: ms.quadrant_body_font_size || 9, bold: false,
+        color: bc, align: 'left', valign: 'top'
+      })
+    }
+    // Secondary message (action line)
+    if (q.secondary_message) {
+      blocks.push({
+        block_type: 'text_box',
+        x: r2(def.x + 0.14), y: r2(def.y + 0.64), w: r2(quadW - 0.28), h: 0.20,
+        text: q.secondary_message,
+        font_family: bodyFont, font_size: ms.quadrant_body_font_size || 9, bold: false,
+        color: bc, align: 'left', valign: 'top'
+      })
+    }
   })
 
+  // ── Points: filled abbreviation circle + outlined label bubble ────────────
   const semanticToRatio = { low: 0.25, medium: 0.50, high: 0.75 }
-  const markerSize = 0.14
-  points.slice(0, 6).forEach((pt, i) => {
-    const px = r2(gridX + gridW * (semanticToRatio[String(pt.x || 'medium').toLowerCase()] || 0.5))
-    const py = r2(gridY + gridH * (1 - (semanticToRatio[String(pt.y || 'medium').toLowerCase()] || 0.5)))
-    const fill = palette[i % Math.max(palette.length, 1)] || bt.primary_color || '#0078AE'
+  const emphSize = { high: 0.26, medium: 0.20, low: 0.16 }
+
+  points.slice(0, 6).forEach(pt => {
+    const xRatio = semanticToRatio[String(pt.x || 'medium').toLowerCase()] || 0.5
+    const yRatio = semanticToRatio[String(pt.y || 'medium').toLowerCase()] || 0.5
+    const px = r2(gridX + gridW * xRatio)
+    const py = r2(gridY + gridH * (1 - yRatio))
+
+    // Derive which quadrant this point is in, then get its tone for color
+    const inLeft = xRatio < 0.5
+    const inTop  = yRatio >= 0.5
+    const ptQId  = inLeft && inTop ? 'q1' : !inLeft && inTop ? 'q2' : inLeft && !inTop ? 'q3' : 'q4'
+    const ptQ    = quadMap[ptQId] || {}
+    const ptTone = String(ptQ.tone || 'neutral').toLowerCase()
+    const dotFill= tonePointFill(ptTone)
+
+    const mSize  = emphSize[String(pt.emphasis || 'medium').toLowerCase()] || 0.20
+
+    // Short label — use explicit field, or derive initials from full label
+    const lbl   = String(pt.label || '')
+    const sLbl  = pt.short_label || (() => {
+      const words = lbl.trim().split(/\s+/)
+      return words.length >= 2
+        ? (words[0][0] + words[1][0]).toUpperCase()
+        : lbl.slice(0, 2).toUpperCase()
+    })()
+
+    // Filled abbreviation circle
     blocks.push({
       block_type: 'circle',
-      x: r2(px - markerSize / 2),
-      y: r2(py - markerSize / 2),
-      w: markerSize,
-      h: markerSize,
-      fill_color: fill,
+      x: r2(px - mSize / 2), y: r2(py - mSize / 2), w: mSize, h: mSize,
+      fill_color: dotFill,
       font_color: '#FFFFFF',
-      text: ''
+      text: _truncateText(sLbl, 3)
     })
 
-    const rightSpace = gridX + gridW - px
-    const labelW = Math.min(1.1, Math.max(0.6, (String(pt.label || '').length || 8) * 0.08))
-    const labelX = rightSpace > labelW + 0.18 ? r2(px + 0.12) : r2(px - labelW - 0.12)
+    // Outlined label bubble below the dot
+    const bubbleW = r2(Math.min(1.2, Math.max(0.52, lbl.length * 0.080 + 0.22)))
+    const bubbleH = 0.26
+    const bubbleY = r2(py + mSize / 2 + 0.06)
+    // Clamp bubble X so it stays within the grid
+    let bubbleX = r2(px - bubbleW / 2)
+    bubbleX = r2(Math.max(gridX + 0.04, Math.min(bubbleX, gridX + gridW - bubbleW - 0.04)))
+    // Clamp bubbleY so it stays within the grid
+    const clampedBubbleY = r2(Math.min(bubbleY, gridY + gridH - bubbleH - 0.04))
+    blocks.push({
+      block_type: 'rect',
+      x: bubbleX, y: clampedBubbleY, w: bubbleW, h: bubbleH,
+      fill_color: '#FFFFFF',
+      border_color: dotFill,
+      border_width: 0.8, corner_radius: 10
+    })
     blocks.push({
       block_type: 'text_box',
-      x: labelX,
-      y: r2(py - 0.11),
-      w: labelW,
-      h: 0.24,
-      text: pt.label || '',
+      x: r2(bubbleX + 0.06), y: clampedBubbleY,
+      w: r2(bubbleW - 0.12), h: bubbleH,
+      text: _truncateText(lbl, 18),
       font_family: ms.point_label_font_family || bt.body_font_family || 'Arial',
-      font_size: ms.point_label_font_size || 10,
-      bold: false,
-      color: ms.point_label_color || '#111111',
-      align: 'left',
-      valign: 'middle'
+      font_size: ms.point_label_font_size || 9, bold: false,
+      color: dotFill, align: 'center', valign: 'middle'
     })
   })
 }
@@ -5007,7 +5416,7 @@ function _driverTreeToBlocks(art, content_y, blocks, bt, r2) {
   }
 
   let cursor = 0
-  const branchLayout = branches.map((branch, i) => {
+  const branchLayout = branches.map((branch) => {
     const childCount = Math.max((branch.children || []).length, 1)
     const branchLeafCenters = leafCenters.slice(cursor, cursor + childCount)
     cursor += childCount
@@ -5082,7 +5491,7 @@ function _driverTreeToBlocks(art, content_y, blocks, bt, r2) {
     pushConnector(Math.min(...branchCenters), r2(trunkBottomY - 0.01), Math.max(0.02, Math.max(...branchCenters) - Math.min(...branchCenters)), 0.02)
   }
 
-  branchLayout.forEach((entry, i) => {
+  branchLayout.forEach((entry) => {
     const bx = r2(entry.centerX - branchW / 2)
     pushNode(bx, branchY, branchW, branchH, ts.node_fill_color_secondary || '#EDF7F3', entry.branch.label, entry.branch.value, false)
     pushConnector(r2(entry.centerX - 0.01), r2(branchY - 0.14), 0.02, 0.14)
@@ -5228,9 +5637,8 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
 
     if (nonEmptyQualifiers.length) {
       const pillGap = 0.08
-      const pillCount = nonEmptyQualifiers.length
       let pillCursorY = r2(rowY + 0.12)
-      nonEmptyQualifiers.forEach((q, qi) => {
+      nonEmptyQualifiers.forEach((_q, qi) => {
         const valueColor = qualifierPalette[qi % Math.max(qualifierPalette.length, 1)] || bt.primary_color || '#0078AE'
         const pillText = qualifierTexts[qi] || ''
         let qualifierFs = baseQualifierFs
@@ -5245,7 +5653,7 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
         blocks.push({
           block_type: 'rect',
           x: qualifierX, y: pillY, w: qualifierAreaW, h: pillH,
-          fill_color: ps.qualifier_fill_color || '#EEF4E2',
+          fill_color: ps.qualifier_fill_color || valueColor,
           border_color: null,
           border_width: 0,
           corner_radius: 4
@@ -5418,170 +5826,216 @@ function _chartLegendToBlocks(legendBox, fontFamily, fontSizePt, colorHex, block
   })
 }
 
+// workflow renders all four subtypes:
+//   process_flow — horizontal linear sequence, value above/description below nodes
+//   timeline     — same layout as process_flow + horizontal baseline with dot markers
+//   hierarchy    — top_down_branching tree, level-based node fills, description below
+//   decomposition— top_down_branching breakdown, level-based node fills, description below
+// All connector segments emit arrowheads when conn.type === 'arrow'.
 function _workflowToBlocks(art, content_y, blocks, bt, r2) {
-  const ws = art.workflow_style || {}
-  const nodes = Array.isArray(art.nodes) ? art.nodes : []
+  const ws    = art.workflow_style || {}
+  const nodes = Array.isArray(art.nodes)       ? art.nodes       : []
   const conns = Array.isArray(art.connections) ? art.connections : []
   if (!nodes.length) return
 
-  const titleFont = ws.node_title_font_family || bt.title_font_family || 'Arial'
-  const valueFont = ws.node_value_font_family || bt.body_font_family || 'Arial'
-  const labelColor = ws.node_title_color || '#FFFFFF'
-  const valueColor = ws.node_value_color || '#111111'
-  const nodeFill = ws.node_fill_color || bt.primary_color || '#0078AE'
-  const nodeBorder = ws.node_border_color || '#FFFFFF'
-  const nodeBorderWidth = ws.node_border_width != null ? ws.node_border_width : 1
-  const nodeCornerRadius = ws.node_corner_radius != null ? ws.node_corner_radius : 4
-  const connectorColor = ws.connector_color || bt.primary_color || '#0078AE'
-  const connectorWidth = ws.connector_width != null ? ws.connector_width : 0.5
-  const innerPad = ws.node_inner_padding != null ? ws.node_inner_padding : 0.08
-  const externalGap = ws.external_label_gap != null ? ws.external_label_gap : 0.08
+  // ── Brand tokens ────────────────────────────────────────────────────────────
+  const titleFont        = ws.node_title_font_family || bt.title_font_family || 'Arial'
+  const valueFont        = ws.node_value_font_family || bt.body_font_family  || 'Arial'
+  const nodeFill         = ws.node_fill_color           || bt.primary_color  || '#0078AE'
+  const nodeFillSecond   = ws.node_fill_color_secondary || bt.secondary_color || '#3A6EA5'
+  const nodeFillLeaf     = ws.node_fill_color_leaf      || '#EAF2FB'
+  const nodeBorder       = ws.node_border_color    || '#FFFFFF'
+  const nodeBorderWidth  = ws.node_border_width    != null ? ws.node_border_width    : 1
+  const nodeCornerRadius = ws.node_corner_radius   != null ? ws.node_corner_radius   : 4
+  const titleColorDark   = ws.node_title_color     || '#FFFFFF'    // for dark fills (level 1 & 2)
+  const titleColorLeaf   = ws.node_title_color_leaf || bt.body_color || '#111111'  // for light fills (level 3+)
+  const valueColor       = ws.node_value_color     || bt.body_color || '#111111'
+  const connColor        = ws.connector_color      || bt.primary_color || '#0078AE'
+  const connWidth        = ws.connector_width      != null ? ws.connector_width      : 0.5
+  const innerPad         = ws.node_inner_padding   != null ? ws.node_inner_padding   : 0.08
+  const externalGap      = ws.external_label_gap   != null ? ws.external_label_gap   : 0.08
+  const titleFs          = ws.node_title_font_size || 10
+  const valueFs          = ws.node_value_font_size || 9
 
+  // ── Helpers ─────────────────────────────────────────────────────────────────
   const estimateTextHeight = (text, widthIn, fontSizePt, lineHeight = 1.2) => {
     const textStr = String(text || '').trim()
     if (!textStr) return 0
     const usableWidth = Math.max(0.3, Number(widthIn) || 0.3)
-    const fontSize = Math.max(7, Number(fontSizePt) || 10)
-    const charsPerLine = Math.max(8, Math.floor((usableWidth * 72) / (fontSize * 0.52)))
+    const fontSize    = Math.max(7, Number(fontSizePt) || 10)
+    const charsPerLine= Math.max(8, Math.floor((usableWidth * 72) / (fontSize * 0.52)))
     const words = textStr.split(/\s+/).filter(Boolean)
-    let lines = 1
-    let lineLen = 0
+    let lines = 1, lineLen = 0
     for (const word of words) {
       const nextLen = lineLen === 0 ? word.length : lineLen + 1 + word.length
       if (nextLen <= charsPerLine) lineLen = nextLen
-      else {
-        lines += 1
-        lineLen = word.length
-      }
+      else { lines += 1; lineLen = word.length }
     }
     return lines * (fontSize * lineHeight / 72)
   }
 
+  // Resolve per-level node fill and text color
+  const nodeStyle = level => {
+    if (level <= 1) return { fill: nodeFill,       text: titleColorDark }
+    if (level === 2) return { fill: nodeFillSecond, text: titleColorDark }
+    return                 { fill: nodeFillLeaf,    text: titleColorLeaf }
+  }
+
+  // ── Flow type detection ─────────────────────────────────────────────────────
+  const flowDir     = String(art.flow_direction || '').toLowerCase()
+  const wType       = String(art.workflow_type  || '').toLowerCase()
+  const isHorizFlow = flowDir === 'left_to_right' || flowDir === 'horizontal'
+    || wType === 'timeline' || wType === 'roadmap' || wType === 'process_flow'
+  const isVertFlow  = flowDir === 'top_to_bottom' || flowDir === 'bottom_up'
+  const isBranching = flowDir === 'top_down_branching'
+    || wType === 'hierarchy' || wType === 'decomposition'
+  const isTimeline  = wType === 'timeline'
+
+  // ── Connector segments (drawn BEFORE nodes so nodes render on top) ──────────
   conns.forEach(conn => {
-    const path = Array.isArray(conn.path) ? conn.path : []
+    const path      = Array.isArray(conn.path) ? conn.path : []
+    const isArrow   = String(conn.type || 'arrow').toLowerCase() === 'arrow'
+    // Emit one `line` block per path segment; only the LAST segment gets the arrowhead
     for (let i = 0; i < path.length - 1; i++) {
-      const p1 = path[i]
-      const p2 = path[i + 1]
+      const p1 = path[i], p2 = path[i + 1]
       if (p1?.x == null || p1?.y == null || p2?.x == null || p2?.y == null) continue
+      const isLastSeg = (i === path.length - 2)
       blocks.push({
         block_type: 'line',
         x1: r2(p1.x), y1: r2(p1.y), x2: r2(p2.x), y2: r2(p2.y),
-        x: r2(Math.min(p1.x, p2.x)),
-        y: r2(Math.min(p1.y, p2.y)),
-        w: r2(Math.max(Math.abs(p2.x - p1.x), 0.02)),
-        h: r2(Math.max(Math.abs(p2.y - p1.y), 0.02)),
-        color: connectorColor,
-        line_width: connectorWidth
+        x:  r2(Math.min(p1.x, p2.x)),
+        y:  r2(Math.min(p1.y, p2.y)),
+        w:  r2(Math.max(Math.abs(p2.x - p1.x), 0.02)),
+        h:  r2(Math.max(Math.abs(p2.y - p1.y), 0.02)),
+        color:      connColor,
+        line_width: connWidth,
+        arrowhead:  isArrow && isLastSeg   // arrowhead only on the final segment
       })
     }
   })
 
-  const flowDir = String(art.flow_direction || '').toLowerCase()
-  const wType   = String(art.workflow_type  || '').toLowerCase()
-  const isHorizFlow  = flowDir === 'left_to_right' || flowDir === 'horizontal'
-    || wType === 'timeline' || wType === 'roadmap' || wType === 'process_flow'
-  const isVertFlow   = flowDir === 'top_to_bottom' || flowDir === 'bottom_up'
+  // ── Timeline baseline (before nodes so nodes render on top) ─────────────────
+  // Draw a horizontal bar at node-bottom height, spanning all phase nodes,
+  // with a small filled dot at each node center and an arrowhead at the right end.
+  if (isTimeline && nodes.length >= 2) {
+    const validNodes = nodes.filter(n => (n.w || 0) > 0 && (n.h || 0) > 0)
+    if (validNodes.length >= 2) {
+      const baselineY = r2(validNodes[0].y + (validNodes[0].h || 0.6))
+      const lineX1    = r2(Math.min(...validNodes.map(n => n.x || 0)))
+      const lineX2    = r2(Math.max(...validNodes.map(n => (n.x || 0) + (n.w || 0.8))))
+      const lineColor = ws.timeline_line_color || connColor
+      blocks.push({
+        block_type: 'line',
+        x1: lineX1, y1: baselineY, x2: lineX2, y2: baselineY,
+        x: lineX1, y: baselineY, w: r2(lineX2 - lineX1), h: 0.02,
+        color: lineColor, line_width: connWidth + 0.3, arrowhead: true
+      })
+      // Dot markers at each phase midpoint on the baseline
+      const dotR = 0.06
+      validNodes.forEach(n => {
+        const dotX = r2((n.x || 0) + (n.w || 0.8) / 2 - dotR)
+        blocks.push({
+          block_type: 'circle',
+          x: dotX, y: r2(baselineY - dotR), w: r2(dotR * 2), h: r2(dotR * 2),
+          fill_color: lineColor, text: ''
+        })
+      })
+    }
+  }
 
+  // ── Node rendering ──────────────────────────────────────────────────────────
   nodes.forEach(node => {
-    const nx = r2(node.x || 0)
-    const ny = r2(node.y || content_y)
-    const nw = r2(node.w || 0.8)
-    const nh = r2(node.h || 0.6)
+    const nx    = r2(node.x || 0)
+    const ny    = r2(node.y || content_y)
+    const nw    = r2(node.w || 0.8)
+    const nh    = r2(node.h || 0.6)
+    const level = node.level != null ? Number(node.level) : 1
+    const innerW= r2(Math.max(0.3, nw - innerPad * 2))
+
     const titleText = String(node.label || node.title || node.id || '')
     const valueText = String(node.value || '').trim()
-    const descText = String(node.description || '').trim()
-    const titleFs = ws.node_title_font_size || 10
-    const valueFs = ws.node_value_font_size || 9
-    const innerW = r2(Math.max(0.3, nw - innerPad * 2))
+    const descText  = String(node.description || '').trim()
 
-    // ── node box ──────────────────────────────────────────────────────────────
+    // Level-based fill for hierarchy/decomposition; flat fill for process_flow/timeline
+    const ns = (isBranching) ? nodeStyle(level) : { fill: nodeFill, text: titleColorDark }
+
+    // Node box
     blocks.push({
-      block_type: 'rect',
+      block_type:    'rect',
       x: nx, y: ny, w: nw, h: nh,
-      fill_color: nodeFill,
-      border_color: nodeBorder,
-      border_width: nodeBorderWidth,
+      fill_color:    ns.fill,
+      border_color:  nodeBorder,
+      border_width:  nodeBorderWidth,
       corner_radius: nodeCornerRadius
     })
 
-    // ── title — always inside the node box, vertically centered ───────────────
+    // Label inside node (always)
     blocks.push({
-      block_type: 'text_box',
+      block_type:  'text_box',
       x: r2(nx + innerPad), y: r2(ny + innerPad), w: innerW, h: r2(nh - innerPad * 2),
-      text: titleText,
-      font_family: titleFont,
-      font_size: titleFs,
-      bold: true,
-      color: labelColor,
-      align: 'center',
-      valign: 'middle'
+      text:        titleText,
+      font_family: titleFont, font_size: titleFs, bold: true,
+      color:       ns.text, align: 'center', valign: 'middle'
     })
 
     if (isHorizFlow) {
-      // ── horizontal (left_to_right / timeline): value ABOVE, description BELOW ──
+      // process_flow / timeline: value ABOVE, description BELOW
       if (valueText) {
         const valueH = r2(Math.max(0.16, estimateTextHeight(valueText, nw, valueFs, 1.15) + 0.04))
         blocks.push({
-          block_type: 'text_box',
+          block_type:  'text_box',
           x: nx, y: r2(ny - valueH - externalGap), w: nw, h: valueH,
-          text: valueText,
-          font_family: valueFont,
-          font_size: valueFs,
-          bold: false,
-          color: valueColor,
-          align: 'center',
-          valign: 'bottom'
+          text:        valueText,
+          font_family: valueFont, font_size: valueFs, bold: false,
+          color:       valueColor, align: 'center', valign: 'bottom'
         })
       }
       if (descText) {
         const descH = r2(Math.max(0.18, estimateTextHeight(descText, nw, valueFs, 1.18) + 0.04))
         blocks.push({
-          block_type: 'text_box',
+          block_type:  'text_box',
           x: nx, y: r2(ny + nh + externalGap), w: nw, h: descH,
-          text: descText,
-          font_family: valueFont,
-          font_size: valueFs,
-          bold: false,
-          color: valueColor,
-          align: 'center',
-          valign: 'top'
+          text:        descText,
+          font_family: valueFont, font_size: valueFs, bold: false,
+          color:       valueColor, align: 'center', valign: 'top'
         })
       }
     } else if (isVertFlow) {
-      // ── vertical (top_to_bottom / bottom_up): description to the RIGHT of box ──
-      // No text above or below the box in vertical flows.
+      // top_to_bottom / bottom_up: description to the RIGHT of the box
       if (descText) {
-        const ax  = art.x || 0
-        const aw  = art.w || 0
-        const rightX = r2(nx + nw + externalGap)
-        const rightW = r2(Math.max(0.3, ax + aw - rightX))
-        const descH  = r2(Math.max(0.18, estimateTextHeight(descText, rightW, valueFs, 1.18) + 0.04))
+        const ax    = art.x || 0
+        const aw    = art.w || 0
+        const rightX= r2(nx + nw + externalGap)
+        const rightW= r2(Math.max(0.3, ax + aw - rightX))
+        const descH = r2(Math.max(0.18, estimateTextHeight(descText, rightW, valueFs, 1.18) + 0.04))
         blocks.push({
-          block_type: 'text_box',
+          block_type:  'text_box',
           x: rightX, y: r2(ny + (nh - descH) / 2), w: rightW, h: descH,
-          text: descText,
-          font_family: valueFont,
-          font_size: valueFs,
-          bold: false,
-          color: valueColor,
-          align: 'left',
-          valign: 'middle'
+          text:        descText,
+          font_family: valueFont, font_size: valueFs, bold: false,
+          color:       valueColor, align: 'left', valign: 'middle'
         })
       }
     } else {
-      // ── branching / other: description below (legacy behaviour) ──────────────
+      // hierarchy / decomposition (top_down_branching): description below the node box
       if (descText) {
         const descH = r2(Math.max(0.18, estimateTextHeight(descText, nw, valueFs, 1.18) + 0.04))
         blocks.push({
-          block_type: 'text_box',
+          block_type:  'text_box',
           x: nx, y: r2(ny + nh + externalGap), w: nw, h: descH,
-          text: descText,
-          font_family: valueFont,
-          font_size: valueFs,
-          bold: false,
-          color: valueColor,
-          align: 'center',
-          valign: 'top'
+          text:        descText,
+          font_family: valueFont, font_size: valueFs, bold: false,
+          color:       valueColor, align: 'center', valign: 'top'
+        })
+      }
+      // Also render value text inside the node as a secondary line (hierarchy uses node space)
+      if (valueText && nh > 0.5) {
+        blocks.push({
+          block_type:  'text_box',
+          x: r2(nx + innerPad), y: r2(ny + nh / 2), w: innerW, h: r2(nh / 2 - innerPad),
+          text:        valueText,
+          font_family: valueFont, font_size: Math.max(7, valueFs - 1), bold: false,
+          color:       ns.text, align: 'center', valign: 'middle'
         })
       }
     }
@@ -5687,7 +6141,7 @@ function _artifactToBlocks(art, blocks, bt, r2) {
         block_type:              'chart',
         x: chartRect.x, y: chartRect.y, w: chartRect.w, h: chartRect.h,
         chart_type:              art.chart_type,
-        chart_header:            art.chart_header || '',
+        chart_header:            art.chart_header || art.artifact_header || '',
         chart_title:             art.chart_title  || '',
         categories:              art.categories   || [],
         series:                  art.series       || [],
@@ -6327,8 +6781,8 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
         const resolvedMode = mArt.insight_mode
           || (mGroups ? 'grouped' : mPoints ? 'standard' : dArt.insight_mode || 'standard')
 
-        const heading        = mArt.heading        || mArt.insight_header || dArt.heading        || 'Key Insight'
-        const insight_header = mArt.insight_header || mArt.heading        || dArt.insight_header || 'Key Insight'
+        const heading        = mArt.heading || getArtifactHeader(mArt) || dArt.heading || 'Key Insight'
+        const insight_header = getArtifactHeader(mArt) || dArt.insight_header || dArt.artifact_header || heading || 'Key Insight'
         const sentiment      = mArt.sentiment      || dArt.sentiment      || 'neutral'
 
         // ── FLOW 2: Grouped ──────────────────────────────────────────────────────
@@ -6431,9 +6885,10 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
           const group_gap_in         = dArt.group_gap_in         || r2(Math.max(dimForGap * 0.015, 0.05))
           const header_to_box_gap_in = dArt.header_to_box_gap_in || r2(Math.max(f * 0.5 / 72, 0.03))
 
-          return {
+          return syncArtifactHeaderBlock({
             ...dArt,
             insight_mode:          'grouped',
+            artifact_header:       insight_header,
             heading,
             insight_header,
             sentiment,
@@ -6445,7 +6900,7 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
             bullet_style:          { ...bullet_style },
             group_gap_in:          r2(group_gap_in),
             header_to_box_gap_in:  r2(header_to_box_gap_in)
-          }
+          }, insight_header)
         }
 
         // ── FLOW 1: Standard (points) ────────────────────────────────────────────
@@ -6460,9 +6915,10 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
           space_before_pt:       6,
           vertical_distribution: 'spread'
         }
-        return {
+        return syncArtifactHeaderBlock({
           ...dArt,
           artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
+          artifact_header: insight_header,
           insight_mode:   'standard',
           heading,
           insight_header,
@@ -6470,16 +6926,18 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
           points:  mPoints || dArt.points || [],
           groups:  undefined,
           body_style
-        }
+        }, insight_header)
       }
 
       if (t === 'chart') {
         const mergedChartType = mArt.chart_type || dArt.chart_type || 'bar'
-        return {
+        const artifactHeader = getArtifactHeader(mArt) || dArt.chart_header || dArt.artifact_header || ''
+        return syncArtifactHeaderBlock({
           ...dArt,
           artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
+          artifact_header: artifactHeader,
           chart_type:       mergedChartType,
-          chart_header:     mArt.chart_header     || mArt.stat_header || dArt.chart_header     || '',
+          chart_header:     mArt.chart_header || artifactHeader || mArt.stat_header || dArt.chart_header || '',
           chart_title:      mArt.chart_title      || dArt.chart_title      || '',
           chart_insight:    mArt.chart_insight    || mArt.stat_decision || dArt.chart_insight    || '',
           rows:             mArt.rows             || dArt.rows             || [],
@@ -6492,60 +6950,73 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
                               ? mArt.show_data_labels : (dArt.show_data_labels !== false),
           show_legend:      mArt.show_legend      !== undefined
                               ? mArt.show_legend      : (mergedChartType === 'group_pie' ? true : !!dArt.show_legend)
-        }
+        }, artifactHeader)
       }
 
       if (t === 'stat_bar') {
-        return {
+        const artifactHeader = getArtifactHeader(mArt) || dArt.stat_header || dArt.artifact_header || ''
+        return syncArtifactHeaderBlock({
           ...dArt,
           artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
-          stat_header: mArt.stat_header || dArt.stat_header || '',
+          artifact_header: artifactHeader,
+          stat_header: mArt.stat_header || artifactHeader || dArt.stat_header || '',
           stat_decision: mArt.stat_decision || dArt.stat_decision || '',
           column_headers: mArt.column_headers || dArt.column_headers || {},
           rows: mArt.rows || dArt.rows || [],
           annotation_style: mArt.annotation_style || dArt.annotation_style || 'trailing'
-        }
+        }, artifactHeader)
       }
 
       if (t === 'comparison_table') {
-        return {
+        const normalized = normalizeComparisonTableManifest(mArt)
+        const artifactHeader = getArtifactHeader(mArt) || dArt.comparison_header || dArt.artifact_header || ''
+        return syncArtifactHeaderBlock({
           ...dArt,
           artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
-          comparison_header: mArt.comparison_header || dArt.comparison_header || mArt.table_header || '',
-          criteria: mArt.criteria || dArt.criteria || [],
-          options: mArt.options || dArt.options || [],
-          recommended_option: mArt.recommended_option || dArt.recommended_option || ''
-        }
+          artifact_header: artifactHeader,
+          comparison_header: mArt.comparison_header || artifactHeader || dArt.comparison_header || mArt.table_header || '',
+          criteria: normalized.criteria.length ? normalized.criteria : (dArt.criteria || []),
+          options: normalized.options.length ? normalized.options : (dArt.options || []),
+          recommended_option: normalized.recommended_option || dArt.recommended_option || ''
+        }, artifactHeader)
       }
 
       if (t === 'initiative_map') {
-        return {
+        const normalized = normalizeInitiativeMapManifest(mArt)
+        const artifactHeader = getArtifactHeader(mArt) || dArt.initiative_header || dArt.artifact_header || ''
+        return syncArtifactHeaderBlock({
           ...dArt,
           artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
-          initiative_header: mArt.initiative_header || dArt.initiative_header || mArt.table_header || '',
-          dimension_labels: mArt.dimension_labels || dArt.dimension_labels || [],
-          initiatives: mArt.initiatives || dArt.initiatives || []
-        }
+          artifact_header: artifactHeader,
+          initiative_header: mArt.initiative_header || artifactHeader || dArt.initiative_header || mArt.table_header || '',
+          dimension_labels: normalized.dimension_labels.length ? normalized.dimension_labels : (dArt.dimension_labels || []),
+          initiatives: normalized.initiatives.length ? normalized.initiatives : (dArt.initiatives || [])
+        }, artifactHeader)
       }
 
       if (t === 'profile_card_set') {
-        return {
+        const artifactHeader = getArtifactHeader(mArt) || dArt.profile_header || dArt.artifact_header || ''
+        return syncArtifactHeaderBlock({
           ...dArt,
           artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
-          profile_header: mArt.profile_header || dArt.profile_header || mArt.heading || '',
+          artifact_header: artifactHeader,
+          profile_header: mArt.profile_header || artifactHeader || dArt.profile_header || mArt.heading || '',
           profiles: mArt.profiles || dArt.profiles || [],
           layout_direction: mArt.layout_direction || dArt.layout_direction || 'horizontal'
-        }
+        }, artifactHeader)
       }
 
       if (t === 'risk_register') {
-        return {
+        const normalized = normalizeRiskRegisterManifest(mArt)
+        const artifactHeader = getArtifactHeader(mArt) || dArt.risk_header || dArt.artifact_header || ''
+        return syncArtifactHeaderBlock({
           ...dArt,
           artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
-          risk_header: mArt.risk_header || dArt.risk_header || mArt.table_header || '',
-          risks: mArt.risks || dArt.risks || [],
+          artifact_header: artifactHeader,
+          risk_header: mArt.risk_header || artifactHeader || dArt.risk_header || mArt.table_header || '',
+          risks: normalized.risks.length ? normalized.risks : (dArt.risks || []),
           show_mitigation: mArt.show_mitigation !== undefined ? mArt.show_mitigation : (dArt.show_mitigation !== false)
-        }
+        }, artifactHeader)
       }
 
       if (t === 'cards') {
@@ -6560,24 +7031,24 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
         // Merge node content (label, value, description, level) into designed nodes
         // Designed nodes have x/y/w/h; manifest nodes have the text content.
         const designedNodes   = dArt.nodes   || []
-        const manifestNodes   = mArt.nodes   || []
+        const manifestNodes   = normalizeWorkflowNodes(mArt.nodes)
         const mergedNodes = designedNodes.length > 0
           ? designedNodes.map((dn, ni) => {
               const mn = manifestNodes.find(n => n.id === dn.id) || manifestNodes[ni]
               if (!mn) return dn
               return {
                 ...dn,                        // keep x, y, w, h from Agent 5
-                label:       mn.label       || dn.label       || dn.id,
-                value:       mn.value       || dn.value       || '',
-                description: mn.description || dn.description || '',
+                label:       mn.node_label || mn.label || dn.label || dn.id,
+                value:       mn.primary_message || mn.value || dn.value || '',
+                description: mn.secondary_message || mn.description || dn.description || '',
                 level:       mn.level       !== undefined ? mn.level : (dn.level || 1)
               }
             })
           : manifestNodes.map((mn, ni) => ({
               id:          mn.id || `n${ni + 1}`,
-              label:       mn.label || mn.id || `Step ${ni + 1}`,
-              value:       mn.value || '',
-              description: mn.description || '',
+              label:       mn.node_label || mn.label || mn.id || `Step ${ni + 1}`,
+              value:       mn.primary_message || mn.value || '',
+              description: mn.secondary_message || mn.description || '',
               level:       mn.level !== undefined ? mn.level : 1
             }))
 
@@ -6603,60 +7074,72 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
               type: mc.type || 'arrow'
             }))
 
-        return {
+        const artifactHeader = getArtifactHeader(mArt) || dArt.workflow_header || dArt.artifact_header || ''
+        return syncArtifactHeaderBlock({
           ...dArt,
           artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
+          artifact_header: artifactHeader,
           workflow_type:    mArt.workflow_type    || dArt.workflow_type    || 'process_flow',
-          workflow_header:  mArt.workflow_header  || dArt.workflow_header  || '',
+          workflow_header:  mArt.workflow_header  || artifactHeader || dArt.workflow_header  || '',
           flow_direction:   mArt.flow_direction   || dArt.flow_direction   || 'left_to_right',
           workflow_title:   mArt.workflow_title   || dArt.workflow_title   || '',
           workflow_insight: mArt.workflow_insight || dArt.workflow_insight || '',
           nodes:            mergedNodes,
           connections:      mergedConns
-        }
+        }, artifactHeader)
       }
 
       if (t === 'table') {
-        return {
+        const artifactHeader = getArtifactHeader(mArt) || dArt.table_header || dArt.artifact_header || ''
+        return syncArtifactHeaderBlock({
           ...dArt,
           artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
-          table_header:   mArt.table_header   || dArt.table_header   || '',
+          artifact_header: artifactHeader,
+          table_header:   mArt.table_header   || artifactHeader || dArt.table_header   || '',
           title:          mArt.title          || dArt.title          || '',
           headers:        mArt.headers        || dArt.headers        || [],
           rows:           mArt.rows           || dArt.rows           || [],
           highlight_rows: mArt.highlight_rows || dArt.highlight_rows || [],
           note:           mArt.note           || dArt.note           || ''
-        }
+        }, artifactHeader)
       }
 
       if (t === 'matrix') {
-        return {
+        const normalized = normalizeMatrixManifest(mArt)
+        const artifactHeader = getArtifactHeader(mArt) || dArt.matrix_header || dArt.artifact_header || ''
+        return syncArtifactHeaderBlock({
           ...dArt,
           artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
+          artifact_header: artifactHeader,
           matrix_type:   mArt.matrix_type   || dArt.matrix_type   || '2x2',
-          matrix_header: mArt.matrix_header || dArt.matrix_header || '',
+          matrix_header: mArt.matrix_header || artifactHeader || dArt.matrix_header || '',
           x_axis:        mArt.x_axis        || dArt.x_axis        || { label: '', low_label: '', high_label: '' },
           y_axis:        mArt.y_axis        || dArt.y_axis        || { label: '', low_label: '', high_label: '' },
-          quadrants:     mArt.quadrants     || dArt.quadrants     || [],
-          points:        mArt.points        || dArt.points        || []
-        }
+          quadrants:     normalized.quadrants.length ? normalized.quadrants : (dArt.quadrants || []),
+          points:        normalized.points.length ? normalized.points : (dArt.points || [])
+        }, artifactHeader)
       }
 
       if (t === 'driver_tree') {
-        return {
+        const normalized = normalizeDriverTreeManifest(mArt)
+        const artifactHeader = getArtifactHeader(mArt) || dArt.tree_header || dArt.artifact_header || ''
+        return syncArtifactHeaderBlock({
           ...dArt,
           artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
-          tree_header: mArt.tree_header || dArt.tree_header || '',
-          root:        mArt.root        || dArt.root        || { label: '', value: '' },
-          branches:    mArt.branches    || dArt.branches    || []
-        }
+          artifact_header: artifactHeader,
+          tree_header: mArt.tree_header || artifactHeader || dArt.tree_header || '',
+          root:        normalized.root.label || normalized.root.value ? normalized.root : (dArt.root || { label: '', value: '' }),
+          branches:    normalized.branches.length ? normalized.branches : (dArt.branches || [])
+        }, artifactHeader)
       }
 
       if (t === 'prioritization') {
-        return {
+        const artifactHeader = getArtifactHeader(mArt) || dArt.priority_header || dArt.artifact_header || ''
+        return syncArtifactHeaderBlock({
           ...dArt,
           artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
-          priority_header: mArt.priority_header || dArt.priority_header || '',
+          artifact_header: artifactHeader,
+          priority_header: mArt.priority_header || artifactHeader || dArt.priority_header || '',
           items: (mArt.items || dArt.items || []).map(it => ({
             rank: it.rank,
             title: it.title || '',
@@ -6665,7 +7148,7 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
               ? it.qualifiers.slice(0, 2).map(q => ({ label: q?.label || '', value: q?.value || '' }))
               : [{ label: '', value: '' }, { label: '', value: '' }]
           }))
-        }
+        }, artifactHeader)
       }
 
       return dArt
@@ -6858,6 +7341,10 @@ function deriveScratchContentBounds(slideSpec) {
 
 function chooseScratchSplitOrientation(zones) {
   if (!Array.isArray(zones) || zones.length !== 2) return 'vertical'
+  // Respect explicit artifact_arrangement hint from Agent 4 before falling back to type inference
+  const explicitArrangement = (zones[0]?.layout_hint?.artifact_arrangement || zones[1]?.layout_hint?.artifact_arrangement || '').toLowerCase()
+  if (explicitArrangement === 'horizontal') return 'horizontal'
+  if (explicitArrangement === 'vertical')   return 'vertical'
   const primaryType = (((zones[0]?.artifacts || [])[0] || {}).type || '').toLowerCase()
   const secondaryType = (((zones[1]?.artifacts || [])[0] || {}).type || '').toLowerCase()
   if (['workflow', 'prioritization', 'matrix', 'driver_tree'].includes(primaryType)) return 'vertical'
@@ -6866,6 +7353,11 @@ function chooseScratchSplitOrientation(zones) {
 }
 
 function parseScratchSplitToken(split) {
+  // Handle array format [pct0, pct1] e.g. [60, 40] — treat as left/top split
+  if (Array.isArray(split) && split.length >= 2) {
+    const pct = Math.max(1, Math.min(99, parseFloat(split[0]) || 50))
+    return { side: 'left', pct, frac: pct / 100, orientation: 'horizontal' }
+  }
   const s = String(split || '').trim().toLowerCase()
   const m = s.match(/^(left|right|top|bottom)_(\d{1,3})$/)
   if (!m) return null
@@ -6894,7 +7386,11 @@ function buildScratchZoneFrames(zones, slideSpec) {
     const z0Split = parseScratchSplitToken(framed[0]?.zone_split || framed[0]?.layout_hint?.split || framed[0]?.split_hint)
     const z1Split = parseScratchSplitToken(framed[1]?.zone_split || framed[1]?.layout_hint?.split || framed[1]?.split_hint)
     const explicit = z0Split || z1Split
-    const orientation = explicit?.orientation || chooseScratchSplitOrientation(framed)
+    // artifact_arrangement always wins over the array-derived orientation default
+    const explicitArr = (framed[0]?.layout_hint?.artifact_arrangement || framed[1]?.layout_hint?.artifact_arrangement || '').toLowerCase()
+    const orientation = (explicitArr === 'horizontal' || explicitArr === 'vertical')
+      ? explicitArr
+      : (explicit?.orientation || chooseScratchSplitOrientation(framed))
     const primaryFrac = explicit?.frac || (String((framed[0].narrative_weight || '')).toLowerCase() === 'primary' ? 0.58 : 0.50)
     if (orientation === 'horizontal') {
       const availW = bounds.w - gap
@@ -7277,29 +7773,35 @@ async function runAgent5(state) {
   console.log('  Slide size:', tokens.slide_width_inches + '" x ' + tokens.slide_height_inches + '"')
   console.log('  Title font:', (tokens.title_font || {}).family || 'default')
 
-  // Batch into groups of 2.
-  // Exception: slides flagged _was_repaired by Agent 4 get their own solo batch (batch of 1)
-  // because they likely have complex content that was borderline in Agent 4 — grouping them
-  // with another slide risks token overflow and cascading fallbacks.
-  const BATCH_SIZE = 2
-  const batches    = []
-  const repairedSlides = manifest.filter(s => s._was_repaired)
+  // Batch rules:
+  //   - Repaired slides (flagged by Agent 4 repair) → solo batch of 1 (complex content, avoid overflow)
+  //   - Structural slides (title / divider / thank_you) → batch of 3 (light, text-only)
+  //   - Regular content slides → batch of 2
+  const STRUCTURAL_TYPES = new Set(['title', 'divider', 'thank_you', 'thankyou'])
+  const repairedSlides   = manifest.filter(s => s._was_repaired)
+  const structuralSlides = manifest.filter(s => !s._was_repaired && STRUCTURAL_TYPES.has((s.slide_type || '').toLowerCase()))
+  const contentSlides    = manifest.filter(s => !s._was_repaired && !STRUCTURAL_TYPES.has((s.slide_type || '').toLowerCase()))
   if (repairedSlides.length > 0) {
     console.log('  Slides from Agent 4 repair (will be processed solo):', repairedSlides.map(s => s.slide_number).join(', '))
   }
-  const regularSlides = manifest.filter(s => !s._was_repaired)
-  // Build regular batches
-  for (let i = 0; i < regularSlides.length; i += BATCH_SIZE) {
-    batches.push(regularSlides.slice(i, i + BATCH_SIZE))
-  }
-  // Insert repaired slides as solo batches, preserving overall slide order
+
+  const batches = []
+  // Structural slides: batch of 3
+  for (let i = 0; i < structuralSlides.length; i += 3) batches.push(structuralSlides.slice(i, i + 3))
+  // Content slides: batch of 2
+  for (let i = 0; i < contentSlides.length;   i += 2) batches.push(contentSlides.slice(i, i + 2))
+  // Repaired slides: solo, inserted in slide_number order
   for (const rs of repairedSlides) {
-    // Insert in the correct position by slide_number
     let insertIdx = batches.findIndex(b => b.some(s => s.slide_number > rs.slide_number))
     if (insertIdx === -1) insertIdx = batches.length
     batches.splice(insertIdx, 0, [rs])
   }
-  console.log('  Batches:', batches.length, '(max', BATCH_SIZE, 'slides each, repaired slides solo)')
+  // Re-sort all batches so they run in slide_number order
+  batches.sort((a, b) => (a[0]?.slide_number || 0) - (b[0]?.slide_number || 0))
+  console.log('  Batches:', batches.length,
+    '| structural(3):', Math.ceil(structuralSlides.length / 3),
+    '| content(2):', Math.ceil(contentSlides.length / 2),
+    '| repaired(1):', repairedSlides.length)
 
   const allDesigned = []
   const manifestBySlide = new Map((manifest || []).map(s => [s.slide_number, s]))

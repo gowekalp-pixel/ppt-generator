@@ -911,18 +911,42 @@ For every slide, construct one final slide object using the required output sche
 Preserve slide order exactly as provided by Agent 3.
 
 STEP 2 — APPLY SLIDE-TYPE RULES
-- Title slide:
-  - zones must be []
-  - use title, subtitle, and key_message only
-- Divider slide:
-  - zones must be []
-  - title = section name
-  - subtitle = ""
-- Thank-you slide:
-  - zones must be []
-  - use closing title, subtitle if needed, and key_message
-- Content slide:
-  - include finalized title, subtitle, key_message, zones, artifacts, and layout fields
+
+Title slide:
+  - zones: []
+  - slide_archetype: "summary"
+  - narrative_role: ""
+  - speaker_note: ""
+  - title: short presentation name (4–8 words)
+  - subtitle: audience / context / date
+  - key_message: governing thought of the deck
+
+Divider slide:
+  - zones: []
+  - slide_archetype: "summary"
+  - narrative_role: ""
+  - speaker_note: ""
+  - title: section name only
+  - subtitle: ""
+  - key_message: one-line purpose of the section
+
+Thank-you slide:
+  - zones: []
+  - slide_archetype: "summary"
+  - narrative_role: ""
+  - speaker_note: ""
+  - title: "Thank You" or equivalent closing phrase
+  - subtitle: presenter name / contact if relevant
+  - key_message: one sentence — what the audience must do next
+
+Content slide:
+  - zones: array of 1–4 zone objects (never [])
+  - slide_archetype: derived from zone structure — do not set manually
+  - narrative_role: carry forward from Agent 3 plan
+  - speaker_note: Phase 2 overflow content (1–4 sentences; "" if none)
+  - title: insight-led (see SLIDE TYPE RULES)
+  - subtitle: optional framing note
+  - key_message: one-line proof claim for this slide
 
 STEP 3 — NORMALIZE LAYOUT FIELDS
 - If Layout Mode was used:
@@ -951,43 +975,21 @@ Each slide object must contain EXACTLY these top-level fields:
 {
   "slide_number": number,
   "slide_type": "title" | "divider" | "content" | "thank_you",
+  "slide_archetype": "string — see SLIDE TYPE RULES below for allowed values per type",
   "narrative_role": "string — carry forward from Agent 3 plan; empty string for structural slides",
-  "selected_layout_name": "string",
+  "selected_layout_name": "string — empty string for structural slides",
   "title": "string",
   "subtitle": "string",
   "key_message": "string",
-  "zones": [ ... ],
-  "speaker_note": "string — consolidate all speaker overflow from Phase 2 reasoning here:
-    qualifications, secondary data points, assumptions, and context that support the
-    slide's claims but do not belong on the slide surface. 1–4 sentences. Leave empty
-    string if there is no meaningful overflow."
+  "zones": [ ... ],   ← always [] for title / divider / thank_you
+  "speaker_note": "string — content slides only: consolidate Phase 2 speaker overflow here
+    (qualifications, secondary data, assumptions). 1–4 sentences. Empty string for
+    structural slides and when there is no meaningful overflow."
 }
 
-SLIDE TYPE RULES
+SLIDE TYPE RULES — CONTENT SLIDE TITLE
 
-  Title slide:
-  - title: short presentation name, 4–8 words
-  - subtitle: audience / context / date if relevant
-  - key_message: governing thought of the full deck
-  - slide_archetype: "summary"
-  - zones: []
-
-  Divider slide:
-  - title: section name only
-  - subtitle: empty
-  - key_message: one-line purpose of the section
-  - slide_archetype: "summary"
-  - zones: []
-
-  Thank-you slide:
-  - title: "Thank You" or equivalent closing phrase
-  - subtitle: presenter name / contact if relevant
-  - key_message: one sentence — what the audience must do next
-  - slide_archetype: "summary"
-  - zones: []
-
-  Content slide:
-  - title must be insight-led — never a generic topic label
+  Content slide title must be insight-led — never a generic topic label
     WRONG: "Revenue Analysis"   | RIGHT: "Premium mix drove most of the revenue uplift"
     WRONG: "Market Overview"    | RIGHT: "Market growing at 22% CAGR with untapped headroom"
     WRONG: "Geographic Risk"    | RIGHT: "North Zone concentration exceeds safe exposure threshold"
@@ -1196,13 +1198,15 @@ matrix:
       {
         "id": "q1",
         "title": "string",
-        "primary_message": "string",
-        "secondary_message": "string"
+        "primary_message": "string — one-line axis descriptor (e.g. 'High ASP · low scale')",
+        "secondary_message": "string — action implication (e.g. 'Protect margin, selective growth')",
+        "tone": "positive" | "negative" | "neutral"
       }
     ],
     "points": [
       {
-        "label": "string",
+        "label": "string — full display name (e.g. 'Own Store')",
+        "short_label": "string — 2-3 char abbreviation for the inner dot (e.g. 'OS')",
         "x": "low|medium|high",
         "y": "low|medium|high",
         "primary_message": "string",
@@ -1213,14 +1217,16 @@ matrix:
   }
   Max 6 points. Must define both axes and all 4 quadrants.
   Quadrant usage:
-  - title = quadrant label
-  - primary_message = main implication of that quadrant
-  - secondary_message = optional supporting note
+  - id: q1=top-left, q2=top-right, q3=bottom-left, q4=bottom-right
+  - title = quadrant strategic label (e.g. "Scale with margin")
+  - primary_message = one-line axis descriptor showing WHERE in the matrix (e.g. "High ASP · high scale")
+  - secondary_message = recommended action for items in this quadrant
+  - tone = "positive" (favourable quadrant), "negative" (unfavourable), "neutral" (monitor/mixed)
   Point usage:
-  - label = plotted item name
-  - primary_message = short callout or value if needed
-  - secondary_message = optional supporting note
-  - emphasis = controls visual prominence of the point label/callout
+  - label = full item name shown in the label bubble below the dot
+  - short_label = 2-3 char abbreviation shown INSIDE the filled dot (initials of words)
+  - x/y = semantic position within the grid (low=25%, medium=50%, high=75%)
+  - emphasis = "high" for the largest dot (typically the dominant or most critical item), "medium" default, "low" for minor items
 
 driver_tree:
   {
@@ -1351,18 +1357,25 @@ initiative_map:
     "artifact_header": "string — the one-line framing of the initiative landscape",
     "column_headers": [
       { "id": "initiative", "label": "Initiative" },
-      { "id": "c1", "label": "string" }
+      { "id": "c1", "label": "Phase 1 — Immediate" },
+      { "id": "c2", "label": "Phase 2 — Next quarter" }
     ],
     "rows": [
       {
         "id": "string",
-        "initiative_name": "string — row label shown at left",
+        "initiative_name": "string — bold row label shown at left (e.g. track or product name)",
+        "initiative_subtitle": "string — optional muted line below the initiative name (e.g. category or sub-track)",
         "cells": [
           {
             "column_id": "string — matches column_headers[].id",
-            "primary_message": "string",
-            "secondary_message": "string",
-            "tags": ["string"],
+            "primary_message": "string — main content headline for this cell (e.g. action, KPI, outcome)",
+            "secondary_message": "string — optional supporting line below primary_message",
+            "tags": [
+              {
+                "label": "string — short pill text (e.g. city name, priority band, owner)",
+                "tone": "primary" | "secondary" | "neutral"
+              }
+            ],
             "cell_tone": "primary" | "secondary" | "neutral"
           }
         ]
@@ -1370,10 +1383,13 @@ initiative_map:
     ]
   }
   initiative_map usage:
-  - each row is one initiative / workstream.
-  - each cell is a structured content block, not a raw table value.
-  - primary_message is the main content of the cell; secondary_message is the supporting line below.
-  - tags[] are optional pills such as phase, priority band, or workstream marker.
+  - each row is one initiative / workstream; columns are structured dimensions (phase, owner, KPI, status).
+  - each cell is a self-contained content block: primary_message is the headline action or metric; secondary_message is the supporting note below it.
+  - tags[] are optional pills rendered inside the cell — use them for any per-cell labels such as city names, owners, priority bands, or sub-tags. Any cell can carry tags, not only the first column.
+  - each tag carries its own tone ("primary" | "secondary" | "neutral") so individual pills can be colored differently within the same cell (e.g. one city chip "primary", another "neutral").
+  - cell_tone drives the overall chip fill / border palette for chips that do not have an individual tag tone override.
+  - initiative_subtitle is shown below the initiative_name in a muted style; use it for sub-track or product category labels.
+  - Typical swim-lane roadmap: columns = phases (Phase 1, Phase 2 …), rows = product tracks, each cell has primary_message (action title), secondary_message (revenue target), tags (city or geography chips).
   NEVER use when rows have a rank order (use prioritization). NEVER use for process steps (use workflow).
 
 profile_card_set:
@@ -1435,10 +1451,12 @@ risk_register:
   }
   risk_register usage:
   - each row is one named risk / issue / exception.
-  - severity drives row color banding and optional leading dot marker.
+  - severity ("critical"|"high"|"medium"|"low") drives row color banding and the leading dot marker. Use "critical" for the worst-case tier.
   - risk_title is the main row headline; risk_detail is the smaller supporting line below.
-  - likelihood / impact / owner / status are rendered as explicit columns.
-  - status_tone controls the visual treatment of the status chip.
+  - likelihood / impact accept "High", "Medium", or "Low" strings — rendered as 3 filled pip squares (High=3 pips, Medium=2, Low=1).
+  - owner_tag is the display text for the owner chip (use a short name or team label, ≤ 15 chars).
+  - status_tone MUST be one of: "open" | "in_progress" | "mitigated" | "closed" — controls chip color (red/amber/green/gray).
+  - status_tag is the display text for the status chip (e.g. "Open", "In progress", "Mitigated").
   NEVER use plain table when severity-by-row is the primary signal.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -2596,9 +2614,8 @@ function normaliseSlide(slide, plan) {
 
   let zones = []
 
-  // Title and Divider slides must never have zones — enforce unconditionally
-  // regardless of what Claude returned.
-  if (slideType !== 'title' && slideType !== 'divider') {
+  // Structural slides (title, divider, thank_you) must never have zones — enforce unconditionally.
+  if (slideType !== 'title' && slideType !== 'divider' && slideType !== 'thank_you') {
     if (slide.zones && Array.isArray(slide.zones) && slide.zones.length > 0) {
       zones = slide.zones.map(normaliseZone).filter(Boolean)
     } else {
@@ -2624,7 +2641,7 @@ function normaliseSlide(slide, plan) {
     visual_flow_hint:             slide.visual_flow_hint             || '',
     context_from_previous_slide:  slide.context_from_previous_slide  || '',
     zones:                        zones,
-    speaker_note:                 slide.speaker_note                 || plan.strategic_objective || ''
+    speaker_note:                 (slideType === 'content' ? (slide.speaker_note || plan.strategic_objective || '') : '')
   }
   const enforced = applyZoneStructureMetadata(enforceStructuralPatternRules(enforceReasoningArtifactUsage(normalized)))
   return {
@@ -2647,6 +2664,7 @@ function buildSlidePlan(brief) {
     slide_type:            s.slide_type            || 'content',
     narrative_role:        s.narrative_role        || '',
     slide_title_draft:     s.slide_title_draft     || '',
+    subtitle:              s.subtitle              || '',
     strategic_objective:   s.strategic_objective   || '',
     key_content:           Array.isArray(s.key_content) ? s.key_content : [],
     zone_count_signal:     s.zone_count_signal     || 'unsure',
@@ -3520,15 +3538,20 @@ function pruneAgent4SlideForOutput(slide) {
         : Array.isArray(artifact.dimension_labels)
           ? [{ id: 'initiative', label: 'Initiative' }, ...artifact.dimension_labels.map(d => ({ id: d?.id || '', label: d?.label || '' }))]
           : []
+      // Normalize a tags entry to {label, tone} regardless of whether Claude emitted strings or objects
+      const normTag = t => typeof t === 'string'
+        ? { label: t, tone: 'neutral' }
+        : { label: String(t?.label || t?.text || t?.name || ''), tone: t?.tone || 'neutral' }
       const rows = Array.isArray(artifact.rows) && artifact.rows.length
         ? artifact.rows.map(r => ({
             id: r?.id || '',
             initiative_name: r?.initiative_name || r?.name || '',
+            initiative_subtitle: r?.initiative_subtitle || r?.subtitle || undefined,
             cells: Array.isArray(r?.cells) ? r.cells.map(cell => ({
               column_id: cell?.column_id || '',
               primary_message: cell?.primary_message || '',
               secondary_message: cell?.secondary_message || undefined,
-              tags: Array.isArray(cell?.tags) ? cell.tags : undefined,
+              tags: Array.isArray(cell?.tags) ? cell.tags.map(normTag) : undefined,
               cell_tone: cell?.cell_tone || 'neutral'
             })) : []
           }))
@@ -3536,12 +3559,13 @@ function pruneAgent4SlideForOutput(slide) {
           ? artifact.initiatives.map(init => ({
               id: init?.id || undefined,
               initiative_name: init?.name || '',
+              initiative_subtitle: init?.subtitle || undefined,
               cells: Array.isArray(init?.placements)
                 ? init.placements.map(p => ({
                     column_id: p?.lane_id || '',
                     primary_message: p?.title || '',
                     secondary_message: p?.subtitle || undefined,
-                    tags: Array.isArray(p?.tags) ? p.tags : undefined,
+                    tags: Array.isArray(p?.tags) ? p.tags.map(normTag) : undefined,
                     cell_tone: p?.accent_tone || 'neutral'
                   }))
                 : Array.isArray(init?.dimensions)
@@ -3775,6 +3799,7 @@ async function runAgent4(state) {
     slide_number: plan.slide_number,
     slide_type:   plan.slide_type,
     title:        plan.slide_title_draft || '',
+    subtitle:     plan.subtitle          || '',
     key_message:  plan.strategic_objective || ''
   }, plan))
 

@@ -1393,7 +1393,7 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
         if chart_type_str == 'horizontal_bar':
             # Space per bar in inches; 0.55" is a comfortable single-bar baseline
             _density = min(1.0, (_chart_h / _n_cat) / 0.55)
-        elif chart_type_str in ('bar', 'clustered_bar', 'line', 'waterfall'):
+        elif chart_type_str in ('bar', 'clustered_bar', 'line', 'area', 'combo', 'waterfall'):
             # Space per column in inches; 0.65" is a comfortable single-column baseline
             _density = min(1.0, (_chart_w / _n_cat) / 0.65)
         else:
@@ -1408,12 +1408,17 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
         max_chart_label_size = int(cs.get('label_font_size') or header_font_size or 9)
 
     # Map chart type string to XL_CHART_TYPE
+    # combo maps to COLUMN_CLUSTERED; _apply_dual_axis converts it to bar+line when dual_axis=True
+    # waterfall has no native python-pptx type (Office 2016+ XML); falls back to COLUMN_CLUSTERED
     chart_type_map = {
         'bar':           XL_CHART_TYPE.COLUMN_CLUSTERED,
         'clustered_bar': XL_CHART_TYPE.COLUMN_CLUSTERED,
         'horizontal_bar':XL_CHART_TYPE.BAR_CLUSTERED,
         'line':          XL_CHART_TYPE.LINE,
+        'area':          XL_CHART_TYPE.AREA,
         'pie':           XL_CHART_TYPE.PIE,
+        'donut':         XL_CHART_TYPE.DOUGHNUT,
+        'combo':         XL_CHART_TYPE.COLUMN_CLUSTERED,
         'waterfall':     XL_CHART_TYPE.COLUMN_CLUSTERED,
     }
     xl_type = chart_type_map.get(chart_type_str, XL_CHART_TYPE.COLUMN_CLUSTERED)
@@ -1497,11 +1502,26 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
     ).chart
 
     # Apply dual-axis layout (barChart primary + lineChart secondary with right Y axis)
-    if dual_axis and secondary_names and chart_type_str not in ('pie', 'line'):
+    if dual_axis and secondary_names and chart_type_str not in ('pie', 'donut', 'line', 'area'):
         try:
             _apply_dual_axis(chart, secondary_names)
         except Exception as e:
             print('dual axis error:', e)
+
+    # Donut hole size — set after chart creation via oxml
+    if chart_type_str == 'donut':
+        try:
+            from pptx.oxml.ns import qn as _qn
+            from lxml import etree as _et
+            plot_area = chart._element.find(_qn('c:plotArea'))
+            doughnut_chart = plot_area.find(_qn('c:doughnutChart')) if plot_area is not None else None
+            if doughnut_chart is not None:
+                hole = doughnut_chart.find(_qn('c:holeSize'))
+                if hole is None:
+                    hole = _et.SubElement(doughnut_chart, _qn('c:holeSize'))
+                hole.set('val', '55')  # 55% hole — standard doughnut appearance
+        except Exception:
+            pass
 
     # Title — suppress when the zone header placeholder already carries the label
     show_title = bool(chart_title) and not suppress_heading
@@ -1634,9 +1654,9 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
     except Exception:
         pass
 
-    # Pie: color each slice individually and rebuild dLbls via raw XML so
+    # Pie / Donut: color each slice individually and rebuild dLbls via raw XML so
     # Outside End positioning is honored reliably by PowerPoint.
-    if chart_type_str == 'pie':
+    if chart_type_str in ('pie', 'donut'):
         try:
             for ser_obj in chart.series:
                 for pi, point_obj in enumerate(ser_obj.points):
@@ -1729,7 +1749,7 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
         n_cats = len(categories)
         if _computed_cat_rotation is not None:
             rotation_deg = float(_computed_cat_rotation)
-        elif allow_chart_fallback and chart_type_str in ('bar', 'line', 'clustered_bar') and n_cats > 6:
+        elif allow_chart_fallback and chart_type_str in ('bar', 'line', 'clustered_bar', 'area', 'combo') and n_cats > 6:
             rotation_deg = -45.0
         else:
             rotation_deg = None
@@ -3136,11 +3156,11 @@ def render_block_title(slide, block, bt, use_template):
 
 
 def render_block_text_box(slide, block, bt):
-    """Render a generic text_box block."""
+    """Render a generic text_box block. Supports optional `rotation` in degrees (clockwise)."""
     text = block.get('text', '')
     if not text:
         return
-    add_text_box(slide,
+    txBox = add_text_box(slide,
         block.get('x', 0), block.get('y', 0),
         block.get('w', 1),  block.get('h', 0.3),
         text,
@@ -3150,6 +3170,12 @@ def render_block_text_box(slide, block, bt):
         block.get('color', '#000000'),
         block.get('align', 'left'),
         block.get('valign', 'middle'))
+    rotation = block.get('rotation')
+    if rotation is not None and txBox is not None:
+        try:
+            txBox.rotation = float(rotation)
+        except Exception:
+            pass
 
 
 def render_block_rect(slide, block):
@@ -3222,14 +3248,18 @@ def render_block_rule(slide, block, bt):
 
 
 def render_block_line(slide, block, bt):
-    """Render a straight connector line between two endpoints."""
+    """Render a straight connector line. Supports line_style: 'dashed' and arrowhead: true."""
     from pptx.enum.shapes import MSO_CONNECTOR
+    from pptx.oxml.ns import qn
+    from lxml import etree
     x1 = block.get('x1', block.get('x', 0))
     y1 = block.get('y1', block.get('y', 0))
     x2 = block.get('x2', x1)
     y2 = block.get('y2', y1)
     color = block.get('color') or bt.get('primary_color', '#1A3C8F')
     width_pt = float(block.get('line_width', 0.5) or 0.5)
+    line_style = block.get('line_style', 'solid')
+    has_arrowhead = bool(block.get('arrowhead', False))
     try:
         line = slide.shapes.add_connector(
             MSO_CONNECTOR.STRAIGHT,
@@ -3237,6 +3267,19 @@ def render_block_line(slide, block, bt):
         )
         line.line.color.rgb = hex_to_rgb(color)
         line.line.width = pt(width_pt)
+        ln = line.line._get_or_add_ln()
+        if line_style == 'dashed':
+            prstDash = ln.find(qn('a:prstDash'))
+            if prstDash is None:
+                prstDash = etree.SubElement(ln, qn('a:prstDash'))
+            prstDash.set('val', 'sysDash')
+        if has_arrowhead:
+            tailEnd = ln.find(qn('a:tailEnd'))
+            if tailEnd is None:
+                tailEnd = etree.SubElement(ln, qn('a:tailEnd'))
+            tailEnd.set('type', 'triangle')
+            tailEnd.set('w', 'med')
+            tailEnd.set('len', 'med')
     except Exception:
         pass
 
