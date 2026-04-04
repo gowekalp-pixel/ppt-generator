@@ -4544,13 +4544,19 @@ function _initiativeMapToBlocks(art, content_y, blocks, bt, r2) {
       blocks.push({
         block_type: 'text_box',
         x: r2(ax + 0.14), y: r2(blockStartY + nameLineH + blockGap), w: r2(trackW - 0.22), h: subLineH,
-        text: _truncateText(String(initiative.subtitle), 32),
+        text: String(initiative.subtitle),
         font_family: bodyFont, font_size: Math.max(8, bodyFontSize - 1), bold: false,
-        color: captionColor, align: 'left', valign: 'middle'
+        color: captionColor, align: 'left', valign: 'middle',
+        wrap: true
       })
     }
 
     // Dimension cells
+    const chipH    = 0.22
+    const chipGap  = 0.26  // chip row height including gap below
+    const textLineH = bodyFontSize * 0.022 * 1.35  // approx rendered line height in inches
+    const subFontH  = Math.max(8, bodyFontSize - 1) * 0.022 * 1.35
+
     dims.forEach((dim, di) => {
       const laneX = r2(ax + trackW + di * laneW)
       const contentX = r2(laneX + 0.12)
@@ -4563,17 +4569,33 @@ function _initiativeMapToBlocks(art, content_y, blocks, bt, r2) {
       const cellSubtitle = String(placement?.subtitle || '')
       const cellTone     = String(placement?.cell_tone || '').toLowerCase()
       const cellTags     = Array.isArray(placement?.tags) ? placement.tags : []
+      const maxTagChars  = Math.max(12, Math.floor((maxChipW - 0.14) / 0.066))
 
-      let contentY = r2(rowY + 0.09)
+      // ── Pre-calculate total content height for vertical centering ─────────────
+      let estimatedH = 0
+      if (cellTags.length) {
+        // Estimate chip rows needed
+        let chipX = 0, chipRows = 1
+        cellTags.slice(0, 4).forEach(tagObj => {
+          const tw = Math.min(maxChipW, Math.max(0.40, String(tagObj?.label || '').length * 0.066 + 0.14))
+          if (chipX + tw > contentW - 0.06 && chipRows < 2) { chipRows++; chipX = 0 }
+          chipX += tw + 0.05
+        })
+        estimatedH += chipRows * chipGap
+        if (cellSubtitle) estimatedH += subFontH + 0.04
+      } else {
+        if (cellTitle)    estimatedH += textLineH * Math.ceil(cellTitle.length / Math.max(1, contentW / (bodyFontSize * 0.010))) + 0.04
+        if (cellSubtitle) estimatedH += subFontH + 0.04
+      }
+      estimatedH = Math.min(estimatedH, rowH - 0.10)
 
-      // Phase / tag chips — each tag becomes one pill; tags are {label, tone} objects.
-      // Per-tag tone overrides the cell-level tone for individual chip color.
-      // When tags are present: tags act as the primary signal — primary_message is suppressed
-      // (agent4 puts any key supporting metric in secondary_message instead).
+      // Vertically centre the content block within the row
+      let contentY = r2(rowY + Math.max(0.07, (rowH - estimatedH) / 2))
+
+      // ── Render chips (tags-first path) ───────────────────────────────────────
       if (cellTags.length) {
         let chipX = contentX
         let rowsRendered = 0
-        const maxTagChars = Math.max(12, Math.floor((maxChipW - 0.14) / 0.066))
         cellTags.slice(0, 4).forEach(tagObj => {
           const tagLabel = String(tagObj?.label || tagObj || '')
           const tagTone  = String(tagObj?.tone  || cellTone  || 'neutral').toLowerCase()
@@ -4586,34 +4608,31 @@ function _initiativeMapToBlocks(art, content_y, blocks, bt, r2) {
           const tChipFill   = tagTone === 'primary'   ? (istyle.primary_chip_fill   || '#EBF1FF')
                             : tagTone === 'secondary' ? (istyle.secondary_chip_fill || '#FEF6E4')
                             :                           (istyle.neutral_chip_fill   || '#F3F4F6')
-          // Chip width: sized to text, capped at maxChipW (lane-relative)
           const chipW = r2(Math.min(maxChipW, Math.max(0.40, tagLabel.length * 0.066 + 0.14)))
-          // Wrap to next row if this chip overflows the lane right edge
           if (chipX + chipW > laneX + laneW - 0.06) {
             if (rowsRendered >= 1) return  // max 2 chip rows
-            contentY = r2(contentY + 0.26)
+            contentY = r2(contentY + chipGap)
             chipX = contentX
             rowsRendered++
           }
           blocks.push({
             block_type: 'rect',
-            x: chipX, y: contentY, w: chipW, h: 0.22,
+            x: chipX, y: contentY, w: chipW, h: chipH,
             fill_color: tChipFill, border_color: tChipBorder, border_width: 0.6, corner_radius: 8
           })
           blocks.push({
             block_type: 'text_box',
-            x: r2(chipX + 0.05), y: contentY, w: r2(chipW - 0.10), h: 0.22,
+            x: r2(chipX + 0.05), y: contentY, w: r2(chipW - 0.10), h: chipH,
             text: _truncateText(tagLabel, maxTagChars),
             font_family: bodyFont, font_size: 8, bold: true,
             color: tChipText, align: 'center', valign: 'middle'
           })
           chipX = r2(chipX + chipW + 0.05)
         })
-        contentY = r2(contentY + 0.26)
+        contentY = r2(contentY + chipGap)
 
-        // Tags present → skip primary_message (tags are the primary signal).
-        // Only render secondary_message as supporting detail below the chips.
-        if (cellSubtitle && contentY + 0.14 < rowY + rowH - 0.05) {
+        // Tags present → secondary_message only (primary suppressed)
+        if (cellSubtitle && contentY + 0.12 < rowY + rowH - 0.05) {
           blocks.push({
             block_type: 'text_box',
             x: contentX, y: contentY, w: contentW,
@@ -4624,7 +4643,7 @@ function _initiativeMapToBlocks(art, content_y, blocks, bt, r2) {
           })
         }
       } else {
-        // No tags → render primary message, then secondary below
+        // ── No tags: primary then secondary ──────────────────────────────────
         if (cellTitle) {
           const isPositive = /^\+/.test(cellTitle.trim())
           const textColor = isPositive ? (istyle.positive_color || bodyTextColor) : bodyTextColor
@@ -4638,8 +4657,7 @@ function _initiativeMapToBlocks(art, content_y, blocks, bt, r2) {
           })
           contentY = r2(contentY + primaryH + 0.04)
         }
-
-        if (cellSubtitle && contentY + 0.14 < rowY + rowH - 0.05) {
+        if (cellSubtitle && contentY + 0.12 < rowY + rowH - 0.05) {
           blocks.push({
             block_type: 'text_box',
             x: contentX, y: contentY, w: contentW,
