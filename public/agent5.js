@@ -4132,17 +4132,21 @@ function _comparisonTableToBlocks(art, content_y, blocks, bt, r2) {
         const colX = r2(ax + labelW + ci * colW)
         const textPad = 0.06
         const tonality = String(ratingObj?.tonality || '').toLowerCase()
-        // Tonality pill: render a colored rounded-rect behind the value when tonality is set
-        const tonalityFill = tonality === 'positive' ? (cs.yes_fill_color   || '#E4F2DE')
-                           : tonality === 'negative' ? (cs.no_fill_color    || '#FDE8E8')
-                           : tonality === 'neutral'  ? (cs.neutral_fill_color || '#F4F5F7')
-                           : null
         const tonalityText = tonality === 'positive' ? (cs.yes_text_color     || '#386B2A')
                            : tonality === 'negative' ? (cs.no_text_color      || '#8B2C23')
                            : tonality === 'neutral'  ? (cs.neutral_text_color || bodyTextColor)
                            : null
-        if (tonalityFill && visual.text) {
-          // Pill sized to the text, centred in the cell
+        // Pill only for short numeric/unit values (≤2 words, e.g. "28.7%", "₹1,082", "471k (68.1%)")
+        // Longer descriptive phrases get colored text only — no background pill
+        const wordCount = (visual.text || '').trim().split(/\s+/).filter(Boolean).length
+        const isNumericValue = wordCount <= 2
+        const tonalityFill = (tonality === 'positive' ? (cs.yes_fill_color   || '#E4F2DE')
+                           :  tonality === 'negative' ? (cs.no_fill_color    || '#FDE8E8')
+                           :  tonality === 'neutral'  ? (cs.neutral_fill_color || '#F4F5F7')
+                           :  null)
+
+        if (tonalityFill && isNumericValue && visual.text) {
+          // Pill: colored rounded-rect behind the value, centred in the cell
           const pillW = r2(Math.min(colW - 2 * textPad, Math.max(0.42, visual.text.length * 0.072 + 0.18)))
           const pillH = 0.24
           const pillX = r2(colX + (colW - pillW) / 2)
@@ -4162,14 +4166,17 @@ function _comparisonTableToBlocks(art, content_y, blocks, bt, r2) {
             color: tonalityText, align: 'center', valign: 'middle'
           })
         } else {
+          // Plain text — apply tonality as font color only (no background)
+          const textColor = (tonalityText && visual.text) ? tonalityText
+                          : isRecommended ? recommendedTextColor
+                          : bodyTextColor
           blocks.push({
             block_type: 'text_box',
             x: r2(colX + textPad), y: r2(rowY + 0.04), w: r2(colW - 2 * textPad), h: r2(rowH - 0.08),
             text: visual.text,
             font_family: bodyFont, font_size: cs.body_font_size || 10,
-            bold: false,
-            color: isRecommended ? recommendedTextColor : bodyTextColor,
-            align: 'center', valign: 'middle'
+            bold: !!tonalityText,
+            color: textColor, align: 'center', valign: 'middle'
           })
         }
       }
@@ -7049,7 +7056,7 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
 
   const bt = brandTokens || {}
 
-  return designedZones.map((dZone, zi) => {
+  const result = designedZones.map((dZone, zi) => {
     // Find the matching manifest zone — by index first, then by zone_id
     const mZone = manifestZones[zi]
                || manifestZones.find(z => z.zone_id === dZone.zone_id)
@@ -7468,6 +7475,30 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
       artifacts: mergedArtifacts
     }
   })
+
+  // Recovery: if the LLM omitted zones (e.g. truncation), append any manifest zones
+  // that were not matched by a designed zone. buildScratchZoneFrames will assign geometry,
+  // computeArtifactInternals will normalize artifact content downstream.
+  if (result.length < manifestZones.length) {
+    const matchedCount = result.length
+    const matchedIds = new Set(result.map(z => z.zone_id).filter(Boolean))
+    manifestZones.forEach((mZone, mi) => {
+      const alreadyCovered = mi < matchedCount || (mZone.zone_id && matchedIds.has(mZone.zone_id))
+      if (!alreadyCovered) {
+        // Use buildSafeArtifactShell so recovered artifacts have normalized content
+        // (e.g. column_headers+rows → dimension_labels+initiatives for initiative_map)
+        const recoveredArts = (mZone.artifacts || []).map(a => buildSafeArtifactShell(a, bt))
+        result.push({
+          ...mZone,
+          frame: null,  // geometry filled later by buildScratchZoneFrames
+          artifacts: recoveredArts
+        })
+        console.warn('Agent 5 — zone recovery: manifest zone', mZone.zone_id || mi, 'was missing from LLM output; re-injected from manifest')
+      }
+    })
+  }
+
+  return result
 }
 
 
