@@ -3686,19 +3686,38 @@ async function repairSlide(slide, brief, contentB64, layoutNames) {
   console.log('Agent 4 — repairing slide', slide.slide_number, ':', slide.title)
 
   const briefSummary = buildBriefSummaryForAgent4(brief)
+
+  // Build narrative_role constraint block so the repair knows what is permitted/forbidden
+  const narrativeRole = slide.narrative_role || ''
+  const NARRATIVE_CONSTRAINTS = {
+    recommendations:      { permitted: 'prioritization, initiative_map, comparison_table, cards (future targets/milestones only)', forbidden: 'chart showing actuals, workflow, matrix, driver_tree' },
+    methodology_note:     { permitted: 'insight_text, table (definitions/rates only)', forbidden: 'cards, chart, prioritization, workflow, matrix, driver_tree' },
+    context_setter:       { permitted: 'cards (baseline KPIs), stat_bar, comparison_table', forbidden: 'prioritization, workflow, matrix, driver_tree' },
+    exception_highlight:  { permitted: 'profile_card_set or cards (negative/warning sentiment), chart (supporting evidence)', forbidden: 'prioritization, workflow' },
+  }
+  const roleConstraint = NARRATIVE_CONSTRAINTS[narrativeRole]
+  const constraintBlock = roleConstraint
+    ? `\nNARRATIVE ROLE CONSTRAINTS (narrative_role = "${narrativeRole}"):
+  PERMITTED artifact types: ${roleConstraint.permitted}
+  FORBIDDEN artifact types: ${roleConstraint.forbidden}
+  IMPORTANT: If any zone currently uses a FORBIDDEN artifact type, you MUST replace it with a PERMITTED type and populate it with real data.\n`
+    : ''
+
   const prompt = `This slide has missing or invalid artifact content. Fix every zone with specific data from the source document.
 
 CONTEXT:
 Document type:  ${briefSummary.document_type || '—'}
 Key messages:   ${briefSummary.key_messages || '—'}
 Key data:       ${briefSummary.key_data_points || '—'}
-
+Narrative role: ${narrativeRole || '—'}
+${constraintBlock}
 SLIDE TO FIX:
 ${JSON.stringify(slide, null, 2)}
 
 Fix rules:
-- Replace all placeholder or empty content with real, specific data
-- Keep the same zones[] and artifact types — only fill in the content
+- Replace all placeholder or empty content with real, specific data from the source document
+- Keep the same zones[] structure and zone count — do not add or remove zones
+- Keep artifact types UNLESS they violate the NARRATIVE ROLE CONSTRAINTS above — if forbidden, replace with the best permitted type and populate fully
 - Do NOT change the slide structure to fit slide_archetype; slide_archetype is metadata only
 - Preserve the chosen zone_structure. For asymmetric zone structures, keep dense proof artifacts in the dominant slot and compact support artifacts in the smaller support slots.
 - Keep structure compatible with these rules:
@@ -3759,9 +3778,15 @@ Fix rules:
 // ═══════════════════════════════════════════════════════════════════════════════
 
 async function runAgent4(state) {
-  const brief      = state.outline
-  const contentB64 = state.contentB64
-  const brand      = state.brandRulebook || {}
+  const brief          = state.outline
+  const contentB64     = state.contentB64
+  const brand          = state.brandRulebook || {}
+  // Optional: when set, only process these slide numbers and merge into existingSlides
+  const targetNumbers  = Array.isArray(state.slideNumbers) && state.slideNumbers.length > 0
+    ? new Set(state.slideNumbers.map(Number))
+    : null
+  const existingSlides = Array.isArray(state.existingSlides) ? state.existingSlides : null
+  const isPartialRun   = !!(targetNumbers && existingSlides)
 
   // Use pre-filtered content_layout_names from Agent 2 when available.
   // This excludes title, section-header, divider, blank, and thank-you layouts
@@ -3785,23 +3810,34 @@ async function runAgent4(state) {
 
   // buildSlidePlan returns the full deck from Agent 3 (structural + content slides)
   const slidePlan      = buildSlidePlan(brief)
-  const contentPlan    = slidePlan.filter(s => s.slide_type === 'content')
+  const allContentPlan = slidePlan.filter(s => s.slide_type === 'content')
   const structuralPlan = slidePlan.filter(s => s.slide_type !== 'content')
-  const contentCount   = contentPlan.length
 
-  console.log('Agent 4 starting — content slides:', contentCount, '| structural slides from Agent 3:', structuralPlan.length)
+  // In a partial run, only process the requested slide numbers
+  const contentPlan  = isPartialRun
+    ? allContentPlan.filter(s => targetNumbers.has(s.slide_number))
+    : allContentPlan
+  const contentCount = contentPlan.length
+
+  if (isPartialRun) {
+    console.log('Agent 4 starting — PARTIAL RUN for slides:', [...targetNumbers].sort((a,b)=>a-b).join(', '))
+  } else {
+    console.log('Agent 4 starting — content slides:', contentCount, '| structural slides from Agent 3:', structuralPlan.length)
+  }
   console.log('  Brand layouts total:', totalLayouts, '| content layouts:', layoutNames.length,
     layoutNames.length >= 5 ? '→ layout mode (Agent 4 selects per slide)' : '→ zone-split mode')
 
-  // Structural slides (title, divider, thank_you) come pre-defined from Agent 3.
-  // Pass them through directly — no zone enrichment needed.
-  let allSlides = structuralPlan.map(plan => normaliseSlide({
-    slide_number: plan.slide_number,
-    slide_type:   plan.slide_type,
-    title:        plan.slide_title_draft || '',
-    subtitle:     plan.subtitle          || '',
-    key_message:  plan.strategic_objective || ''
-  }, plan))
+  // In a partial run, start from a copy of the existing deck; structural slides are already present.
+  // In a full run, build structural slides from Agent 3 plan.
+  let allSlides = isPartialRun
+    ? existingSlides.map(s => ({ ...s }))
+    : structuralPlan.map(plan => normaliseSlide({
+        slide_number: plan.slide_number,
+        slide_type:   plan.slide_type,
+        title:        plan.slide_title_draft || '',
+        subtitle:     plan.subtitle          || '',
+        key_message:  plan.strategic_objective || ''
+      }, plan))
 
   let summaryCardRegistry = []  // built from summary slide, threaded through all batches
 
@@ -3820,13 +3856,21 @@ async function runAgent4(state) {
     const result = await writeSlideBatch(batch, brief, contentB64, b + 1, layoutNames, summaryCardRegistry)
 
     if (!result) {
-      batch.forEach(plan => allSlides.push(normaliseSlide({}, plan)))
+      batch.forEach(plan => {
+        const normalised = normaliseSlide({}, plan)
+        const idx = allSlides.findIndex(s => s.slide_number === plan.slide_number)
+        if (idx >= 0) allSlides[idx] = normalised
+        else allSlides.push(normalised)
+      })
     } else {
       result.forEach(s => {
         // Content slide — match to plan entry by slide_number
         const plan = batch.find(p => p.slide_number === s.slide_number) || batch[0]
         const normalised = normaliseSlide(s, plan)
-        allSlides.push(normalised)
+        // Replace existing entry (partial run) or append (full run)
+        const idx = allSlides.findIndex(existing => existing.slide_number === normalised.slide_number)
+        if (idx >= 0) allSlides[idx] = normalised
+        else allSlides.push(normalised)
 
         // If this is the summary slide, extract cards for deduplication in subsequent batches
         if (normalised.narrative_role === 'summary' || (normalised.zones || []).some(z => z.zone_role === 'summary')) {
@@ -3846,7 +3890,10 @@ async function runAgent4(state) {
       // Fallback: if any content plan entry produced no output, fill with blank
       batch.forEach(plan => {
         if (!allSlides.find(s => s.slide_number === plan.slide_number && s.slide_type === 'content')) {
-          allSlides.push(normaliseSlide({}, plan))
+          const normalised = normaliseSlide({}, plan)
+          const idx = allSlides.findIndex(s => s.slide_number === plan.slide_number)
+          if (idx >= 0) allSlides[idx] = normalised
+          else allSlides.push(normalised)
         }
       })
     }
@@ -3858,9 +3905,12 @@ async function runAgent4(state) {
 
   // Layout-mode enforcement: when 5+ content layouts exist every content slide must
   // have selected_layout_name set.  Claude sometimes misses this — fill gaps here.
+  // In a partial run, only enforce on the slides we just generated.
   const hasLayouts = layoutNames.length >= 5
+  const shouldEnforce = (s) => !isPartialRun || targetNumbers.has(s.slide_number)
   if (hasLayouts) {
     allSlides = allSlides.map(s => {
+      if (!shouldEnforce(s)) return s
       if (s.slide_type === 'content' && !hasCompatibleLayout(s, layoutNames)) {
         console.log('  No compatible layout for slide', s.slide_number, '→ using scratch splits')
         return assignScratchSplits(s)
@@ -3873,11 +3923,14 @@ async function runAgent4(state) {
       return s
     })
   } else {
-    allSlides = allSlides.map(assignScratchSplits)
+    allSlides = allSlides.map(s => shouldEnforce(s) ? assignScratchSplits(s) : s)
   }
 
-  // Validate and repair
-  const failed = allSlides.filter(s => hasPlaceholderContent(s))
+  // Validate and repair — in a partial run, only check the slides we just generated
+  const slidesToCheck = isPartialRun
+    ? allSlides.filter(s => targetNumbers.has(s.slide_number))
+    : allSlides
+  const failed = slidesToCheck.filter(s => hasPlaceholderContent(s))
   console.log('  Slides needing repair:', failed.length)
 
   // Repair in groups of 2 — each repair re-sends the PDF so we observe the same
@@ -3907,6 +3960,7 @@ async function runAgent4(state) {
   // Second enforcement pass: repaired slides may still be missing selected_layout_name
   if (hasLayouts) {
     allSlides = allSlides.map(s => {
+      if (!shouldEnforce(s)) return s
       if (s.slide_type === 'content' && !hasCompatibleLayout(s, layoutNames)) {
         console.log('  Post-repair: no compatible layout for slide', s.slide_number, '→ using scratch splits')
         return assignScratchSplits(s)
@@ -3919,7 +3973,7 @@ async function runAgent4(state) {
       return s
     })
   } else {
-    allSlides = allSlides.map(assignScratchSplits)
+    allSlides = allSlides.map(s => shouldEnforce(s) ? assignScratchSplits(s) : s)
   }
 
   // Summary log

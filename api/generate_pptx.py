@@ -1365,8 +1365,15 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
     show_legend     = artifact.get('show_legend', False)
     series_styles   = artifact.get('series_style', [])
     cs              = artifact.get('chart_style', {})
-    dual_axis       = artifact.get('dual_axis', False)
-    secondary_names = set(artifact.get('secondary_series', []))
+    dual_axis            = artifact.get('dual_axis', False)
+    secondary_series_raw = artifact.get('secondary_series', [])
+    # secondary_series may be a list of objects {name, values, ...} or a list of strings
+    if secondary_series_raw and isinstance(secondary_series_raw[0], dict):
+        secondary_series_data = secondary_series_raw
+        secondary_names       = set(s.get('name', '') for s in secondary_series_raw)
+    else:
+        secondary_series_data = []
+        secondary_names       = set(secondary_series_raw)
     chart_palette   = bt.get('chart_palette', ['#0F2FB5', '#FF8E00', '#2D962D', '#D60202'])
     header_block    = artifact.get('header_block', {}) or {}
     header_font_size = int(header_block.get('font_size') or cs.get('title_font_size', 11) or 11)
@@ -1487,11 +1494,17 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
         )
         return
 
-    # Build ChartData
+    # Build ChartData — primary series first, then secondary (for combo/dual-axis charts)
     cd = ChartData()
     cd.categories = [str(c) for c in categories]
     for si, ser in enumerate(series_data):
         ser_name   = ser.get('name', 'Series ' + str(si + 1))
+        ser_values = [float(v) if v is not None else 0 for v in (ser.get('values') or [])]
+        while len(ser_values) < len(categories): ser_values.append(0)
+        cd.add_series(ser_name, ser_values[:len(categories)])
+    # Add secondary series so _apply_dual_axis can find and move them to the line plot
+    for si, ser in enumerate(secondary_series_data):
+        ser_name   = ser.get('name', 'Secondary ' + str(si + 1))
         ser_values = [float(v) if v is not None else 0 for v in (ser.get('values') or [])]
         while len(ser_values) < len(categories): ser_values.append(0)
         cd.add_series(ser_name, ser_values[:len(categories)])

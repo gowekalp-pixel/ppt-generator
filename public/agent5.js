@@ -2061,7 +2061,8 @@ function normalizeComparisonTableManifest(artifact) {
           return {
             criterion: header.label || header.id || String(cell?.column_id || ''),
             column_id: cell?.column_id || header.id || '',
-            rating: cell?.rating || cell?.display_value || '',
+            rating: cell?.rating || '',
+            display_value: cell?.display_value || cell?.rating || '',
             note: cell?.secondary_message || cell?.note || '',
             representation_type: cell?.representation_type || ''
           }
@@ -4109,15 +4110,28 @@ function _comparisonTableToBlocks(art, content_y, blocks, bt, r2) {
           fill_color: visual.fill,
           border_color: null, border_width: 0
         })
+        blocks.push({
+          block_type: 'text_box',
+          x: r2(cx - iconR - 0.02), y: r2(cy - iconR), w: r2(iconR * 2 + 0.04), h: r2(iconR * 2),
+          text: visual.text,
+          font_family: titleFont, font_size: 10,
+          bold: true,
+          color: visual.color, align: 'center', valign: 'middle'
+        })
+      } else {
+        // Text cell — span the full column width so values aren't clipped
+        const colX = r2(ax + labelW + ci * colW)
+        const textPad = 0.06
+        blocks.push({
+          block_type: 'text_box',
+          x: r2(colX + textPad), y: r2(rowY + 0.04), w: r2(colW - 2 * textPad), h: r2(rowH - 0.08),
+          text: visual.text,
+          font_family: bodyFont, font_size: cs.body_font_size || 10,
+          bold: false,
+          color: isRecommended ? recommendedTextColor : bodyTextColor,
+          align: 'center', valign: 'middle'
+        })
       }
-      blocks.push({
-        block_type: 'text_box',
-        x: r2(cx - iconR - 0.02), y: r2(cy - iconR), w: r2(iconR * 2 + 0.04), h: r2(iconR * 2),
-        text: visual.text,
-        font_family: titleFont, font_size: reprType === 'text' ? (cs.body_font_size || 9) : 10,
-        bold: reprType !== 'text',
-        color: visual.color, align: 'center', valign: 'middle'
-      })
     })
 
     if (oi < options.length - 1) {
@@ -6038,7 +6052,7 @@ function _workflowToBlocks(art, content_y, blocks, bt, r2) {
   })
 }
 
-function _artifactToBlocks(art, blocks, bt, r2) {
+function _artifactToBlocks(art, blocks, bt, r2, fontSizeFloor) {
   const ax = art.x || 0
   const ay = art.y || 0
   const aw = art.w || 0
@@ -6172,9 +6186,9 @@ function _artifactToBlocks(art, blocks, bt, r2) {
 
     case 'insight_text': {
       if (art.insight_mode === 'grouped') {
-        _groupedInsightToBlocks(art, content_y, blocks, bt, r2)
+        _groupedInsightToBlocks(art, content_y, blocks, bt, r2, fontSizeFloor)
       } else {
-        _standardInsightToBlocks(art, content_y, blocks, r2)
+        _standardInsightToBlocks(art, content_y, blocks, r2, fontSizeFloor)
       }
       break
     }
@@ -6292,7 +6306,103 @@ function _artifactToBlocks(art, blocks, bt, r2) {
   decorateArtifactBlocks(blocks, headerEnd, blocks.length, art, 'artifact_body')
 }
 
-function _standardInsightToBlocks(art, content_y, blocks, r2) {
+// Compute the standalone bullet font size an insight artifact would naturally use,
+// without actually emitting blocks. Used for cross-artifact harmonisation.
+function _computeInsightFontSize(art, content_y) {
+  const r2    = x => Math.round(x * 100) / 100
+  const mode  = art.insight_mode || 'standard'
+  const ay    = art.y || 0
+  const ah    = art.h || 0
+  const aw    = art.w || 0
+
+  if (mode !== 'grouped') {
+    // standard
+    const sty        = art.style || {}
+    const hasBox     = !!(sty.fill_color || (sty.border_color && sty.border_width))
+    const cr         = sty.corner_radius || 0
+    const hasHeader  = !!(art.header_block && art.header_block.text)
+    const BOX_TOP_GUARD = (hasBox && hasHeader) ? 0.06 : 0
+    const body_y     = r2(content_y + BOX_TOP_GUARD)
+    const body_h     = r2(Math.max(0.3, ay + ah - body_y))
+    const cornerInset = cr >= 4 ? 0.04 : 0
+    const padV = hasBox ? (0.10 + cornerInset) : 0.06
+    const padH = hasBox ? (0.12 + cornerInset) : 0.04
+    const innerH     = Math.max(0.2, body_h - 2 * padV)
+    const points     = art.points || []
+    const nPoints    = Math.max(1, points.length)
+    const st         = art.body_style || {}
+    const avgChars   = points.reduce((s, p) => s + String(p?.text || p || '').length, 0) / nPoints
+    const areaW      = Math.max(0.3, aw - 2 * padH)
+    let fontSize = st.font_size || 10
+    for (let tryFs = 18; tryFs >= Math.max(9, fontSize); tryFs--) {
+      const linesEach = Math.max(1, Math.ceil(avgChars / Math.max(1, areaW * 72 / (tryFs * 0.56))))
+      const lineH     = (tryFs / 72) * 1.3
+      const nPoints2  = nPoints
+      const estH      = nPoints2 * linesEach * lineH + (nPoints2 - 1) * 0.04
+      if (estH <= innerH * 0.82) { fontSize = tryFs; break }
+    }
+    return fontSize
+  } else {
+    // grouped — return the bullet font size (not the header font)
+    const groups      = art.groups || []
+    if (!groups.length) return 10
+    const total_content_h = r2(ay + ah - content_y)
+    const gLayout     = art.group_layout || 'rows'
+    const g_gap       = art.group_gap_in || 0.08
+    const hb_gap      = art.header_to_box_gap_in || 0.05
+    const ghs         = art.group_header_style || {}
+    const bsty        = art.bullet_style || {}
+    const gbs         = art.group_bullet_box_style || {}
+    const n           = groups.length
+
+    let minBulletFs = 18
+    if (gLayout === 'rows') {
+      const h_w           = ghs.w || 1.2
+      const box_w         = Math.max(0.3, aw - h_w - hb_gap)
+      const total_bullets = Math.max(1, groups.reduce((s, g) => s + (g.bullets || []).length, 0))
+      const total_rh      = Math.max(0.2, total_content_h - (n - 1) * g_gap)
+      for (const g of groups) {
+        const nb    = Math.max(1, (g.bullets || []).length)
+        const row_h = r2(Math.max(0.25, total_rh * (nb / total_bullets)))
+        const bPadV = (gbs.padding && gbs.padding.top)  || 0.08
+        const bPadH = (gbs.padding && gbs.padding.left) || 0.10
+        const bAreaW = Math.max(0.3, box_w - 2 * bPadH)
+        const bAreaH = Math.max(0.1, row_h - 2 * bPadV)
+        const bullets = g.bullets || []
+        const avgC  = bullets.reduce((s, b) => s + String(b?.text || b || '').length, 0) / Math.max(1, bullets.length)
+        let fs = bsty.font_size || 10
+        for (let tryFs = 18; tryFs >= Math.max(9, fs); tryFs--) {
+          const lines = Math.max(1, Math.ceil(avgC / Math.max(1, bAreaW * 72 / (tryFs * 0.56))))
+          const estH  = bullets.length * lines * (tryFs / 72) * 1.3 + (bullets.length - 1) * 0.04
+          if (estH <= bAreaH * 0.82) { fs = tryFs; break }
+        }
+        minBulletFs = Math.min(minBulletFs, fs)
+      }
+    } else {
+      const col_w = r2((aw - (n - 1) * g_gap) / Math.max(n, 1))
+      const h_h   = ghs.h || 0.28
+      const box_h = r2(total_content_h - h_h - hb_gap)
+      for (const g of groups) {
+        const bPadV  = (gbs.padding && gbs.padding.top)  || 0.08
+        const bPadH  = (gbs.padding && gbs.padding.left) || 0.10
+        const bAreaW = Math.max(0.3, col_w - 2 * bPadH)
+        const bAreaH = Math.max(0.1, box_h - 2 * bPadV)
+        const bullets = g.bullets || []
+        const avgC  = bullets.reduce((s, b) => s + String(b?.text || b || '').length, 0) / Math.max(1, bullets.length)
+        let fs = bsty.font_size || 10
+        for (let tryFs = 18; tryFs >= Math.max(9, fs); tryFs--) {
+          const lines = Math.max(1, Math.ceil(avgC / Math.max(1, bAreaW * 72 / (tryFs * 0.56))))
+          const estH  = bullets.length * lines * (tryFs / 72) * 1.3 + (bullets.length - 1) * 0.04
+          if (estH <= bAreaH * 0.82) { fs = tryFs; break }
+        }
+        minBulletFs = Math.min(minBulletFs, fs)
+      }
+    }
+    return minBulletFs
+  }
+}
+
+function _standardInsightToBlocks(art, content_y, blocks, r2, fontSizeFloor) {
   const ax = art.x || 0
   const ay = art.y || 0
   const aw = art.w || 0
@@ -6347,6 +6457,8 @@ function _standardInsightToBlocks(art, content_y, blocks, r2) {
   for (let tryFs = 18; tryFs >= Math.max(9, fontSize); tryFs--) {
     if (estimatedH(tryFs) <= innerH * 0.82) { fontSize = tryFs; break }
   }
+  // Apply cross-artifact harmonisation floor (min font across all insights on slide)
+  if (fontSizeFloor && fontSizeFloor < fontSize) fontSize = fontSizeFloor
 
   // ── Vertical centering ────────────────────────────────────────────────────
   // Shrink the bullet_list to its estimated content height, then offset y to centre it
@@ -6365,7 +6477,7 @@ function _standardInsightToBlocks(art, content_y, blocks, r2) {
   })
 }
 
-function _groupedInsightToBlocks(art, content_y, blocks, bt, r2) {
+function _groupedInsightToBlocks(art, content_y, blocks, bt, r2, fontSizeFloor) {
   const ax      = art.x || 0
   const ay      = art.y || 0
   const aw      = art.w || 0
@@ -6480,7 +6592,7 @@ function _groupedInsightToBlocks(art, content_y, blocks, bt, r2) {
       const bPadH    = (gbs.padding && gbs.padding.left) || 0.10
       const bAreaW   = Math.max(0.3, box_w - 2 * bPadH)
       const bAreaH   = Math.max(0.1, row_h - 2 * bPadV)
-      const bFs      = _bulletFontSize(g.bullets || [], bAreaW, bAreaH, bsty.font_size)
+      const bFs      = Math.min(_bulletFontSize(g.bullets || [], bAreaW, bAreaH, bsty.font_size), fontSizeFloor || Infinity)
       const { offset: bOffset, h: bH } = _centerBullets(g.bullets || [], bAreaW, bAreaH, bFs, bPadV)
       blocks.push({
         block_type: 'bullet_list',
@@ -6555,7 +6667,7 @@ function _groupedInsightToBlocks(art, content_y, blocks, bt, r2) {
       const bPadH  = (gbs.padding && gbs.padding.left) || 0.10
       const bAreaW = Math.max(0.3, col_w - 2 * bPadH)
       const bAreaH = Math.max(0.1, box_h - 2 * bPadV)
-      const bFs    = _bulletFontSize(g.bullets || [], bAreaW, bAreaH, bsty.font_size)
+      const bFs    = Math.min(_bulletFontSize(g.bullets || [], bAreaW, bAreaH, bsty.font_size), fontSizeFloor || Infinity)
       const { offset: bOffset, h: bH } = _centerBullets(g.bullets || [], bAreaW, bAreaH, bFs, bPadV)
       blocks.push({
         block_type: 'bullet_list',
@@ -6792,9 +6904,27 @@ function flattenToBlocks(slideSpec, brandTokens) {
   }
 
   // ── 3. Zones → Artifacts ──────────────────────────────────────────────────
+  // Pre-pass: compute each insight artifact's standalone font size, then
+  // harmonise all insight bullet text on this slide to the minimum found.
+  // Group headers are excluded — only bullet/body text is harmonised.
+  const allArts = (slideSpec.zones || []).flatMap(z => z.artifacts || [])
+  const insightArts = allArts.filter(a => a.type === 'insight_text')
+  let slideFontSizeFloor = null
+  if (insightArts.length > 1) {
+    const sizes = insightArts.map(a => {
+      // Approximate content_y: art.y (header handled inside compute fn)
+      const approxContentY = (a.header_block && a.header_block.text)
+        ? (a.y || 0) + (a.header_block.h || 0.30) + 0.07
+        : (a.y || 0)
+      return _computeInsightFontSize(a, approxContentY)
+    })
+    slideFontSizeFloor = Math.min(...sizes)
+  }
+
   for (const zone of (slideSpec.zones || [])) {
     for (const art of (zone.artifacts || [])) {
-      _artifactToBlocks(art, blocks, bt, r2)
+      const floor = art.type === 'insight_text' ? slideFontSizeFloor : null
+      _artifactToBlocks(art, blocks, bt, r2, floor)
     }
   }
 
@@ -8055,11 +8185,17 @@ async function runAgent5(state) {
   }
   console.log('Agent 5 -- final slide sequence:', slideNums.join(', '))
 
-  // Strip brand_tokens from every slide — renderer reads from the top-level key.
+  // Strip internal-only fields from every slide before handing off to Agent 6 / renderer.
+  // brand_tokens: renderer reads from the top-level key.
+  // zones_summary, _*_validation_issues: debug metadata — not read by Agent 6 or generate_pptx.
   const slides = finalDesigned.map(slide => {
     if (!slide) return slide
     const out = Object.assign({}, slide)
     delete out.brand_tokens
+    delete out.zones_summary
+    delete out._validation_issues
+    delete out._source_validation_issues
+    delete out._render_validation_issues
     return out
   })
 
