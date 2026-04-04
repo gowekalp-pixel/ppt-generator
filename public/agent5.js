@@ -50,7 +50,6 @@ Your task is to convert each slide into an exact render-ready layout specificati
 
 You are NOT rewriting content.
 You are NOT changing business meaning.
-slide_archetype is descriptive metadata only. It must never override the explicit zones, artifact types, artifact subtypes, or selected_layout_name from Agent 4.
 
 You ARE responsible for:
 - spatial layout
@@ -194,7 +193,6 @@ Each slide must return EXACTLY:
 {
   "slide_number": number,
   "slide_type": "title" | "divider" | "content",
-  "slide_archetype": "summary" | "trend" | "comparison" | "breakdown" | "driver_analysis" | "process" | "recommendation" | "dashboard" | "proof" | "roadmap",
   "layout_mode": true | false,
   "selected_layout_name": "string — brand layout name chosen by Agent 4, or empty string",
   "canvas": {
@@ -1927,7 +1925,6 @@ async function buildFallbackDesign(manifestSlide, brand) {
     '\n\nBuild the best possible layout for this slide.' +
     '\nPreserve the title, key_message, zones structure and artifact content from the manifest.' +
     '\nCRITICAL: preserve the exact number of zones and the exact artifact types in each zone from the manifest.' +
-    '\nTreat slide_archetype as a weak summary label only. The explicit manifest structure is authoritative.' +
     '\nDo NOT collapse charts, tables, workflows, cards, matrix, driver_tree, prioritization, comparison_table, initiative_map, profile_card_set, or risk_register into generic insight_text unless the manifest itself uses insight_text.' +
     '\nChoose the cleanest, most board-ready layout from the manifest structure itself: zone count, zone roles, artifact types, and selected_layout_name if present.' +
     '\nReturn a single JSON object for this one slide.'
@@ -2445,7 +2442,6 @@ function buildMinimalSafeSlide(manifestSlide, tokens) {
   const fallbackSlide = {
     slide_number: manifestSlide.slide_number,
     slide_type: manifestSlide.slide_type || 'content',
-    slide_archetype: manifestSlide.slide_archetype || 'summary',
     canvas: {
       width_in: w, height_in: h,
       margin: { left: 0.40, right: 0.40, top: 0.15, bottom: 0.30 },
@@ -7192,7 +7188,6 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
     // Always override with manifest ground truth (Claude may drift on slide_number etc.)
     slide_number:          manifestSlide.slide_number,
     slide_type:            manifestSlide.slide_type            || designed.slide_type,
-    slide_archetype:       manifestSlide.slide_archetype       || designed.slide_archetype || 'summary',
     // Layout mode fields — ground truth from Agent 4 manifest
     layout_mode:           isLayoutMode,
     selected_layout_name:  manifestSlide.selected_layout_name  || designed.selected_layout_name || '',

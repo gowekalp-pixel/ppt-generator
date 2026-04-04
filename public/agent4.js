@@ -827,12 +827,12 @@ In Scratch Mode:
 
 4. Derive zone splits
 - Use the nearest valid split family consistent with zone_structure:
-  - single zone → `full`
-  - 2 stacked zones → `top_50+bottom_50`, `top_40+bottom_60`, or `top_30+bottom_70`
-  - 2 side-by-side zones → `left_50+right_50`, `left_60+right_40`, or `left_40+right_60`
-  - 3 zones top-led → `top_left_50 + top_right_50 + bottom_full`
-  - 3 zones left-led → `left_full_50 + top_right_50_h + bottom_right_50_h`
-  - 4 zones → `tl + tr + bl + br`
+  - single zone → full
+  - 2 stacked zones → top_50+bottom_50, top_40+bottom_60, or top_30+bottom_70
+  - 2 side-by-side zones → left_50+right_50, left_60+right_40, or left_40+right_60
+  - 3 zones top-led → top_left_50 + top_right_50 + bottom_full
+  - 3 zones left-led → left_full_50 + top_right_50_h + bottom_right_50_h
+  - 4 zones → tl + tr + bl + br
 
 5. Validate each zone against artifact sizing ranges
 - If any primary artifact falls below MIN_W or MIN_H, the split is invalid.
@@ -922,8 +922,6 @@ Each slide object must contain EXACTLY these top-level fields:
   "slide_number": number,
   "slide_type": "title" | "divider" | "content" | "thank_you",
   "narrative_role": "string — carry forward from Agent 3 plan; empty string for structural slides",
-  "slide_archetype": "summary" | "trend" | "comparison" | "breakdown" | "driver_analysis" |
-                     "process" | "recommendation" | "dashboard" | "proof" | "roadmap",
   "selected_layout_name": "string",
   "title": "string",
   "subtitle": "string",
@@ -993,18 +991,6 @@ insight_text:
   }
   Use either points[] OR groups[] — never both.
 
-  STANDARD mode bullet rules:
-  - Max points by slide area: < 25% → 4 pts; 25–50% → 6 pts; > 50% → 8 pts (HARD MAX)
-  - Each bullet ≤ 12 words. 1–2 data points per bullet. Remainder goes to speaker notes.
-  - Data-first phrasing: lead with the number or entity, not "This shows that…"
-  - No compound sentences with dashes or semicolons — one idea per bullet.
-  - If at the slide-area cap with findings remaining: move lower-priority findings to speaker notes.
-
-  GROUPED mode bullet rules:
-  - Grouped mode eligibility by slide area: < 30% → not allowed, revert to Standard; 30–50% → max 3 groups × 3 bullets each; > 50% → max 6 groups × 3 bullets each (HARD MAX)
-  - Each bullet ≤ 12 words. 1–2 data points per bullet. Remainder to speaker notes.
-  - Group headers: 2–4 words, no verbs, label the theme not the finding.
-
   Content integrity: preserve ALL facts, numbers, names, percentages exactly from source.
   Do NOT drop data-bearing facts. DO compress prose around the facts.
 
@@ -1028,8 +1014,7 @@ chart:
     "show_legend": true
   }
   chart_title is rendered INSIDE the plot area; artifact_header is the zone heading.
-  When a layout header placeholder exists, set chart_title: "" — never duplicate in both.
-
+  
 group_pie chart — use this schema instead when chart_type is "group_pie":
   {
     "type": "chart",
@@ -1047,14 +1032,13 @@ group_pie chart — use this schema instead when chart_type is "group_pie":
     "show_data_labels": true                           ← percentage labels on each slice
   }
   group_pie rules:
-  - categories[] = the slice breakdown (same for all pies); max 7 entries
-  - series[] = one entry per entity; series[i].name becomes the label BELOW pie i; max 8 entries
+  - categories[] = the shared slice breakdown for all pies
+  - series[] = one entry per entity; series[i].name becomes the label BELOW pie i
   - series[i].series_total (optional): pre-formatted absolute total displayed as a sub-label
     directly below the entity name under each pie — use when entities differ materially in
     absolute scale and the audience needs both composition and magnitude. Agent 4 must compute
     and format this value from source data (e.g. "₹39.7L", "23%", "$4.2M") — do not leave
     it blank or delegate calculation to Agent 5. Omit the field entirely if not meaningful.
-  - Each series values[] must sum to ~100 (percentages) or represent a consistent unit
   - values[] length must equal categories[] length for every series
   - Do NOT use x_label, y_label, dual_axis, secondary_series for group_pie
   - Legend is always shared and rendered once above the group, below the artifact_header
@@ -1080,15 +1064,29 @@ workflow:
     "workflow_type": "process_flow" | "hierarchy" | "decomposition" | "timeline",
     "flow_direction": "left_to_right" | "top_to_bottom" | "top_down_branching" | "bottom_up",
     "artifact_header": "string",
-    "workflow_insight": "string",
     "nodes": [
-      { "id": "n1", "label": "string", "value": "string", "description": "string", "level": 1 }
+      {
+        "id": "n1",
+        "node_label": "string",
+        "primary_message": "string",
+        "secondary_message": "string",
+        "level": 1
+      }
     ],
     "connections": [ { "from": "n1", "to": "n2", "type": "arrow" } ]
   }
-  Node copy limits: label 2–5 words (hard max 18 chars); value 2–6 words; description 8–18 words.
-  For left_to_right / timeline: value = short secondary above box; description = longer note below.
-  For top_to_bottom / bottom_up: use only description; leave value empty.
+  Node copy limits:
+  - node_label: 2–5 words (hard max 18 chars)
+  - primary_message: 2–6 words
+  - secondary_message: 8–18 words
+  Workflow node usage by type:
+  - process_flow / timeline:
+    - node_label = step / phase name
+    - primary_message = short top message, KPI, or milestone cue
+    - secondary_message = supporting note below
+  - hierarchy / decomposition:
+    - node_label is mandatory
+    - primary_message and secondary_message are optional and should be used only if they improve clarity
   Max 6 nodes. Max 8 connections. No crossing connections.
 
 table:
