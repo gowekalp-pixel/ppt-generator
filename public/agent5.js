@@ -4504,7 +4504,7 @@ function _initiativeMapToBlocks(art, content_y, blocks, bt, r2) {
     // Vertical column separator spanning full table height
     blocks.push({
       block_type: 'rect',
-      x: laneX, y: ay, w: 0.007, h: ah,
+      x: laneX, y: ay, w: 0.003, h: ah,
       fill_color: gridColor, border_color: null, border_width: 0, corner_radius: 0
     })
     blocks.push({
@@ -4526,21 +4526,25 @@ function _initiativeMapToBlocks(art, content_y, blocks, bt, r2) {
   initiatives.forEach((initiative, ii) => {
     const rowY = r2(rowStartY + ii * rowH)
 
-    // Initiative name + subtitle in left track column
+    // Initiative name + subtitle — vertically centred as a combined block within the row
     const hasSubtitle = Boolean(initiative?.subtitle)
-    const nameH = hasSubtitle ? 0.26 : r2(Math.min(0.52, rowH - 0.20))
+    const nameLineH   = 0.26   // height of the name text_box
+    const subLineH    = 0.18   // height of the subtitle text_box
+    const blockGap    = 0.04
+    const combinedH   = hasSubtitle ? nameLineH + blockGap + subLineH : nameLineH
+    const blockStartY = r2(rowY + Math.max(0.06, (rowH - combinedH) / 2))
     blocks.push({
       block_type: 'text_box',
-      x: r2(ax + 0.14), y: r2(rowY + 0.10), w: r2(trackW - 0.22), h: nameH,
+      x: r2(ax + 0.14), y: blockStartY, w: r2(trackW - 0.22), h: nameLineH,
       text: String(initiative?.name || ''),
       font_family: titleFont, font_size: labelFontSize, bold: true,
-      color: bodyTextColor, align: 'left', valign: 'top'
+      color: bodyTextColor, align: 'left', valign: 'middle'
     })
     if (hasSubtitle) {
       blocks.push({
         block_type: 'text_box',
-        x: r2(ax + 0.14), y: r2(rowY + 0.10 + nameH + 0.04), w: r2(trackW - 0.22), h: 0.20,
-        text: _truncateText(String(initiative.subtitle), 36),
+        x: r2(ax + 0.14), y: r2(blockStartY + nameLineH + blockGap), w: r2(trackW - 0.22), h: subLineH,
+        text: _truncateText(String(initiative.subtitle), 32),
         font_family: bodyFont, font_size: Math.max(8, bodyFontSize - 1), bold: false,
         color: captionColor, align: 'left', valign: 'middle'
       })

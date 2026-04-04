@@ -1367,16 +1367,16 @@ initiative_map:
     "rows": [
       {
         "id": "string",
-        "initiative_name": "string — bold row label shown at left (e.g. track or product name)",
-        "initiative_subtitle": "string — optional muted line below the initiative name (e.g. category or sub-track)",
+        "initiative_name": "string — bold row label, 2–5 words",
+        "initiative_subtitle": "string — OPTIONAL muted sub-label (e.g. category); omit if initiative_name is already self-explanatory. Max 5 words. Must NOT repeat any word from initiative_name.",
         "cells": [
           {
             "column_id": "string — matches column_headers[].id",
-            "primary_message": "string — main content headline for this cell (e.g. action, KPI, outcome)",
-            "secondary_message": "string — optional supporting line below primary_message",
+            "primary_message": "string — headline for this cell; 2–5 words max",
+            "secondary_message": "string — OPTIONAL detail line; include ONLY when primary_message is ≤4 words AND secondary adds non-redundant context; max 7 words; omit otherwise",
             "tags": [
               {
-                "label": "string — short pill text (e.g. city name, priority band, owner)",
+                "label": "string — short pill text (e.g. city name, priority band, owner); max 2 words",
                 "tone": "primary" | "secondary" | "neutral"
               }
             ],
@@ -1388,15 +1388,17 @@ initiative_map:
   }
   initiative_map usage:
   - each row is one initiative / workstream; columns are structured dimensions (phase, owner, KPI, status).
-  - each cell is a self-contained content block.
-  - tags[] are optional pills rendered inside the cell — city names, owners, priority bands, confidence labels, etc. Any cell can carry tags.
+  - DENSITY RULE: every cell must fit in ~0.7" of height. Be ruthless with brevity.
+  - primary_message: 2–5 words — the single most important fact for that cell.
+  - secondary_message: OPTIONAL — only add when primary_message is ≤4 words AND secondary adds a genuinely distinct data point. Max 7 words. Never restate primary_message in different words.
+  - initiative_subtitle: OPTIONAL — only add when initiative_name alone is ambiguous. Max 5 words. Must not repeat words from initiative_name.
+  - tags[] are optional pills — city names, owners, priority bands, confidence labels. Max 3 tags per cell.
   - each tag carries its own tone ("primary" | "secondary" | "neutral") for individual chip colour.
   - cell_tone drives the chip fill / border palette for chips with no individual tone override.
-  - CRITICAL rendering rule: when tags[] is non-empty, primary_message is suppressed by the renderer — the tags ARE the primary visual signal. In this case put the key metric or action into secondary_message, and leave primary_message empty ("").
-  - When tags[] is empty, primary_message is the headline action or metric; secondary_message is the supporting note below it.
-  - initiative_subtitle is shown below the initiative_name in a muted style; use it for sub-track or product category labels.
-  - Typical city-tagged cell: tags = [{label:"Bangalore",tone:"primary"}, ...], primary_message = "", secondary_message = "3,981 + 2,810 orders on base SKU".
-  - Typical tag-free cell: primary_message = "~₹0.3–0.4 Cr incremental revenue", secondary_message = "~15% demand capture".
+  - CRITICAL rendering rule: when tags[] is non-empty, primary_message is suppressed by the renderer — tags ARE the primary visual signal. Put any key metric into secondary_message (≤7 words), leave primary_message "".
+  - When tags[] is empty: primary_message is the headline; secondary_message is optional supporting detail.
+  - Typical city-tagged cell: tags=[{label:"Bangalore",tone:"primary"},{label:"Mumbai",tone:"primary"}], primary_message="", secondary_message="9,009 orders at ₹0.26Cr".
+  - Typical tag-free cell: primary_message="~₹0.3–0.4Cr revenue", secondary_message="" (omit unless distinct).
   NEVER use when rows have a rank order (use prioritization). NEVER use for process steps (use workflow).
 
 profile_card_set:
