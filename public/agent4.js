@@ -1077,13 +1077,13 @@ workflow:
   }
   Node copy limits:
   - node_label: 2–5 words (hard max 18 chars)
-  - primary_message: 2–6 words
+  - primary_message: 4-10 words
   - secondary_message: 8–18 words
   Workflow node usage by type:
   - process_flow / timeline:
     - node_label = step / phase name
     - primary_message = short top message, KPI, or milestone cue
-    - secondary_message = supporting note below
+    - secondary_message = optional supporting note below
   - hierarchy / decomposition:
     - node_label is mandatory
     - primary_message and secondary_message are optional and should be used only if they improve clarity
@@ -1110,19 +1110,66 @@ matrix:
     "artifact_header": "string",
     "x_axis": { "label": "string", "low_label": "string", "high_label": "string" },
     "y_axis": { "label": "string", "low_label": "string", "high_label": "string" },
-    "quadrants": [ { "id": "q1", "name": "string", "insight": "string" } ],
-    "points": [ { "label": "string", "x": "low|medium|high", "y": "low|medium|high" } ]
+    "quadrants": [
+      {
+        "id": "q1",
+        "title": "string",
+        "primary_message": "string",
+        "secondary_message": "string"
+      }
+    ],
+    "points": [
+      {
+        "label": "string",
+        "x": "low|medium|high",
+        "y": "low|medium|high",
+        "primary_message": "string",
+        "secondary_message": "string",
+        "emphasis": "high" | "medium" | "low"
+      }
+    ]
   }
   Max 6 points. Must define both axes and all 4 quadrants.
+  Quadrant usage:
+  - title = quadrant label
+  - primary_message = main implication of that quadrant
+  - secondary_message = optional supporting note
+  Point usage:
+  - label = plotted item name
+  - primary_message = short callout or value if needed
+  - secondary_message = optional supporting note
+  - emphasis = controls visual prominence of the point label/callout
 
 driver_tree:
   {
     "type": "driver_tree",
     "artifact_header": "string",
-    "root": { "label": "string", "value": "string" },
-    "branches": [ { "label": "string", "value": "string", "children": [] } ]
+    "root": {
+      "node_label": "string",
+      "primary_message": "string",
+      "secondary_message": "string"
+    },
+    "branches": [
+      {
+        "node_label": "string",
+        "primary_message": "string",
+        "secondary_message": "string",
+        "children": [
+          {
+            "node_label": "string",
+            "primary_message": "string",
+            "secondary_message": "string"
+          }
+        ]
+      }
+    ]
   }
-  Max 3 levels. Max 6–8 nodes. Root = outcome; children = drivers.
+  Max 3 levels. Max 6–8 nodes.
+  Node usage:
+  - node_label = driver name
+  - primary_message = key value / main takeaway
+  - secondary_message = optional supporting note
+  Root = outcome; branches = main drivers; children = sub-drivers.
   NOT a process — do not use when showing sequence or steps.
 
 prioritization:
