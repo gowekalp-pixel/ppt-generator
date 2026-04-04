@@ -5027,8 +5027,6 @@ function _statBarToBlocks(art, content_y, blocks, bt, r2) {
   const barW = r2(Math.max(1.0, aw - labelW - valueW - annotationW - colGap * 3))
   const values = items.map(r => Math.abs(+r?.value || 0))
   const maxValue = Math.max(...values, 1)
-  const minValue = Math.min(...values, maxValue)
-  const valueSpread = maxValue > 0 ? (maxValue - minValue) / maxValue : 0
   const bodyFont         = cs.label_font_family || bt.body_font_family || 'Arial'
   const bodyTextColor    = bt.body_color || '#111111'
   const captionColor     = bt.caption_color || bodyTextColor
@@ -5108,12 +5106,12 @@ function _statBarToBlocks(art, content_y, blocks, bt, r2) {
     const isHighlighted = row?.highlight === true
     const fill = row?.bar_color || (isHighlighted ? highlightBarFill : neutralBarColor)
     const rawValue = Math.abs(+row?.value || 0)
-    const normalized = maxValue > minValue ? (rawValue - minValue) / Math.max(maxValue - minValue, 0.0001) : 1
-    const rankedFallback = [0.04, 0.72, 0.66, 0.50, 0.42, 0.36, 0.31, 0.28, 0.25, 0.22]
-    const fillFrac = valueSpread < 0.08
-      ? (rankedFallback[ri] || 0.22)
-      : Math.max(0.04, normalized * 0.76)   // true proportional — 4% min sliver, no artificial floor
-    const barLen = r2(Math.max(0.06, Math.min(barW * 0.78, barW * fillFrac)))
+    // Normalize against maxValue (not the range) so bars are always proportional to the actual value.
+    // This correctly handles tight-range datasets (e.g. margin % 77–80%) where range-normalization
+    // would amplify noise and push the top row to near-zero when the fallback fires.
+    const normalized = maxValue > 0 ? rawValue / maxValue : 1
+    const fillFrac = Math.max(0.05, Math.min(1, normalized))
+    const barLen = r2(Math.max(0.06, barW * fillFrac))
     const trackY = r2(y + rowH * 0.40)
     const trackH = r2(Math.max(0.14, Math.min(0.20, rowH * 0.18)))
 
@@ -7066,16 +7064,33 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
   const bt = brandTokens || {}
 
   const result = designedZones.map((dZone, zi) => {
-    // Find the matching manifest zone — by index first, then by zone_id
-    const mZone = manifestZones[zi]
-               || manifestZones.find(z => z.zone_id === dZone.zone_id)
+    // Zone matching: zone_id takes priority over index so reordered zones still merge correctly.
+    // Agent 5's LLM may reorder zones vs Agent 4's spec — index-first matching would then
+    // pair initiative_map with insight_text data (or vice-versa), causing empty content.
+    const mZoneById    = manifestZones.find(z => z.zone_id && z.zone_id === dZone.zone_id)
+    const mZoneByIndex = manifestZones[zi]
+    const mZone = mZoneById || mZoneByIndex
     if (!mZone) return dZone
 
     const mergedArtifacts = (dZone.artifacts || []).map((dArt, ai) => {
-      // Match manifest artifact by position index
-      const mArt = (mZone.artifacts || [])[ai]
       const dType = normalizeArtifactType(dArt?.type, dArt?.chart_type)
-      const mType = normalizeArtifactType(mArt?.type, mArt?.chart_type)
+
+      // Artifact matching: try by position within the matched zone first.
+      // If the types don't match (zone mis-match or reorder), search all manifest zones
+      // for a zone whose first artifact has the same type as the designed artifact.
+      let mArt = (mZone.artifacts || [])[ai]
+      let mType = normalizeArtifactType(mArt?.type, mArt?.chart_type)
+      if (!mArt || mType !== dType) {
+        // Fallback: scan all manifest zones for a type-compatible artifact
+        for (const mz of manifestZones) {
+          const candidate = (mz.artifacts || [])[0]
+          if (normalizeArtifactType(candidate?.type, candidate?.chart_type) === dType) {
+            mArt = candidate
+            mType = dType
+            break
+          }
+        }
+      }
       if (!mArt || mType !== dType) return dArt
 
       const t = dType
@@ -7485,25 +7500,33 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
     }
   })
 
-  // Recovery: if the LLM omitted zones (e.g. truncation), append any manifest zones
-  // that were not matched by a designed zone. buildScratchZoneFrames will assign geometry,
-  // computeArtifactInternals will normalize artifact content downstream.
-  if (result.length < manifestZones.length) {
-    const matchedCount = result.length
-    const matchedIds = new Set(result.map(z => z.zone_id).filter(Boolean))
+  // Recovery: append any manifest zones not matched by any designed zone.
+  // Track matched manifest zones by zone_id (and by the artifact-type scan used above).
+  {
+    // Collect the zone_ids and artifact types that were actually matched
+    const matchedManifestZoneIds = new Set()
+    const matchedManifestArtTypes = new Set()
+    result.forEach(rz => {
+      if (rz.zone_id) matchedManifestZoneIds.add(rz.zone_id)
+      ;(rz.artifacts || []).forEach(a => matchedManifestArtTypes.add(normalizeArtifactType(a?.type, a?.chart_type)))
+    })
+
     manifestZones.forEach((mZone, mi) => {
-      const alreadyCovered = mi < matchedCount || (mZone.zone_id && matchedIds.has(mZone.zone_id))
-      if (!alreadyCovered) {
-        // Use buildSafeArtifactShell so recovered artifacts have normalized content
-        // (e.g. column_headers+rows → dimension_labels+initiatives for initiative_map)
-        const recoveredArts = (mZone.artifacts || []).map(a => buildSafeArtifactShell(a, bt))
-        result.push({
-          ...mZone,
-          frame: null,  // geometry filled later by buildScratchZoneFrames
-          artifacts: recoveredArts
-        })
-        console.warn('Agent 5 — zone recovery: manifest zone', mZone.zone_id || mi, 'was missing from LLM output; re-injected from manifest')
-      }
+      // A manifest zone is covered if its zone_id appears in the merged result OR
+      // its primary artifact type was matched by the type-scan fallback above.
+      const coveredById = mZone.zone_id && matchedManifestZoneIds.has(mZone.zone_id)
+      const primaryMType = normalizeArtifactType((mZone.artifacts || [])[0]?.type, (mZone.artifacts || [])[0]?.chart_type)
+      const coveredByType = primaryMType && matchedManifestArtTypes.has(primaryMType)
+      const coveredByIndex = mi < result.length
+      if (coveredById || coveredByType || coveredByIndex) return
+
+      const recoveredArts = (mZone.artifacts || []).map(a => buildSafeArtifactShell(a, bt))
+      result.push({
+        ...mZone,
+        frame: null,  // geometry assigned by buildScratchZoneFrames
+        artifacts: recoveredArts
+      })
+      console.warn('Agent 5 — zone recovery: manifest zone', mZone.zone_id || mi, 'not matched; re-injected from manifest')
     })
   }
 
