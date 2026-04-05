@@ -4318,9 +4318,11 @@ function _profileCardSetToBlocks(art, content_y, blocks, bt, r2) {
 
   // ── Minimum card dimensions (relative to standard 13.33" × 7.5" slide) ──
   // Cards narrower or shorter than these become unreadable
-  const MIN_CARD_W = 1.40   // ~10.5% of slide width
-  const MIN_CARD_H = 1.10   // ~14.7% of slide height
-  const MAX_CARD_H = 1.80   // cap — cards should not be taller than this
+  const slideW     = bt.slide_width_inches  || 13.33
+  const slideH     = bt.slide_height_inches || 7.50
+  const MIN_CARD_W = r2(slideW * 0.20)   // 20% of slide width
+  const MIN_CARD_H = r2(slideH * 0.15)   // 15% of slide height
+  const MAX_CARD_H = r2(slideH * 0.30)   // 30% of slide height
 
   // ── Grid selection: find best (cols × rows) for n cards ──────────────────
   // Try all valid column counts; evaluate against min card dimensions.
