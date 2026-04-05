@@ -4332,18 +4332,39 @@ function _profileCardSetToBlocks(art, content_y, blocks, bt, r2) {
     const x = r2(ax + col * (cardW + gap))
     const y = r2(ay + row * (cardH + gap))
     const attrs = (profile?.secondary_items || profile?.attributes || []).slice(0, 5)
-    const titleH = 0.28
-    const subtitleH = 0.20
-    const topPad = 0.10
-    const dividerY = r2(y + 0.66)
-    const bodyStartY = r2(dividerY + 0.10)
-    const attrGap = 0.05
-    const attrH = r2(Math.max(0.24, (cardH - (bodyStartY - y) - 0.12 - attrGap * Math.max(0, attrs.length - 1)) / Math.max(attrs.length, 1)))
     const cardCornerR = ps.card_corner_radius != null ? ps.card_corner_radius : 10
     const mutedColor = '#6B7280'
     const dividerColor = '#D9D9D9'
     const subtitle = String(profile?.subtitle || profile?.entity_type || profile?.category || profile?.subtype || '')
     const badgeText = String(profile?.badge_text || profile?.kpi_badge || profile?.headline_metric || profile?.metric_badge || '')
+
+    // ── All measurements scale proportionally with cardH ────────────────────
+    const topPad        = r2(Math.max(0.07, cardH * 0.07))
+    const headerH       = r2(Math.max(0.52, cardH * 0.42))  // header section up to divider
+    const bodyGap       = r2(Math.max(0.07, cardH * 0.06))  // gap below divider
+    const bottomPad     = r2(Math.max(0.08, cardH * 0.07))
+    const attrGap       = r2(Math.max(0.03, Math.min(0.07, cardH * 0.04)))
+    const bodyH         = r2(cardH - headerH - bodyGap - bottomPad)
+    const attrH         = r2(Math.max(0.18, (bodyH - attrGap * Math.max(0, attrs.length - 1)) / Math.max(attrs.length, 1)))
+    const titleH        = r2(headerH * 0.42)
+    const subtitleH     = r2(headerH * 0.30)
+    const badgeH        = r2(Math.max(0.22, Math.min(0.36, cardH * 0.22)))
+    const dividerY      = r2(y + headerH)
+    const bodyStartY    = r2(dividerY + bodyGap)
+
+    // Font sizes scale with cardH: larger card → larger text
+    const titleFontSize    = ps.label_font_size || Math.round(Math.max(9, Math.min(13, cardH * 8.5)))
+    const subtitleFontSize = Math.round(Math.max(7.5, Math.min(11, cardH * 7.0)))
+    const attrKeyFontSize  = Math.round(Math.max(7.5, Math.min(10, cardH * 6.5)))
+    const attrValFontSize  = Math.round(Math.max(8, Math.min(11, cardH * 7.0)))
+    const badgeFontSize    = Math.round(Math.max(7, Math.min(9.5, cardH * 6.0)))
+    const chipFontSize     = Math.round(Math.max(7, Math.min(9, cardH * 5.5)))
+
+    // Label column width: proportional to cardW, capped
+    const labelColW  = r2(Math.min(1.15, cardW * 0.42))
+    const attrLabelX = r2(x + 0.14)
+    const attrValueX = r2(x + 0.14 + labelColW)
+    const attrValueW = r2(cardW - (attrValueX - x) - 0.14)
 
     blocks.push({
       block_type: 'rect',
@@ -4357,23 +4378,24 @@ function _profileCardSetToBlocks(art, content_y, blocks, bt, r2) {
       block_type: 'text_box',
       x: r2(x + 0.14), y: r2(y + topPad), w: r2(cardW - 1.55), h: titleH,
       text: String(profile?.entity_name || ''),
-      font_family: titleFont, font_size: ps.label_font_size || 11, bold: true,
+      font_family: titleFont, font_size: titleFontSize, bold: true,
       color: bt.body_color || '#111111', align: 'left', valign: 'middle'
     })
     if (subtitle) {
       blocks.push({
         block_type: 'text_box',
-        x: r2(x + 0.14), y: r2(y + topPad + 0.26), w: r2(cardW - 1.60), h: subtitleH,
+        x: r2(x + 0.14), y: r2(y + topPad + titleH + 0.02), w: r2(cardW - 1.60), h: subtitleH,
         text: subtitle,
-        font_family: bodyFont, font_size: 9, bold: false,
+        font_family: bodyFont, font_size: subtitleFontSize, bold: false,
         color: mutedColor, align: 'left', valign: 'middle'
       })
     }
     if (badgeText) {
-      const badgeW = r2(Math.min(1.35, Math.max(0.85, badgeText.length * 0.08)))
+      const badgeW = r2(Math.min(1.35, Math.max(0.75, badgeText.length * 0.078)))
+      const badgeTopY = r2(y + topPad)
       blocks.push({
         block_type: 'rect',
-        x: r2(x + cardW - badgeW - 0.18), y: r2(y + 0.12), w: badgeW, h: 0.32,
+        x: r2(x + cardW - badgeW - 0.18), y: badgeTopY, w: badgeW, h: badgeH,
         fill_color: '#E8F0D9',
         border_color: '#7AA243',
         border_width: 0.7,
@@ -4381,9 +4403,9 @@ function _profileCardSetToBlocks(art, content_y, blocks, bt, r2) {
       })
       blocks.push({
         block_type: 'text_box',
-        x: r2(x + cardW - badgeW - 0.14), y: r2(y + 0.17), w: r2(badgeW - 0.08), h: 0.20,
+        x: r2(x + cardW - badgeW - 0.14), y: r2(badgeTopY + 0.02), w: r2(badgeW - 0.08), h: r2(badgeH - 0.04),
         text: badgeText,
-        font_family: bodyFont, font_size: 8.5, bold: true,
+        font_family: bodyFont, font_size: badgeFontSize, bold: true,
         color: '#386B2A', align: 'center', valign: 'middle'
       })
     }
@@ -4393,9 +4415,6 @@ function _profileCardSetToBlocks(art, content_y, blocks, bt, r2) {
       color: dividerColor, line_width: 0.5
     })
 
-    const attrLabelX = r2(x + 0.14)
-    const attrValueX = r2(x + 1.28)
-    const attrValueW = r2(cardW - (attrValueX - x) - 0.14)
     attrs.forEach((attr, ai) => {
       const rowY = r2(bodyStartY + ai * (attrH + attrGap))
       const key = String(attr?.label || attr?.key || '')
@@ -4408,19 +4427,20 @@ function _profileCardSetToBlocks(art, content_y, blocks, bt, r2) {
 
       blocks.push({
         block_type: 'text_box',
-        x: attrLabelX, y: rowY, w: 1.00, h: attrH,
+        x: attrLabelX, y: rowY, w: labelColW, h: attrH,
         text: _truncateText(key, 16),
-        font_family: bodyFont, font_size: 9, bold: false,
+        font_family: bodyFont, font_size: attrKeyFontSize, bold: false,
         color: mutedColor, align: 'left', valign: 'middle'
       })
       if (isChipRow && chipValues.length) {
+        const chipH   = r2(Math.max(0.18, Math.min(0.28, attrH * 0.82)))
+        const chipTopY = r2(rowY + (attrH - chipH) / 2)
         let chipX = attrValueX
-        const chipY = r2(rowY + 0.02)
         chipValues.slice(0, 5).forEach((chip) => {
-          const chipW = r2(Math.min(1.05, Math.max(0.55, chip.length * 0.07 + 0.16)))
+          const chipW = r2(Math.min(1.05, Math.max(0.45, chip.length * 0.065 + 0.14)))
           blocks.push({
             block_type: 'rect',
-            x: chipX, y: chipY, w: chipW, h: 0.24,
+            x: chipX, y: chipTopY, w: chipW, h: chipH,
             fill_color: '#F5F3EE',
             border_color: '#DDD6C8',
             border_width: 0.5,
@@ -4428,19 +4448,19 @@ function _profileCardSetToBlocks(art, content_y, blocks, bt, r2) {
           })
           blocks.push({
             block_type: 'text_box',
-            x: r2(chipX + 0.05), y: r2(chipY + 0.03), w: r2(chipW - 0.10), h: 0.14,
+            x: r2(chipX + 0.04), y: chipTopY, w: r2(chipW - 0.08), h: chipH,
             text: _truncateText(chip, 14),
-            font_family: bodyFont, font_size: 8, bold: false,
+            font_family: bodyFont, font_size: chipFontSize, bold: false,
             color: '#4B5563', align: 'center', valign: 'middle'
           })
-          chipX = r2(chipX + chipW + 0.06)
+          chipX = r2(chipX + chipW + 0.05)
         })
       } else {
         blocks.push({
           block_type: 'text_box',
           x: attrValueX, y: rowY, w: attrValueW, h: attrH,
           text: _truncateText(rawValue || '', 44),
-          font_family: bodyFont, font_size: 9.5, bold: false,
+          font_family: bodyFont, font_size: attrValFontSize, bold: false,
           color: _sentimentColor(attr?.sentiment, ps, bt), align: 'left', valign: 'middle'
         })
       }
