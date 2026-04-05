@@ -4307,65 +4307,115 @@ function _initiativeMapToBlocks_legacy(art, content_y, blocks, bt, r2) {
 function _profileCardSetToBlocks(art, content_y, blocks, bt, r2) {
   const ps = art.profile_style || {}
   const profiles = (art.profiles || []).slice(0, 6)
-  const direction = String(art.layout_direction || 'horizontal').toLowerCase()
   const ax = art.x || 0
   const ay = content_y
   const aw = art.w || 0
   const ah = r2((art.y || 0) + (art.h || 0) - content_y)
   if (!profiles.length || aw <= 0 || ah <= 0) return
 
+  const n   = profiles.length
   const gap = 0.12
-  // Auto-correct layout direction: 4 profiles must be 2×2 grid regardless of what Claude set
-  const resolvedDirection = (profiles.length === 4 && direction !== 'grid') ? 'grid' : direction
-  const cols = resolvedDirection === 'grid'
-    ? Math.min(3, Math.max(2, Math.ceil(Math.sqrt(profiles.length))))
-    : profiles.length <= 3 ? profiles.length : Math.min(3, profiles.length)
-  const rows = Math.ceil(profiles.length / cols)
+
+  // ── Minimum card dimensions (relative to standard 13.33" × 7.5" slide) ──
+  // Cards narrower or shorter than these become unreadable
+  const MIN_CARD_W = 1.40   // ~10.5% of slide width
+  const MIN_CARD_H = 1.10   // ~14.7% of slide height
+  const MAX_CARD_H = 1.80   // cap — cards should not be taller than this
+
+  // ── Grid selection: find best (cols × rows) for n cards ──────────────────
+  // Try all valid column counts; evaluate against min card dimensions.
+  // Score: prefer options where BOTH dims meet minimum, then fewest rows
+  // (landscape layout), then fewest empty slots, then widest card.
+  const gridOptions = []
+  for (let c = 1; c <= n; c++) {
+    const r  = Math.ceil(n / c)
+    const cW = (aw - gap * Math.max(0, c - 1)) / c
+    const cH = (ah - gap * Math.max(0, r - 1)) / r
+    gridOptions.push({
+      cols: c, rows: r, cW, cH,
+      wOk: cW >= MIN_CARD_W,
+      hOk: cH >= MIN_CARD_H,
+      empty: c * r - n
+    })
+  }
+  const fullyValid = gridOptions.filter(o => o.wOk && o.hOk)
+  const chosen = fullyValid.length > 0
+    ? fullyValid.sort((a, b) => a.rows - b.rows || a.empty - b.empty || b.cW - a.cW)[0]
+    : gridOptions.sort((a, b) => {  // fallback: prioritise width fit, then height fit
+        const sa = (a.wOk ? 2 : 0) + (a.hOk ? 1 : 0)
+        const sb = (b.wOk ? 2 : 0) + (b.hOk ? 1 : 0)
+        return sb - sa || a.empty - b.empty || b.cW - a.cW
+      })[0]
+
+  const cols  = chosen.cols
+  const rows  = chosen.rows
   const cardW = r2((aw - gap * Math.max(0, cols - 1)) / cols)
-  const cardH = r2((ah - gap * Math.max(0, rows - 1)) / rows)
+
+  // ── Card height: natural content-based cap — do NOT stretch to fill zone ──
+  // Derive natural height from the max attrs count across all profiles
+  const maxAttrCount   = Math.max(...profiles.map(p => ((p?.secondary_items || p?.attributes || []).slice(0, 5)).length), 1)
+  const naturalCardH   = r2(0.66 + 0.10 + maxAttrCount * 0.27 + Math.max(0, maxAttrCount - 1) * 0.05 + 0.14)
+  const zoneCardH      = r2((ah - gap * Math.max(0, rows - 1)) / rows)
+  const cardH          = r2(Math.min(naturalCardH, MAX_CARD_H, zoneCardH))
+
+  // Center the card group within the zone (both axes if smaller than zone)
+  const totalGroupH  = rows * cardH + Math.max(0, rows - 1) * gap
+  const totalGroupW  = cols * cardW + Math.max(0, cols - 1) * gap
+  const groupOffsetY = r2(Math.max(0, (ah - totalGroupH) / 2))
+  const groupOffsetX = r2(Math.max(0, (aw - totalGroupW) / 2))
+
   const titleFont = ps.label_font_family || bt.title_font_family || 'Arial'
-  const bodyFont = ps.body_font_family || bt.body_font_family || 'Arial'
+  const bodyFont  = ps.body_font_family  || bt.body_font_family  || 'Arial'
 
   profiles.forEach((profile, pi) => {
     const col = pi % cols
     const row = Math.floor(pi / cols)
-    const x = r2(ax + col * (cardW + gap))
-    const y = r2(ay + row * (cardH + gap))
-    const attrs = (profile?.secondary_items || profile?.attributes || []).slice(0, 5)
+    const x   = r2(ax + groupOffsetX + col * (cardW + gap))
+    const y   = r2(ay + groupOffsetY + row * (cardH + gap))
+    const attrs       = (profile?.secondary_items || profile?.attributes || []).slice(0, 5)
     const cardCornerR = ps.card_corner_radius != null ? ps.card_corner_radius : 10
-    const mutedColor = '#6B7280'
+    const mutedColor  = '#6B7280'
     const dividerColor = '#D9D9D9'
-    const subtitle = String(profile?.subtitle || profile?.entity_type || profile?.category || profile?.subtype || '')
+    const subtitle  = String(profile?.subtitle || profile?.entity_type || profile?.category || profile?.subtype || '')
     const badgeText = String(profile?.badge_text || profile?.kpi_badge || profile?.headline_metric || profile?.metric_badge || '')
 
-    // ── All measurements scale proportionally with cardH ────────────────────
-    const topPad        = r2(Math.max(0.07, cardH * 0.07))
-    const headerH       = r2(Math.max(0.52, cardH * 0.42))  // header section up to divider
-    const bodyGap       = r2(Math.max(0.07, cardH * 0.06))  // gap below divider
-    const bottomPad     = r2(Math.max(0.08, cardH * 0.07))
-    const attrGap       = r2(Math.max(0.03, Math.min(0.07, cardH * 0.04)))
-    const bodyH         = r2(cardH - headerH - bodyGap - bottomPad)
-    const attrH         = r2(Math.max(0.18, (bodyH - attrGap * Math.max(0, attrs.length - 1)) / Math.max(attrs.length, 1)))
-    const titleH        = r2(headerH * 0.42)
-    const subtitleH     = r2(headerH * 0.30)
-    const badgeH        = r2(Math.max(0.22, Math.min(0.36, cardH * 0.22)))
-    const dividerY      = r2(y + headerH)
-    const bodyStartY    = r2(dividerY + bodyGap)
+    // ── All internal measurements proportional to cardH and cardW ────────────
+    const topPad    = r2(Math.max(0.07, cardH * 0.07))
+    const headerH   = r2(Math.max(0.52, cardH * 0.42))   // header section height up to divider
+    const bodyGap   = r2(Math.max(0.07, cardH * 0.06))   // gap between divider and first attr row
+    const bottomPad = r2(Math.max(0.08, cardH * 0.07))
+    const attrGap   = r2(Math.max(0.03, Math.min(0.07, cardH * 0.04)))
+    const bodyH     = r2(cardH - headerH - bodyGap - bottomPad)
+    const attrH     = r2(Math.max(0.18, (bodyH - attrGap * Math.max(0, attrs.length - 1)) / Math.max(attrs.length, 1)))
+    const titleH    = r2(headerH * 0.42)
+    const subtitleH = r2(headerH * 0.30)
+    const badgeH    = r2(Math.max(0.22, Math.min(0.36, cardH * 0.22)))
+    const dividerY  = r2(y + headerH)
+    const bodyStartY = r2(dividerY + bodyGap)
 
-    // Font sizes scale with cardH: larger card → larger text
+    // Badge dimensions computed first so title/subtitle widths avoid it
+    const badgeW    = badgeText ? r2(Math.min(Math.max(0.65, badgeText.length * 0.078), Math.min(1.30, cardW * 0.48))) : 0
+    const leftPad   = 0.14
+    const rightPad  = 0.14
+    const badgeRightPad = badgeText ? 0.16 : 0
+    // Title/subtitle width = full card width minus left pad, badge area, right pad
+    const headerTextW = r2(cardW - leftPad - (badgeText ? badgeW + badgeRightPad + 0.06 : rightPad))
+
+    // Font sizes scale with cardH
     const titleFontSize    = ps.label_font_size || Math.round(Math.max(9, Math.min(13, cardH * 8.5)))
     const subtitleFontSize = Math.round(Math.max(7.5, Math.min(11, cardH * 7.0)))
     const attrKeyFontSize  = Math.round(Math.max(7.5, Math.min(10, cardH * 6.5)))
-    const attrValFontSize  = Math.round(Math.max(8, Math.min(11, cardH * 7.0)))
-    const badgeFontSize    = Math.round(Math.max(7, Math.min(9.5, cardH * 6.0)))
-    const chipFontSize     = Math.round(Math.max(7, Math.min(9, cardH * 5.5)))
+    const attrValFontSize  = Math.round(Math.max(8,   Math.min(11, cardH * 7.0)))
+    const badgeFontSize    = Math.round(Math.max(7,   Math.min(9.5, cardH * 6.0)))
+    const chipFontSize     = Math.round(Math.max(7,   Math.min(9,   cardH * 5.5)))
 
-    // Label column width: proportional to cardW, capped
-    const labelColW  = r2(Math.min(1.15, cardW * 0.42))
-    const attrLabelX = r2(x + 0.14)
-    const attrValueX = r2(x + 0.14 + labelColW)
-    const attrValueW = r2(cardW - (attrValueX - x) - 0.14)
+    // Attribute label/value column split proportional to cardW
+    const labelColW  = r2(Math.min(1.10, cardW * 0.42))
+    const attrLabelX = r2(x + leftPad)
+    const attrValueX = r2(attrLabelX + labelColW)
+    const attrValueW = r2(cardW - labelColW - leftPad - rightPad)
 
+    // ── Card background ───────────────────────────────────────────────────────
     blocks.push({
       block_type: 'rect',
       x, y, w: cardW, h: cardH,
@@ -4374,50 +4424,56 @@ function _profileCardSetToBlocks(art, content_y, blocks, bt, r2) {
       border_width: ps.card_border_width != null ? ps.card_border_width : 0.5,
       corner_radius: cardCornerR
     })
+
+    // ── Entity name (title) ───────────────────────────────────────────────────
     blocks.push({
       block_type: 'text_box',
-      x: r2(x + 0.14), y: r2(y + topPad), w: r2(cardW - 1.55), h: titleH,
+      x: r2(x + leftPad), y: r2(y + topPad), w: headerTextW, h: titleH,
       text: String(profile?.entity_name || ''),
       font_family: titleFont, font_size: titleFontSize, bold: true,
-      color: bt.body_color || '#111111', align: 'left', valign: 'middle'
+      color: bt.body_color || '#111111', align: 'left', valign: 'middle', wrap: true
     })
+
+    // ── Subtitle ──────────────────────────────────────────────────────────────
     if (subtitle) {
       blocks.push({
         block_type: 'text_box',
-        x: r2(x + 0.14), y: r2(y + topPad + titleH + 0.02), w: r2(cardW - 1.60), h: subtitleH,
+        x: r2(x + leftPad), y: r2(y + topPad + titleH + 0.02), w: headerTextW, h: subtitleH,
         text: subtitle,
         font_family: bodyFont, font_size: subtitleFontSize, bold: false,
         color: mutedColor, align: 'left', valign: 'middle'
       })
     }
+
+    // ── Badge (right-aligned in header) ──────────────────────────────────────
     if (badgeText) {
-      const badgeW = r2(Math.min(1.35, Math.max(0.75, badgeText.length * 0.078)))
       const badgeTopY = r2(y + topPad)
       blocks.push({
         block_type: 'rect',
-        x: r2(x + cardW - badgeW - 0.18), y: badgeTopY, w: badgeW, h: badgeH,
-        fill_color: '#E8F0D9',
-        border_color: '#7AA243',
-        border_width: 0.7,
-        corner_radius: 10
+        x: r2(x + cardW - badgeW - badgeRightPad), y: badgeTopY, w: badgeW, h: badgeH,
+        fill_color: '#E8F0D9', border_color: '#7AA243', border_width: 0.7, corner_radius: 10
       })
       blocks.push({
         block_type: 'text_box',
-        x: r2(x + cardW - badgeW - 0.14), y: r2(badgeTopY + 0.02), w: r2(badgeW - 0.08), h: r2(badgeH - 0.04),
+        x: r2(x + cardW - badgeW - badgeRightPad + 0.04), y: r2(badgeTopY + 0.02),
+        w: r2(badgeW - 0.08), h: r2(badgeH - 0.04),
         text: badgeText,
         font_family: bodyFont, font_size: badgeFontSize, bold: true,
         color: '#386B2A', align: 'center', valign: 'middle'
       })
     }
+
+    // ── Divider ───────────────────────────────────────────────────────────────
     blocks.push({
       block_type: 'rule',
-      x: x, y: dividerY, w: cardW, h: 0.005,
+      x, y: dividerY, w: cardW, h: 0.005,
       color: dividerColor, line_width: 0.5
     })
 
+    // ── Attribute rows ────────────────────────────────────────────────────────
     attrs.forEach((attr, ai) => {
       const rowY = r2(bodyStartY + ai * (attrH + attrGap))
-      const key = String(attr?.label || attr?.key || '')
+      const key  = String(attr?.label || attr?.key || '')
       const rawValue = attr?.value
       const representationType = String(attr?.representation_type || '').toLowerCase()
       const isChipRow = representationType === 'chip_list' || Array.isArray(rawValue) || /city|cities|market|markets/i.test(key)
@@ -4433,7 +4489,7 @@ function _profileCardSetToBlocks(art, content_y, blocks, bt, r2) {
         color: mutedColor, align: 'left', valign: 'middle'
       })
       if (isChipRow && chipValues.length) {
-        const chipH   = r2(Math.max(0.18, Math.min(0.28, attrH * 0.82)))
+        const chipH    = r2(Math.max(0.18, Math.min(0.28, attrH * 0.82)))
         const chipTopY = r2(rowY + (attrH - chipH) / 2)
         let chipX = attrValueX
         chipValues.slice(0, 5).forEach((chip) => {
@@ -4441,10 +4497,7 @@ function _profileCardSetToBlocks(art, content_y, blocks, bt, r2) {
           blocks.push({
             block_type: 'rect',
             x: chipX, y: chipTopY, w: chipW, h: chipH,
-            fill_color: '#F5F3EE',
-            border_color: '#DDD6C8',
-            border_width: 0.5,
-            corner_radius: 8
+            fill_color: '#F5F3EE', border_color: '#DDD6C8', border_width: 0.5, corner_radius: 8
           })
           blocks.push({
             block_type: 'text_box',
