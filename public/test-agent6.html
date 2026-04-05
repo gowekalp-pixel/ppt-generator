@@ -47,7 +47,7 @@
     /* Spec summary */
     .spec-summary { display: none; background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 12px 16px; margin-top: 10px; font-size: 12px; }
     .spec-summary.show { display: block; }
-    .sum-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-bottom: 8px; }
+    .sum-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 8px; margin-bottom: 8px; }
     .sum-item { text-align: center; background: white; border-radius: 6px; padding: 8px; }
     .sum-val { font-size: 20px; font-weight: 700; color: #059669; }
     .sum-lbl { font-size: 10px; color: #888; text-transform: uppercase; margin-top: 2px; }
@@ -101,7 +101,7 @@
 
   <div class="badge">Isolated Test — Agent 6 Only</div>
   <h1>PPTX Generator Tester</h1>
-  <p class="subhead">Upload the brand PPTX template and the Agent 5 JSON spec. The backend loads the template's slide master — preserving brand background, fonts, logo, and decorative shapes — then builds every slide from the spec on top of it.</p>
+  <p class="subhead">Upload the brand PPTX template and the Agent 5 JSON spec. Agent 5 output now uses <strong>artifact_groups[]</strong> (blocks grouped by artifact, metadata hoisted to reduce payload size). Agent 6 flattens groups back to blocks[] before sending to python-pptx, which builds every slide on the brand master.</p>
 
   <!-- TEMPLATE UPLOAD — REQUIRED -->
   <div class="card">
@@ -119,8 +119,8 @@
   <div class="card">
     <div class="card-title">Agent 5 Designed Spec JSON — Step 2</div>
 
-    <div class="hint">Paste the full JSON object from Agent 5 output — format: <code>{ "brand_tokens": {...}, "slides": [...] }</code>. brand_tokens is hoisted once at the top level; each slide has canvas and blocks[]. blocks[] is the primary rendering contract — workflow artifacts are flattened to rect/text_box/line blocks with flow_direction already encoded; tables carry column_types and column_alignments; no layout recalculation is done here.</div>
-    <textarea id="spec-input" placeholder='{ "brand_tokens": { "primary_color": "...", ... }, "slides": [ { "slide_number": 1, "slide_type": "title", "canvas": { "width_in": 11.02, ... }, "blocks": [...] }, ... ] }'></textarea>
+    <div class="hint">Paste the full JSON object from Agent 5 output — format: <code>{ "brand_tokens": {...}, "slides": [...] }</code>. brand_tokens is hoisted once at the top level; each slide has canvas and <strong>artifact_groups[]</strong> (blocks grouped by artifact — replaces the old flat blocks[]). Agent 6 flattens artifact_groups back to blocks[] for python-pptx rendering.</div>
+    <textarea id="spec-input" placeholder='{ "brand_tokens": { "primary_color": "...", ... }, "slides": [ { "slide_number": 1, "slide_type": "title", "canvas": { "width_in": 11.02, ... }, "artifact_groups": [...] }, ... ] }'></textarea>
 
     <div class="upload-zone" id="zone-spec">
       <input type="file" accept=".json" onchange="loadSpecFile(this)">
@@ -160,6 +160,36 @@
   function estimateJsonBytes(obj) {
     try { return new TextEncoder().encode(JSON.stringify(obj)).length }
     catch(_) { return 0 }
+  }
+
+  // ─── ARTIFACT GROUPS HELPERS ─────────────────────────────────────────────────
+  // Agent 5 now emits artifact_groups[] instead of blocks[].
+  // getBlocksFromSlide() restores a flat blocks[] for inspection/stats purposes only.
+  // slimSlideForRender() passes artifact_groups through to the server,
+  // and generate_pptx.py calls flatten_artifact_groups() before rendering.
+
+  function getBlocksFromSlide(slide) {
+    if (!slide || typeof slide !== 'object') return []
+    if (Array.isArray(slide.artifact_groups)) {
+      const blocks = []
+      for (const ag of slide.artifact_groups) {
+        const meta = {}
+        if (ag.artifact_id != null)          meta.artifact_id          = ag.artifact_id
+        if (ag.artifact_type)                meta.artifact_type        = ag.artifact_type
+        if (ag.artifact_subtype)             meta.artifact_subtype     = ag.artifact_subtype
+        if (ag.artifact_header_text != null) meta.artifact_header_text = ag.artifact_header_text
+        if (ag.fallback_policy)              meta.fallback_policy      = ag.fallback_policy
+        for (const b of (ag.blocks || [])) blocks.push({ ...meta, ...b })
+      }
+      return blocks
+    }
+    return slide.blocks || []
+  }
+
+  function hasRenderBlocks(slide) {
+    if (!slide) return false
+    if (Array.isArray(slide.artifact_groups) && slide.artifact_groups.length > 0) return true
+    return Array.isArray(slide.blocks) && slide.blocks.length > 0
   }
 
   // ─── TEMPLATE FILE LOAD ─────────────────────────────────────────────────────
@@ -246,15 +276,16 @@
 
   // ─── SPEC SUMMARY ────────────────────────────────────────────────────────────
   function showSummary(spec) {
-    const layoutSlides  = spec.filter(s => s.layout_mode === true).length
-    const scratchSlides = spec.filter(s => s.slide_type === 'content' && !s.layout_mode).length
-    const totalBlocks   = spec.reduce((n, s) => n + (s.blocks || []).length, 0)
+    const layoutSlides   = spec.filter(s => s.layout_mode === true).length
+    const scratchSlides  = spec.filter(s => s.slide_type === 'content' && !s.layout_mode).length
+    const totalGroups    = spec.reduce((n, s) => n + (Array.isArray(s.artifact_groups) ? s.artifact_groups.length : 0), 0)
+    const totalBlocks    = spec.reduce((n, s) => n + getBlocksFromSlide(s).length, 0)
 
-    // Block type counts from blocks[] (primary render contract)
+    // Block type counts — use flat blocks for inspection
     const blockCounts = {}
     const artTypeCounts = {}  // structural artifact types from zones_summary when present
     spec.forEach(s => {
-      ;(s.blocks || []).forEach(b => {
+      getBlocksFromSlide(s).forEach(b => {
         const bt = b.block_type || 'unknown'
         blockCounts[bt] = (blockCounts[bt] || 0) + 1
       })
@@ -268,6 +299,7 @@
       { val: spec.filter(s => s.slide_type === 'content').length, lbl: 'Content',      color: '' },
       { val: layoutSlides,                                         lbl: 'Layout Mode',  color: layoutSlides > 0 ? '#059669' : '' },
       { val: scratchSlides,                                        lbl: 'Scratch Mode', color: '' },
+      { val: totalGroups,                                          lbl: 'Groups',       color: totalGroups > 0 ? '#059669' : '' },
       { val: totalBlocks,                                          lbl: 'Blocks',       color: totalBlocks > 0 ? '#059669' : '' },
       { val: Object.values(artTypeCounts).reduce((a,b)=>a+b, 0),  lbl: 'Artifacts',    color: '' }
     ].map(i => `<div class="sum-item"><div class="sum-val" ${i.color ? 'style="color:'+i.color+'"' : ''}>${i.val}</div><div class="sum-lbl">${i.lbl}</div></div>`).join('')
@@ -283,26 +315,37 @@
       (artBar   ? `<div style="margin-bottom:4px;font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.05em;">artifacts (summary)</div><div style="display:flex;gap:4px;flex-wrap:wrap;">${artBar}</div>` : '') +
       `</div>`
 
-    // Slide list — show block count per slide; prefer blocks[], fall back to artifact types
+    // Slide list — show block count per slide; prefer artifact_groups[], fall back to artifact types
     document.getElementById('slide-list').innerHTML = spec.map(s => {
-      const slideBlocks   = s.blocks || []
-      const hasBlocks     = slideBlocks.length > 0
+      const slideBlocks   = getBlocksFromSlide(s)
+      const slideGroups   = Array.isArray(s.artifact_groups) ? s.artifact_groups : []
+      const hasRender     = hasRenderBlocks(s)
       const isLayoutMode  = s.layout_mode === true
       const layoutBadge   = isLayoutMode
         ? `<span style="font-size:9px;background:#dcfce7;color:#166534;padding:1px 5px;border-radius:10px;font-weight:700;flex-shrink:0;" title="${s.selected_layout_name || 'layout mode'}">📐${s.selected_layout_name ? ' ' + s.selected_layout_name : ''}</span>`
         : ''
 
+      // Title: check slide.title first, then find title block in groups/blocks
+      const titleBlock = slideBlocks.find(b =>
+        b.block_role === 'slide_header' ||
+        (b.artifact_type === 'slide' && b.artifact_subtype === 'title')
+      )
+      const titleText = (s.title || (titleBlock || {}).text || '—').slice(0, 60)
+
       let pillsHtml
-      if (hasBlocks) {
-        // Show distinct render block types that carry most of the visual contract
+      if (hasRender) {
         const renderTypes = [...new Set(slideBlocks
           .map(b => b.block_type)
           .filter(t => ['chart','table','bullet_list','circle','rect','text_box','line'].includes(t))
         )]
         const artTypes = [...new Set((s.zones_summary || []).flatMap(z => z.artifact_types || []))]
+        const blockCount = slideBlocks.length
+        const groupsLabel = slideGroups.length > 0
+          ? `<span style="font-size:9px;background:#ede9fe;color:#5b21b6;padding:1px 5px;border-radius:10px;font-weight:600;">${slideGroups.length}g/${blockCount}b</span>`
+          : `<span style="font-size:9px;background:#f0fdf4;color:#166534;padding:1px 5px;border-radius:10px;font-weight:600;">${blockCount} blocks</span>`
         pillsHtml = artTypes.map(t => `<span class="ap ap-${t}">${t}</span>`).join('')
           + renderTypes.map(t => `<span class="ap ap-${t.replace('_','-')}">${t}</span>`).join('')
-          + `<span style="font-size:9px;background:#f0fdf4;color:#166534;padding:1px 5px;border-radius:10px;font-weight:600;">${slideBlocks.length} blocks</span>`
+          + groupsLabel
       } else {
         const arts = (s.zones_summary || []).flatMap(z => z.artifact_types || [])
         pillsHtml = [...new Set(arts)].map(t => `<span class="ap ap-${t}">${t}</span>`).join('')
@@ -311,7 +354,7 @@
       return `<div class="slide-row">
         <span class="sn">S${s.slide_number}</span>
         <span class="st-badge st-${s.slide_type}">${s.slide_type}</span>
-        <span class="slide-title-text">${(s.title || (((s.blocks || []).find(b => b.block_role === 'slide_header' || (b.artifact_type === 'slide' && b.artifact_subtype === 'title')) || {}).text) || '—').slice(0, 60)}</span>
+        <span class="slide-title-text">${titleText}</span>
         ${layoutBadge}
         <div class="art-pills">${pillsHtml}</div>
       </div>`
@@ -339,12 +382,12 @@
     // Validate schema
     const first = parsedSpec[0]
     if (!first.canvas) {
-      errEl.textContent = 'Invalid schema — expected Agent 5 output with canvas + blocks[]. Old elements[] format is not supported.'
+      errEl.textContent = 'Invalid schema — expected Agent 5 output with canvas + artifact_groups[]. Old elements[] format is not supported.'
       errEl.classList.add('show')
       return
     }
-    if (!Array.isArray(first.blocks) || first.blocks.length === 0) {
-      errEl.textContent = 'Invalid schema — this looks like pre-render manifest JSON, not Agent 5 output. Agent 6 only accepts slides with canvas + blocks[]. Run Agent 5 first.'
+    if (!hasRenderBlocks(first)) {
+      errEl.textContent = 'Invalid schema — this looks like pre-render manifest JSON, not Agent 5 output. Agent 6 only accepts slides with canvas + artifact_groups[] (or blocks[]). Run Agent 5 first.'
       errEl.classList.add('show')
       return
     }
@@ -535,10 +578,15 @@
       'canvas', 'global_elements',
       'layout_mode', 'selected_layout_name',
       'title', 'subtitle', 'speaker_note',
-      'blocks'
+      'artifact_groups', 'blocks'
     ])
     for (const [k, v] of Object.entries(slide)) {
       if (!keep.has(k) || v === undefined) continue
+      if (k === 'artifact_groups' && Array.isArray(v)) {
+        // Slim the nested blocks within each artifact group; keep group-level metadata as-is
+        out[k] = v.map(ag => ({ ...ag, blocks: (ag.blocks || []).map(slimBlockForRender) }))
+        continue
+      }
       out[k] = (k === 'blocks' && Array.isArray(v)) ? v.map(slimBlockForRender) : v
     }
     return out

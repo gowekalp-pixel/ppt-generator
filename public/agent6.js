@@ -132,10 +132,18 @@ function slimSlideForRender(slide, useTemplate) {
     'canvas', 'global_elements',
     'layout_mode', 'selected_layout_name',
     'title', 'subtitle', 'speaker_note',
-    'blocks'
+    'artifact_groups', 'blocks'
   ])
   for (const [k, v] of Object.entries(slide)) {
     if (!keep.has(k) || v === undefined) continue
+    if (k === 'artifact_groups' && Array.isArray(v)) {
+      // Slim the nested blocks within each artifact group
+      out[k] = v.map(ag => ({
+        ...ag,
+        blocks: (ag.blocks || []).map(slimBlockForRender)
+      }))
+      continue
+    }
     if (k === 'blocks' && Array.isArray(v)) {
       out[k] = v.map(slimBlockForRender)
       continue
@@ -250,10 +258,13 @@ async function generatePPTX() {
 
   // ── Schema validation ─────────────────────────────────────────────────────
   const hasNewSchema = state.finalSpec.every(slide =>
-    slide && slide.canvas && Array.isArray(slide.blocks) && slide.blocks.length > 0
+    slide && slide.canvas && (
+      (Array.isArray(slide.artifact_groups) && slide.artifact_groups.length > 0) ||
+      (Array.isArray(slide.blocks) && slide.blocks.length > 0)
+    )
   )
   if (!hasNewSchema) {
-    alert('Spec schema mismatch. Agent 6 only accepts Agent 5 output with canvas plus non-empty blocks[] on every slide.')
+    alert('Spec schema mismatch. Agent 6 only accepts Agent 5 output with canvas plus non-empty artifact_groups[] (or blocks[]) on every slide.')
     return
   }
   const firstSlide   = state.finalSpec[0]

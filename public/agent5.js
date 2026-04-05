@@ -2793,10 +2793,11 @@ function buildMinimalSafeSlide(manifestSlide, tokens) {
   }
 
   fallbackSlide.zones = framedZones
-  fallbackSlide.blocks = sanitizeBlocks(flattenToBlocks(
+  const fallbackRawBlocks = sanitizeBlocks(flattenToBlocks(
     fallbackSlide,
     fallbackBrandTokens
   ), fallbackSlide)
+  fallbackSlide.artifact_groups = groupBlocksByArtifact(fallbackRawBlocks)
   fallbackSlide.zones_summary = framedZones.map(z => ({
     zone_id: z.zone_id,
     zone_role: z.zone_role,
@@ -7181,6 +7182,45 @@ function flattenToBlocks(slideSpec, brandTokens) {
   return blocks
 }
 
+// ── groupBlocksByArtifact ─────────────────────────────────────────────────────
+// Converts a flat blocks[] into artifact_groups[] where artifact-level metadata
+// (artifact_id, artifact_type, artifact_subtype, artifact_header_text,
+//  fallback_policy) is hoisted to the group and removed from each block.
+// Blocks without artifact_id (title, subtitle, footer, page_number) each become
+// their own single-block group keyed by block_type.
+// generate_pptx.py / Agent 6 call flattenArtifactGroups() to restore flat blocks[].
+function groupBlocksByArtifact(blocks) {
+  const groups   = []
+  const indexMap = new Map()  // groupKey → index in groups
+
+  for (const block of (blocks || [])) {
+    const aid      = block.artifact_id
+    const groupKey = aid != null ? 'id:' + aid : 'bt:' + block.block_type
+
+    if (!indexMap.has(groupKey)) {
+      const entry = {}
+      if (aid != null)                             entry.artifact_id          = aid
+      if (block.artifact_type)                     entry.artifact_type        = block.artifact_type
+      if (block.artifact_subtype)                  entry.artifact_subtype     = block.artifact_subtype
+      if (block.artifact_header_text != null)      entry.artifact_header_text = block.artifact_header_text
+      if (block.fallback_policy)                   entry.fallback_policy      = block.fallback_policy
+      entry.blocks = []
+      indexMap.set(groupKey, groups.length)
+      groups.push(entry)
+    }
+
+    const slim = Object.assign({}, block)
+    delete slim.artifact_id
+    delete slim.artifact_type
+    delete slim.artifact_subtype
+    delete slim.artifact_header_text
+    delete slim.fallback_policy
+    groups[indexMap.get(groupKey)].blocks.push(slim)
+  }
+
+  return groups
+}
+
 
 function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
   if (!designedZones || !manifestZones) return designedZones || []
@@ -8121,12 +8161,19 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
   }
 
   // Flatten to blocks[] — ordered, self-contained render units.
-  // generate_pptx.py reads these directly when present; zones path is legacy fallback.
-  brandedWithLayoutTitle.blocks = sanitizeBlocks(flattenToBlocks(
+  // Validation runs on the raw flat blocks; output is grouped into artifact_groups[]
+  // to eliminate repeated artifact metadata (artifact_id, artifact_type, etc.) on
+  // every block. generate_pptx.py / Agent 6 call flattenArtifactGroups() to restore.
+  const rawBlocks = sanitizeBlocks(flattenToBlocks(
     { ...brandedWithLayoutTitle, zones: finalZones },
     bt
   ), brandedWithLayoutTitle)
+  // Temporarily attach flat blocks for validateRenderCompleteness (which reads slide.blocks)
+  brandedWithLayoutTitle.blocks = rawBlocks
   const renderIssues = validateRenderCompleteness({ ...brandedWithLayoutTitle, zones: finalZones })
+  // Replace flat blocks with grouped form before output
+  brandedWithLayoutTitle.artifact_groups = groupBlocksByArtifact(rawBlocks)
+  delete brandedWithLayoutTitle.blocks
   if (renderIssues.length > 0) {
     console.warn('Agent 5 -- S' + (manifestSlide.slide_number || '?') + ' render issues:', renderIssues.join('; '))
   }
@@ -8383,7 +8430,7 @@ async function runAgent5(state) {
   console.log('  Artifact types:', JSON.stringify(typeCounts))
 
   const finalDesigned = allDesigned.map(slide => {
-    if (slide && Array.isArray(slide.blocks) && slide.blocks.length > 0) return slide
+    if (slide && Array.isArray(slide.artifact_groups) && slide.artifact_groups.length > 0) return slide
     const manifestSlide = manifestBySlide.get(slide?.slide_number)
     if (!manifestSlide) return slide
     console.warn('Agent 5 -- S' + manifestSlide.slide_number + ' missing blocks at final handoff, forcing minimal safe render spec')

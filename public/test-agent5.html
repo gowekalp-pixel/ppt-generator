@@ -151,7 +151,7 @@
 
   <div class="badge">Isolated Test — Agent 5 Only</div>
   <h1>Layout Design Engine Tester</h1>
-  <p class="subhead">Paste the Brand Rulebook (Agent 2 output) and Slide Manifest (Agent 4 output). Agent 5 calls Claude to produce render-ready layout specs: canvas dimensions, brand tokens, title/subtitle blocks, zones with fully specified artifacts, and a flat blocks[] array. Workflow artifacts are flattened to rect/text_box/line blocks with flow-direction-aware external text bands: value above + description below for horizontal flows; description to the right for vertical (top_to_bottom/bottom_up) flows.</p>
+  <p class="subhead">Paste the Brand Rulebook (Agent 2 output) and Slide Manifest (Agent 4 output). Agent 5 calls Claude to produce render-ready layout specs: canvas dimensions, brand tokens, title/subtitle blocks, zones with fully specified artifacts, and an <strong>artifact_groups[]</strong> array (blocks grouped by artifact — artifact metadata hoisted to group level to reduce payload size). Agent 6 / generate_pptx.py flatten groups back to blocks[] before rendering.</p>
 
   <!-- INPUTS -->
   <div class="card">
@@ -395,7 +395,12 @@ function safeParseJSON(raw, fallback) {
     // Stats
     const totalZones     = spec.reduce((n, s) => n + (s.zones || []).length, 0)
     const totalArtifacts = spec.reduce((n, s) => n + (s.zones || []).reduce((m, z) => m + (z.artifacts || []).length, 0), 0)
-    const totalBlocks    = spec.reduce((n, s) => n + (s.blocks || []).length, 0)
+    const totalBlocks    = spec.reduce((n, s) => {
+      if (Array.isArray(s.artifact_groups))
+        return n + s.artifact_groups.reduce((m, ag) => m + (ag.blocks || []).length, 0)
+      return n + (s.blocks || []).length
+    }, 0)
+    const totalArtGroups = spec.reduce((n, s) => n + (Array.isArray(s.artifact_groups) ? s.artifact_groups.length : 0), 0)
     const withIssues    = spec.filter(s => s._validation_issues?.length > 0)
     const withFallback  = spec.filter(s => s._fallback === true)
 
@@ -420,6 +425,7 @@ function safeParseJSON(raw, fallback) {
       { val: scratchSlides.length,    lbl: 'Scratch Mode' },
       { val: totalZones,                                            lbl: 'Zones' },
       { val: totalArtifacts,                                        lbl: 'Artifacts' },
+      { val: totalArtGroups,                                        lbl: 'Groups' },
       { val: totalBlocks,                                           lbl: 'Blocks' },
       { val: withFallback.length, lbl: 'Fallback' },
       { val: withIssues.length,   lbl: 'Issues' }

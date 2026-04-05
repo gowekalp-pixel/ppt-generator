@@ -124,6 +124,31 @@ def apply_block_render_metadata(artifact, block, default_type=None, default_subt
         if policy.get('allow_renderer_layout_fallback'):
             artifact['allow_renderer_layout_fallback'] = True
     return artifact
+
+
+def flatten_artifact_groups(slide_spec):
+    """Convert artifact_groups[] back to flat blocks[] for legacy rendering code.
+
+    Agent 5 emits artifact_groups[] to reduce payload size by hoisting repeated
+    artifact metadata (artifact_id, artifact_type, artifact_subtype,
+    artifact_header_text, fallback_policy) to the group level.
+    This function restores the flat blocks[] that the rest of the renderer expects.
+    No-op if blocks[] is already present or artifact_groups is absent.
+    """
+    if not isinstance(slide_spec, dict):
+        return slide_spec
+    if 'blocks' in slide_spec or 'artifact_groups' not in slide_spec:
+        return slide_spec
+    blocks = []
+    for ag in (slide_spec.get('artifact_groups') or []):
+        meta = {k: ag[k] for k in ('artifact_id', 'artifact_type', 'artifact_subtype',
+                                     'artifact_header_text', 'fallback_policy')
+                if k in ag and ag[k] is not None}
+        for b in (ag.get('blocks') or []):
+            blocks.append({**meta, **b})
+    return {k: v for k, v in slide_spec.items() if k != 'artifact_groups'} | {'blocks': blocks}
+
+
 CHART_HEADER_GAP = 0.11
 OPTICAL_NUDGE = 0.02
 
@@ -3924,6 +3949,9 @@ def build_presentation(final_spec, brand_rulebook, template_b64=None, brand_toke
     """
     if not final_spec:
         raise ValueError('finalSpec is empty')
+    # Normalize: Agent 5 emits artifact_groups[] for smaller payloads.
+    # Flatten to blocks[] before validation and rendering.
+    final_spec = [flatten_artifact_groups(s) for s in final_spec]
     invalid_slides = []
     for slide_spec in final_spec:
         slide_no = slide_spec.get('slide_number', '?')
