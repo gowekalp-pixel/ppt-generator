@@ -2015,20 +2015,36 @@ function getArtifactHeader(artifact) {
 
 function syncArtifactHeaderBlock(artifact, headerText) {
   if (!artifact || !headerText) return artifact
-  const existingHB = artifact.header_block
-  const newHB = existingHB
-    ? { ...existingHB, text: headerText }
-    : {
-        // Create a default header_block when the designed artifact didn't include one
-        text: headerText,
-        x: null, y: null, w: null, h: 0.30,
-        font_size: 11, font_weight: 'semibold',
-        style: 'underline'
-      }
   return {
     ...artifact,
     artifact_header: artifact.artifact_header || headerText,
-    header_block: newHB
+    // Only update text if header_block already exists — never create one here.
+    // Charts render chart_header internally; creating a block would duplicate it.
+    // Types that need a guaranteed header_block (profile_card_set, comparison_table,
+    // initiative_map, risk_register) call ensureArtifactHeaderBlock explicitly.
+    header_block: artifact.header_block
+      ? { ...artifact.header_block, text: headerText }
+      : artifact.header_block
+  }
+}
+
+// Creates a header_block if one is absent. Only called for artifact types that
+// render their own header separately (not charts/tables that embed it internally).
+function ensureArtifactHeaderBlock(artifact, headerText, bt) {
+  if (!artifact || !headerText) return artifact
+  if (artifact.header_block) return syncArtifactHeaderBlock(artifact, headerText)
+  return {
+    ...artifact,
+    artifact_header: artifact.artifact_header || headerText,
+    header_block: {
+      text: headerText,
+      x: null, y: null, w: null, h: 0.30,
+      font_family: (bt && bt.title_font_family) || 'Arial',
+      font_size: 11, font_weight: 'semibold',
+      color: (bt && bt.primary_color) || '#0078AE',
+      style: 'underline',
+      accent_color: (bt && bt.primary_color) || '#0078AE'
+    }
   }
 }
 
@@ -7402,7 +7418,7 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
       if (t === 'comparison_table') {
         const normalized = normalizeComparisonTableManifest(mArt)
         const artifactHeader = getArtifactHeader(mArt) || dArt.comparison_header || dArt.artifact_header || ''
-        return syncArtifactHeaderBlock({
+        return ensureArtifactHeaderBlock({
           ...dArt,
           artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
           artifact_header: artifactHeader,
@@ -7410,45 +7426,45 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
           criteria: normalized.criteria.length ? normalized.criteria : (dArt.criteria || []),
           options: normalized.options.length ? normalized.options : (dArt.options || []),
           recommended_option: normalized.recommended_option || dArt.recommended_option || ''
-        }, artifactHeader)
+        }, artifactHeader, bt)
       }
 
       if (t === 'initiative_map') {
         const normalized = normalizeInitiativeMapManifest(mArt)
         const artifactHeader = getArtifactHeader(mArt) || dArt.initiative_header || dArt.artifact_header || ''
-        return syncArtifactHeaderBlock({
+        return ensureArtifactHeaderBlock({
           ...dArt,
           artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
           artifact_header: artifactHeader,
           initiative_header: mArt.initiative_header || artifactHeader || dArt.initiative_header || mArt.table_header || '',
           dimension_labels: normalized.dimension_labels.length ? normalized.dimension_labels : (dArt.dimension_labels || []),
           initiatives: normalized.initiatives.length ? normalized.initiatives : (dArt.initiatives || [])
-        }, artifactHeader)
+        }, artifactHeader, bt)
       }
 
       if (t === 'profile_card_set') {
         const artifactHeader = getArtifactHeader(mArt) || dArt.profile_header || dArt.artifact_header || ''
-        return syncArtifactHeaderBlock({
+        return ensureArtifactHeaderBlock({
           ...dArt,
           artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
           artifact_header: artifactHeader,
           profile_header: mArt.profile_header || artifactHeader || dArt.profile_header || mArt.heading || '',
           profiles: mArt.profiles || dArt.profiles || [],
           layout_direction: mArt.layout_direction || dArt.layout_direction || 'horizontal'
-        }, artifactHeader)
+        }, artifactHeader, bt)
       }
 
       if (t === 'risk_register') {
         const normalized = normalizeRiskRegisterManifest(mArt)
         const artifactHeader = getArtifactHeader(mArt) || dArt.risk_header || dArt.artifact_header || ''
-        return syncArtifactHeaderBlock({
+        return ensureArtifactHeaderBlock({
           ...dArt,
           artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
           artifact_header: artifactHeader,
           risk_header: mArt.risk_header || artifactHeader || dArt.risk_header || mArt.table_header || '',
           risks: normalized.risks.length ? normalized.risks : (dArt.risks || []),
           show_mitigation: mArt.show_mitigation !== undefined ? mArt.show_mitigation : (dArt.show_mitigation !== false)
-        }, artifactHeader)
+        }, artifactHeader, bt)
       }
 
       if (t === 'cards') {
