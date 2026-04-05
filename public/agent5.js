@@ -2917,8 +2917,8 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
       if (artType === 'chart') {
         if (!art._computed) art._computed = {}
         const computed = art._computed
-        const canvasW = (canvas && canvas.width_in) ? canvas.width_in : 10
-        const canvasH = (canvas && canvas.height_in) ? canvas.height_in : 7.5
+        const canvasW = (canvas && canvas.width_in) ? canvas.width_in : (bt.slide_width_inches  || 13.33)
+        const canvasH = (canvas && canvas.height_in) ? canvas.height_in : (bt.slide_height_inches || 7.50)
         const cs = art.chart_style || {}
 
         // legend_position
@@ -4322,7 +4322,7 @@ function _profileCardSetToBlocks(art, content_y, blocks, bt, r2) {
   const slideH     = bt.slide_height_inches || 7.50
   const MIN_CARD_W = r2(slideW * 0.20)   // 20% of slide width
   const MIN_CARD_H = r2(slideH * 0.15)   // 15% of slide height
-  const MAX_CARD_H = r2(slideH * 0.30)   // 30% of slide height
+  const MAX_CARD_H = r2(slideH * 0.40)   // 40% of slide height
 
   // ── Grid selection: find best (cols × rows) for n cards ──────────────────
   // Try all valid column counts; evaluate against min card dimensions.
@@ -4353,12 +4353,13 @@ function _profileCardSetToBlocks(art, content_y, blocks, bt, r2) {
   const rows  = chosen.rows
   const cardW = r2((aw - gap * Math.max(0, cols - 1)) / cols)
 
-  // ── Card height: natural content-based cap — do NOT stretch to fill zone ──
-  // Derive natural height from the max attrs count across all profiles
-  const maxAttrCount   = Math.max(...profiles.map(p => ((p?.secondary_items || p?.attributes || []).slice(0, 5)).length), 1)
-  const naturalCardH   = r2(0.66 + 0.10 + maxAttrCount * 0.27 + Math.max(0, maxAttrCount - 1) * 0.05 + 0.14)
-  const zoneCardH      = r2((ah - gap * Math.max(0, rows - 1)) / rows)
-  const cardH          = r2(Math.min(naturalCardH, MAX_CARD_H, zoneCardH))
+  // ── Card height: fill zone by default, capped at 40% of slide height ────
+  // Cards always try to cover the full zone height (so the group fills the zone).
+  // MAX_CARD_H (40% of slideH) prevents any single card from becoming too tall.
+  // If zone forces cards taller than MAX_CARD_H, they are capped and the group
+  // is centered vertically within the remaining space.
+  const zoneCardH = r2((ah - gap * Math.max(0, rows - 1)) / rows)
+  const cardH     = r2(Math.min(zoneCardH, MAX_CARD_H))
 
   // Center the card group within the zone (both axes if smaller than zone)
   const totalGroupH  = rows * cardH + Math.max(0, rows - 1) * gap
@@ -4375,7 +4376,7 @@ function _profileCardSetToBlocks(art, content_y, blocks, bt, r2) {
     const x   = r2(ax + groupOffsetX + col * (cardW + gap))
     const y   = r2(ay + groupOffsetY + row * (cardH + gap))
     const attrs       = (profile?.secondary_items || profile?.attributes || []).slice(0, 5)
-    const cardCornerR = ps.card_corner_radius != null ? ps.card_corner_radius : 10
+    const cardCornerR = ps.card_corner_radius != null ? ps.card_corner_radius : 3
     const mutedColor  = '#6B7280'
     const dividerColor = '#D9D9D9'
     const subtitle  = String(profile?.subtitle || profile?.entity_type || profile?.category || profile?.subtype || '')
@@ -7358,11 +7359,14 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
           annotation_style: mArt.annotation_style || dArt.annotation_style || 'trailing',
           x_label:          mArt.x_label          || dArt.x_label          || '',
           y_label:          mArt.y_label          || dArt.y_label          || '',
-          categories:       mArt.categories       || dArt.categories       || [],
-          series:           mArt.series           || dArt.series           || [],
-          show_data_labels: mArt.show_data_labels !== undefined
+          categories:        mArt.categories        || dArt.categories        || [],
+          series:            mArt.series            || dArt.series            || [],
+          secondary_series:  mArt.secondary_series  || dArt.secondary_series  || [],
+          dual_axis:         mArt.dual_axis          != null ? mArt.dual_axis  : (dArt.dual_axis || false),
+          secondary_y_label: mArt.secondary_y_label || dArt.secondary_y_label || '',
+          show_data_labels:  mArt.show_data_labels !== undefined
                               ? mArt.show_data_labels : (dArt.show_data_labels !== false),
-          show_legend:      mArt.show_legend      !== undefined
+          show_legend:       mArt.show_legend      !== undefined
                               ? mArt.show_legend      : (mergedChartType === 'group_pie' ? true : !!dArt.show_legend)
         }, artifactHeader)
       }
@@ -7748,8 +7752,8 @@ function zonesHaveValidFrames(zones) {
 function deriveScratchContentBounds(slideSpec) {
   const canvas = slideSpec.canvas || {}
   const margin = canvas.margin || {}
-  const width = +canvas.width_in || 10
-  const height = +canvas.height_in || 7.5
+  const width = +canvas.width_in || 13.33
+  const height = +canvas.height_in || 7.50
   const left = +margin.left || 0.4
   const right = +margin.right || 0.4
   const topMargin = +margin.top || 0.15
@@ -7923,7 +7927,9 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
     caption_font_family:(brand.caption_font || {}).family  || 'Arial',
     accent_colors:      brand.accent_colors        || [],
     chart_palette:      brand.chart_color_sequence || brand.chart_colors || [],
-    uses_template:      brand.uses_template        || false
+    uses_template:      brand.uses_template        || false,
+    slide_width_inches:  brand.slide_width_inches  || 13.33,
+    slide_height_inches: brand.slide_height_inches || 7.50
   }
   // Keep brand_tokens on the slide object for internal processing only —
   // it is stripped from every slide before runAgent5 returns.
@@ -8017,7 +8023,7 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
   if (!isLayoutMode) {
     const _r2 = v => Math.round(v * 100) / 100
     const cv = brandedWithLayoutTitle.canvas || {}
-    const canvasH = +cv.height_in || 7.5
+    const canvasH = +cv.height_in || bt.slide_height_inches || 7.50
     const mBottom = +(cv.margin && cv.margin.bottom) || 0.37
     const canvasBottom = _r2(canvasH - mBottom)
 
