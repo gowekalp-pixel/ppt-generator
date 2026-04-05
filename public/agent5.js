@@ -2015,12 +2015,20 @@ function getArtifactHeader(artifact) {
 
 function syncArtifactHeaderBlock(artifact, headerText) {
   if (!artifact || !headerText) return artifact
+  const existingHB = artifact.header_block
+  const newHB = existingHB
+    ? { ...existingHB, text: headerText }
+    : {
+        // Create a default header_block when the designed artifact didn't include one
+        text: headerText,
+        x: null, y: null, w: null, h: 0.30,
+        font_size: 11, font_weight: 'semibold',
+        style: 'underline'
+      }
   return {
     ...artifact,
     artifact_header: artifact.artifact_header || headerText,
-    header_block: artifact.header_block
-      ? { ...artifact.header_block, text: headerText }
-      : artifact.header_block
+    header_block: newHB
   }
 }
 
@@ -2385,7 +2393,7 @@ function buildSafeArtifactShell(manifestArt, bt) {
         card_fill_color: '#FFFFFF',
         card_border_color: '#D7DEE8',
         card_border_width: 0.6,
-        card_corner_radius: 10,
+        card_corner_radius: 2,
         header_fill_color: '#EDF4FF',
         header_text_color: bt.primary_color || '#0078AE',
         key_fill_color: '#F4F5F7',
@@ -4335,17 +4343,23 @@ function _profileCardSetToBlocks(art, content_y, blocks, bt, r2) {
     const cH = (ah - gap * Math.max(0, r - 1)) / r
     gridOptions.push({
       cols: c, rows: r, cW, cH,
-      wOk: cW >= MIN_CARD_W,
-      hOk: cH >= MIN_CARD_H,
-      empty: c * r - n
+      wOk:       cW >= MIN_CARD_W,
+      hOk:       cH >= MIN_CARD_H,
+      fillsZone: cH <= MAX_CARD_H,   // this layout fills the zone without hitting the height cap
+      empty:     c * r - n
     })
   }
+  // Prefer layouts where ALL three goals are met: dims OK + fills zone within cap.
+  // Among those, fewest rows (avoid unnecessary stacking), then fewest empty slots, then widest card.
+  // If no layout fills the zone within cap, fall back to dims-OK layouts (cards will be centered).
   const fullyValid = gridOptions.filter(o => o.wOk && o.hOk)
-  const chosen = fullyValid.length > 0
-    ? fullyValid.sort((a, b) => a.rows - b.rows || a.empty - b.empty || b.cW - a.cW)[0]
+  const fillsZoneValid = fullyValid.filter(o => o.fillsZone)
+  const chosen = (fillsZoneValid.length > 0 ? fillsZoneValid : fullyValid).length > 0
+    ? (fillsZoneValid.length > 0 ? fillsZoneValid : fullyValid)
+        .sort((a, b) => a.rows - b.rows || a.empty - b.empty || b.cW - a.cW)[0]
     : gridOptions.sort((a, b) => {  // fallback: prioritise width fit, then height fit
-        const sa = (a.wOk ? 2 : 0) + (a.hOk ? 1 : 0)
-        const sb = (b.wOk ? 2 : 0) + (b.hOk ? 1 : 0)
+        const sa = (a.wOk ? 2 : 0) + (a.hOk ? 1 : 0) + (a.fillsZone ? 1 : 0)
+        const sb = (b.wOk ? 2 : 0) + (b.hOk ? 1 : 0) + (b.fillsZone ? 1 : 0)
         return sb - sa || a.empty - b.empty || b.cW - a.cW
       })[0]
 
@@ -4376,7 +4390,7 @@ function _profileCardSetToBlocks(art, content_y, blocks, bt, r2) {
     const x   = r2(ax + groupOffsetX + col * (cardW + gap))
     const y   = r2(ay + groupOffsetY + row * (cardH + gap))
     const attrs       = (profile?.secondary_items || profile?.attributes || []).slice(0, 5)
-    const cardCornerR = ps.card_corner_radius != null ? ps.card_corner_radius : 3
+    const cardCornerR = 2  // design policy: profile cards use a subtle 2pt corner radius
     const mutedColor  = '#6B7280'
     const dividerColor = '#D9D9D9'
     const subtitle  = String(profile?.subtitle || profile?.entity_type || profile?.category || profile?.subtype || '')

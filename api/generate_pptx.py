@@ -1369,8 +1369,8 @@ def render_chart(slide, artifact, bt, suppress_heading=False, slide_w=13.33, sli
     series_data     = artifact.get('series', [])
     chart_title     = artifact.get('chart_title', '')
     show_labels     = artifact.get('show_data_labels', True)
-    # combo charts always require a legend to distinguish bar vs line series
-    show_legend     = True if chart_type_str == 'combo' else artifact.get('show_legend', False)
+    # Agent-5 handles combo chart legends via custom rect/text blocks — respect show_legend from block
+    show_legend     = bool(artifact.get('show_legend', False))
     series_styles   = artifact.get('series_style', [])
     cs              = artifact.get('chart_style', {})
     y_label           = artifact.get('y_label', '')
