@@ -1318,6 +1318,7 @@ stat_bar:
   column_headers: optional; include only when column labels differ from defaults.
 
 comparison_table:
+  IMPORTANT: Use ONLY the flat schema below. Do NOT use column_headers[], criteria[], options[], or any other old field names — they are deprecated and will cause validation failure.
   {
     "type": "comparison_table",
     "artifact_header": "string — the one-line insight the comparison proves",
@@ -3801,7 +3802,7 @@ Fix rules:
 - Matrix: fully populate x_axis, y_axis, all 4 quadrants, and points; ensure artifact_header is set
 - Driver_tree: fully populate root and branches; ensure artifact_header is set
 - Prioritization: fully populate ranked action items; ensure artifact_header is set
-- comparison_table: use the flat schema — columns[] as a string array, rows[].cells[{value, subtext, tone}]; cells[0] is the option name with tone:"label"; data cells use tone:"positive"/"negative"/"neutral"; is_recommended:true on the best row; fully populate every cell with real values from the source document
+- comparison_table: use the flat schema — columns[] as a string array, rows[].cells[{value, icon_type, subtext, tone}]; cells[0] is the option name with tone:"label"; data cells use tone:"positive"/"negative"/"neutral"; each data cell has EITHER value (metric/%, ₹) OR icon_type ("check"/"cross"/"partial") but never both; is_recommended:true on the best row; fully populate every cell with real values from the source document
 - If matrix / driver_tree / prioritization is present, keep it only in the PRIMARY zone and pair it only with insight_text
 - If a slide uses matrix / driver_tree / prioritization, do NOT add cards, chart, workflow, or table anywhere else on that slide
 - selected_layout_name: choose from available layouts; set to "" if none available
