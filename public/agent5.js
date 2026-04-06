@@ -927,7 +927,7 @@ Matrix rules:
     "node_border_color": "hex",
     "node_border_width": number,
     "connector_color": "hex",
-    "connector_width": number,
+    "connector_width": "number — connector line thickness in pts (1–2pt typical; converted to inches by renderer)",
     "label_font_family": "string",
     "label_font_size": number,
     "label_color": "hex",
@@ -1005,6 +1005,189 @@ Prioritization rules:
 - Qualifier slots may be empty; do not render empty pills
 - Rank 1 should be visually strongest; later ranks may step down subtly through the rank palette
 - Title must dominate description; qualifiers must remain compact, secondary metadata
+
+═══════════════════════════
+9. STAT_BAR
+═══════════════════════════
+
+{
+  "type": "stat_bar",
+  "x": number, "y": number, "w": number, "h": number,
+  "artifact_header": "string — artifact section label",
+  "column_headers": {
+    "label": "string — header for the entity/partner name column",
+    "metric": "string — header for the bar chart column",
+    "value": "string — header for the numeric value column",
+    "annotation": "string — header for the annotation/use-case column"
+  },
+  "annotation_style": {
+    "label_font_family": "string",
+    "axis_color": "hex — muted color for column header labels, dividers, and neutral bars",
+    "annotation_color": "hex — annotation text column color",
+    "gridline_color": "hex — header divider rule color",
+    "border_color": "hex — non-highlighted row border color",
+    "background_color": "hex — empty bar track fill and highlighted row background tint"
+  },
+  "rows": [
+    {
+      "label": "string — entity/partner name",
+      "value": number,
+      "display_value": "string — formatted value string (e.g. '₹8.2Cr')",
+      "unit": "string — unit suffix if no display_value",
+      "annotation": "string — short use-case or context note (max 6 words)",
+      "highlight": true | false,
+      "bar_color": "hex or null — per-row bar color override; null = auto from highlight state"
+    }
+  ],
+  "header_block": null or { "text": "string", "x": number, "y": number, "w": number, "h": number,
+    "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
+    "style": "underline" | "brand_fill", "accent_color": "hex" }
+}
+
+Stat_bar rules:
+- Layout (column widths, bar geometry, row heights) is computed by JS from x/y/w/h — do NOT set internal positions
+- axis_color: use a muted caption gray (NOT a brand primary — too vibrant for column headers)
+- background_color: use a very light tint for the bar track background and highlighted row fill
+- Highlighted bar fill comes automatically from brand chart_palette[0]; do not set it in annotation_style
+- Max 10 rows; mark the most important row highlight: true (at most 1–2 highlighted rows)
+- display_value overrides value+unit in the rendered number column — always set it for formatted numbers
+
+═══════════════════════════
+10. COMPARISON_TABLE
+═══════════════════════════
+
+{
+  "type": "comparison_table",
+  "x": number, "y": number, "w": number, "h": number,
+  "comparison_style": {
+    "label_font_family": "string",
+    "label_font_size": number,
+    "body_font_family": "string",
+    "body_font_size": number,
+    "container_fill_color": "hex — outer shell background (usually #FFFFFF)",
+    "container_border_color": "hex",
+    "container_border_width": number,
+    "container_corner_radius": number,
+    "grid_color": "hex — horizontal row dividers",
+    "recommended_fill_color": "hex — highlight fill for the recommended option row",
+    "yes_fill_color": "hex", "yes_text_color": "hex",
+    "no_fill_color": "hex",  "no_text_color": "hex",
+    "partial_fill_color": "hex", "partial_text_color": "hex",
+    "neutral_fill_color": "hex"
+  },
+  "header_block": null or { ... }
+}
+
+Comparison table rules:
+- Layout (column widths, row heights, cell positions) is computed by JS from x/y/w/h — do NOT set internal positions
+- Content (criteria[], options[], recommended_option) comes from the Agent 4 manifest — do NOT duplicate it here
+- recommended_fill_color: light green tint (#EEF4E2 or brand equivalent)
+- yes/no/partial: semantic signal colors — green/red/amber respectively; do NOT use brand primary for these
+- label_font_size: 9–11pt; body_font_size: 8–10pt
+- container_corner_radius: 6–10 for a card-like container
+
+═══════════════════════════
+11. INITIATIVE_MAP
+═══════════════════════════
+
+{
+  "type": "initiative_map",
+  "x": number, "y": number, "w": number, "h": number,
+  "initiative_style": {
+    "label_font_family": "string",
+    "label_font_size": number,
+    "body_font_family": "string",
+    "body_font_size": number,
+    "row_fill_color": "hex — data row background (usually #FFFFFF)",
+    "row_border_color": "hex — row dividers and column separators",
+    "row_border_width": number,
+    "row_corner_radius": number,
+    "primary_chip_fill": "hex — tag chip fill for primary-tone cells (light tint of brand primary)",
+    "secondary_chip_fill": "hex — tag chip fill for secondary-tone cells (light tint of brand secondary)",
+    "neutral_chip_fill": "hex — tag chip fill for neutral-tone cells",
+    "positive_color": "hex — text color for positive / delta values"
+  },
+  "header_block": null or { ... }
+}
+
+Initiative map rules:
+- Layout (track width, lane widths, row heights, cell text positions) is computed by JS from x/y/w/h — do NOT set internal positions
+- Content (column_headers, rows, cells, primary_message, secondary_message, tags) comes from the Agent 4 manifest — do NOT duplicate it here
+- row_border_color: use a light grid color (e.g. #D7DEE8)
+- primary_chip_fill: light (~10%) tint of brand primary_color; secondary_chip_fill: light tint of brand secondary_color
+- label_font_size: 9–11pt; body_font_size: 8–10pt
+
+═══════════════════════════
+12. PROFILE_CARD_SET
+═══════════════════════════
+
+{
+  "type": "profile_card_set",
+  "x": number, "y": number, "w": number, "h": number,
+  "profile_style": {
+    "label_font_family": "string",
+    "label_font_size": number,
+    "body_font_family": "string",
+    "card_fill_color": "hex — card background (usually #FFFFFF or very light brand tint)",
+    "card_border_color": "hex",
+    "card_border_width": number,
+    "card_corner_radius": number,
+    "muted_color": "hex — subtitle and attribute-key label color (muted gray)",
+    "divider_color": "hex — horizontal line between card header and attribute body",
+    "badge_fill_color": "hex — KPI badge background (light green tint default)",
+    "badge_border_color": "hex — KPI badge border",
+    "badge_text_color": "hex — KPI badge text",
+    "chip_fill_color": "hex — attribute chip background (warm neutral default)",
+    "chip_border_color": "hex — attribute chip border",
+    "chip_text_color": "hex — attribute chip label text"
+  },
+  "header_block": null or { ... }
+}
+
+Profile card set rules:
+- Grid layout (columns × rows, card width/height, internal card proportions) is computed by JS from x/y/w/h and profile count — do NOT set card positions
+- Content (entity_name, subtitle, badge_text, attributes) comes from the Agent 4 manifest — do NOT duplicate it here
+- card_fill_color: #FFFFFF or a 5% tint of brand primary
+- card_border_color: light gray or brand grid line color (#D7DEE8)
+- label_font_size: 9–13pt (controls the card entity name size)
+
+═══════════════════════════
+13. RISK_REGISTER
+═══════════════════════════
+
+{
+  "type": "risk_register",
+  "x": number, "y": number, "w": number, "h": number,
+  "risk_style": {
+    "label_font_family": "string",
+    "body_font_family": "string",
+    "row_border_color": "hex", "row_border_width": number, "row_corner_radius": number,
+    "critical_fill_color": "hex", "high_fill_color": "hex",
+    "medium_fill_color": "hex",  "low_fill_color": "hex",
+    "critical_badge_color": "hex", "high_badge_color": "hex",
+    "medium_badge_color": "hex",   "low_badge_color": "hex",
+    "critical_text_color": "hex",  "high_text_color": "hex",
+    "medium_text_color": "hex",    "low_text_color": "hex",
+    "critical_pip_fill": "hex",    "high_pip_fill": "hex",
+    "medium_pip_fill": "hex",      "low_pip_fill": "hex",
+    "status_open_fill": "hex",     "status_open_border": "hex",     "status_open_text": "hex",
+    "status_progress_fill": "hex", "status_progress_border": "hex", "status_progress_text": "hex",
+    "status_mitigated_fill": "hex","status_mitigated_border": "hex","status_mitigated_text": "hex",
+    "status_closed_fill": "hex",   "status_closed_border": "hex",   "status_closed_text": "hex"
+  },
+  "header_block": null or { ... }
+}
+
+Risk register rules:
+- Layout (severity bands, row heights, pip positions, column widths) is computed by JS from x/y/w/h and risk count — do NOT set internal positions
+- Content (risks[], severity, title, detail, likelihood, impact, owner, status) comes from the Agent 4 manifest — do NOT duplicate it here
+- Severity colors are SEMANTIC — use standard risk palette regardless of brand:
+  critical_fill_color: #FEE2E2 | critical_badge_color: #DC2626 | critical_text_color: #8B2C23
+  high_fill_color: #FFF1E5     | high_badge_color: #EA580C     | high_text_color: #7C2D12
+  medium_fill_color: #FFFBEB   | medium_badge_color: #D97706   | medium_text_color: #6E5712
+  low_fill_color: #ECFDF5      | low_badge_color: #16A34A      | low_text_color: #14532D
+- pip_fill colors: match the badge color for each severity level
+- Status chip fills: open=red tint, in_progress=amber tint, mitigated=green tint, closed=gray tint
 
 ARTIFACT HEADER
 ═══════════════════════════
@@ -1224,7 +1407,7 @@ async function designSlideBatch(batchManifest, brand, batchNum) {
     '\n- prioritization: must have priority_style plus semantic fields from Agent 4 (items[], qualifiers[])' +
     '\n- insight_text (standard mode): must have insight_mode:"standard", style, heading_style, body_style' +
     '\n- insight_text (grouped mode):  must have insight_mode:"grouped", heading_style, group_layout, group_header_style, group_bullet_box_style, bullet_style, group_gap_in, header_to_box_gap_in' +
-    '\n- charts: include final legend_position, data_label_size, category_label_rotation, and series styling; stat_bar must preserve rows[] + annotation_style for local block flattening' +
+    '\n- charts: include final legend_position, data_label_size, category_label_rotation, and series styling; stat_bar must have rows[], column_headers{}, and annotation_style{}' +
     '\n- workflows: include final node geometry, connection paths, node_inner_padding, and external_label_gap' +
     '\n- tables: include column_widths, column_types, column_alignments, header_row_height, row_heights, and cell_padding (do NOT compute column_x_positions, row_y_positions, header_cell_frames, body_cell_frames — these are computed automatically)' +
     '\n- comparison_table / initiative_map / profile_card_set / risk_register are flattened locally into rect/text blocks, so emphasize rounded rows, semantic fills, and explicit labels rather than native table behavior' +
@@ -1295,10 +1478,9 @@ function validateDesignedSlide(slide) {
       if (normalizedType === 'chart'    && a.chart_style && a.chart_style.legend_position == null) issues.push(p + ': chart missing legend_position')
       if (normalizedType === 'chart'    && a.chart_style && a.chart_style.data_label_size == null) issues.push(p + ': chart missing data_label_size')
       if (normalizedType === 'chart'    && a.chart_style && a.chart_style.category_label_rotation == null) issues.push(p + ': chart missing category_label_rotation')
-      if (normalizedType === 'stat_bar' && !Array.isArray(a.rows)) issues.push(p + ': stat_bar missing rows')
-      if (normalizedType === 'stat_bar' && (a.rows || []).length < 2) issues.push(p + ': stat_bar needs 2+ rows')
+      if (normalizedType === 'stat_bar' && !Array.isArray(a.rows) && !Array.isArray(a.categories)) issues.push(p + ': stat_bar missing rows/categories')
       if (normalizedType === 'stat_bar' && !a.artifact_header && !a.stat_header && !a.chart_header) issues.push(p + ': stat_bar missing artifact_header/stat_header')
-      if (normalizedType === 'stat_bar' && !a.annotation_style) issues.push(p + ': stat_bar missing annotation_style')
+      if (normalizedType === 'stat_bar' && !a.annotation_style && !a.chart_style) issues.push(p + ': stat_bar missing annotation_style/chart_style')
       if (normalizedType === 'chart'    && normalizedChartType === 'pie' && Array.isArray(a.series_style) && Array.isArray(a.categories) && a.series_style.length !== a.categories.length) issues.push(p + ': pie chart series_style.length (' + a.series_style.length + ') must equal categories.length (' + a.categories.length + ')')
       if (normalizedType === 'chart'    && normalizedChartType === 'group_pie' && Array.isArray(a.series_style) && Array.isArray(a.categories) && a.series_style.length !== a.categories.length) issues.push(p + ': group_pie series_style.length (' + a.series_style.length + ') must equal categories.length (' + a.categories.length + ') — one style entry per slice')
       if (normalizedType === 'chart'    && normalizedChartType === 'group_pie' && Array.isArray(a.series) && (a.series.length < 2 || a.series.length > 8)) issues.push(p + ': group_pie series (entities) must be 2–8, got ' + (a.series || []).length)
@@ -4399,20 +4581,26 @@ function _profileCardSetToBlocks(art, content_y, blocks, bt, r2) {
   const groupOffsetY = r2(Math.max(0, (ah - totalGroupH) / 2))
   const groupOffsetX = r2(Math.max(0, (aw - totalGroupW) / 2))
 
-  const titleFont = ps.label_font_family || bt.title_font_family || 'Arial'
-  const bodyFont  = ps.body_font_family  || bt.body_font_family  || 'Arial'
+  const titleFont    = ps.label_font_family  || bt.title_font_family || 'Arial'
+  const bodyFont     = ps.body_font_family   || bt.body_font_family  || 'Arial'
+  const cardCornerR  = ps.card_corner_radius != null ? ps.card_corner_radius : 2
+  const mutedColor   = ps.muted_color        || bt.caption_color || '#6B7280'
+  const dividerColor = ps.divider_color      || '#D9D9D9'
+  const badgeFill    = ps.badge_fill_color   || '#E8F0D9'
+  const badgeBorder  = ps.badge_border_color || '#7AA243'
+  const badgeText    = ps.badge_text_color   || '#386B2A'
+  const chipFill     = ps.chip_fill_color    || '#F5F3EE'
+  const chipBorder   = ps.chip_border_color  || '#DDD6C8'
+  const chipText     = ps.chip_text_color    || '#4B5563'
 
   profiles.forEach((profile, pi) => {
     const col = pi % cols
     const row = Math.floor(pi / cols)
     const x   = r2(ax + groupOffsetX + col * (cardW + gap))
     const y   = r2(ay + groupOffsetY + row * (cardH + gap))
-    const attrs       = (profile?.secondary_items || profile?.attributes || []).slice(0, 5)
-    const cardCornerR = 2  // design policy: profile cards use a subtle 2pt corner radius
-    const mutedColor  = '#6B7280'
-    const dividerColor = '#D9D9D9'
-    const subtitle  = String(profile?.subtitle || profile?.entity_type || profile?.category || profile?.subtype || '')
-    const badgeText = String(profile?.badge_text || profile?.kpi_badge || profile?.headline_metric || profile?.metric_badge || '')
+    const attrs        = (profile?.secondary_items || profile?.attributes || []).slice(0, 5)
+    const subtitle     = String(profile?.subtitle || profile?.entity_type || profile?.category || profile?.subtype || '')
+    const badgeLabel   = String(profile?.badge_text || profile?.kpi_badge || profile?.headline_metric || profile?.metric_badge || '')
 
     // ── All internal measurements proportional to cardH and cardW ────────────
     const topPad    = r2(Math.max(0.07, cardH * 0.07))
@@ -4429,12 +4617,12 @@ function _profileCardSetToBlocks(art, content_y, blocks, bt, r2) {
     const bodyStartY = r2(dividerY + bodyGap)
 
     // Badge dimensions computed first so title/subtitle widths avoid it
-    const badgeW    = badgeText ? r2(Math.min(Math.max(0.65, badgeText.length * 0.078), Math.min(1.30, cardW * 0.48))) : 0
-    const leftPad   = 0.14
-    const rightPad  = 0.14
-    const badgeRightPad = badgeText ? 0.16 : 0
+    const badgeW        = badgeLabel ? r2(Math.min(Math.max(0.65, badgeLabel.length * 0.078), Math.min(1.30, cardW * 0.48))) : 0
+    const leftPad       = 0.14
+    const rightPad      = 0.14
+    const badgeRightPad = badgeLabel ? 0.16 : 0
     // Title/subtitle width = full card width minus left pad, badge area, right pad
-    const headerTextW = r2(cardW - leftPad - (badgeText ? badgeW + badgeRightPad + 0.06 : rightPad))
+    const headerTextW   = r2(cardW - leftPad - (badgeLabel ? badgeW + badgeRightPad + 0.06 : rightPad))
 
     // Font sizes scale with cardH
     const titleFontSize    = ps.label_font_size || Math.round(Math.max(9, Math.min(13, cardH * 8.5)))
@@ -4481,20 +4669,20 @@ function _profileCardSetToBlocks(art, content_y, blocks, bt, r2) {
     }
 
     // ── Badge (right-aligned in header) ──────────────────────────────────────
-    if (badgeText) {
+    if (badgeLabel) {
       const badgeTopY = r2(y + topPad)
       blocks.push({
         block_type: 'rect',
         x: r2(x + cardW - badgeW - badgeRightPad), y: badgeTopY, w: badgeW, h: badgeH,
-        fill_color: '#E8F0D9', border_color: '#7AA243', border_width: 0.7, corner_radius: 10
+        fill_color: badgeFill, border_color: badgeBorder, border_width: 0.7, corner_radius: 10
       })
       blocks.push({
         block_type: 'text_box',
         x: r2(x + cardW - badgeW - badgeRightPad + 0.04), y: r2(badgeTopY + 0.02),
         w: r2(badgeW - 0.08), h: r2(badgeH - 0.04),
-        text: badgeText,
+        text: badgeLabel,
         font_family: bodyFont, font_size: badgeFontSize, bold: true,
-        color: '#386B2A', align: 'center', valign: 'middle'
+        color: badgeText, align: 'center', valign: 'middle'
       })
     }
 
@@ -4532,14 +4720,14 @@ function _profileCardSetToBlocks(art, content_y, blocks, bt, r2) {
           blocks.push({
             block_type: 'rect',
             x: chipX, y: chipTopY, w: chipW, h: chipH,
-            fill_color: '#F5F3EE', border_color: '#DDD6C8', border_width: 0.5, corner_radius: 8
+            fill_color: chipFill, border_color: chipBorder, border_width: 0.5, corner_radius: 8
           })
           blocks.push({
             block_type: 'text_box',
             x: r2(chipX + 0.04), y: chipTopY, w: r2(chipW - 0.08), h: chipH,
             text: _truncateText(chip, 14),
             font_family: bodyFont, font_size: chipFontSize, bold: false,
-            color: '#4B5563', align: 'center', valign: 'middle'
+            color: chipText, align: 'center', valign: 'middle'
           })
           chipX = r2(chipX + chipW + 0.05)
         })
@@ -5123,7 +5311,7 @@ function _riskRegisterToBlocks(art, content_y, blocks, bt, r2) {
 }
 
 function _statBarToBlocks(art, content_y, blocks, bt, r2) {
-  const cs = art.chart_style || {}
+  const cs = art.annotation_style || art.chart_style || {}
   const headers = art.column_headers || {}
   const rows = Array.isArray(art.rows) && art.rows.length
     ? art.rows
@@ -5594,8 +5782,11 @@ function _driverTreeToBlocks(art, content_y, blocks, bt, r2) {
   const leafW = r2(Math.min(Math.max(1.6, aw * 0.20), 2.2))
   const leafH = r2(Math.min(Math.max(0.7, ah * 0.16), 0.95))
 
-  const rootX = r2(ax + (aw - rootW) / 2)
-  const rootY = rowY[0]
+  const rootX  = r2(ax + (aw - rootW) / 2)
+  const rootY  = rowY[0]
+  // connector_width is in pts → convert to inches; 0.02" ≈ 1.44pt (default thin connector)
+  const connW  = r2(ts.connector_width != null ? ts.connector_width / 72 : 0.02)
+  const connHW = r2(connW / 2)  // half-width for centering offsets
 
   const leafCenters = []
   if (leafCount === 1) {
@@ -5679,27 +5870,27 @@ function _driverTreeToBlocks(art, content_y, blocks, bt, r2) {
   const branchCenters = branchLayout.map(b => b.centerX)
   if (branchCenters.length) {
     const trunkBottomY = r2(branchY - 0.14)
-    pushConnector(r2(rootBottomX - 0.01), r2(rootY + rootH), 0.02, r2(trunkBottomY - (rootY + rootH)))
-    pushConnector(Math.min(...branchCenters), r2(trunkBottomY - 0.01), Math.max(0.02, Math.max(...branchCenters) - Math.min(...branchCenters)), 0.02)
+    pushConnector(r2(rootBottomX - connHW), r2(rootY + rootH), connW, r2(trunkBottomY - (rootY + rootH)))
+    pushConnector(Math.min(...branchCenters), r2(trunkBottomY - connHW), Math.max(connW, Math.max(...branchCenters) - Math.min(...branchCenters)), connW)
   }
 
   branchLayout.forEach((entry) => {
     const bx = r2(entry.centerX - branchW / 2)
     pushNode(bx, branchY, branchW, branchH, ts.node_fill_color_secondary || '#EDF7F3', entry.branch.label, entry.branch.value, false)
-    pushConnector(r2(entry.centerX - 0.01), r2(branchY - 0.14), 0.02, 0.14)
+    pushConnector(r2(entry.centerX - connHW), r2(branchY - 0.14), connW, 0.14)
 
     if (!hasThirdLevel) return
     const childCenters = entry.children.map(c => c.centerX)
     const childY = rowY[2]
     const childTopY = childY
-    pushConnector(r2(entry.centerX - 0.01), branchBottomY, 0.02, r2((childY - 0.14) - branchBottomY))
+    pushConnector(r2(entry.centerX - connHW), branchBottomY, connW, r2((childY - 0.14) - branchBottomY))
     if (childCenters.length > 1) {
-      pushConnector(Math.min(...childCenters), r2(childY - 0.15), Math.max(0.02, Math.max(...childCenters) - Math.min(...childCenters)), 0.02)
+      pushConnector(Math.min(...childCenters), r2(childY - connHW), Math.max(connW, Math.max(...childCenters) - Math.min(...childCenters)), connW)
     }
 
     entry.children.forEach(({ child, centerX }) => {
       const lx = r2(centerX - leafW / 2)
-      pushConnector(r2(centerX - 0.01), r2(childY - 0.15), 0.02, 0.15)
+      pushConnector(r2(centerX - connHW), r2(childY - 0.15), connW, 0.15)
       const label = child ? child.label : entry.branch.label
       const value = child ? child.value : entry.branch.value
       pushNode(lx, childTopY, leafW, leafH, ts.node_fill_color_leaf || '#F4F7FA', label, value, false)
