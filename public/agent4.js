@@ -1451,41 +1451,35 @@ profile_card_set:
 risk_register:
   {
     "type": "risk_register",
-    "artifact_header": "string — the one-line framing of the risk landscape",
-    "column_headers": [
-      { "id": "risk", "label": "Risk" },
-      { "id": "likelihood", "label": "Likelihood" },
-      { "id": "impact", "label": "Impact" },
-      { "id": "owner", "label": "Owner" },
-      { "id": "status", "label": "Status" }
-    ],
-    "rows": [
+    "risk_header": "string — one-line framing of the risk landscape (used as section header, NOT as artifact_header — do NOT populate artifact_header for risk_register)",
+    "severity_levels": [
       {
-        "id": "string",
-        "severity": "critical" | "high" | "medium" | "low",
-        "risk_title": "string — short risk headline",
-        "risk_detail": "string — explanatory line under the title",
-        "likelihood": "High" | "Medium" | "Low",
-        "impact": "High" | "Medium" | "Low",
-        "owner": "string",
-        "status": "string",
-        "status_tone": "open" | "in_progress" | "mitigated" | "closed",
-        "status_representation": "pill" | "text",
-        "severity_dot": true | false,
-        "severity_color_override": "string — optional hex override",
-        "owner_tag": "string — optional display override for owner text",
-        "status_tag": "string — optional display override for status pill"
+        "id": "string — e.g. 'level_1'",
+        "label": "string — severity band heading shown in the colored band (e.g. 'Critical severity — immediate action required')",
+        "tone": "critical" | "high" | "medium" | "low",
+        "item_details": [
+          {
+            "primary_message": "string — short risk headline (bold, ≤8 words)",
+            "secondary_message": "string — supporting detail line (muted, ≤18 words)",
+            "tags": [
+              { "value": "string — short chip label (owner, team, category; ≤2 words)", "tone": "neutral" | "positive" | "negative" | "warning" }
+            ],
+            "pips": [
+              { "label": "string — dimension name (e.g. 'Likelihood', 'Impact')", "intensity": "extreme" | "v_high" | "high" | "medium" | "low" | "v_low" }
+            ]
+          }
+        ]
       }
     ]
   }
   risk_register usage:
-  - each row is one named risk / issue / exception.
-  - severity ("critical"|"high"|"medium"|"low") drives row color banding and the leading dot marker. Use "critical" for the worst-case tier.
-  - risk_title is the main row headline; risk_detail is the smaller supporting line below.
-  - likelihood / impact accept "High", "Medium", or "Low" strings — rendered as 3 filled pip squares (High=3 pips, Medium=2, Low=1).
-  - owner_tag is the display text for the owner chip (use a short name or team label, ≤ 15 chars).
-  - status_tone MUST be one of: "open" | "in_progress" | "mitigated" | "closed" — controls chip color (red/amber/green/gray).
-  - status_tag is the display text for the status chip (e.g. "Open", "In progress", "Mitigated").
+  - Do NOT populate artifact_header — risk_register is always a single-artifact zone and uses risk_header as its own internal section header.
+  - severity_levels groups items by severity band. Order from worst to best: critical → high → medium → low. Omit unused levels.
+  - tone on each severity_level drives band fill, dot color, and pip fill (critical=red, high=orange, medium=amber, low=gray).
+  - primary_message: bold title for the risk/issue (≤8 words).
+  - secondary_message: supporting evidence line rendered smaller below the title (≤18 words).
+  - tags[]: 1–3 short pill chips per item. Each has value (display text, ≤2 words) and tone (neutral=gray, positive=green, negative=red, warning=amber).
+  - pips[]: 1–3 dimension assessments (e.g. Likelihood, Impact). intensity maps to filled squares: extreme/v_high=3 full+hot, high=3, medium=2, low=1, v_low=0. LLM decides intensity from data.
   NEVER use plain table when severity-by-row is the primary signal.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1888,8 +1882,8 @@ function validateArtifact(artifact) {
   }
 
   if (t === 'risk_register') {
-    if (!(artifact.risks || []).length) return { valid: false, reason: 'risk_register has no risks' }
-    if ((artifact.risks || []).some(r => !r.title || !r.severity)) return { valid: false, reason: 'risk_register risk missing title or severity' }
+    const levels = artifact.severity_levels || artifact.rows || artifact.risks || []
+    if (!Array.isArray(levels) || !levels.length) return { valid: false, reason: 'risk_register has no severity_levels' }
     return { valid: true }
   }
 
@@ -3694,39 +3688,61 @@ function pruneAgent4SlideForOutput(slide) {
       }
     }
     if (type === 'risk_register') {
-      // New schema uses rows[] with risk_title/risk_detail; legacy used risks[] with title/detail
-      const riskRows = Array.isArray(artifact.rows) && artifact.rows.length
-        ? artifact.rows
-        : Array.isArray(artifact.risks) ? artifact.risks : []
-      const defaultColumnHeaders = [
-        { id: 'risk', label: 'Risk' },
-        { id: 'likelihood', label: 'Likelihood' },
-        { id: 'impact', label: 'Impact' },
-        { id: 'owner', label: 'Owner' },
-        { id: 'status', label: 'Status' }
-      ]
+      // Normalize new severity_levels schema; fall back to legacy rows[]/risks[] if needed
+      let severityLevels = []
+      if (Array.isArray(artifact.severity_levels) && artifact.severity_levels.length) {
+        severityLevels = artifact.severity_levels.map((lvl, li) => ({
+          id: lvl.id || `level_${li + 1}`,
+          label: lvl.label || '',
+          tone: String(lvl.tone || lvl.severity || 'medium').toLowerCase(),
+          item_details: (Array.isArray(lvl.item_details) ? lvl.item_details : []).map(item => ({
+            primary_message: item.primary_message || item.risk_title || item.title || '',
+            secondary_message: item.secondary_message || item.risk_detail || item.detail || '',
+            tags: (Array.isArray(item.tags) ? item.tags : []).map(t => ({
+              value: String(t.value || t.label || ''),
+              tone: String(t.tone || 'neutral').toLowerCase()
+            })),
+            pips: (Array.isArray(item.pips) ? item.pips : []).map(p => ({
+              label: String(p.label || p.value || ''),
+              intensity: String(p.intensity || 'medium').toLowerCase()
+            }))
+          }))
+        }))
+      } else {
+        // Legacy rows[]/risks[] → convert to severity_levels structure
+        const riskRows = Array.isArray(artifact.rows) && artifact.rows.length
+          ? artifact.rows
+          : Array.isArray(artifact.risks) ? artifact.risks : []
+        const grouped = {}
+        const order = ['critical', 'high', 'medium', 'low']
+        riskRows.forEach(r => {
+          const sev = String(r?.severity || 'medium').toLowerCase()
+          if (!grouped[sev]) grouped[sev] = []
+          grouped[sev].push(r)
+        })
+        severityLevels = order.filter(s => grouped[s]).map((s, i) => ({
+          id: `level_${i + 1}`,
+          label: { critical: 'Critical severity — immediate action required', high: 'High severity — immediate action required', medium: 'Medium severity — monitor closely', low: 'Low severity — resolved or contained' }[s] || s,
+          tone: s,
+          item_details: grouped[s].map(r => ({
+            primary_message: r?.risk_title || r?.title || '',
+            secondary_message: r?.risk_detail || r?.detail || r?.description || '',
+            tags: [
+              ...(r?.owner_tag || r?.owner ? [{ value: r.owner_tag || r.owner, tone: 'neutral' }] : []),
+              ...(r?.status_tag || r?.status ? [{ value: r.status_tag || r.status, tone: r?.status_tone === 'open' ? 'negative' : r?.status_tone === 'mitigated' ? 'positive' : 'neutral' }] : [])
+            ],
+            pips: [
+              ...(r?.likelihood ? [{ label: 'Likelihood', intensity: String(r.likelihood).toLowerCase() }] : []),
+              ...(r?.impact ? [{ label: 'Impact', intensity: String(r.impact).toLowerCase() }] : [])
+            ]
+          }))
+        }))
+      }
       return {
         type: 'risk_register',
-        risk_header: artifact.risk_header || artifact.artifact_header || artifact.table_header || '',
-        column_headers: Array.isArray(artifact.column_headers) && artifact.column_headers.length
-          ? artifact.column_headers.map(c => ({ id: c?.id || '', label: c?.label || '' }))
-          : defaultColumnHeaders,
-        rows: riskRows.map(r => ({
-          id: r?.id || undefined,
-          severity: r?.severity || 'medium',
-          risk_title: r?.risk_title || r?.title || '',
-          risk_detail: r?.risk_detail || r?.detail || r?.description || '',
-          likelihood: r?.likelihood != null ? r.likelihood : undefined,
-          impact: r?.impact != null ? r.impact : undefined,
-          owner: r?.owner || undefined,
-          status: r?.status || undefined,
-          status_tone: r?.status_tone || undefined,
-          status_representation: r?.status_representation || 'pill',
-          severity_dot: r?.severity_dot === true,
-          severity_color_override: r?.severity_color_override || undefined,
-          owner_tag: r?.owner_tag || undefined,
-          status_tag: r?.status_tag || undefined
-        })),
+        risk_header: artifact.risk_header || artifact.table_header || '',
+        // artifact_header intentionally omitted — risk_register uses risk_header internally
+        severity_levels: severityLevels,
         ...coverage
       }
     }

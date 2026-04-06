@@ -1185,7 +1185,8 @@ Profile card set rules:
 
 Risk register rules:
 - Layout (severity bands, row heights, pip positions, column widths) is computed by JS from x/y/w/h and risk count — do NOT set internal positions
-- Content (risks[], severity, title, detail, likelihood, impact, owner, status) comes from the Agent 4 manifest — do NOT duplicate it here
+- Content (severity_levels[], each with label/tone/item_details[]; each item has primary_message, secondary_message, tags[], pips[]) comes from the Agent 4 manifest — do NOT duplicate it here
+- risk_register never has an artifact_header or header_block — the risk_header is rendered as an internal section header by JS
 - Severity colors are SEMANTIC — use standard risk palette regardless of brand:
   critical_fill_color: #FEE2E2 | critical_badge_color: #DC2626 | critical_text_color: #8B2C23
   high_fill_color: #FFF1E5     | high_badge_color: #EA580C     | high_text_color: #7C2D12
@@ -1405,7 +1406,7 @@ async function designSlideBatch(batchManifest, brand, batchNum) {
     '\n- comparison_table: must have comparison_style, criteria[], options[], recommended_option' +
     '\n- initiative_map: must have initiative_style, dimension_labels[], initiatives[]' +
     '\n- profile_card_set: must have profile_style, profiles[], layout_direction' +
-    '\n- risk_register: must have risk_style, risks[], show_mitigation' +
+    '\n- risk_register: must have risk_style and severity_levels[]; no artifact_header or header_block; tags[].tone controls chip color; pips[].intensity maps to filled squares' +
     '\n- cards: must have card_style, card_frames[] with x/y/w/h per card' +
     '\n- matrix: must have matrix_style plus semantic fields from Agent 4 (x_axis, y_axis, quadrants[id/title/primary_message/tone], points[label/short_label/quadrant_id/x/y/emphasis]); quadrant has NO secondary_message; points have NO primary_message or secondary_message; x/y are numeric 0–100' +
     '\n- driver_tree: must have tree_style plus semantic fields from Agent 4 (root, branches)' +
@@ -1508,7 +1509,7 @@ function validateDesignedSlide(slide) {
       if (normalizedType === 'initiative_map' && !a.initiative_style && !Array.isArray(a.rows)) issues.push(p + ': initiative_map missing initiative_style')
       if (normalizedType === 'profile_card_set' && !Array.isArray(a.profiles)) issues.push(p + ': profile_card_set missing profiles')
       if (normalizedType === 'profile_card_set' && !a.profile_style) issues.push(p + ': profile_card_set missing profile_style')
-      if (normalizedType === 'risk_register' && !Array.isArray(a.risks)) issues.push(p + ': risk_register missing risks')
+      if (normalizedType === 'risk_register' && !Array.isArray(a.severity_levels) && !Array.isArray(a.risks)) issues.push(p + ': risk_register missing severity_levels')
       if (normalizedType === 'risk_register' && !a.risk_style) issues.push(p + ': risk_register missing risk_style')
       if (normalizedType === 'cards'    && !a.card_frames?.length) issues.push(p + ': cards missing card_frames')
       if (normalizedType === 'cards'    && !a.card_style)      issues.push(p + ': cards missing card_style')
@@ -2371,27 +2372,56 @@ function normalizeInitiativeMapManifest(artifact) {
 }
 
 function normalizeRiskRegisterManifest(artifact) {
-  const rows = Array.isArray(artifact?.rows) ? artifact.rows : []
-  const risks = rows.length
-    ? rows.map((row, ri) => ({
-        id: row?.id || `risk_${ri + 1}`,
-        severity: String(row?.severity || '').toLowerCase() || 'low',
-        title: row?.risk_title || row?.title || '',
-        detail: row?.risk_detail || row?.detail || row?.description || '',
-        description: row?.risk_detail || row?.detail || row?.description || '',
-        likelihood: row?.likelihood || '',
-        impact: row?.impact || '',
-        owner: row?.owner || '',
-        owner_tag: _truncateText(row?.owner_tag || row?.owner || '', 15),
-        status: row?.status || '',
-        status_tag: row?.status_tag || row?.status || '',
-        status_tone: row?.status_tone || '',
-        status_representation: row?.status_representation || 'pill',
-        severity_dot: row?.severity_dot === true,
-        severity_color_override: row?.severity_color_override || null
+  // New schema: severity_levels[]
+  if (Array.isArray(artifact?.severity_levels) && artifact.severity_levels.length) {
+    const severityLevels = artifact.severity_levels.map((lvl, li) => ({
+      id: lvl.id || `level_${li + 1}`,
+      label: lvl.label || '',
+      tone: String(lvl.tone || lvl.severity || 'medium').toLowerCase(),
+      item_details: (Array.isArray(lvl.item_details) ? lvl.item_details : []).map(item => ({
+        primary_message: item.primary_message || item.risk_title || item.title || '',
+        secondary_message: item.secondary_message || item.risk_detail || item.detail || '',
+        tags: (Array.isArray(item.tags) ? item.tags : []).map(t => ({
+          value: String(t.value || t.label || ''),
+          tone: String(t.tone || 'neutral').toLowerCase()
+        })),
+        pips: (Array.isArray(item.pips) ? item.pips : []).map(p => ({
+          label: String(p.label || p.value || ''),
+          intensity: String(p.intensity || 'medium').toLowerCase()
+        }))
       }))
-    : (Array.isArray(artifact?.risks) ? artifact.risks : [])
-  return { risks }
+    }))
+    return { severity_levels: severityLevels }
+  }
+  // Legacy rows[]/risks[] fallback — convert to severity_levels
+  const rows = Array.isArray(artifact?.rows) && artifact.rows.length ? artifact.rows
+    : Array.isArray(artifact?.risks) ? artifact.risks : []
+  const order = ['critical', 'high', 'medium', 'low']
+  const grouped = {}
+  rows.forEach(r => {
+    const s = String(r?.severity || 'medium').toLowerCase()
+    if (!grouped[s]) grouped[s] = []
+    grouped[s].push(r)
+  })
+  const bandLabel = { critical: 'Critical severity — immediate action required', high: 'High severity — immediate action required', medium: 'Medium severity — monitor closely', low: 'Low severity — resolved or contained' }
+  const severityLevels = order.filter(s => grouped[s]).map((s, i) => ({
+    id: `level_${i + 1}`,
+    label: bandLabel[s] || s,
+    tone: s,
+    item_details: grouped[s].map(r => ({
+      primary_message: r?.risk_title || r?.title || '',
+      secondary_message: r?.risk_detail || r?.detail || r?.description || '',
+      tags: [
+        ...(r?.owner_tag || r?.owner ? [{ value: r.owner_tag || r.owner, tone: 'neutral' }] : []),
+        ...(r?.status_tag || r?.status ? [{ value: r.status_tag || r.status, tone: r?.status_tone === 'open' ? 'negative' : r?.status_tone === 'mitigated' ? 'positive' : 'neutral' }] : [])
+      ],
+      pips: [
+        ...(r?.likelihood ? [{ label: 'Likelihood', intensity: String(r.likelihood).toLowerCase() }] : []),
+        ...(r?.impact     ? [{ label: 'Impact',     intensity: String(r.impact).toLowerCase()     }] : [])
+      ]
+    }))
+  }))
+  return { severity_levels: severityLevels }
 }
 
 function normalizeMatrixManifest(artifact) {
@@ -2669,58 +2699,49 @@ function buildSafeArtifactShell(manifestArt, bt) {
     return {
       type: 'risk_register',
       artifact_coverage_hint,
-      artifact_header,
+      // artifact_header intentionally omitted — risk_register uses risk_header internally
       x: null, y: null, w: null, h: null,
-      risk_header: manifestArt?.risk_header || artifact_header || manifestArt?.table_header || '',
-      risks: normalized.risks,
-      show_mitigation: manifestArt?.show_mitigation !== false,
+      risk_header: manifestArt?.risk_header || manifestArt?.table_header || '',
+      severity_levels: normalized.severity_levels,
       risk_style: {
         row_border_color: '#D7DEE8',
         row_border_width: 0.6,
         row_corner_radius: 8,
         // Severity band fill colors (semantic tint — not brand-driven)
         critical_fill_color: '#FDE8E8',
-        high_fill_color: '#FFF1F2',
-        medium_fill_color: '#FFF7E5',
-        low_fill_color: '#F3F4F6',
-        // Severity dot + badge colors (semantic — not brand-driven)
+        high_fill_color:     '#FFF1F2',
+        medium_fill_color:   '#FFF7E5',
+        low_fill_color:      '#F3F4F6',
+        // Severity dot + badge colors
         critical_badge_color: '#DC2626',
         high_badge_color:     '#EA580C',
         medium_badge_color:   '#D97706',
         low_badge_color:      '#6B7280',
         badge_text_color: '#FFFFFF',
-        // Severity band text colors — match dot color for visual coherence
         critical_text_color: '#8B2C23',
         high_text_color:     '#8B2C23',
         medium_text_color:   '#6E5712',
         low_text_color:      '#6B7280',
-        // Pip square fill colors — match band text
         critical_pip_fill: '#8B2C23',
         high_pip_fill:     '#8B2C23',
         medium_pip_fill:   '#6E5712',
         low_pip_fill:      '#7A7A72',
-        // Owner chip — neutral, non-brand
         owner_fill_color:   '#F5F5F5',
         owner_border_color: '#D1D5DB',
-        // Status chip colors by tone
-        status_open_fill:      '#FFF7F6',
-        status_open_border:    '#A33B32',
-        status_open_text:      '#A33B32',
-        status_progress_fill:  '#FFF8E8',
-        status_progress_border:'#9A6B10',
-        status_progress_text:  '#6E5712',
-        status_mitigated_fill: '#F1F8E8',
-        status_mitigated_border:'#7AA243',
-        status_mitigated_text: '#386B2A',
-        status_closed_fill:    '#F3F4F6',
-        status_closed_border:  '#6B7280',
-        status_closed_text:    '#6B7280',
+        status_open_fill:       '#FFF7F6', status_open_border:    '#A33B32', status_open_text:    '#A33B32',
+        status_progress_fill:   '#FFF8E8', status_progress_border:'#9A6B10', status_progress_text:'#6E5712',
+        status_mitigated_fill:  '#F1F8E8', status_mitigated_border:'#7AA243',status_mitigated_text:'#386B2A',
+        status_closed_fill:     '#F3F4F6', status_closed_border:  '#6B7280', status_closed_text:  '#6B7280',
+        tag_positive_fill: '#F1F8E8', tag_positive_border: '#7AA243', tag_positive_text: '#386B2A',
+        tag_negative_fill: '#FFF7F6', tag_negative_border: '#A33B32', tag_negative_text: '#A33B32',
+        tag_warning_fill:  '#FFF8E8', tag_warning_border:  '#9A6B10', tag_warning_text:  '#6E5712',
+        tag_neutral_fill:  '#F5F5F5', tag_neutral_border:  '#D1D5DB', tag_neutral_text:  '#374151',
         label_font_family: bt.title_font_family || 'Arial',
         label_font_size: 10,
         body_font_family: bt.body_font_family || 'Arial',
         body_font_size: 9
       },
-      header_block
+      header_block: null   // no header_block for risk_register — risk_header is rendered internally
     }
   }
   if (t === 'workflow') {
@@ -5181,235 +5202,132 @@ function _riskRegisterToBlocks_legacy(art, content_y, blocks, bt, r2) {
   })
 }
 
-// risk_register renders as a severity-banded stack:
-// - Full-width colored band per severity group with dot marker + label + item count
-// - Item rows: bold title + muted detail (left), owner pill + status pill + pip grid (right)
+// risk_register renders as a severity-banded stack (new severity_levels schema):
+// - Colored band per severity group: dot + label + item count
+// - Item rows: bold primary_message + muted secondary_message (left); tags[] pills + pips[] squares (right)
 // - Thin divider between items; section gap between groups
 function _riskRegisterToBlocks(art, content_y, blocks, bt, r2) {
   const rs = art.risk_style || {}
-  const risks = (art.risks || []).slice(0, 8)
+  const severityLevels = Array.isArray(art.severity_levels) ? art.severity_levels : []
   const ax = art.x || 0
   const ay = content_y
   const aw = art.w || 0
   const ah = r2((art.y || 0) + (art.h || 0) - content_y)
-  if (!risks.length || aw <= 0 || ah <= 0) return
-
-  const titleFont   = rs.label_font_family || bt.title_font_family || 'Arial'
-  const bodyFont    = rs.body_font_family  || bt.body_font_family  || 'Arial'
-  const bodyColor   = bt.body_color   || '#111111'
-  const captionColor= bt.caption_color || bodyColor
-
-  const pipSize   = 0.10
-  const pipGap    = 0.04
-  const bandH     = 0.34
-  const rowH      = 0.92
-  const dividerH  = 0.005
-  const sectionGap= 0.20
-
-  // Critical always first, then high, medium, low
-  const severityOrder = ['critical', 'high', 'medium', 'low']
-  const severityLabel = {
-    critical: 'Critical severity',
-    high:     'High severity',
-    medium:   'Medium severity',
-    low:      'Low severity'
-  }
-  const severitySuffix = {
-    critical: 'immediate action required',
-    high:     'immediate action required',
-    medium:   'monitor closely',
-    low:      'resolved or contained'
+  if (!severityLevels.length || aw <= 0 || ah <= 0) {
+    _riskRegisterToBlocks_legacy(art, content_y, blocks, bt, r2)
+    return
   }
 
-  // All severity colors resolved through rs.* (set by batch call defaults above)
-  const bandText = sev => rs[`${sev}_text_color`] || (sev === 'medium' ? '#6E5712' : sev === 'low' ? '#6B7280' : '#8B2C23')
-  const pipColor = sev => rs[`${sev}_pip_fill`]   || (sev === 'medium' ? '#6E5712' : sev === 'low' ? '#7A7A72'  : '#8B2C23')
-  const pipEmpty = '#FFFFFF'
-  const pipBorder= '#B8B8B8'
+  const titleFont    = rs.label_font_family || bt.title_font_family || 'Arial'
+  const bodyFont     = rs.body_font_family  || bt.body_font_family  || 'Arial'
+  const bodyColor    = bt.body_color    || '#111111'
+  const captionColor = bt.caption_color || bodyColor
 
-  // Convert "High"|"Medium"|"Low" string → numeric pip count (1–3). Numbers pass through.
-  const toNum = v => {
-    if (typeof v === 'number') return Math.max(0, Math.min(3, v))
-    const t = String(v || '').toLowerCase()
-    if (t === 'high')   return 3
-    if (t === 'medium') return 2
-    if (t === 'low')    return 1
+  const pipSize    = 0.10
+  const pipGap     = 0.03
+  const bandH      = 0.34
+  const rowH       = 0.90
+  const dividerH   = 0.005
+  const sectionGap = 0.18
+
+  const bandFill  = tone => _riskSeverityFill(tone, rs)
+  const dotColor  = tone => _riskSeverityBadgeColor(tone, rs)
+  const bandTxt   = tone => rs[`${tone}_text_color`] || (tone === 'medium' ? '#6E5712' : tone === 'low' ? '#6B7280' : '#8B2C23')
+  const pipFill   = tone => rs[`${tone}_pip_fill`]   || (tone === 'medium' ? '#6E5712' : tone === 'low' ? '#7A7A72' : '#8B2C23')
+  const pipEmpty  = '#FFFFFF'
+  const pipBorder = '#C8C8C8'
+
+  // intensity → filled pip count (out of 3 squares)
+  const intensityToCount = v => {
+    const t = String(v || '').toLowerCase().replace(/[\s_]/g, '')
+    if (t === 'extreme' || t === 'vhigh')  return 3
+    if (t === 'high')                      return 3
+    if (t === 'medium' || t === 'med')     return 2
+    if (t === 'low')                       return 1
+    if (t === 'vlow')                      return 0
     const n = Number(v)
     return isNaN(n) ? 0 : Math.max(0, Math.min(3, Math.round(n)))
   }
 
-  // Status chip colors resolved from rs.* tokens
-  const statusColors = tone => {
-    if (tone === 'open')
-      return { fill: rs.status_open_fill || '#FFF7F6', border: rs.status_open_border || '#A33B32', text: rs.status_open_text || '#A33B32' }
-    if (tone === 'in_progress' || tone === 'progress')
-      return { fill: rs.status_progress_fill || '#FFF8E8', border: rs.status_progress_border || '#9A6B10', text: rs.status_progress_text || '#6E5712' }
-    if (tone === 'mitigated')
-      return { fill: rs.status_mitigated_fill || '#F1F8E8', border: rs.status_mitigated_border || '#7AA243', text: rs.status_mitigated_text || '#386B2A' }
-    // closed / default
-    return { fill: rs.status_closed_fill || '#F3F4F6', border: rs.status_closed_border || '#6B7280', text: rs.status_closed_text || '#6B7280' }
+  // Tag chip colors
+  const tagColors = tone => {
+    if (tone === 'positive') return { fill: rs.tag_positive_fill || '#F1F8E8', border: rs.tag_positive_border || '#7AA243', text: rs.tag_positive_text || '#386B2A' }
+    if (tone === 'negative') return { fill: rs.tag_negative_fill || '#FFF7F6', border: rs.tag_negative_border || '#A33B32', text: rs.tag_negative_text || '#A33B32' }
+    if (tone === 'warning')  return { fill: rs.tag_warning_fill  || '#FFF8E8', border: rs.tag_warning_border  || '#9A6B10', text: rs.tag_warning_text  || '#6E5712' }
+    return                          { fill: rs.tag_neutral_fill  || '#F5F5F5', border: rs.tag_neutral_border  || '#D1D5DB', text: rs.tag_neutral_text  || '#374151' }
   }
 
-  const groups = severityOrder
-    .map(sev => ({
-      severity: sev,
-      items: risks.filter(r => String(r?.severity || '').toLowerCase() === sev)
-    }))
-    .filter(g => g.items.length)
+  // Right column: enough for 2 tags + pip grid
+  const rightColW = 1.90
+  const leftX     = r2(ax + 0.16)
+  const leftW     = r2(aw - rightColW - 0.28)
+  const rightX    = r2(ax + aw - rightColW)
 
   let cursorY = ay
-  groups.forEach((group, gi) => {
-    const sev      = group.severity
-    const bandFill = _riskSeverityFill(sev, rs)
-    const dotColor = _riskSeverityBadgeColor(sev, rs)
-    const txtColor = bandText(sev)
+
+  severityLevels.forEach((level, li) => {
+    const tone    = String(level.tone || level.severity || 'medium').toLowerCase()
+    const bFill   = bandFill(tone)
+    const dColor  = dotColor(tone)
+    const txtColor= bandTxt(tone)
+    const items   = Array.isArray(level.item_details) ? level.item_details : []
 
     // Severity band
-    blocks.push({
-      block_type: 'rect',
-      x: ax, y: cursorY, w: aw, h: bandH,
-      fill_color: bandFill,
-      border_color: null, border_width: 0, corner_radius: 10
-    })
-    blocks.push({
-      block_type: 'circle',
-      x: r2(ax + 0.16), y: r2(cursorY + 0.12), w: 0.10, h: 0.10,
-      fill_color: dotColor, text: ''
-    })
-    blocks.push({
-      block_type: 'text_box',
-      x: r2(ax + 0.40), y: r2(cursorY + 0.06), w: r2(aw - 1.6), h: 0.22,
-      text: `${severityLabel[sev] || 'Severity'} — ${severitySuffix[sev] || ''}`,
-      font_family: titleFont, font_size: 10, bold: true,
-      color: txtColor, align: 'left', valign: 'middle'
-    })
-    blocks.push({
-      block_type: 'text_box',
-      x: r2(ax + aw - 0.90), y: r2(cursorY + 0.06), w: 0.74, h: 0.22,
-      text: `${group.items.length} item${group.items.length > 1 ? 's' : ''}`,
-      font_family: bodyFont, font_size: 9, bold: false,
-      color: txtColor, align: 'right', valign: 'middle'
-    })
+    blocks.push({ block_type: 'rect', x: ax, y: cursorY, w: aw, h: bandH, fill_color: bFill, border_color: null, border_width: 0, corner_radius: 8 })
+    blocks.push({ block_type: 'circle', x: r2(ax + 0.16), y: r2(cursorY + 0.12), w: 0.10, h: 0.10, fill_color: dColor, text: '' })
+    blocks.push({ block_type: 'text_box', x: r2(ax + 0.36), y: r2(cursorY + 0.06), w: r2(aw - 1.8), h: 0.22,
+      text: level.label || tone, font_family: titleFont, font_size: 10, bold: true, color: txtColor, align: 'left', valign: 'middle' })
+    blocks.push({ block_type: 'text_box', x: r2(ax + aw - 0.88), y: r2(cursorY + 0.06), w: 0.72, h: 0.22,
+      text: `${items.length} item${items.length !== 1 ? 's' : ''}`, font_family: bodyFont, font_size: 9, bold: false, color: txtColor, align: 'right', valign: 'middle' })
     cursorY = r2(cursorY + bandH + 0.08)
 
-    group.items.forEach((risk, ri) => {
-      const rowY      = cursorY
-      const leftX     = r2(ax + 0.16)
-      const rightColW = 1.95
-      const leftW     = r2(aw - rightColW - 0.32)
-      const rightX    = r2(ax + aw - rightColW)
-      const owner     = String(risk?.owner_tag  || risk?.owner  || '')
-      const status    = String(risk?.status_tag || risk?.status || '')
-      const title     = String(risk?.title      || risk?.description || '')
-      const detail    = String(risk?.detail     || risk?.mitigation  || '')
+    items.forEach((item, ii) => {
+      const rowY = cursorY
 
-      // Left column: title + detail
-      blocks.push({
-        block_type: 'text_box',
-        x: leftX, y: r2(rowY + 0.06), w: leftW, h: 0.24,
-        text: _truncateText(title, 64),
-        font_family: titleFont, font_size: 11, bold: true,
-        color: bodyColor, align: 'left', valign: 'middle'
+      // Left: primary_message (bold) + secondary_message (muted)
+      blocks.push({ block_type: 'text_box', x: leftX, y: r2(rowY + 0.06), w: leftW, h: 0.24,
+        text: _truncateText(item.primary_message || '', 64), font_family: titleFont, font_size: 11, bold: true, color: bodyColor, align: 'left', valign: 'middle' })
+      if (item.secondary_message) {
+        blocks.push({ block_type: 'text_box', x: leftX, y: r2(rowY + 0.34), w: leftW, h: 0.22,
+          text: _truncateText(item.secondary_message, 96), font_family: bodyFont, font_size: 9, bold: false, color: captionColor, align: 'left', valign: 'middle' })
+      }
+
+      // Right top: tag pills
+      const tags = Array.isArray(item.tags) ? item.tags.slice(0, 3) : []
+      let pillX = rightX
+      tags.forEach(tag => {
+        const tc  = tagColors(String(tag.tone || 'neutral').toLowerCase())
+        const val = String(tag.value || '')
+        const tW  = r2(Math.min(1.10, Math.max(0.60, val.length * 0.072 + 0.22)))
+        blocks.push({ block_type: 'rect', x: pillX, y: r2(rowY + 0.04), w: tW, h: 0.26, fill_color: tc.fill, border_color: tc.border, border_width: 0.5, corner_radius: 10 })
+        blocks.push({ block_type: 'text_box', x: r2(pillX + 0.07), y: r2(rowY + 0.08), w: r2(tW - 0.10), h: 0.16,
+          text: _truncateText(val, 16), font_family: bodyFont, font_size: 8.5, bold: false, color: tc.text, align: 'center', valign: 'middle' })
+        pillX = r2(pillX + tW + 0.08)
       })
-      if (detail) {
-        blocks.push({
-          block_type: 'text_box',
-          x: leftX, y: r2(rowY + 0.34), w: leftW, h: 0.22,
-          text: _truncateText(detail, 96),
-          font_family: bodyFont, font_size: 9, bold: false,
-          color: captionColor, align: 'left', valign: 'middle'
-        })
-      }
 
-      // Right column: owner pill + status pill (top row)
-      let pillX = r2(rightX + 0.02)
-      if (owner) {
-        const oW = r2(Math.min(1.10, Math.max(0.70, owner.length * 0.07 + 0.20)))
-        blocks.push({
-          block_type: 'rect',
-          x: pillX, y: r2(rowY + 0.04), w: oW, h: 0.26,
-          fill_color: rs.owner_fill_color   || '#F5F5F5',
-          border_color: rs.owner_border_color || '#D1D5DB',
-          border_width: 0.5, corner_radius: 10
-        })
-        blocks.push({
-          block_type: 'text_box',
-          x: r2(pillX + 0.08), y: r2(rowY + 0.08), w: r2(oW - 0.12), h: 0.16,
-          text: _truncateText(owner, 16),
-          font_family: bodyFont, font_size: 8.5, bold: false,
-          color: captionColor, align: 'center', valign: 'middle'
-        })
-        pillX = r2(pillX + oW + 0.08)
-      }
-
-      if (status) {
-        const rawTone  = String(risk?.status_tone || '').toLowerCase()
-        // Normalise "in_progress" / "in progress" → canonical token
-        const tone = rawTone.includes('progress') ? 'in_progress'
-                   : rawTone.includes('mitigat') ? 'mitigated'
-                   : rawTone.includes('clos') ? 'closed'
-                   : rawTone === 'open' ? 'open'
-                   : (status.toLowerCase().includes('progress') ? 'in_progress'
-                      : status.toLowerCase().includes('mitigat') ? 'mitigated'
-                      : status.toLowerCase().includes('open') ? 'open' : 'closed')
-        const sc   = statusColors(tone)
-        const sW   = r2(Math.min(1.05, Math.max(0.74, status.length * 0.07 + 0.22)))
-        blocks.push({
-          block_type: 'rect',
-          x: pillX, y: r2(rowY + 0.04), w: sW, h: 0.26,
-          fill_color: sc.fill, border_color: sc.border, border_width: 0.6, corner_radius: 10
-        })
-        blocks.push({
-          block_type: 'text_box',
-          x: r2(pillX + 0.08), y: r2(rowY + 0.08), w: r2(sW - 0.12), h: 0.16,
-          text: _truncateText(status, 14),
-          font_family: bodyFont, font_size: 8.5, bold: true,
-          color: sc.text, align: 'center', valign: 'middle'
-        })
-      }
-
-      // Pip grid: Likelihood + Impact (bottom of right column)
-      const likVal   = toNum(risk?.likelihood)
-      const impVal   = toNum(risk?.impact)
-      const pipLblX  = r2(rightX + 0.30)
-      const pipStartX= r2(rightX + 1.10)
-      const likY     = r2(rowY + 0.40)
-      const impY     = r2(rowY + 0.64)
-      ;[
-        { label: 'Likelihood', value: likVal, y: likY },
-        { label: 'Impact',     value: impVal, y: impY }
-      ].forEach(pip => {
-        blocks.push({
-          block_type: 'text_box',
-          x: pipLblX, y: pip.y, w: 0.72, h: 0.16,
-          text: pip.label,
-          font_family: bodyFont, font_size: 8.5, bold: false,
-          color: captionColor, align: 'right', valign: 'middle'
-        })
+      // Right bottom: pip rows (one per pip entry)
+      const pips = Array.isArray(item.pips) ? item.pips.slice(0, 4) : []
+      pips.forEach((pip, pi) => {
+        const pipY     = r2(rowY + 0.38 + pi * 0.24)
+        const count    = intensityToCount(pip.intensity)
+        const pipLblX  = rightX
+        const pipStart = r2(rightX + 0.88)
+        blocks.push({ block_type: 'text_box', x: pipLblX, y: pipY, w: 0.82, h: 0.16,
+          text: pip.label || '', font_family: bodyFont, font_size: 8.5, bold: false, color: captionColor, align: 'right', valign: 'middle' })
         for (let i = 0; i < 3; i++) {
-          blocks.push({
-            block_type: 'rect',
-            x: r2(pipStartX + i * (pipSize + pipGap)), y: r2(pip.y + 0.02), w: pipSize, h: pipSize,
-            fill_color: i < pip.value ? pipColor(sev) : pipEmpty,
-            border_color: pipBorder,
-            border_width: 0.5,
-            corner_radius: 2
-          })
+          blocks.push({ block_type: 'rect', x: r2(pipStart + i * (pipSize + pipGap)), y: r2(pipY + 0.02), w: pipSize, h: pipSize,
+            fill_color: i < count ? pipFill(tone) : pipEmpty, border_color: pipBorder, border_width: 0.5, corner_radius: 2 })
         }
       })
 
       cursorY = r2(cursorY + rowH)
-      if (ri < group.items.length - 1) {
-        blocks.push({
-          block_type: 'rule',
-          x: r2(ax + 0.16), y: r2(cursorY - 0.04), w: r2(aw - 0.32), h: dividerH,
-          color: rs.row_border_color || '#D9D9D9',
-          line_width: 0.5
-        })
+      if (ii < items.length - 1) {
+        blocks.push({ block_type: 'rule', x: r2(ax + 0.16), y: r2(cursorY - 0.04), w: r2(aw - 0.32), h: dividerH,
+          color: rs.row_border_color || '#D9D9D9', line_width: 0.5 })
       }
     })
 
-    if (gi < groups.length - 1) cursorY = r2(cursorY + sectionGap)
+    if (li < severityLevels.length - 1) cursorY = r2(cursorY + sectionGap)
   })
 }
 
@@ -5800,11 +5718,11 @@ function _matrixToBlocks(art, content_y, blocks, bt, r2) {
   })
 
   // ── 5. Points: badge (circle or pill) + label bubble ─────────────────────
-  // Badge shape: circle when short_label ≤ 2 chars AND emphasis=high/medium;
-  //              rounded-rect pill otherwise (3 chars, or emphasis=low where circle is too small).
-  // Emphasis controls badge height only (consistent across circle/pill):
-  //   high → 0.24"  medium → 0.22"  low → 0.20"
-  const emphH = { high: 0.24, medium: 0.22, low: 0.20 }
+  // ALL badges use IDENTICAL size and font regardless of emphasis:
+  //   circle for short_label ≤ 2 chars; pill (rounded rect) for 3+ chars
+  const BADGE_H  = 0.22          // fixed height for every badge
+  const BADGE_FS = 9             // fixed font size for every badge label
+  const BADGE_CR = Math.round(BADGE_H * 36)  // corner_radius → fully rounded ends
 
   points.slice(0, 6).forEach(pt => {
     const xRatio = Math.min(Math.max((typeof pt.x === 'number' ? pt.x : 50) / 100, 0.02), 0.98)
@@ -5819,41 +5737,36 @@ function _matrixToBlocks(art, content_y, blocks, bt, r2) {
     const ptTone = String(ptQ.tone || 'neutral').toLowerCase()
     const dotFill= tonePointFill(ptTone)
 
-    const emphKey = String(pt.emphasis || 'medium').toLowerCase()
-    const bH      = emphH[emphKey] || 0.22   // badge height (same for circle and pill)
-
     const lbl  = String(pt.label || '')
     const sLbl = String(pt.short_label || (() => {
       const words = lbl.trim().split(/\s+/)
       return words.length >= 2 ? (words[0][0] + words[1][0]).toUpperCase() : lbl.slice(0,2).toUpperCase()
     })())
 
-    // Decide badge shape: circle for ≤2 chars at high/medium; pill otherwise
-    const useCircle = sLbl.length <= 2 && emphKey !== 'low'
-    const bW = useCircle ? bH : r2(Math.max(bH * 1.6, sLbl.length * 0.10 + 0.16))
+    const useCircle = sLbl.length <= 2
+    const bW = useCircle ? BADGE_H : r2(Math.max(BADGE_H * 1.5, sLbl.length * 0.095 + 0.14))
 
     if (useCircle) {
       blocks.push({
         block_type: 'circle',
-        x: r2(px - bH / 2), y: r2(py - bH / 2), w: bH, h: bH,
+        x: r2(px - BADGE_H / 2), y: r2(py - BADGE_H / 2), w: BADGE_H, h: BADGE_H,
         fill_color: dotFill, font_color: '#FFFFFF',
         text: _truncateText(sLbl, 2)
       })
     } else {
-      // Pill badge (rounded rect)
       blocks.push({
         block_type: 'rect',
-        x: r2(px - bW / 2), y: r2(py - bH / 2), w: bW, h: bH,
+        x: r2(px - bW / 2), y: r2(py - BADGE_H / 2), w: bW, h: BADGE_H,
         fill_color: dotFill, border_color: null, border_width: 0,
-        corner_radius: Math.round(bH * 36)   // fully rounded ends
+        corner_radius: BADGE_CR
       })
       blocks.push({
         block_type: 'text_box',
-        x: r2(px - bW / 2 + 0.04), y: r2(py - bH / 2),
-        w: r2(bW - 0.08), h: bH,
+        x: r2(px - bW / 2 + 0.04), y: r2(py - BADGE_H / 2),
+        w: r2(bW - 0.08), h: BADGE_H,
         text: _truncateText(sLbl, 3),
         font_family: ms.point_label_font_family || bt.body_font_family || 'Arial',
-        font_size: Math.max(7, Math.round(bH * 36) - 2), bold: true,
+        font_size: BADGE_FS, bold: true,
         color: '#FFFFFF', align: 'center', valign: 'middle'
       })
     }
@@ -5861,7 +5774,7 @@ function _matrixToBlocks(art, content_y, blocks, bt, r2) {
     // Label bubble below the badge
     const bubbleW = r2(Math.min(1.2, Math.max(0.52, lbl.length * 0.075 + 0.20)))
     const bubbleH = 0.24
-    const bubbleY = r2(py + bH / 2 + 0.05)
+    const bubbleY = r2(py + BADGE_H / 2 + 0.05)
     let   bubbleX = r2(px - bubbleW / 2)
     bubbleX = r2(Math.max(gridX + 0.04, Math.min(bubbleX, gridX + gridW - bubbleW - 0.04)))
     const clampedBubbleY = r2(Math.min(bubbleY, gridY + gridH - bubbleH - 0.04))
@@ -5880,17 +5793,7 @@ function _matrixToBlocks(art, content_y, blocks, bt, r2) {
       color: dotFill, align: 'center', valign: 'middle'
     })
   })
-
-  // ── 6. Outer grid border drawn LAST — no fill, just border ────────────────
-  // Rendered on top of all fills and dividers so rounded corners cleanly frame the grid.
-  blocks.push({
-    block_type: 'rect',
-    x: gridX, y: gridY, w: gridW, h: gridH,
-    fill_color: null,
-    border_color: ms.border_color || '#D7DEE8',
-    border_width: ms.border_width != null ? ms.border_width : 0.8,
-    corner_radius: 8
-  })
+  // No outer border rect — grid framing is provided by the quadrant fills and dividers only.
 }
 
 function _driverTreeToBlocks(art, content_y, blocks, bt, r2) {
@@ -7913,15 +7816,14 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
 
       if (t === 'risk_register') {
         const normalized = normalizeRiskRegisterManifest(mArt)
-        const artifactHeader = getArtifactHeader(mArt) || dArt.risk_header || dArt.artifact_header || ''
-        return ensureArtifactHeaderBlock({
+        return {
           ...dArt,
           artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
-          artifact_header: artifactHeader,
-          risk_header: mArt.risk_header || artifactHeader || dArt.risk_header || mArt.table_header || '',
-          risks: normalized.risks.length ? normalized.risks : (dArt.risks || []),
-          show_mitigation: mArt.show_mitigation !== undefined ? mArt.show_mitigation : (dArt.show_mitigation !== false)
-        }, artifactHeader, bt)
+          artifact_header: '',   // always empty for risk_register
+          header_block: null,
+          risk_header: mArt.risk_header || dArt.risk_header || mArt.table_header || '',
+          severity_levels: normalized.severity_levels.length ? normalized.severity_levels : (dArt.severity_levels || [])
+        }
       }
 
       if (t === 'cards') {

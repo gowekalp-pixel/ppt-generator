@@ -61,12 +61,15 @@ app.post('/api/inject-artifact', (req, res) => {
     return res.status(409).json({ error: `Artifact "${type}" already exists in agent4.js.` })
   }
 
+  // NOTE: agent4.js uses Windows line endings (\r\n); agent5.js uses Unix (\n).
+  // All agent4 anchors must use \r\n.
+
   // ── AGENT 4 INJECTIONS ──────────────────────────────────────────────────────
 
   // 1. Add to AVAILABLE ARTIFACT TYPES list (after risk_register, before matrix)
-  const a4_type_anchor = '  risk_register\n  matrix'
+  const a4_type_anchor = '  risk_register\r\n  matrix'
   if (a4.includes(a4_type_anchor)) {
-    a4 = a4.replace(a4_type_anchor, `  risk_register\n  ${type}\n  matrix`)
+    a4 = a4.replace(a4_type_anchor, `  risk_register\r\n  ${type}\r\n  matrix`)
     steps.a4_type = true
   } else {
     steps.a4_type = false
@@ -74,9 +77,9 @@ app.post('/api/inject-artifact', (req, res) => {
 
   // 2. Add to PRIMARY zone permitted list (after risk_register, before cards)
   if (a4data.can_be_primary) {
-    const a4_primary_anchor = '    - risk_register\n    - cards'
+    const a4_primary_anchor = '    - risk_register\r\n    - cards'
     if (a4.includes(a4_primary_anchor)) {
-      a4 = a4.replace(a4_primary_anchor, `    - risk_register\n    - ${type}\n    - cards`)
+      a4 = a4.replace(a4_primary_anchor, `    - risk_register\r\n    - ${type}\r\n    - cards`)
       steps.a4_primary = true
     } else {
       steps.a4_primary = false
@@ -86,11 +89,11 @@ app.post('/api/inject-artifact', (req, res) => {
   }
 
   // 3. Add pairing rule (after risk_register pairing line, before matrix pairing line)
-  const a4_pairing_anchor = '  risk_register                             no second artifact permitted\n  matrix'
+  const a4_pairing_anchor = '  risk_register                             no second artifact permitted\r\n  matrix'
   if (a4data.pairing_rule && a4.includes(a4_pairing_anchor)) {
     a4 = a4.replace(
       a4_pairing_anchor,
-      `  risk_register                             no second artifact permitted\n${a4data.pairing_rule}\n  matrix`
+      `  risk_register                             no second artifact permitted\r\n${a4data.pairing_rule}\r\n  matrix`
     )
     steps.a4_pairing = true
   } else {
@@ -98,22 +101,26 @@ app.post('/api/inject-artifact', (req, res) => {
   }
 
   // 4. Add density rule (after risk_register density entry, before FAMILY 6)
-  const a4_density_anchor = '    risk_register:     No compact; standard <6 risks;  dense >=6\n\n  FAMILY 6'
+  const a4_density_anchor = '    risk_register:     No compact; standard <6 risks;  dense >=6\r\n\r\n  FAMILY 6'
   if (a4data.density_rule && a4.includes(a4_density_anchor)) {
     a4 = a4.replace(
       a4_density_anchor,
-      `    risk_register:     No compact; standard <6 risks;  dense >=6\n${a4data.density_rule}\n\n  FAMILY 6`
+      `    risk_register:     No compact; standard <6 risks;  dense >=6\r\n${a4data.density_rule}\r\n\r\n  FAMILY 6`
     )
     steps.a4_density = true
   } else {
     steps.a4_density = false
   }
 
-  // 5. Add schema snippet + usage notes (before PRE-OUTPUT QUALITY GATES separator)
-  const a4_schema_anchor = '  NEVER use plain table when severity-by-row is the primary signal.\n\n\u2501\u2501\u2501'
+  // 5. Add schema snippet + usage notes (after risk_register schema, before CARDS SELECTION section)
+  const a4_schema_anchor = '  NEVER use plain table when severity-by-row is the primary signal.\r\n\r\n\u2500\u2500\u2500 CARDS SELECTION'
   if (a4data.schema_snippet && a4.includes(a4_schema_anchor)) {
-    const schemaBlock = `\n${a4data.schema_snippet}\n${a4data.schema_usage_notes || ''}\n`
-    a4 = a4.replace(a4_schema_anchor, `  NEVER use plain table when severity-by-row is the primary signal.\n${schemaBlock}\n\u2501\u2501\u2501`)
+    const eol = '\r\n'
+    const schemaBlock = eol + a4data.schema_snippet + eol + (a4data.schema_usage_notes || '') + eol
+    a4 = a4.replace(
+      a4_schema_anchor,
+      `  NEVER use plain table when severity-by-row is the primary signal.${eol}${schemaBlock}${eol}\u2500\u2500\u2500 CARDS SELECTION`
+    )
     steps.a4_schema = true
   } else {
     steps.a4_schema = false
