@@ -4590,7 +4590,8 @@ function _initiativeMapToBlocks(art, content_y, blocks, bt, r2) {
   // ── Layout ─────────────────────────────────────────────────────────────────
   const colHeaderH = r2(Math.min(0.40, Math.max(0.28, ah * 0.09)))
   const bodyH      = Math.max(0.6, ah - colHeaderH)
-  const rowH       = r2(Math.max(0.72, bodyH / Math.max(initiatives.length, 1)))
+  // No hard minimum — let rows scale to fill the zone; enforce a soft floor of 0.48" only
+  const rowH       = r2(Math.max(0.48, bodyH / Math.max(initiatives.length, 1)))
   // Narrower track column = more room for content lanes
   const trackW     = r2(Math.min(Math.max(1.3, aw * 0.22), 2.0))
   const laneCount  = Math.max(dims.length, 1)
@@ -4598,6 +4599,21 @@ function _initiativeMapToBlocks(art, content_y, blocks, bt, r2) {
   const rowStartY  = r2(ay + colHeaderH)
   // Max chip width: relative to lane width so chips never overflow
   const maxChipW   = r2(Math.min(laneW - 0.22, 1.60))
+
+  // ── Cell rendering constants (shared across all rows) ──────────────────────
+  const chipH      = 0.22
+  const chipRowGap = 0.04
+  const elemGap    = 0.05
+  const cellPad    = 0.07
+  const textLineH  = bodyFontSize * 0.022 * 1.35
+  const cellSubFontSize = Math.max(8, bodyFontSize - 1)
+  const subLineH   = cellSubFontSize * 0.022 * 1.35
+  const truncWords = (text, maxW) => {
+    const ws = String(text || '').trim().split(/\s+/).filter(Boolean)
+    return ws.length <= maxW ? String(text || '') : ws.slice(0, maxW).join(' ') + '\u2026'
+  }
+  const primaryMaxWords   = 9
+  const secondaryMaxWords = 8
 
   // ── Column header row ──────────────────────────────────────────────────────
   blocks.push({
@@ -4612,7 +4628,7 @@ function _initiativeMapToBlocks(art, content_y, blocks, bt, r2) {
     // Vertical column separator spanning full table height
     blocks.push({
       block_type: 'rect',
-      x: laneX, y: ay, w: 0.003, h: ah,
+      x: laneX, y: ay, w: 0.0015, h: ah,
       fill_color: gridColor, border_color: null, border_width: 0, corner_radius: 0
     })
     blocks.push({
@@ -4635,12 +4651,12 @@ function _initiativeMapToBlocks(art, content_y, blocks, bt, r2) {
     const rowY = r2(rowStartY + ii * rowH)
 
     // Initiative name + subtitle — vertically centred as a combined block within the row
-    const hasSubtitle = Boolean(initiative?.subtitle)
-    const nameLineH   = 0.26   // height of the name text_box
-    const subLineH    = 0.18   // height of the subtitle text_box
-    const blockGap    = 0.04
-    const combinedH   = hasSubtitle ? nameLineH + blockGap + subLineH : nameLineH
-    const blockStartY = r2(rowY + Math.max(0.06, (rowH - combinedH) / 2))
+    const hasSubtitle  = Boolean(initiative?.subtitle)
+    const nameLineH    = 0.26   // height of the initiative name text_box
+    const nameSubLineH = 0.18   // height of the initiative subtitle text_box
+    const blockGap     = 0.04
+    const combinedH    = hasSubtitle ? nameLineH + blockGap + nameSubLineH : nameLineH
+    const blockStartY  = r2(rowY + Math.max(0.06, (rowH - combinedH) / 2))
     blocks.push({
       block_type: 'text_box',
       x: r2(ax + 0.14), y: blockStartY, w: r2(trackW - 0.22), h: nameLineH,
@@ -4651,7 +4667,7 @@ function _initiativeMapToBlocks(art, content_y, blocks, bt, r2) {
     if (hasSubtitle) {
       blocks.push({
         block_type: 'text_box',
-        x: r2(ax + 0.14), y: r2(blockStartY + nameLineH + blockGap), w: r2(trackW - 0.22), h: subLineH,
+        x: r2(ax + 0.14), y: r2(blockStartY + nameLineH + blockGap), w: r2(trackW - 0.22), h: nameSubLineH,
         text: String(initiative.subtitle),
         font_family: bodyFont, font_size: Math.max(8, bodyFontSize - 1), bold: false,
         color: captionColor, align: 'left', valign: 'middle',
@@ -4660,132 +4676,111 @@ function _initiativeMapToBlocks(art, content_y, blocks, bt, r2) {
     }
 
     // Dimension cells
-    const chipH    = 0.22
-    const chipGap  = 0.26  // chip row height including gap below
-    const textLineH = bodyFontSize * 0.022 * 1.35  // approx rendered line height in inches
-    const subFontH  = Math.max(8, bodyFontSize - 1) * 0.022 * 1.35
+    const available = rowH - 2 * cellPad
 
     dims.forEach((dim, di) => {
-      const laneX = r2(ax + trackW + di * laneW)
+      const laneX    = r2(ax + trackW + di * laneW)
       const contentX = r2(laneX + 0.12)
       const contentW = r2(laneW - 0.20)
 
       const placement = (initiative?.placements || []).find(p =>
         String(p?.lane_id || '') === String(dim.id)
       ) || {}
-      const cellTitle    = String(placement?.title    || '')
-      const cellSubtitle = String(placement?.subtitle || '')
-      const cellTone     = String(placement?.cell_tone || '').toLowerCase()
-      const cellTags     = Array.isArray(placement?.tags) ? placement.tags : []
-      const maxTagChars  = Math.max(12, Math.floor((maxChipW - 0.14) / 0.066))
+      const rawTitle    = String(placement?.title    || '')
+      const rawSubtitle = String(placement?.subtitle || '')
+      const cellTone    = String(placement?.cell_tone || '').toLowerCase()
+      const cellTags    = Array.isArray(placement?.tags) ? placement.tags : []
+      const maxTagChars = Math.max(12, Math.floor((maxChipW - 0.14) / 0.066))
 
-      // ── Pre-calculate total content height for vertical centering ─────────────
-      let estimatedH = 0
+      // Apply word limits
+      const cellTitle    = truncWords(rawTitle,    primaryMaxWords)
+      const cellSubtitle = truncWords(rawSubtitle, secondaryMaxWords)
+
       if (cellTags.length) {
-        // Estimate chip rows needed
-        let chipX = 0, chipRows = 1
+        // ── Tags path: chips (primary suppressed) + optional secondary ───────
+        // Pass 1: count chip rows for centering
+        let cX = 0, chipRowsNeeded = 1
         cellTags.slice(0, 4).forEach(tagObj => {
-          const tw = Math.min(maxChipW, Math.max(0.40, String(tagObj?.label || '').length * 0.066 + 0.14))
-          if (chipX + tw > contentW - 0.06 && chipRows < 2) { chipRows++; chipX = 0 }
-          chipX += tw + 0.05
+          const tw = r2(Math.min(maxChipW, Math.max(0.40, String(tagObj?.label || '').length * 0.066 + 0.14)))
+          if (cX + tw > contentW - 0.06 && chipRowsNeeded < 2) { chipRowsNeeded++; cX = 0 }
+          cX += tw + 0.05
         })
-        estimatedH += chipRows * chipGap
-        if (cellSubtitle) estimatedH += subFontH + 0.04
-      } else {
-        if (cellTitle)    estimatedH += textLineH * Math.ceil(cellTitle.length / Math.max(1, contentW / (bodyFontSize * 0.010))) + 0.04
-        if (cellSubtitle) estimatedH += subFontH + 0.04
-      }
-      estimatedH = Math.min(estimatedH, rowH - 0.10)
+        const chipsH   = chipRowsNeeded * chipH + (chipRowsNeeded - 1) * chipRowGap
+        const showSub  = Boolean(cellSubtitle) && (chipsH + elemGap + subLineH) <= available
+        const totalH   = chipsH + (showSub ? elemGap + subLineH : 0)
+        let curY       = r2(rowY + cellPad + Math.max(0, (available - totalH) / 2))
 
-      // Vertically centre the content block within the row
-      let contentY = r2(rowY + Math.max(0.07, (rowH - estimatedH) / 2))
-
-      // ── Render chips (tags-first path) ───────────────────────────────────────
-      if (cellTags.length) {
-        let chipX = contentX
-        let rowsRendered = 0
+        // Pass 2: render chips
+        let chipX = contentX, chipRowIdx = 0, chipRowStartY = curY
         cellTags.slice(0, 4).forEach(tagObj => {
-          const tagLabel = String(tagObj?.label || tagObj || '')
-          const tagTone  = String(tagObj?.tone  || cellTone  || 'neutral').toLowerCase()
+          const tagLabel    = String(tagObj?.label || tagObj || '')
+          const tagTone     = String(tagObj?.tone  || cellTone || 'neutral').toLowerCase()
           const tChipBorder = tagTone === 'primary'   ? primaryColor
-                            : tagTone === 'secondary' ? secondaryColor
-                            : gridColor
+                            : tagTone === 'secondary' ? secondaryColor : gridColor
           const tChipText   = tagTone === 'primary'   ? primaryColor
-                            : tagTone === 'secondary' ? secondaryColor
-                            : captionColor
+                            : tagTone === 'secondary' ? secondaryColor : captionColor
           const tChipFill   = tagTone === 'primary'   ? (istyle.primary_chip_fill   || '#EBF1FF')
                             : tagTone === 'secondary' ? (istyle.secondary_chip_fill || '#FEF6E4')
                             :                           (istyle.neutral_chip_fill   || '#F3F4F6')
           const chipW = r2(Math.min(maxChipW, Math.max(0.40, tagLabel.length * 0.066 + 0.14)))
           if (chipX + chipW > laneX + laneW - 0.06) {
-            if (rowsRendered >= 1) return  // max 2 chip rows
-            contentY = r2(contentY + chipGap)
-            chipX = contentX
-            rowsRendered++
+            if (chipRowIdx >= 1) return
+            chipRowIdx++; chipRowStartY = r2(chipRowStartY + chipH + chipRowGap); chipX = contentX
           }
-          blocks.push({
-            block_type: 'rect',
-            x: chipX, y: contentY, w: chipW, h: chipH,
-            fill_color: tChipFill, border_color: tChipBorder, border_width: 0.6, corner_radius: 8
-          })
-          blocks.push({
-            block_type: 'text_box',
-            x: r2(chipX + 0.05), y: contentY, w: r2(chipW - 0.10), h: chipH,
-            text: _truncateText(tagLabel, maxTagChars),
+          blocks.push({ block_type: 'rect', x: chipX, y: chipRowStartY, w: chipW, h: chipH,
+            fill_color: tChipFill, border_color: tChipBorder, border_width: 0.6, corner_radius: 8 })
+          blocks.push({ block_type: 'text_box', x: r2(chipX + 0.05), y: chipRowStartY,
+            w: r2(chipW - 0.10), h: chipH, text: _truncateText(tagLabel, maxTagChars),
             font_family: bodyFont, font_size: 8, bold: true,
-            color: tChipText, align: 'center', valign: 'middle'
-          })
+            color: tChipText, align: 'center', valign: 'middle' })
           chipX = r2(chipX + chipW + 0.05)
         })
-        contentY = r2(contentY + chipGap)
 
-        // Tags present → secondary_message only (primary suppressed)
-        if (cellSubtitle && contentY + 0.12 < rowY + rowH - 0.05) {
-          blocks.push({
-            block_type: 'text_box',
-            x: contentX, y: contentY, w: contentW,
-            h: r2(Math.min(rowY + rowH - contentY - 0.05, 0.44)),
-            text: cellSubtitle,
-            font_family: bodyFont, font_size: Math.max(8, bodyFontSize - 1), bold: false,
-            color: captionColor, align: 'left', valign: 'top'
-          })
+        if (showSub) {
+          curY = r2(chipRowStartY + chipH + elemGap)
+          blocks.push({ block_type: 'text_box', x: contentX, y: curY, w: contentW, h: r2(subLineH),
+            text: cellSubtitle, font_family: bodyFont, font_size: cellSubFontSize, bold: false,
+            color: captionColor, align: 'left', valign: 'middle' })
         }
+
       } else {
-        // ── No tags: primary then secondary ──────────────────────────────────
+        // ── No tags: primary + secondary, both word-limited ──────────────────
+        const charsPerLine    = Math.max(8, Math.floor(contentW / (bodyFontSize * 0.010)))
+        const subCharsPerLine = Math.max(8, Math.floor(contentW / (cellSubFontSize  * 0.010)))
+
+        // Estimate heights from truncated text
+        const titleLines = cellTitle    ? Math.max(1, Math.ceil(cellTitle.length    / charsPerLine))    : 0
+        const subLines   = cellSubtitle ? Math.max(1, Math.ceil(cellSubtitle.length / subCharsPerLine)) : 0
+        const titleH     = r2(titleLines * textLineH)
+        const subH       = r2(subLines   * subLineH)
+
+        // Decide what fits — subtitle shown only when both fit together
+        const showSub = cellSubtitle && titleLines > 0 && (titleH + elemGap + subH) <= available
+        const totalH  = (titleLines > 0 ? titleH : 0) + (showSub ? elemGap + subH : 0)
+        let curY      = r2(rowY + cellPad + Math.max(0, (available - totalH) / 2))
+
         if (cellTitle) {
           const isPositive = /^\+/.test(cellTitle.trim())
-          const textColor = isPositive ? (istyle.positive_color || bodyTextColor) : bodyTextColor
-          const primaryH = r2(Math.max(0.22, Math.min(0.52, rowH - (contentY - rowY) - 0.10)))
-          blocks.push({
-            block_type: 'text_box',
-            x: contentX, y: contentY, w: contentW, h: primaryH,
-            text: cellTitle,
-            font_family: bodyFont, font_size: bodyFontSize, bold: false,
-            color: textColor, align: 'left', valign: 'top'
-          })
-          contentY = r2(contentY + primaryH + 0.04)
+          const textColor  = isPositive ? (istyle.positive_color || bodyTextColor) : bodyTextColor
+          blocks.push({ block_type: 'text_box', x: contentX, y: curY, w: contentW, h: r2(titleH),
+            text: cellTitle, font_family: bodyFont, font_size: bodyFontSize, bold: false,
+            color: textColor, align: 'left', valign: 'middle' })
+          curY = r2(curY + titleH + elemGap)
         }
-        if (cellSubtitle && contentY + 0.12 < rowY + rowH - 0.05) {
-          blocks.push({
-            block_type: 'text_box',
-            x: contentX, y: contentY, w: contentW,
-            h: r2(Math.min(rowY + rowH - contentY - 0.05, 0.36)),
-            text: cellSubtitle,
-            font_family: bodyFont, font_size: Math.max(8, bodyFontSize - 1), bold: false,
-            color: captionColor, align: 'left', valign: 'top'
-          })
+        if (showSub) {
+          blocks.push({ block_type: 'text_box', x: contentX, y: curY, w: contentW, h: r2(subH),
+            text: cellSubtitle, font_family: bodyFont, font_size: cellSubFontSize, bold: false,
+            color: captionColor, align: 'left', valign: 'middle' })
         }
       }
     })
 
-    // Horizontal row divider (not after last row)
-    if (ii < initiatives.length - 1) {
-      blocks.push({
-        block_type: 'rule',
-        x: ax, y: r2(rowY + rowH), w: aw, h: 0.005,
-        color: gridColor, line_width: 0.5
-      })
-    }
+    // Horizontal row divider (between rows and closing bottom border)
+    blocks.push({
+      block_type: 'rule',
+      x: ax, y: r2(rowY + rowH), w: aw, h: 0.005,
+      color: gridColor, line_width: ii < initiatives.length - 1 ? 0.5 : 0.8
+    })
   })
 }
 

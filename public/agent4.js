@@ -2026,6 +2026,16 @@ function isReasoningArtifact(artifact) {
   return ['matrix', 'driver_tree', 'prioritization'].includes(artifactType(artifact))
 }
 
+function isSoloOnlyArtifact(artifact) {
+  const t = artifactType(artifact)
+  if (['prioritization', 'risk_register', 'profile_card_set'].includes(t)) return true
+  if (t === 'workflow') {
+    const wfType = String(artifact?.workflow_type || '').toLowerCase()
+    return ['process_flow', 'timeline'].includes(wfType)
+  }
+  return false
+}
+
 function isSparseCardsArtifact(artifact) {
   return artifactType(artifact) === 'cards' && artifactCardCount(artifact) > 0 && artifactCardCount(artifact) <= 2
 }
@@ -2270,11 +2280,12 @@ function validateStructuralPatternRules(slide) {
 
   if (zoneCount === 1 && totalArtifacts === 2) {
     const arts = zones[0].artifacts || []
+    if (arts.some(isSoloOnlyArtifact)) return false
     const types = arts.map(artifactType)
     const hasInsight = types.includes('insight_text')
     const pair = types.slice().sort().join('+')
     if (pair === 'cards+insight_text') return artifactCardCount(arts.find(a => artifactType(a) === 'cards')) >= 4
-    if (['chart+insight_text', 'workflow+insight_text', 'table+insight_text', 'matrix+insight_text', 'driver_tree+insight_text', 'insight_text+prioritization'].includes(pair)) {
+    if (['chart+insight_text', 'workflow+insight_text', 'table+insight_text', 'matrix+insight_text', 'driver_tree+insight_text'].includes(pair)) {
       const nonInsight = arts.find(a => artifactType(a) !== 'insight_text')
       return hasInsight && isSubstantialArtifact(nonInsight)
     }
@@ -2299,13 +2310,13 @@ function validateStructuralPatternRules(slide) {
     const pairedZone = zones.find(z => (z.artifacts || []).length === 2)
     const otherZone = zones.find(z => (z.artifacts || []).length === 1)
     const pairedArts = pairedZone?.artifacts || []
+    if (pairedArts.some(isSoloOnlyArtifact)) return false
     const pairedReasoning = pairedArts.filter(isReasoningArtifact)
     const pairKey = zoneArtifactPairKey(pairedZone)
     const allowedPairs = new Set([
       'chart+insight_text',
       'insight_text+workflow',
       'insight_text+table',
-      'insight_text+prioritization',
       'driver_tree+insight_text',
       'insight_text+matrix',
       'cards+insight_text'
@@ -2330,7 +2341,9 @@ function validateStructuralPatternRules(slide) {
     if (!counts.every(n => n === 2)) return false
     if (reasoningCount > 0) return false
     return zones.every(z => {
-      const types = (z.artifacts || []).map(artifactType)
+      const arts = z.artifacts || []
+      if (arts.some(isSoloOnlyArtifact)) return false
+      const types = arts.map(artifactType)
       const pair = types.slice().sort().join('+')
       return ['chart+insight_text', 'workflow+insight_text', 'insight_text+table', 'cards+insight_text'].includes(pair)
     })
@@ -2351,6 +2364,7 @@ function validateStructuralPatternRules(slide) {
     const pairedZones = zones.filter(z => (z.artifacts || []).length === 2)
     if (pairedZones.length !== 1) return false
     const pairedArts = pairedZones[0].artifacts || []
+    if (pairedArts.some(isSoloOnlyArtifact)) return false
     if (pairedArts.some(isReasoningArtifact)) {
       if ((pairedZones[0].narrative_weight || '').toLowerCase() !== 'primary') return false
       if (pairedArts.some(a => !isReasoningArtifact(a) && artifactType(a) !== 'insight_text')) return false
@@ -2375,18 +2389,33 @@ function validateStructuralPatternRules(slide) {
 
 function enforceReasoningArtifactUsage(slide) {
   const reasoningTypes = new Set(['matrix', 'driver_tree', 'prioritization'])
+  // These reasoning types must stand alone — no companion artifact permitted
+  const reasoningSoloOnly = new Set(['prioritization'])
   if (!slide || slide.slide_type !== 'content') return slide
   const zones = (slide.zones || []).map(zone => {
     const arts = zone.artifacts || []
+    if (arts.length <= 1) return zone
+
+    // Reasoning artifacts: matrix/driver_tree/prioritization
     const reasoningArts = arts.filter(a => reasoningTypes.has(String(a.type || '').toLowerCase()))
-    if (!reasoningArts.length) return zone
-    const primaryReasoning = reasoningArts[0]
-    const insightArts = arts.filter(a => String(a.type || '').toLowerCase() === 'insight_text')
-    return {
-      ...zone,
-      narrative_weight: 'primary',
-      artifacts: [primaryReasoning].concat(insightArts.slice(0, 1))
+    if (reasoningArts.length) {
+      const primaryReasoning = reasoningArts[0]
+      const primaryType = String(primaryReasoning.type || '').toLowerCase()
+      if (reasoningSoloOnly.has(primaryType)) {
+        return { ...zone, narrative_weight: 'primary', artifacts: [primaryReasoning] }
+      }
+      // matrix / driver_tree: keep one insight_text companion
+      const insightArts = arts.filter(a => String(a.type || '').toLowerCase() === 'insight_text')
+      return { ...zone, narrative_weight: 'primary', artifacts: [primaryReasoning].concat(insightArts.slice(0, 1)) }
     }
+
+    // Non-reasoning solo-only types: risk_register, profile_card_set, process_flow/timeline workflow
+    const soloArt = arts.find(isSoloOnlyArtifact)
+    if (soloArt) {
+      return { ...zone, artifacts: [soloArt] }
+    }
+
+    return zone
   })
   return { ...slide, zones }
 }
