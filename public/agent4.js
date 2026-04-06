@@ -1221,7 +1221,7 @@ matrix:
       }
     ]
   }
-  Max 6 points. Must define both axes and all 4 quadrants.
+  Max 12 points. Must define both axes and all 4 quadrants.
   Axis label rule:
   - low_label and high_label are the ONLY axis text rendered on the slide — make them self-contained.
   - Each must include the axis dimension name AND the threshold value (e.g. "Low AOV  <₹2k", "High Orders  >50k").
@@ -1457,6 +1457,7 @@ risk_register:
         "id": "string — e.g. 'level_1'",
         "label": "string — severity band heading shown in the colored band (e.g. 'Critical severity — immediate action required')",
         "tone": "critical" | "high" | "medium" | "low",
+        "pip_levels": "number — total number of pip blocks in the scale (e.g. 5 means filled squares out of 5). All items in this severity_level share the same pip_levels value.",
         "item_details": [
           {
             "primary_message": "string — short risk headline (bold, ≤8 words)",
@@ -1465,7 +1466,7 @@ risk_register:
               { "value": "string — short chip label (owner, team, category; ≤2 words)", "tone": "neutral" | "positive" | "negative" | "warning" }
             ],
             "pips": [
-              { "label": "string — dimension name (e.g. 'Likelihood', 'Impact')", "intensity": "extreme" | "v_high" | "high" | "medium" | "low" | "v_low" }
+              { "label": "string — dimension name (e.g. 'Likelihood', 'Impact')", "intensity": "number — filled blocks out of pip_levels (e.g. 3 means 3 filled out of pip_levels total)" }
             ]
           }
         ]
@@ -1476,10 +1477,11 @@ risk_register:
   - Do NOT populate artifact_header — risk_register is always a single-artifact zone and uses risk_header as its own internal section header.
   - severity_levels groups items by severity band. Order from worst to best: critical → high → medium → low. Omit unused levels.
   - tone on each severity_level drives band fill, dot color, and pip fill (critical=red, high=orange, medium=amber, low=gray).
+  - pip_levels: set once per severity_level (typically 3–5). All pips across items in that level use this as the total scale. Choose consistently: if the data warrants finer granularity use 5, coarser use 3.
   - primary_message: bold title for the risk/issue (≤8 words).
   - secondary_message: supporting evidence line rendered smaller below the title (≤18 words).
   - tags[]: 1–3 short pill chips per item. Each has value (display text, ≤2 words) and tone (neutral=gray, positive=green, negative=red, warning=amber).
-  - pips[]: 1–3 dimension assessments (e.g. Likelihood, Impact). intensity maps to filled squares: extreme/v_high=3 full+hot, high=3, medium=2, low=1, v_low=0. LLM decides intensity from data.
+  - pips[]: 1–3 dimension assessments (e.g. Likelihood, Impact). intensity is numeric: number of filled blocks out of pip_levels (0 = none, pip_levels = fully filled). LLM decides intensity from data.
   NEVER use plain table when severity-by-row is the primary signal.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -3695,6 +3697,7 @@ function pruneAgent4SlideForOutput(slide) {
           id: lvl.id || `level_${li + 1}`,
           label: lvl.label || '',
           tone: String(lvl.tone || lvl.severity || 'medium').toLowerCase(),
+          pip_levels: typeof lvl.pip_levels === 'number' ? Math.max(1, Math.round(lvl.pip_levels)) : 5,
           item_details: (Array.isArray(lvl.item_details) ? lvl.item_details : []).map(item => ({
             primary_message: item.primary_message || item.risk_title || item.title || '',
             secondary_message: item.secondary_message || item.risk_detail || item.detail || '',
@@ -3704,7 +3707,7 @@ function pruneAgent4SlideForOutput(slide) {
             })),
             pips: (Array.isArray(item.pips) ? item.pips : []).map(p => ({
               label: String(p.label || p.value || ''),
-              intensity: String(p.intensity || 'medium').toLowerCase()
+              intensity: typeof p.intensity === 'number' ? p.intensity : p.intensity
             }))
           }))
         }))

@@ -1165,35 +1165,54 @@ Profile card set rules:
   "x": number, "y": number, "w": number, "h": number,
   "risk_style": {
     "label_font_family": "string",
+    "label_font_size": number,
     "body_font_family": "string",
+    "body_font_size": number,
+    "primary_message_font_size": number,
+    "secondary_message_font_size": number,
     "row_border_color": "hex", "row_border_width": number, "row_corner_radius": number,
-    "critical_fill_color": "hex", "high_fill_color": "hex",
-    "medium_fill_color": "hex",  "low_fill_color": "hex",
-    "critical_badge_color": "hex", "high_badge_color": "hex",
-    "medium_badge_color": "hex",   "low_badge_color": "hex",
-    "critical_text_color": "hex",  "high_text_color": "hex",
-    "medium_text_color": "hex",    "low_text_color": "hex",
-    "critical_pip_fill": "hex",    "high_pip_fill": "hex",
-    "medium_pip_fill": "hex",      "low_pip_fill": "hex",
-    "status_open_fill": "hex",     "status_open_border": "hex",     "status_open_text": "hex",
-    "status_progress_fill": "hex", "status_progress_border": "hex", "status_progress_text": "hex",
-    "status_mitigated_fill": "hex","status_mitigated_border": "hex","status_mitigated_text": "hex",
-    "status_closed_fill": "hex",   "status_closed_border": "hex",   "status_closed_text": "hex"
+    "critical_fill_color": "hex", "high_fill_color": "hex", "medium_fill_color": "hex", "low_fill_color": "hex",
+    "critical_badge_color": "hex", "high_badge_color": "hex", "medium_badge_color": "hex", "low_badge_color": "hex",
+    "badge_text_color": "hex",
+    "critical_text_color": "hex", "high_text_color": "hex", "medium_text_color": "hex", "low_text_color": "hex",
+    "critical_pip_fill": "hex", "high_pip_fill": "hex", "medium_pip_fill": "hex", "low_pip_fill": "hex",
+    "tag_positive_fill": "hex", "tag_positive_border": "hex", "tag_positive_text": "hex",
+    "tag_negative_fill": "hex", "tag_negative_border": "hex", "tag_negative_text": "hex",
+    "tag_warning_fill": "hex",  "tag_warning_border": "hex",  "tag_warning_text": "hex",
+    "tag_neutral_fill": "hex",  "tag_neutral_border": "hex",  "tag_neutral_text": "hex"
   },
   "header_block": null or { ... }
 }
 
 Risk register rules:
-- Layout (severity bands, row heights, pip positions, column widths) is computed by JS from x/y/w/h and risk count — do NOT set internal positions
+- Layout (severity bands, row heights, pip positions, column widths) is computed by JS from x/y/w/h — do NOT set internal positions
 - Content (severity_levels[], each with label/tone/item_details[]; each item has primary_message, secondary_message, tags[], pips[]) comes from the Agent 4 manifest — do NOT duplicate it here
 - risk_register never has an artifact_header or header_block — the risk_header is rendered as an internal section header by JS
-- Severity colors are SEMANTIC — use standard risk palette regardless of brand:
-  critical_fill_color: #FEE2E2 | critical_badge_color: #DC2626 | critical_text_color: #8B2C23
-  high_fill_color: #FFF1E5     | high_badge_color: #EA580C     | high_text_color: #7C2D12
-  medium_fill_color: #FFFBEB   | medium_badge_color: #D97706   | medium_text_color: #6E5712
-  low_fill_color: #ECFDF5      | low_badge_color: #16A34A      | low_text_color: #14532D
-- pip_fill colors: match the badge color for each severity level
-- Status chip fills: open=red tint, in_progress=amber tint, mitigated=green tint, closed=gray tint
+
+RISK_REGISTER STYLING — decided by YOU (LLM) using brand tokens:
+  Severity palette: use the brand's red/warm sequence at decreasing intensity — critical=darkest, high=dark, medium=mid, low=light.
+    If the brand has a primary red or error color, use it as the base. Otherwise use #DC2626 as semantic red base.
+    critical_badge_color: brand error / darkest red (e.g. bt.primary_color if it is a red brand, else #DC2626)
+    critical_fill_color:  very light tint of critical_badge_color (~8% opacity, e.g. #FDE8E8)
+    critical_text_color:  dark shade of critical_badge_color for text legibility
+    high_badge_color:     one step lighter/warmer than critical (e.g. #EA580C or brand secondary if warm)
+    high_fill_color:      very light tint of high_badge_color
+    high_text_color:      dark shade of high_badge_color
+    medium_badge_color:   amber (e.g. #D97706 or brand accent if amber)
+    medium_fill_color:    very light amber tint
+    medium_text_color:    dark amber for text
+    low_badge_color:      neutral gray (e.g. #6B7280)
+    low_fill_color:       near-white gray tint
+    low_text_color:       mid-gray
+  pip_fill colors: match the badge_color for each severity level
+  Tag chip colors: derive from brand tokens —
+    neutral tags: use bt.body_color tint for border, near-white fill
+    negative tags: use critical_badge_color tint (same brand red family)
+    positive tags: use brand success green if available, else #7AA243 family
+    warning tags:  use medium_badge_color tint (amber family)
+  Font sizes: YOU decide — all primary_messages at one consistent size (recommend 11–12pt), all secondary_messages at one consistent size (recommend 9–10pt, 2pt smaller than primary)
+  label_font_size: band header size (recommend 10pt)
+  body_font_size: pip labels, item count (recommend 9pt)
 
 ARTIFACT HEADER
 ═══════════════════════════
@@ -1406,7 +1425,7 @@ async function designSlideBatch(batchManifest, brand, batchNum) {
     '\n- comparison_table: must have comparison_style, criteria[], options[], recommended_option' +
     '\n- initiative_map: must have initiative_style, dimension_labels[], initiatives[]' +
     '\n- profile_card_set: must have profile_style, profiles[], layout_direction' +
-    '\n- risk_register: must have risk_style and severity_levels[]; no artifact_header or header_block; tags[].tone controls chip color; pips[].intensity maps to filled squares' +
+    '\n- risk_register: must have risk_style and severity_levels[]; no artifact_header or header_block; tags[].tone controls chip color; each severity_level has pip_levels (numeric total scale, e.g. 5); pips[].intensity is numeric (filled blocks out of pip_levels)' +
     '\n- cards: must have card_style, card_frames[] with x/y/w/h per card' +
     '\n- matrix: must have matrix_style plus semantic fields from Agent 4 (x_axis, y_axis, quadrants[id/title/primary_message/tone], points[label/short_label/quadrant_id/x/y/emphasis]); quadrant has NO secondary_message; points have NO primary_message or secondary_message; x/y are numeric 0–100' +
     '\n- driver_tree: must have tree_style plus semantic fields from Agent 4 (root, branches)' +
@@ -2378,6 +2397,7 @@ function normalizeRiskRegisterManifest(artifact) {
       id: lvl.id || `level_${li + 1}`,
       label: lvl.label || '',
       tone: String(lvl.tone || lvl.severity || 'medium').toLowerCase(),
+      pip_levels: typeof lvl.pip_levels === 'number' ? Math.max(1, Math.round(lvl.pip_levels)) : 5,
       item_details: (Array.isArray(lvl.item_details) ? lvl.item_details : []).map(item => ({
         primary_message: item.primary_message || item.risk_title || item.title || '',
         secondary_message: item.secondary_message || item.risk_detail || item.detail || '',
@@ -2387,7 +2407,7 @@ function normalizeRiskRegisterManifest(artifact) {
         })),
         pips: (Array.isArray(item.pips) ? item.pips : []).map(p => ({
           label: String(p.label || p.value || ''),
-          intensity: String(p.intensity || 'medium').toLowerCase()
+          intensity: typeof p.intensity === 'number' ? p.intensity : p.intensity
         }))
       }))
     }))
@@ -2704,42 +2724,27 @@ function buildSafeArtifactShell(manifestArt, bt) {
       risk_header: manifestArt?.risk_header || manifestArt?.table_header || '',
       severity_levels: normalized.severity_levels,
       risk_style: {
-        row_border_color: '#D7DEE8',
-        row_border_width: 0.6,
+        // Structural defaults — LLM sets all color/font values via prompt
+        row_border_color: null,
+        row_border_width: 0.5,
         row_corner_radius: 8,
-        // Severity band fill colors (semantic tint — not brand-driven)
-        critical_fill_color: '#FDE8E8',
-        high_fill_color:     '#FFF1F2',
-        medium_fill_color:   '#FFF7E5',
-        low_fill_color:      '#F3F4F6',
-        // Severity dot + badge colors
-        critical_badge_color: '#DC2626',
-        high_badge_color:     '#EA580C',
-        medium_badge_color:   '#D97706',
-        low_badge_color:      '#6B7280',
-        badge_text_color: '#FFFFFF',
-        critical_text_color: '#8B2C23',
-        high_text_color:     '#8B2C23',
-        medium_text_color:   '#6E5712',
-        low_text_color:      '#6B7280',
-        critical_pip_fill: '#8B2C23',
-        high_pip_fill:     '#8B2C23',
-        medium_pip_fill:   '#6E5712',
-        low_pip_fill:      '#7A7A72',
-        owner_fill_color:   '#F5F5F5',
-        owner_border_color: '#D1D5DB',
-        status_open_fill:       '#FFF7F6', status_open_border:    '#A33B32', status_open_text:    '#A33B32',
-        status_progress_fill:   '#FFF8E8', status_progress_border:'#9A6B10', status_progress_text:'#6E5712',
-        status_mitigated_fill:  '#F1F8E8', status_mitigated_border:'#7AA243',status_mitigated_text:'#386B2A',
-        status_closed_fill:     '#F3F4F6', status_closed_border:  '#6B7280', status_closed_text:  '#6B7280',
-        tag_positive_fill: '#F1F8E8', tag_positive_border: '#7AA243', tag_positive_text: '#386B2A',
-        tag_negative_fill: '#FFF7F6', tag_negative_border: '#A33B32', tag_negative_text: '#A33B32',
-        tag_warning_fill:  '#FFF8E8', tag_warning_border:  '#9A6B10', tag_warning_text:  '#6E5712',
-        tag_neutral_fill:  '#F5F5F5', tag_neutral_border:  '#D1D5DB', tag_neutral_text:  '#374151',
+        // All color fields null — LLM fills these from brand tokens per prompt instructions
+        critical_fill_color: null, high_fill_color: null, medium_fill_color: null, low_fill_color: null,
+        critical_badge_color: null, high_badge_color: null, medium_badge_color: null, low_badge_color: null,
+        badge_text_color: null,
+        critical_text_color: null, high_text_color: null, medium_text_color: null, low_text_color: null,
+        critical_pip_fill: null, high_pip_fill: null, medium_pip_fill: null, low_pip_fill: null,
+        tag_positive_fill: null, tag_positive_border: null, tag_positive_text: null,
+        tag_negative_fill: null, tag_negative_border: null, tag_negative_text: null,
+        tag_warning_fill:  null, tag_warning_border:  null, tag_warning_text:  null,
+        tag_neutral_fill:  null, tag_neutral_border:  null, tag_neutral_text:  null,
+        // Font families from brand tokens (structural, not style)
         label_font_family: bt.title_font_family || 'Arial',
-        label_font_size: 10,
+        label_font_size: null,           // LLM decides
         body_font_family: bt.body_font_family || 'Arial',
-        body_font_size: 9
+        body_font_size: null,            // LLM decides
+        primary_message_font_size: null, // LLM decides — consistent across all rows
+        secondary_message_font_size: null// LLM decides — consistent across all rows
       },
       header_block: null   // no header_block for risk_register — risk_header is rendered internally
     }
@@ -5223,6 +5228,13 @@ function _riskRegisterToBlocks(art, content_y, blocks, bt, r2) {
   const bodyColor    = bt.body_color    || '#111111'
   const captionColor = bt.caption_color || bodyColor
 
+  // Font sizes — LLM-decided, consistent across all rows; fallback to sensible defaults
+  const primaryFs   = rs.primary_message_font_size   || rs.label_font_size || 11
+  const secondaryFs = rs.secondary_message_font_size || rs.body_font_size  || 9
+  const bandLabelFs = rs.label_font_size || 10
+  const pipLabelFs  = rs.body_font_size  || 8.5
+  const countFs     = rs.body_font_size  || 9
+
   const pipSize    = 0.10
   const pipGap     = 0.03
   const bandH      = 0.34
@@ -5230,23 +5242,34 @@ function _riskRegisterToBlocks(art, content_y, blocks, bt, r2) {
   const dividerH   = 0.005
   const sectionGap = 0.18
 
-  const bandFill  = tone => _riskSeverityFill(tone, rs)
-  const dotColor  = tone => _riskSeverityBadgeColor(tone, rs)
-  const bandTxt   = tone => rs[`${tone}_text_color`] || (tone === 'medium' ? '#6E5712' : tone === 'low' ? '#6B7280' : '#8B2C23')
-  const pipFill   = tone => rs[`${tone}_pip_fill`]   || (tone === 'medium' ? '#6E5712' : tone === 'low' ? '#7A7A72' : '#8B2C23')
+  // Severity color fallbacks (LLM fills these; JS provides semantic fallbacks only)
+  const badgeFb   = { critical: '#DC2626', high: '#EA580C', medium: '#D97706', low: '#6B7280' }
+  const fillFb    = { critical: '#FDE8E8', high: '#FFF1F2', medium: '#FFF7E5', low: '#F3F4F6' }
+  const txtFb     = { critical: '#8B2C23', high: '#8B2C23', medium: '#6E5712', low: '#6B7280' }
+  const pipFb     = { critical: '#8B2C23', high: '#8B2C23', medium: '#6E5712', low: '#7A7A72' }
+
+  const bandFill  = tone => rs[`${tone}_fill_color`]  || fillFb[tone]  || '#F5F5F5'
+  const dotColor  = tone => rs[`${tone}_badge_color`] || badgeFb[tone] || '#6B7280'
+  const bandTxt   = tone => rs[`${tone}_text_color`]  || txtFb[tone]   || '#374151'
+  const pipFill   = tone => rs[`${tone}_pip_fill`]    || pipFb[tone]   || dotColor(tone)
   const pipEmpty  = '#FFFFFF'
   const pipBorder = '#C8C8C8'
 
-  // intensity → filled pip count (out of 3 squares)
-  const intensityToCount = v => {
-    const t = String(v || '').toLowerCase().replace(/[\s_]/g, '')
-    if (t === 'extreme' || t === 'vhigh')  return 3
-    if (t === 'high')                      return 3
-    if (t === 'medium' || t === 'med')     return 2
-    if (t === 'low')                       return 1
-    if (t === 'vlow')                      return 0
+  // intensity → filled pip count; pipLevels = total squares in scale
+  const intensityToCount = (v, pipLevels) => {
+    const scale = pipLevels || 5
+    if (typeof v === 'number') return Math.max(0, Math.min(scale, Math.round(v)))
     const n = Number(v)
-    return isNaN(n) ? 0 : Math.max(0, Math.min(3, Math.round(n)))
+    if (!isNaN(n)) return Math.max(0, Math.min(scale, Math.round(n)))
+    // Legacy semantic fallback (maps to a 5-level scale, then scales to pipLevels)
+    const t = String(v || '').toLowerCase().replace(/[\s_]/g, '')
+    const sem5 = t === 'extreme' || t === 'vhigh' ? 5
+               : t === 'high'                     ? 4
+               : t === 'medium' || t === 'med'    ? 3
+               : t === 'low'                       ? 2
+               : t === 'vlow'                      ? 1
+               :                                    0
+    return Math.round(sem5 * scale / 5)
   }
 
   // Tag chip colors
@@ -5261,7 +5284,6 @@ function _riskRegisterToBlocks(art, content_y, blocks, bt, r2) {
   const rightColW = 1.90
   const leftX     = r2(ax + 0.16)
   const leftW     = r2(aw - rightColW - 0.28)
-  const rightX    = r2(ax + aw - rightColW)
 
   let cursorY = ay
 
@@ -5276,47 +5298,59 @@ function _riskRegisterToBlocks(art, content_y, blocks, bt, r2) {
     blocks.push({ block_type: 'rect', x: ax, y: cursorY, w: aw, h: bandH, fill_color: bFill, border_color: null, border_width: 0, corner_radius: 8 })
     blocks.push({ block_type: 'circle', x: r2(ax + 0.16), y: r2(cursorY + 0.12), w: 0.10, h: 0.10, fill_color: dColor, text: '' })
     blocks.push({ block_type: 'text_box', x: r2(ax + 0.36), y: r2(cursorY + 0.06), w: r2(aw - 1.8), h: 0.22,
-      text: level.label || tone, font_family: titleFont, font_size: 10, bold: true, color: txtColor, align: 'left', valign: 'middle' })
+      text: level.label || tone, font_family: titleFont, font_size: bandLabelFs, bold: true, color: txtColor, align: 'left', valign: 'middle' })
     blocks.push({ block_type: 'text_box', x: r2(ax + aw - 0.88), y: r2(cursorY + 0.06), w: 0.72, h: 0.22,
-      text: `${items.length} item${items.length !== 1 ? 's' : ''}`, font_family: bodyFont, font_size: 9, bold: false, color: txtColor, align: 'right', valign: 'middle' })
+      text: `${items.length} item${items.length !== 1 ? 's' : ''}`, font_family: bodyFont, font_size: countFs, bold: false, color: txtColor, align: 'right', valign: 'middle' })
     cursorY = r2(cursorY + bandH + 0.08)
 
     items.forEach((item, ii) => {
       const rowY = cursorY
 
+      // Pip layout constants — pipLevels drives total squares per row
+      const pips     = Array.isArray(item.pips) ? item.pips.slice(0, 4) : []
+      const pipLevels= level.pip_levels || 5
+      const pipRowH  = 0.22   // height per pip row
+      const tagAreaH = 0.30   // height reserved for tags row
+      // Right column fixed width; pip grid uses left part, pip squares right part
+      const pipLblW  = 0.82
+      const pipGridW = pipLevels * pipSize + (pipLevels - 1) * pipGap
+      const pipStart = r2(ax + aw - pipGridW - 0.06)  // right-aligned within rightColW
+      const pipLblX  = r2(pipStart - pipLblW - 0.04)
+
       // Left: primary_message (bold) + secondary_message (muted)
-      blocks.push({ block_type: 'text_box', x: leftX, y: r2(rowY + 0.06), w: leftW, h: 0.24,
-        text: _truncateText(item.primary_message || '', 64), font_family: titleFont, font_size: 11, bold: true, color: bodyColor, align: 'left', valign: 'middle' })
+      const primY = r2(rowY + 0.06)
+      const secY  = r2(rowY + 0.06 + primaryFs / 72 * 1.3 * 1.2 + 0.06)   // below primary with gap
+      blocks.push({ block_type: 'text_box', x: leftX, y: primY, w: leftW, h: r2(primaryFs / 72 * 1.5 + 0.06),
+        text: _truncateText(item.primary_message || '', 64), font_family: titleFont, font_size: primaryFs, bold: true, color: bodyColor, align: 'left', valign: 'top' })
       if (item.secondary_message) {
-        blocks.push({ block_type: 'text_box', x: leftX, y: r2(rowY + 0.34), w: leftW, h: 0.22,
-          text: _truncateText(item.secondary_message, 96), font_family: bodyFont, font_size: 9, bold: false, color: captionColor, align: 'left', valign: 'middle' })
+        blocks.push({ block_type: 'text_box', x: leftX, y: secY, w: leftW, h: r2(secondaryFs / 72 * 1.5 * 2 + 0.04),
+          text: _truncateText(item.secondary_message, 120), font_family: bodyFont, font_size: secondaryFs, bold: false, color: captionColor, align: 'left', valign: 'top' })
       }
 
-      // Right top: tag pills
-      const tags = Array.isArray(item.tags) ? item.tags.slice(0, 3) : []
-      let pillX = rightX
+      // Right top: tag pills — clamp to right column, skip if they would overflow
+      const tags = Array.isArray(item.tags) ? item.tags : []
+      let pillX = r2(ax + aw - rightColW)
+      const pillMaxX = r2(ax + aw - 0.04)   // hard right edge
       tags.forEach(tag => {
         const tc  = tagColors(String(tag.tone || 'neutral').toLowerCase())
         const val = String(tag.value || '')
-        const tW  = r2(Math.min(1.10, Math.max(0.60, val.length * 0.072 + 0.22)))
-        blocks.push({ block_type: 'rect', x: pillX, y: r2(rowY + 0.04), w: tW, h: 0.26, fill_color: tc.fill, border_color: tc.border, border_width: 0.5, corner_radius: 10 })
+        const tW  = r2(Math.min(1.10, Math.max(0.58, val.length * 0.068 + 0.20)))
+        if (r2(pillX + tW) > pillMaxX) return   // skip tag — no room
+        blocks.push({ block_type: 'rect', x: pillX, y: r2(rowY + 0.04), w: tW, h: 0.26,
+          fill_color: tc.fill, border_color: tc.border, border_width: 0.5, corner_radius: 10 })
         blocks.push({ block_type: 'text_box', x: r2(pillX + 0.07), y: r2(rowY + 0.08), w: r2(tW - 0.10), h: 0.16,
-          text: _truncateText(val, 16), font_family: bodyFont, font_size: 8.5, bold: false, color: tc.text, align: 'center', valign: 'middle' })
-        pillX = r2(pillX + tW + 0.08)
+          text: _truncateText(val, 16), font_family: bodyFont, font_size: pipLabelFs, bold: false, color: tc.text, align: 'center', valign: 'middle' })
+        pillX = r2(pillX + tW + 0.07)
       })
 
-      // Right bottom: pip rows (one per pip entry)
-      const pips = Array.isArray(item.pips) ? item.pips.slice(0, 4) : []
+      // Right bottom: pip rows — each pip on its own row, right-aligned within rightColW
       pips.forEach((pip, pi) => {
-        const pipY     = r2(rowY + 0.38 + pi * 0.24)
-        const count    = intensityToCount(pip.intensity)
-        const pipLblX  = rightX
-        const pipStart = r2(rightX + 0.88)
-        blocks.push({ block_type: 'text_box', x: pipLblX, y: pipY, w: 0.82, h: 0.16,
-          text: pip.label || '', font_family: bodyFont, font_size: 8.5, bold: false, color: captionColor, align: 'right', valign: 'middle' })
-        for (let i = 0; i < 3; i++) {
-          blocks.push({ block_type: 'rect', x: r2(pipStart + i * (pipSize + pipGap)), y: r2(pipY + 0.02), w: pipSize, h: pipSize,
-            fill_color: i < count ? pipFill(tone) : pipEmpty, border_color: pipBorder, border_width: 0.5, corner_radius: 2 })
+        const pipY = r2(rowY + tagAreaH + pi * pipRowH)
+        blocks.push({ block_type: 'text_box', x: pipLblX, y: pipY, w: pipLblW, h: 0.18,
+          text: pip.label || '', font_family: bodyFont, font_size: pipLabelFs, bold: false, color: captionColor, align: 'right', valign: 'middle' })
+        for (let i = 0; i < pipLevels; i++) {
+          blocks.push({ block_type: 'rect', x: r2(pipStart + i * (pipSize + pipGap)), y: r2(pipY + 0.04), w: pipSize, h: pipSize,
+            fill_color: i < intensityToCount(pip.intensity, pipLevels) ? pipFill(tone) : pipEmpty, border_color: pipBorder, border_width: 0.5, corner_radius: 2 })
         }
       })
 
