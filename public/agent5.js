@@ -2817,10 +2817,10 @@ function buildSafeArtifactShell(manifestArt, bt) {
         // Center dividers (thin dashed)
         divider_color:   '#AAAAAA',
         divider_width:   0.5,
-        // Quadrant fills — tone-driven; can override per quadrant
-        positive_quadrant_fill: '#E8F5E9',
-        negative_quadrant_fill: '#FEE2E2',
-        neutral_quadrant_fill:  '#F3F4F6',
+        // Quadrant fills — brand-derived tints at ~10% intensity (computed in _matrixToBlocks via _hexTint)
+        positive_quadrant_fill: null,
+        negative_quadrant_fill: null,
+        neutral_quadrant_fill:  null,
         // Quadrant text colors
         positive_title_color:   bt.primary_color || '#1B5E20',
         negative_title_color:   '#B91C1C',
@@ -3807,9 +3807,9 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
           quadrant_body_font_family:  ms.quadrant_body_font_family  || bt.body_font_family  || 'Arial',
           quadrant_body_font_size:    ms.quadrant_body_font_size    || 9,
           // Tone-driven quadrant fills
-          positive_quadrant_fill: ms.positive_quadrant_fill || '#E8F5E9',
-          negative_quadrant_fill: ms.negative_quadrant_fill || '#FEE2E2',
-          neutral_quadrant_fill:  ms.neutral_quadrant_fill  || '#F3F4F6',
+          positive_quadrant_fill: ms.positive_quadrant_fill || null,   // resolved to brand tint in _matrixToBlocks
+          negative_quadrant_fill: ms.negative_quadrant_fill || null,
+          neutral_quadrant_fill:  ms.neutral_quadrant_fill  || null,
           // Tone-driven quadrant text colors
           positive_title_color:  ms.positive_title_color || bt.primary_color || '#1B5E20',
           negative_title_color:  ms.negative_title_color || '#B91C1C',
@@ -5584,12 +5584,23 @@ function _statBarToBlocks(art, content_y, blocks, bt, r2) {
   })
 }
 
+// Blend a hex colour with white at `ratio` intensity (0=white, 1=full colour)
+function _hexTint(hex, ratio) {
+  const h = String(hex || '').replace(/^#/, '')
+  if (h.length !== 6) return hex
+  const r = parseInt(h.slice(0,2), 16), g = parseInt(h.slice(2,4), 16), b = parseInt(h.slice(4,6), 16)
+  const tr = Math.round(255 + (r - 255) * ratio)
+  const tg = Math.round(255 + (g - 255) * ratio)
+  const tb = Math.round(255 + (b - 255) * ratio)
+  return '#' + [tr,tg,tb].map(x => x.toString(16).padStart(2,'0')).join('')
+}
+
 // matrix renders as a 2×2 grid:
-// - Quadrant fill color per tone (positive/negative/neutral)
+// - Quadrant fill color per tone (positive/negative/neutral) — brand-derived tints
 // - Dashed center dividers
 // - Quadrant title (bold) + primary_message axis descriptor (per-tone text color); no secondary_message
-// - Each point: filled abbreviation circle + outlined label bubble below
-// - Axis mid-labels at the divider crosshair; rotated Y-axis label
+// - Each point: circle badge (≤2 chars) or pill badge (>2 chars); size varies with emphasis
+// - Outer border rendered last (no fill) so rounded corners cleanly frame all fills
 function _matrixToBlocks(art, content_y, blocks, bt, r2) {
   const ms = art.matrix_style || {}
   const xAxis = art.x_axis || {}
@@ -5627,19 +5638,22 @@ function _matrixToBlocks(art, content_y, blocks, bt, r2) {
   const axisFs        = ms.axis_label_font_size || 9
   const axisTextColor = ms.axis_label_color || bt.caption_color || bt.body_color || '#6B7280'
 
-  // Per-tone helpers
-  const toneQuadFill   = t => t === 'positive' ? (ms.positive_quadrant_fill || '#E8F5E9')
-                            : t === 'negative' ? (ms.negative_quadrant_fill || '#FEE2E2')
-                            :                    (ms.neutral_quadrant_fill  || '#F3F4F6')
-  const toneTitleColor = t => t === 'positive' ? (ms.positive_title_color || bt.primary_color || '#1B5E20')
-                            : t === 'negative' ? (ms.negative_title_color || '#B91C1C')
+  // Per-tone helpers — fills derived from brand tokens at low intensity (~10% tint)
+  const brandPos  = bt.primary_color   || '#1E40AF'
+  const brandNeg  = '#DC2626'
+  const brandNeut = bt.secondary_color || '#6B7280'
+  const toneQuadFill   = t => t === 'positive' ? (ms.positive_quadrant_fill || _hexTint(brandPos,  0.10))
+                            : t === 'negative' ? (ms.negative_quadrant_fill || _hexTint(brandNeg,  0.10))
+                            :                    (ms.neutral_quadrant_fill  || _hexTint(brandNeut, 0.08))
+  const toneTitleColor = t => t === 'positive' ? (ms.positive_title_color || brandPos)
+                            : t === 'negative' ? (ms.negative_title_color || brandNeg)
                             :                    (ms.neutral_title_color  || bt.body_color || '#374151')
-  const toneBodyColor  = t => t === 'positive' ? (ms.positive_body_color || bt.primary_color || '#2D7F5E')
-                            : t === 'negative' ? (ms.negative_body_color || '#B91C1C')
+  const toneBodyColor  = t => t === 'positive' ? (ms.positive_body_color || brandPos)
+                            : t === 'negative' ? (ms.negative_body_color || brandNeg)
                             :                    (ms.neutral_body_color  || bt.body_color || '#374151')
-  const tonePointFill  = t => t === 'positive' ? (ms.positive_point_fill || bt.primary_color || '#2D7F5E')
-                            : t === 'negative' ? (ms.negative_point_fill || '#C53030')
-                            :                    (ms.neutral_point_fill  || bt.secondary_color || '#6B7280')
+  const tonePointFill  = t => t === 'positive' ? (ms.positive_point_fill || brandPos)
+                            : t === 'negative' ? (ms.negative_point_fill || brandNeg)
+                            :                    (ms.neutral_point_fill  || brandNeut)
 
   // ── Quadrant data lookup ───────────────────────────────────────────────────
   // q1=top-left, q2=top-right, q3=bottom-left, q4=bottom-right
@@ -5651,29 +5665,33 @@ function _matrixToBlocks(art, content_y, blocks, bt, r2) {
     { id: 'q4', x: midX,  y: midY  }
   ]
 
-  // ── Outer grid border ──────────────────────────────────────────────────────
+  // ── 1. White grid background (no border — border drawn last) ─────────────
   blocks.push({
     block_type: 'rect',
     x: gridX, y: gridY, w: gridW, h: gridH,
     fill_color: '#FFFFFF',
-    border_color: ms.border_color || '#D7DEE8',
-    border_width: ms.border_width != null ? ms.border_width : 0.8,
-    corner_radius: 10
+    border_color: null, border_width: 0, corner_radius: 8
   })
 
-  // ── Quadrant fills ─────────────────────────────────────────────────────────
-  quadDefs.forEach((def, idx) => {
+  // ── 2. Quadrant fills — drawn over white background ────────────────────────
+  const quadFillDefs = [
+    { id: 'q1', x: gridX, y: gridY,  w: quadW, h: quadH },  // top-left outer corner
+    { id: 'q2', x: midX,  y: gridY,  w: r2(gridW - quadW), h: quadH },  // top-right
+    { id: 'q3', x: gridX, y: midY,   w: quadW, h: r2(gridH - quadH) },  // bottom-left
+    { id: 'q4', x: midX,  y: midY,   w: r2(gridW - quadW), h: r2(gridH - quadH) }  // bottom-right
+  ]
+  quadFillDefs.forEach((def, idx) => {
     const q    = quadMap[def.id] || quadrants[idx] || {}
     const tone = String(q.tone || 'neutral').toLowerCase()
     blocks.push({
       block_type: 'rect',
-      x: def.x, y: def.y, w: quadW, h: quadH,
+      x: def.x, y: def.y, w: def.w, h: def.h,
       fill_color: toneQuadFill(tone),
       border_color: null, border_width: 0, corner_radius: 0
     })
   })
 
-  // ── Center dividers — thin dashed lines ────────────────────────────────────
+  // ── 3. Center dividers — thin dashed lines ───────────────────────────────
   const divColor = ms.divider_color || '#AAAAAA'
   const divW     = ms.divider_width != null ? ms.divider_width : 0.5
   // Vertical center divider
@@ -5689,7 +5707,7 @@ function _matrixToBlocks(art, content_y, blocks, bt, r2) {
     color: divColor, line_width: divW, line_style: 'dashed'
   })
 
-  // ── Axis mid-labels (at the divider crosshair) ────────────────────────────
+  // ── 4a. Axis mid-labels (at the divider crosshair) ──────────────────────
   // Y-axis high/low labels at the vertical center divider
   if (yAxis.high_label) {
     blocks.push({
@@ -5733,7 +5751,7 @@ function _matrixToBlocks(art, content_y, blocks, bt, r2) {
   // xAxis.label and yAxis.label are metadata only.
   // low_label / high_label are self-descriptive and carry the axis name — no outer label needed.
 
-  // ── Quadrant labels — anchored at the far corner from the centre crosshair ──
+  // ── 4b. Quadrant labels — anchored at the far corner from the centre crosshair
   // q1 top-left  → outer corner = top-left   → stack downward, left-aligned
   // q2 top-right → outer corner = top-right  → stack downward, right-aligned
   // q3 bot-left  → outer corner = bottom-left → stack upward from bottom, left-aligned
@@ -5781,17 +5799,19 @@ function _matrixToBlocks(art, content_y, blocks, bt, r2) {
     }
   })
 
-  // ── Points: filled abbreviation circle + outlined label bubble ────────────
-  const emphSize = { high: 0.26, medium: 0.20, low: 0.16 }
+  // ── 5. Points: badge (circle or pill) + label bubble ─────────────────────
+  // Badge shape: circle when short_label ≤ 2 chars AND emphasis=high/medium;
+  //              rounded-rect pill otherwise (3 chars, or emphasis=low where circle is too small).
+  // Emphasis controls badge height only (consistent across circle/pill):
+  //   high → 0.24"  medium → 0.22"  low → 0.20"
+  const emphH = { high: 0.24, medium: 0.22, low: 0.20 }
 
   points.slice(0, 6).forEach(pt => {
-    // x/y are numeric 0–100 (percentage of full grid), y increases upward
     const xRatio = Math.min(Math.max((typeof pt.x === 'number' ? pt.x : 50) / 100, 0.02), 0.98)
     const yRatio = Math.min(Math.max((typeof pt.y === 'number' ? pt.y : 50) / 100, 0.02), 0.98)
     const px = r2(gridX + gridW * xRatio)
     const py = r2(gridY + gridH * (1 - yRatio))
 
-    // Use quadrant_id from manifest for tone; fall back to geometric derivation
     const ptQId  = pt.quadrant_id
       ? String(pt.quadrant_id).toLowerCase()
       : (xRatio < 0.5 && yRatio >= 0.5 ? 'q1' : xRatio >= 0.5 && yRatio >= 0.5 ? 'q2' : xRatio < 0.5 && yRatio < 0.5 ? 'q3' : 'q4')
@@ -5799,51 +5819,77 @@ function _matrixToBlocks(art, content_y, blocks, bt, r2) {
     const ptTone = String(ptQ.tone || 'neutral').toLowerCase()
     const dotFill= tonePointFill(ptTone)
 
-    const mSize  = emphSize[String(pt.emphasis || 'medium').toLowerCase()] || 0.20
+    const emphKey = String(pt.emphasis || 'medium').toLowerCase()
+    const bH      = emphH[emphKey] || 0.22   // badge height (same for circle and pill)
 
-    // Short label — use explicit field, or derive initials from full label
-    const lbl   = String(pt.label || '')
-    const sLbl  = pt.short_label || (() => {
+    const lbl  = String(pt.label || '')
+    const sLbl = String(pt.short_label || (() => {
       const words = lbl.trim().split(/\s+/)
-      return words.length >= 2
-        ? (words[0][0] + words[1][0]).toUpperCase()
-        : lbl.slice(0, 2).toUpperCase()
-    })()
+      return words.length >= 2 ? (words[0][0] + words[1][0]).toUpperCase() : lbl.slice(0,2).toUpperCase()
+    })())
 
-    // Filled abbreviation circle
-    blocks.push({
-      block_type: 'circle',
-      x: r2(px - mSize / 2), y: r2(py - mSize / 2), w: mSize, h: mSize,
-      fill_color: dotFill,
-      font_color: '#FFFFFF',
-      text: _truncateText(sLbl, 3)
-    })
+    // Decide badge shape: circle for ≤2 chars at high/medium; pill otherwise
+    const useCircle = sLbl.length <= 2 && emphKey !== 'low'
+    const bW = useCircle ? bH : r2(Math.max(bH * 1.6, sLbl.length * 0.10 + 0.16))
 
-    // Outlined label bubble below the dot
-    const bubbleW = r2(Math.min(1.2, Math.max(0.52, lbl.length * 0.080 + 0.22)))
-    const bubbleH = 0.26
-    const bubbleY = r2(py + mSize / 2 + 0.06)
-    // Clamp bubble X so it stays within the grid
-    let bubbleX = r2(px - bubbleW / 2)
+    if (useCircle) {
+      blocks.push({
+        block_type: 'circle',
+        x: r2(px - bH / 2), y: r2(py - bH / 2), w: bH, h: bH,
+        fill_color: dotFill, font_color: '#FFFFFF',
+        text: _truncateText(sLbl, 2)
+      })
+    } else {
+      // Pill badge (rounded rect)
+      blocks.push({
+        block_type: 'rect',
+        x: r2(px - bW / 2), y: r2(py - bH / 2), w: bW, h: bH,
+        fill_color: dotFill, border_color: null, border_width: 0,
+        corner_radius: Math.round(bH * 36)   // fully rounded ends
+      })
+      blocks.push({
+        block_type: 'text_box',
+        x: r2(px - bW / 2 + 0.04), y: r2(py - bH / 2),
+        w: r2(bW - 0.08), h: bH,
+        text: _truncateText(sLbl, 3),
+        font_family: ms.point_label_font_family || bt.body_font_family || 'Arial',
+        font_size: Math.max(7, Math.round(bH * 36) - 2), bold: true,
+        color: '#FFFFFF', align: 'center', valign: 'middle'
+      })
+    }
+
+    // Label bubble below the badge
+    const bubbleW = r2(Math.min(1.2, Math.max(0.52, lbl.length * 0.075 + 0.20)))
+    const bubbleH = 0.24
+    const bubbleY = r2(py + bH / 2 + 0.05)
+    let   bubbleX = r2(px - bubbleW / 2)
     bubbleX = r2(Math.max(gridX + 0.04, Math.min(bubbleX, gridX + gridW - bubbleW - 0.04)))
-    // Clamp bubbleY so it stays within the grid
     const clampedBubbleY = r2(Math.min(bubbleY, gridY + gridH - bubbleH - 0.04))
     blocks.push({
       block_type: 'rect',
       x: bubbleX, y: clampedBubbleY, w: bubbleW, h: bubbleH,
-      fill_color: '#FFFFFF',
-      border_color: dotFill,
-      border_width: 0.8, corner_radius: 10
+      fill_color: '#FFFFFF', border_color: dotFill, border_width: 0.8, corner_radius: 10
     })
     blocks.push({
       block_type: 'text_box',
-      x: r2(bubbleX + 0.06), y: clampedBubbleY,
-      w: r2(bubbleW - 0.12), h: bubbleH,
+      x: r2(bubbleX + 0.05), y: clampedBubbleY,
+      w: r2(bubbleW - 0.10), h: bubbleH,
       text: _truncateText(lbl, 18),
       font_family: ms.point_label_font_family || bt.body_font_family || 'Arial',
       font_size: ms.point_label_font_size || 9, bold: false,
       color: dotFill, align: 'center', valign: 'middle'
     })
+  })
+
+  // ── 6. Outer grid border drawn LAST — no fill, just border ────────────────
+  // Rendered on top of all fills and dividers so rounded corners cleanly frame the grid.
+  blocks.push({
+    block_type: 'rect',
+    x: gridX, y: gridY, w: gridW, h: gridH,
+    fill_color: null,
+    border_color: ms.border_color || '#D7DEE8',
+    border_width: ms.border_width != null ? ms.border_width : 0.8,
+    corner_radius: 8
   })
 }
 

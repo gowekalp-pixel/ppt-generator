@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Add New Artifact — PPT System</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: #f0f2f5; padding: 2rem; color: #111; }
+    .container { max-width: 720px; margin: 0 auto; }
+
+    .header { margin-bottom: 1.5rem; }
+    .header h1 { font-size: 22px; font-weight: 700; color: #111; margin-bottom: 4px; }
+    .header p  { font-size: 13px; color: #666; line-height: 1.5; }
+    .header a  { font-size: 13px; color: #2563eb; text-decoration: none; }
+    .header a:hover { text-decoration: underline; }
+
+    .card { background: white; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.25rem; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
+    .card-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #888; margin-bottom: 1rem; }
+
+    .field { margin-bottom: 1.2rem; }
+    .field:last-child { margin-bottom: 0; }
+    label { display: block; font-size: 13px; font-weight: 600; color: #333; margin-bottom: 4px; }
+    .hint { font-size: 12px; color: #999; margin-bottom: 6px; line-height: 1.4; }
+
+    input[type=text], select, textarea {
+      width: 100%; padding: 9px 12px; font-size: 13px; color: #111;
+      border: 1.5px solid #d1d5db; border-radius: 8px; background: #fafafa;
+      transition: border-color 0.15s; outline: none; font-family: inherit;
+    }
+    input[type=text]:focus, select:focus, textarea:focus { border-color: #2563eb; background: #fff; }
+    textarea { resize: vertical; min-height: 72px; line-height: 1.5; }
+
+    /* Upload zone */
+    .upload-zone { border: 2px dashed #d1d5db; border-radius: 10px; padding: 1rem 1.25rem; cursor: pointer; position: relative; background: #fafafa; transition: all 0.15s; min-height: 80px; display: flex; align-items: center; gap: 1rem; }
+    .upload-zone:hover { background: #f3f4f6; border-color: #9ca3af; }
+    .upload-zone.ready { border-color: #22c55e; border-style: solid; background: #f0fdf4; }
+    .upload-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+    .uz-text { font-size: 13px; color: #555; pointer-events: none; flex: 1; }
+    .uz-text span { font-weight: 600; color: #2563eb; }
+    .upload-zone.ready .uz-text { color: #16a34a; font-weight: 500; }
+    .img-thumb { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; display: none; flex-shrink: 0; border: 1px solid #e5e7eb; }
+    .img-thumb.show { display: block; }
+
+    /* Radio / checkbox groups */
+    .radio-group, .check-group { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 2px; }
+    .radio-group label, .check-group label {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 13px; font-weight: 500; color: #333;
+      cursor: pointer; padding: 6px 14px; border: 1.5px solid #d1d5db;
+      border-radius: 20px; transition: all 0.15s; white-space: nowrap;
+    }
+    .radio-group input[type=radio], .check-group input[type=checkbox] { display: none; }
+    .radio-group label.selected, .check-group label.selected {
+      border-color: #2563eb; background: #eff6ff; color: #1d4ed8; font-weight: 600;
+    }
+
+    /* Secondary artifact — conditional */
+    #secondary-wrap { display: none; margin-top: 10px; }
+    #secondary-wrap.show { display: block; }
+
+    /* Buttons */
+    .btn-primary { width: 100%; padding: 13px; font-size: 14px; font-weight: 700; background: #2563eb; color: white; border: none; border-radius: 10px; cursor: pointer; transition: background 0.15s, transform 0.1s; letter-spacing: 0.02em; }
+    .btn-primary:hover:not(:disabled) { background: #1d4ed8; }
+    .btn-primary:active:not(:disabled) { transform: scale(0.99); }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-green  { width: 100%; padding: 13px; font-size: 14px; font-weight: 700; background: #059669; color: white; border: none; border-radius: 10px; cursor: pointer; transition: background 0.15s; margin-bottom: 8px; }
+    .btn-green:hover:not(:disabled) { background: #047857; }
+    .btn-green:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-ghost  { width: 100%; padding: 11px; font-size: 14px; font-weight: 600; background: transparent; color: #555; border: 1.5px solid #d1d5db; border-radius: 10px; cursor: pointer; transition: all 0.15s; margin-top: 8px; }
+    .btn-ghost:hover { border-color: #9ca3af; color: #111; }
+
+    /* Steps header */
+    .steps-header { display: flex; align-items: center; gap: 0; margin-bottom: 1.5rem; }
+    .step-dot { display: flex; flex-direction: column; align-items: center; min-width: 80px; }
+    .step-dot .circle { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; background: #e5e7eb; color: #888; transition: all 0.3s; margin-bottom: 4px; }
+    .step-dot .circle.active { background: #dbeafe; color: #2563eb; }
+    .step-dot .circle.done   { background: #dcfce7; color: #16a34a; }
+    .step-dot .label { font-size: 10px; font-weight: 600; color: #aaa; text-transform: uppercase; letter-spacing: 0.05em; text-align: center; }
+    .step-dot .label.active { color: #2563eb; }
+    .step-dot .label.done   { color: #16a34a; }
+    .step-connector { flex: 1; height: 2px; background: #e5e7eb; margin-bottom: 16px; transition: background 0.3s; }
+    .step-connector.done { background: #22c55e; }
+
+    /* Schema preview */
+    .preview-section { margin-bottom: 1rem; }
+    .preview-section h3 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #888; margin-bottom: 6px; }
+    .preview-section .badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; margin-bottom: 10px; }
+    .badge-blue   { background: #dbeafe; color: #1d4ed8; }
+    .badge-green  { background: #dcfce7; color: #16a34a; }
+    .badge-orange { background: #fef3c7; color: #92400e; }
+
+    pre.code-block {
+      background: #1e1e2e; color: #cdd6f4; font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 11.5px; line-height: 1.55; padding: 14px 16px; border-radius: 8px;
+      overflow-x: auto; white-space: pre-wrap; word-break: break-word;
+      max-height: 320px; overflow-y: auto; margin: 0;
+    }
+    pre.code-block .kw { color: #89b4fa; }
+    pre.code-block .str { color: #a6e3a1; }
+    pre.code-block .cm { color: #6c7086; font-style: italic; }
+
+    .copy-btn { font-size: 11px; padding: 4px 10px; background: #374151; color: #d1d5db; border: none; border-radius: 5px; cursor: pointer; float: right; margin-bottom: 6px; transition: background 0.15s; }
+    .copy-btn:hover { background: #4b5563; }
+
+    .copy-wrap { overflow: hidden; margin-bottom: 6px; }
+
+    /* Info rows */
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 1rem; }
+    .info-item { background: #f9fafb; border-radius: 8px; padding: 10px 14px; }
+    .info-item .il { font-size: 10px; color: #999; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px; }
+    .info-item .iv { font-size: 13px; font-weight: 700; color: #111; }
+
+    /* Status messages */
+    .status-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #555; padding: 6px 0; }
+    .status-row .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .dot-wait { background: #d1d5db; }
+    .dot-spin { background: #2563eb; animation: pulse 1s infinite; }
+    .dot-ok   { background: #22c55e; }
+    .dot-err  { background: #ef4444; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+    .error-box { background: #fef2f2; border: 1px solid #fca5a5; border-radius: 10px; padding: 12px 14px; font-size: 13px; color: #dc2626; line-height: 1.5; display: none; margin-top: 12px; }
+    .error-box.show { display: block; }
+
+    .success-box { background: #f0fdf4; border: 1.5px solid #22c55e; border-radius: 10px; padding: 18px 20px; text-align: center; display: none; margin-top: 12px; }
+    .success-box.show { display: block; }
+    .success-box h3 { font-size: 16px; font-weight: 700; color: #15803d; margin-bottom: 6px; }
+    .success-box p { font-size: 13px; color: #555; margin-bottom: 14px; line-height: 1.5; }
+
+    /* Page transitions */
+    .page { display: none; }
+    .page.show { display: block; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <!-- HEADER -->
+  <div class="header">
+    <h1>Add New Artifact Type</h1>
+    <p>Extend agent 4 and agent 5 with a new visual artifact. Upload a representative image and answer a few questions — Claude will generate the schema, constraints, and flattening logic automatically.</p>
+    <p style="margin-top:6px"><a href="/">← Back to PPT Generator</a></p>
+  </div>
+
+  <!-- STEPS INDICATOR -->
+  <div class="steps-header">
+    <div class="step-dot">
+      <div class="circle active" id="dot1">1</div>
+      <div class="label active" id="lbl1">Define</div>
+    </div>
+    <div class="step-connector" id="conn1"></div>
+    <div class="step-dot">
+      <div class="circle" id="dot2">2</div>
+      <div class="label" id="lbl2">Review</div>
+    </div>
+    <div class="step-connector" id="conn2"></div>
+    <div class="step-dot">
+      <div class="circle" id="dot3">3</div>
+      <div class="label" id="lbl3">Inject</div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════ PAGE 1 — DEFINE ══════════════════════════ -->
+  <div class="page show" id="page-1">
+
+    <div class="card">
+      <div class="card-title">Step 1A — Representative Image</div>
+
+      <div class="field">
+        <label>Upload Artifact Image</label>
+        <div class="hint">A screenshot or diagram showing the new artifact as it should appear on a slide. PNG, JPG or GIF.</div>
+        <div class="upload-zone" id="zone-image">
+          <input type="file" id="img-input" accept="image/png,image/jpeg,image/gif,image/webp">
+          <img class="img-thumb" id="img-thumb" alt="">
+          <div class="uz-text" id="uz-text"><span>Choose file</span> or drag here — PNG, JPG, GIF</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Step 1B — Artifact Definition</div>
+
+      <div class="field">
+        <label>Artifact Name <span style="font-weight:400;color:#999">(snake_case)</span></label>
+        <div class="hint">A short unique identifier, e.g. <em>heatmap_grid</em> or <em>bubble_chart</em>.</div>
+        <input type="text" id="artifact-name" placeholder="e.g. heatmap_grid" maxlength="30">
+      </div>
+
+      <div class="field">
+        <label>Description</label>
+        <div class="hint">What does this artifact visualise? When should a consultant choose it?</div>
+        <textarea id="description" placeholder="e.g. A colour-encoded grid that shows intensity across two categorical dimensions, ideal when the audience needs to spot hot-spots at a glance."></textarea>
+      </div>
+
+      <div class="field">
+        <label>Can it be a PRIMARY zone artifact?</label>
+        <div class="hint">Primary artifacts occupy 50–100% of a zone. Only data-rich, self-sufficient visuals qualify.</div>
+        <div class="radio-group" id="rg-primary">
+          <label class="selected"><input type="radio" name="primary" value="yes" checked> Yes — it can stand alone</label>
+          <label><input type="radio" name="primary" value="no"> No — supporting only</label>
+        </div>
+        <div id="secondary-wrap" class="show">
+          <div class="hint" style="margin-top:8px">If primary, which EXISTING artifact type can pair as a secondary alongside it?</div>
+          <select id="secondary-artifact">
+            <option value="none">None — no second artifact permitted</option>
+            <option value="insight_text standard, max 30% of zone size">insight_text standard (max 30%)</option>
+            <option value="insight_text standard (callout only — 1–2 points), max 25% of zone size">insight_text standard callout (max 25%)</option>
+            <option value="insight_text grouped, max 30% of zone size">insight_text grouped (max 30%)</option>
+            <option value="cards (1–2) or insight_text, max 40% of zone size">cards or insight_text (max 40%)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Supported Density Levels</label>
+        <div class="hint">Which volume tiers does this artifact support? (Compact = fewest items; Dense = most.)</div>
+        <div class="check-group" id="cg-density">
+          <label><input type="checkbox" value="compact"> Compact</label>
+          <label class="selected"><input type="checkbox" value="standard" checked> Standard</label>
+          <label class="selected"><input type="checkbox" value="dense" checked> Dense</label>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Best Narrative Roles <span style="font-weight:400;color:#999">(optional)</span></label>
+        <div class="hint">Which Agent 3 narrative roles are this artifact best suited for? E.g. <em>segmentation, benchmark_comparison, drill_down</em></div>
+        <textarea id="narrative-roles" placeholder="e.g. segmentation, benchmark_comparison, exception_highlight" style="min-height:54px"></textarea>
+      </div>
+    </div>
+
+    <div class="card">
+      <div id="step1-error" class="error-box"></div>
+      <button class="btn-primary" id="btn-analyze" disabled>Analyze &amp; Generate Schema →</button>
+    </div>
+
+  </div><!-- /page-1 -->
+
+
+  <!-- ═══════════════════════ PAGE 2 — REVIEW ══════════════════════════ -->
+  <div class="page" id="page-2">
+
+    <div class="card">
+      <div class="card-title">Generated Artifact Definition</div>
+
+      <div class="info-grid" id="info-grid">
+        <!-- populated by JS -->
+      </div>
+
+      <div class="preview-section">
+        <h3>Description</h3>
+        <p id="preview-desc" style="font-size:13px;color:#333;line-height:1.55"></p>
+      </div>
+    </div>
+
+    <!-- Agent 4 block -->
+    <div class="card">
+      <div class="card-title">Agent 4 — Schema &amp; Rules</div>
+
+      <div class="preview-section">
+        <h3>JSON Schema Snippet</h3>
+        <div class="copy-wrap"><button class="copy-btn" onclick="copyBlock('schema-code')">Copy</button></div>
+        <pre class="code-block" id="schema-code"></pre>
+      </div>
+
+      <div class="preview-section" style="margin-top:1rem">
+        <h3>Selection Guidance (Phase 3)</h3>
+        <div class="copy-wrap"><button class="copy-btn" onclick="copyBlock('guidance-code')">Copy</button></div>
+        <pre class="code-block" id="guidance-code"></pre>
+      </div>
+
+      <div class="preview-section" style="margin-top:1rem">
+        <h3>Pairing Rule &amp; Density (Phase 4)</h3>
+        <div class="copy-wrap"><button class="copy-btn" onclick="copyBlock('density-code')">Copy</button></div>
+        <pre class="code-block" id="density-code"></pre>
+      </div>
+    </div>
+
+    <!-- Agent 5 block -->
+    <div class="card">
+      <div class="card-title">Agent 5 — Flattening Function</div>
+
+      <div class="preview-section">
+        <h3>Switch Case Entry</h3>
+        <div class="copy-wrap"><button class="copy-btn" onclick="copyBlock('case-code')">Copy</button></div>
+        <pre class="code-block" id="case-code"></pre>
+      </div>
+
+      <div class="preview-section" style="margin-top:1rem">
+        <h3>Flattening Function</h3>
+        <div class="copy-wrap"><button class="copy-btn" onclick="copyBlock('fn-code')">Copy</button></div>
+        <pre class="code-block" id="fn-code"></pre>
+      </div>
+    </div>
+
+    <div class="card">
+      <div id="step2-error" class="error-box"></div>
+      <button class="btn-green" id="btn-inject">Approve &amp; Inject Into Agents</button>
+      <button class="btn-ghost" id="btn-back">← Revise Definition</button>
+    </div>
+
+  </div><!-- /page-2 -->
+
+
+  <!-- ═══════════════════════ PAGE 3 — INJECT ══════════════════════════ -->
+  <div class="page" id="page-3">
+
+    <div class="card">
+      <div class="card-title">Step 3 — Injecting Into Agents</div>
+
+      <div id="inject-steps">
+        <div class="status-row" id="inj-a4-type">
+          <div class="dot dot-wait" id="dot-a4-type"></div>
+          <span>agent4.js — add to artifact type list</span>
+        </div>
+        <div class="status-row" id="inj-a4-primary">
+          <div class="dot dot-wait" id="dot-a4-primary"></div>
+          <span>agent4.js — add to primary zone permitted list</span>
+        </div>
+        <div class="status-row" id="inj-a4-pairing">
+          <div class="dot dot-wait" id="dot-a4-pairing"></div>
+          <span>agent4.js — add pairing rule</span>
+        </div>
+        <div class="status-row" id="inj-a4-density">
+          <div class="dot dot-wait" id="dot-a4-density"></div>
+          <span>agent4.js — add density definition</span>
+        </div>
+        <div class="status-row" id="inj-a4-schema">
+          <div class="dot dot-wait" id="dot-a4-schema"></div>
+          <span>agent4.js — add JSON schema + usage notes</span>
+        </div>
+        <div class="status-row" id="inj-a5-type">
+          <div class="dot dot-wait" id="dot-a5-type"></div>
+          <span>agent5.js — register in supported types set</span>
+        </div>
+        <div class="status-row" id="inj-a5-case">
+          <div class="dot dot-wait" id="dot-a5-case"></div>
+          <span>agent5.js — add switch case entry</span>
+        </div>
+        <div class="status-row" id="inj-a5-fn">
+          <div class="dot dot-wait" id="dot-a5-fn"></div>
+          <span>agent5.js — add flattening function</span>
+        </div>
+      </div>
+
+      <div id="inject-error" class="error-box"></div>
+
+      <div class="success-box" id="inject-success">
+        <h3>Artifact Injected Successfully</h3>
+        <p id="success-detail">The new artifact type has been added to both agent4.js and agent5.js. Restart the server if running locally for changes to take effect.</p>
+        <a href="/" style="display:inline-block;padding:10px 24px;background:#059669;color:white;border-radius:8px;font-size:14px;font-weight:700;text-decoration:none">Back to PPT Generator</a>
+        <br><br>
+        <button class="btn-ghost" id="btn-add-another" style="width:auto;padding:8px 20px">Add Another Artifact</button>
+      </div>
+    </div>
+
+  </div><!-- /page-3 -->
+
+</div><!-- /container -->
+
+<script src="agent_add_artifact.js"></script>
+<script>
+/* ─── STATE ──────────────────────────────────────────────────────────────── */
+let imageB64   = null
+let imageMime  = null
+let definition = null   // Claude's parsed response
+
+/* ─── IMAGE UPLOAD ───────────────────────────────────────────────────────── */
+const imgInput = document.getElementById('img-input')
+const imgThumb = document.getElementById('img-thumb')
+const uzText   = document.getElementById('uz-text')
+const zoneImg  = document.getElementById('zone-image')
+
+imgInput.addEventListener('change', () => {
+  const file = imgInput.files[0]
+  if (!file) return
+  imageMime = file.type || 'image/png'
+  const reader = new FileReader()
+  reader.onload = e => {
+    const dataUrl = e.target.result
+    // Strip the data URL prefix to get raw base64
+    imageB64 = dataUrl.split(',')[1]
+    imgThumb.src = dataUrl
+    imgThumb.classList.add('show')
+    uzText.innerHTML = `<strong>${file.name}</strong> (${(file.size/1024).toFixed(0)} KB)`
+    zoneImg.classList.add('ready')
+    updateBtn()
+  }
+  reader.readAsDataURL(file)
+})
+
+/* ─── RADIO / CHECKBOX STYLING ───────────────────────────────────────────── */
+document.querySelectorAll('.radio-group input[type=radio]').forEach(radio => {
+  radio.addEventListener('change', () => {
+    document.querySelectorAll('.radio-group label').forEach(l => l.classList.remove('selected'))
+    if (radio.checked) radio.closest('label').classList.add('selected')
+    const isPrimary = document.querySelector('input[name=primary]:checked')?.value === 'yes'
+    document.getElementById('secondary-wrap').classList.toggle('show', isPrimary)
+  })
+})
+
+document.querySelectorAll('.check-group input[type=checkbox]').forEach(cb => {
+  // Sync initial state
+  if (cb.checked) cb.closest('label').classList.add('selected')
+  cb.addEventListener('change', () => {
+    cb.closest('label').classList.toggle('selected', cb.checked)
+  })
+})
+
+/* ─── ENABLE ANALYZE BUTTON ──────────────────────────────────────────────── */
+const nameInput = document.getElementById('artifact-name')
+nameInput.addEventListener('input', updateBtn)
+
+function updateBtn() {
+  const ready = imageB64 && nameInput.value.trim().length > 1
+  document.getElementById('btn-analyze').disabled = !ready
+}
+
+/* ─── STEP 1 → STEP 2 ────────────────────────────────────────────────────── */
+document.getElementById('btn-analyze').addEventListener('click', async () => {
+  const errBox = document.getElementById('step1-error')
+  errBox.classList.remove('show')
+
+  const inputs = {
+    imageB64,
+    imageMime,
+    artifactName:      nameInput.value.trim(),
+    description:       document.getElementById('description').value.trim(),
+    canBePrimary:      document.querySelector('input[name=primary]:checked')?.value === 'yes',
+    secondaryArtifact: document.getElementById('secondary-artifact').value,
+    densities: {
+      compact:  document.querySelector('#cg-density input[value=compact]')?.checked,
+      standard: document.querySelector('#cg-density input[value=standard]')?.checked,
+      dense:    document.querySelector('#cg-density input[value=dense]')?.checked
+    },
+    narrativeRoles: document.getElementById('narrative-roles').value.trim(),
+    onProgress: msg => console.log('[agent_add_artifact]', msg)
+  }
+
+  const btn = document.getElementById('btn-analyze')
+  btn.disabled = true
+  btn.textContent = 'Analyzing with Claude…'
+
+  try {
+    definition = await runAgentAddArtifact(inputs)
+    populateReview(definition)
+    goToPage(2)
+  } catch (err) {
+    errBox.textContent = err.message
+    errBox.classList.add('show')
+  } finally {
+    btn.disabled = false
+    btn.textContent = 'Analyze & Generate Schema →'
+  }
+})
+
+/* ─── POPULATE REVIEW PAGE ───────────────────────────────────────────────── */
+function populateReview(def) {
+  const a4 = def.agent4 || {}
+  const a5 = def.agent5 || {}
+
+  // Info grid
+  document.getElementById('info-grid').innerHTML = `
+    <div class="info-item"><div class="il">Artifact Type</div><div class="iv">${def.artifact_type || '—'}</div></div>
+    <div class="info-item"><div class="il">Display Name</div><div class="iv">${def.display_name || '—'}</div></div>
+    <div class="info-item"><div class="il">Primary Zone</div><div class="iv">${a4.can_be_primary ? 'Yes' : 'No'}</div></div>
+    <div class="info-item"><div class="il">Flattening Fn</div><div class="iv">${a5.function_name || '—'}</div></div>
+  `
+
+  document.getElementById('preview-desc').textContent = def.description || ''
+
+  // Schema snippet
+  const schemaText = (a4.schema_snippet || '(none)') + '\n\n' + (a4.schema_usage_notes || '')
+  document.getElementById('schema-code').textContent = schemaText
+
+  // Selection guidance
+  const guidanceText = (a4.selection_guidance || '(none)')
+  document.getElementById('guidance-code').textContent = guidanceText
+
+  // Pairing + density
+  const densityText = [
+    'Pairing rule:', a4.pairing_rule || '(none)',
+    '',
+    'Density (FAMILY 5B):', a4.density_rule || '(none)',
+    '',
+    'Pre-output gate check:', a4.gate_check || '(none)'
+  ].join('\n')
+  document.getElementById('density-code').textContent = densityText
+
+  // Case entry
+  document.getElementById('case-code').textContent = a5.case_entry || '(none)'
+
+  // Function code
+  document.getElementById('fn-code').textContent = a5.function_code || '(none)'
+}
+
+/* ─── COPY HELPER ────────────────────────────────────────────────────────── */
+function copyBlock(id) {
+  const el = document.getElementById(id)
+  navigator.clipboard.writeText(el.textContent || '').catch(() => {})
+  const btn = el.previousElementSibling?.querySelector('.copy-btn')
+  if (btn) { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 1500) }
+}
+
+/* ─── STEP 2 BACK ────────────────────────────────────────────────────────── */
+document.getElementById('btn-back').addEventListener('click', () => goToPage(1))
+
+/* ─── STEP 2 → STEP 3 (INJECT) ──────────────────────────────────────────── */
+document.getElementById('btn-inject').addEventListener('click', async () => {
+  const errBox = document.getElementById('step2-error')
+  errBox.classList.remove('show')
+
+  const btn = document.getElementById('btn-inject')
+  btn.disabled = true
+  btn.textContent = 'Injecting…'
+
+  try {
+    goToPage(3)
+    await runInjection(definition)
+  } catch (err) {
+    document.getElementById('inject-error').textContent = err.message
+    document.getElementById('inject-error').classList.add('show')
+  } finally {
+    btn.disabled = false
+    btn.textContent = 'Approve & Inject Into Agents'
+  }
+})
+
+/* ─── INJECTION ORCHESTRATION ────────────────────────────────────────────── */
+async function runInjection(def) {
+  const ids = ['a4-type','a4-primary','a4-pairing','a4-density','a4-schema','a5-type','a5-case','a5-fn']
+  // Set all to spinning
+  ids.forEach(id => setDot(id, 'spin'))
+
+  try {
+    const result = await injectArtifact(def)
+
+    // Mark each step according to server report
+    const steps = result.steps || {}
+    ids.forEach(id => {
+      const key = id.replace(/-/g, '_')
+      const success = steps[key] !== false
+      setDot(id, success ? 'ok' : 'err')
+    })
+
+    // Show success
+    document.getElementById('success-detail').textContent =
+      `"${def.display_name}" (${def.artifact_type}) has been injected into agent4.js and agent5.js. ` +
+      `Restart your dev server for the changes to take effect.`
+    document.getElementById('inject-success').classList.add('show')
+
+  } catch (err) {
+    ids.forEach(id => setDot(id, 'err'))
+    throw err
+  }
+}
+
+function setDot(id, state) {
+  const el = document.getElementById('dot-' + id)
+  if (!el) return
+  el.className = 'dot dot-' + (state === 'spin' ? 'spin' : state === 'ok' ? 'ok' : state === 'err' ? 'err' : 'wait')
+}
+
+/* ─── PAGE NAVIGATION ────────────────────────────────────────────────────── */
+function goToPage(n) {
+  document.querySelectorAll('.page').forEach((p, i) => p.classList.toggle('show', i + 1 === n))
+  ;[1,2,3].forEach(i => {
+    const dot  = document.getElementById('dot' + i)
+    const lbl  = document.getElementById('lbl' + i)
+    if (i < n)  { dot.className = 'circle done';   lbl.className = 'label done'; }
+    if (i === n){ dot.className = 'circle active'; lbl.className = 'label active'; }
+    if (i > n)  { dot.className = 'circle';        lbl.className = 'label'; }
+    if (i < 3) {
+      const conn = document.getElementById('conn' + i)
+      conn.classList.toggle('done', i < n)
+    }
+  })
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+/* ─── ADD ANOTHER ────────────────────────────────────────────────────────── */
+document.getElementById('btn-add-another').addEventListener('click', () => {
+  imageB64 = null; imageMime = null; definition = null
+  imgThumb.classList.remove('show')
+  imgThumb.src = ''
+  zoneImg.classList.remove('ready')
+  uzText.innerHTML = '<span>Choose file</span> or drag here — PNG, JPG, GIF'
+  document.getElementById('artifact-name').value = ''
+  document.getElementById('description').value = ''
+  document.getElementById('narrative-roles').value = ''
+  document.getElementById('inject-success').classList.remove('show')
+  document.getElementById('inject-error').classList.remove('show')
+  ;['a4-type','a4-primary','a4-pairing','a4-density','a4-schema','a5-type','a5-case','a5-fn'].forEach(id => setDot(id, 'wait'))
+  goToPage(1)
+  updateBtn()
+})
+</script>
+</body>
+</html>
