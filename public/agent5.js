@@ -996,9 +996,10 @@ Prioritization rules:
 - Rows must be stacked vertically in rank order
 - Each row contains:
   - left rank badge (two-layer design — JS renders this automatically):
-      Layer 1: brand primary color background (fully rounded all corners) — driven by bt.primary_color, no style field needed
-      Layer 2: white inner box inset from the left (brand strip visible on left edge), slight inset top/bottom
-      Text: "#N" in upper half and priority label (CRITICAL/HIGH/MEDIUM/LOW) in lower half — both colored with rank_palette[idx] (severity color)
+      Layer 1: rank-colored background rect (fully rounded) — color = rank_palette[idx], so each rank has a distinct severity color
+      Layer 2: white inner box at the same height as the background, shifted right so a thin colored strip shows on the left
+      Text: "#N" in upper half and priority label (CRITICAL/HIGH/MEDIUM/LOW) in lower half — both colored with rank_palette[idx]
+  - rank_palette: set one color per rank (rank 1 = palette[0], rank 2 = palette[1], etc.) — each rank must be visually distinct
   - action title
   - action description
   - up to 2 qualifier pills on the right
@@ -6011,36 +6012,33 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
       corner_radius: cr
     })
 
-    // === BADGE: two-layer — brand BG (fully rounded) + white inner box + severity-colored text ===
-    // Structure is JS-coded; brand BG color = bt.primary_color; text color = rank_palette[idx] (LLM-decided)
-    const badgeStripW  = 0.12   // brand color strip visible on the left
-    const badgePadY    = 0.08   // vertical gap around white inner box
-    const badgePadRight= 0.06   // right inset for white inner box
+    // === BADGE: two-layer — rank-colored BG + white overlay (same height, inset from left) ===
+    // rank_palette[idx] → background color (LLM-decided per rank severity)
+    // White inner box: full row height, shifted right by stripW so colored strip shows on left
+    // Text in rankFill (same severity color) against the white background
+    const badgeStripW = 0.10   // colored strip width visible on left edge
     const innerX = r2(ax + badgeStripW)
-    const innerY = r2(rowY + badgePadY)
-    const innerW = r2(badgeW - badgeStripW - badgePadRight)
-    const innerH = r2(rowH - 2 * badgePadY)
-    const innerCr = Math.max(2, cr - 2)
+    const innerW = r2(badgeW - badgeStripW)
     const labelFontSize = Math.max(6, Math.min(9, Math.round(rowH * 13)))
 
-    // Layer 1: Brand BG — fully rounded rect (all four corners)
+    // Layer 1: Rank-colored BG (fully rounded, all corners) — color from rank_palette[idx]
     blocks.push({
       block_type: 'rect',
       x: ax, y: rowY, w: badgeW, h: rowH,
-      fill_color: bt.primary_color || '#0078AE', border_color: null, border_width: 0, corner_radius: cr
+      fill_color: rankFill, border_color: null, border_width: 0, corner_radius: cr
     })
 
-    // Layer 2: White inner box (brand strip visible on left)
+    // Layer 2: White inner box — same height as BG, inset only from left (strip shows through)
     blocks.push({
       block_type: 'rect',
-      x: innerX, y: innerY, w: innerW, h: innerH,
-      fill_color: '#FFFFFF', border_color: null, border_width: 0, corner_radius: innerCr
+      x: innerX, y: rowY, w: innerW, h: rowH,
+      fill_color: '#FFFFFF', border_color: null, border_width: 0, corner_radius: cr
     })
 
-    // "#N" — upper portion of white box, in severity color (rank_palette[idx])
+    // "#N" — upper half of white area, colored with rankFill
     blocks.push({
       block_type: 'text_box',
-      x: innerX, y: innerY, w: innerW, h: r2(innerH * 0.55),
+      x: innerX, y: rowY, w: innerW, h: r2(rowH * 0.55),
       text: '#' + rankNum,
       font_family: ps.rank_font_family || bt.title_font_family || 'Arial',
       font_size: numFontSize, bold: true,
@@ -6048,10 +6046,10 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
       align: 'center', valign: 'bottom'
     })
 
-    // Rank label — lower portion of white box, in severity color
+    // Rank label — lower half of white area, colored with rankFill
     blocks.push({
       block_type: 'text_box',
-      x: innerX, y: r2(innerY + innerH * 0.55), w: innerW, h: r2(innerH * 0.40),
+      x: innerX, y: r2(rowY + rowH * 0.55), w: innerW, h: r2(rowH * 0.36),
       text: rankLabel,
       font_family: ps.rank_font_family || bt.title_font_family || 'Arial',
       font_size: labelFontSize, bold: false,
