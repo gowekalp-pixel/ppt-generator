@@ -2264,9 +2264,10 @@ function normalizeComparisonTableManifest(artifact) {
           criterion:           criteria[ci] || '',
           column_id:           criteria[ci] || '',
           rating:              toneToRating(cell?.tone),
-          display_value:       String(cell?.value || ''),
-          note:                String(cell?.subtext || ''),
-          representation_type: 'text',
+          display_value:       cell?.value     != null ? String(cell.value)     : '',
+          icon_type:           cell?.icon_type != null ? String(cell.icon_type) : '',
+          note:                cell?.subtext   != null ? String(cell.subtext)   : '',
+          representation_type: cell?.icon_type ? 'icon' : 'text',
           tonality:            cell?.tone === 'positive' ? 'positive' : cell?.tone === 'negative' ? 'negative' : 'neutral'
         }))
       }
@@ -4223,6 +4224,30 @@ function _comparisonTableToBlocks_legacy(art, content_y, blocks, bt, r2) {
   })
 }
 
+// ── icon_badge block schema ───────────────────────────────────────────────────
+// Any renderer that needs a vector icon inside a colored circle emits this block.
+// The Python backend (ICON_PRESET_MAP in generate_pptx.py) resolves the name to
+// an OOXML preset geometry shape — no external assets required.
+//
+//   { block_type: 'icon_badge',
+//     icon:        string,   // name from the vocabulary below
+//     fill_color:  hex,      // circle background
+//     icon_color:  hex,      // icon shape fill / line color
+//     x, y, w, h:  number   // square bounding box in inches (w == h)
+//   }
+//
+// Supported icon names (maps to PowerPoint preset geometries):
+//   Verdict   check | cross | partial
+//   Direction arrow_right | arrow_left | arrow_up | arrow_down |
+//             arrow_up_right | chevron_right | chevron
+//   Priority  star | star4 | star6 | ribbon | badge
+//   Warning   warning | diamond | shield
+//   Shape     circle | square | pentagon | hexagon | cloud |
+//             heart | lightning | moon | sun | smiley
+//
+// To add a new icon: add it to ICON_PRESET_MAP in api/generate_pptx.py.
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Override: comparison_table should render as a simple comparison grid using
 // one outer shell, plain headers, row dividers, recommended-row highlight,
 // and colored value pills with optional subtext built from basic shapes.
@@ -4237,26 +4262,38 @@ function _comparisonTableToBlocks(art, content_y, blocks, bt, r2) {
   const ah = r2((art.y || 0) + (art.h || 0) - content_y)
   if (!criteria.length || !options.length || aw <= 0 || ah <= 0) return
 
-  // Increase minimum row height when any cell has subtext so it can be shown
   const hasAnySubtext = options.some(o => (o.ratings || []).some(r => r.note && r.note.trim()))
-  const headerH   = 0.44
-  const minRowH   = hasAnySubtext ? 0.72 : 0.50
-  const rowH      = r2(Math.max(minRowH, (ah - headerH) / Math.max(options.length, 1)))
-  const labelW    = r2(Math.min(Math.max(1.9, aw * 0.24), 2.7))
-  const colW      = r2(Math.max(0.80, (aw - labelW) / Math.max(criteria.length, 1)))
+  const headerH = 0.44
+  const minRowH = hasAnySubtext ? 0.72 : 0.52
+  const rowH    = r2(Math.max(minRowH, (ah - headerH) / Math.max(options.length, 1)))
+
+  // (e) First column wider — 28% of width, capped at 3.0"
+  const labelW = r2(Math.min(Math.max(1.9, aw * 0.28), 3.0))
+  const colW   = r2(Math.max(0.80, (aw - labelW) / Math.max(criteria.length, 1)))
 
   // ── Brand-sourced tokens ───────────────────────────────────────────────────
-  const titleFont        = cs.label_font_family || bt.title_font_family || 'Arial'
-  const bodyFont         = cs.body_font_family  || bt.body_font_family  || 'Arial'
-  const bodyTextColor    = bt.body_color || '#111111'
-  const captionColor     = bt.caption_color || bodyTextColor
-  const shellFill        = cs.container_fill_color   || '#FFFFFF'
-  const shellBorder      = cs.container_border_color || '#D7DEE8'
-  const shellBorderW     = cs.container_border_width   != null ? cs.container_border_width   : 0.6
-  const shellCornerR     = cs.container_corner_radius  != null ? cs.container_corner_radius  : 8
-  const gridColor        = cs.grid_color || shellBorder
-  const recommendedFill  = cs.recommended_fill_color || '#EEF4E2'
-  const recommendedTextColor = bt.primary_color || bodyTextColor
+  const titleFont     = cs.label_font_family || bt.title_font_family || 'Arial'
+  const bodyFont      = cs.body_font_family  || bt.body_font_family  || 'Arial'
+  const bodyTextColor = bt.body_color || '#111111'
+  const captionColor  = bt.caption_color || bodyTextColor
+  const shellFill     = cs.container_fill_color   || '#FFFFFF'
+  const shellBorder   = cs.container_border_color || '#D7DEE8'
+  const shellBorderW  = cs.container_border_width != null ? cs.container_border_width : 0.6
+  // (a) Corner radius hard-capped at 2 — minimal, table-like
+  const shellCornerR  = Math.min(cs.container_corner_radius != null ? cs.container_corner_radius : 2, 2)
+  const gridColor     = cs.grid_color || shellBorder
+
+  // (c) Recommended fill: light tint of brand primary, not hardcoded green
+  const primaryHex = String(bt.primary_color || '#0078AE')
+  const _tint = (hex, f) => {
+    try {
+      const h = hex.replace('#','')
+      const rv = parseInt(h.slice(0,2),16), gv = parseInt(h.slice(2,4),16), bv = parseInt(h.slice(4,6),16)
+      return '#' + [rv,gv,bv].map(c => Math.round(c+(255-c)*f).toString(16).padStart(2,'0')).join('')
+    } catch(_) { return hex }
+  }
+  const recommendedFill      = _tint(primaryHex, 0.88)
+  const recommendedTextColor = primaryHex
 
   // Tone → pill colors
   const pillStyleFor = (tonality) => {
@@ -4274,11 +4311,10 @@ function _comparisonTableToBlocks(art, content_y, blocks, bt, r2) {
     fill_color: shellFill,
     border_color: shellBorder,
     border_width: shellBorderW,
-    corner_radius: shellCornerR
+    corner_radius: shellCornerR    // (a) max 2
   })
 
   // ── Column header row ──────────────────────────────────────────────────────
-  // First column header (label column)
   blocks.push({
     block_type: 'text_box',
     x: r2(ax + 0.14), y: ay, w: r2(labelW - 0.18), h: headerH,
@@ -4307,70 +4343,86 @@ function _comparisonTableToBlocks(art, content_y, blocks, bt, r2) {
   options.forEach((option, oi) => {
     const rowY = r2(ay + headerH + oi * rowH)
 
-    // Recommended detection: prefer explicit row_tone field, fall back to name match
     const isRecommended = option?.row_tone === 'recommended'
       || (recommendedNameFallback && String(option?.name || '').trim().toLowerCase() === recommendedNameFallback)
+    const hasBadge = isRecommended && !!option?.badge_text
 
     if (isRecommended) {
       blocks.push({
         block_type: 'rect',
         x: ax, y: rowY, w: aw, h: rowH,
-        fill_color: recommendedFill,
+        fill_color: recommendedFill,   // (c) brand tint
         border_color: null, border_width: 0, corner_radius: 0
       })
     }
 
-    // Option name label — left column, vertically centred
-    blocks.push({
-      block_type: 'text_box',
-      x: r2(ax + 0.14), y: rowY, w: r2(labelW - 0.24), h: rowH,
-      text: String(option?.name || ''),
-      font_family: titleFont, font_size: cs.label_font_size || 11, bold: true,
-      color: isRecommended ? recommendedTextColor : bodyTextColor,
-      align: 'left', valign: 'middle', wrap: false
-    })
-
-    // "Recommended" badge — sits on its own line below the option name
-    if (isRecommended && option?.badge_text) {
+    // (b) Option name + badge: split the label cell vertically when badge present
+    //     Name → upper 52 %, bottom-aligned; Badge → lower band, solid brand fill
+    if (hasBadge) {
+      const nameSectH  = r2(rowH * 0.52)
       const badgeLabel = String(option.badge_text)
-      const badgeW = r2(Math.min(labelW - 0.28, Math.max(0.72, badgeLabel.length * 0.072 + 0.22)))
+      const badgeH     = 0.20
+      const badgeW     = r2(Math.min(labelW - 0.28, Math.max(0.70, badgeLabel.length * 0.070 + 0.20)))
+      const badgeY     = r2(rowY + rowH * 0.58)
+      blocks.push({
+        block_type: 'text_box',
+        x: r2(ax + 0.14), y: rowY, w: r2(labelW - 0.24), h: nameSectH,
+        text: String(option?.name || ''),
+        font_family: titleFont, font_size: cs.label_font_size || 11, bold: true,
+        color: recommendedTextColor,
+        align: 'left', valign: 'bottom', wrap: false
+      })
+      // Badge: solid brand primary background, white text — high contrast
       blocks.push({
         block_type: 'rect',
-        x: r2(ax + 0.14), y: r2(rowY + rowH / 2 + 0.04), w: badgeW, h: 0.20,
-        fill_color: recommendedFill,
-        border_color: shellBorder,
-        border_width: 0.6,
-        corner_radius: 10
+        x: r2(ax + 0.14), y: badgeY, w: badgeW, h: badgeH,
+        fill_color: primaryHex,
+        border_color: null, border_width: 0, corner_radius: 10
       })
       blocks.push({
         block_type: 'text_box',
-        x: r2(ax + 0.14), y: r2(rowY + rowH / 2 + 0.04), w: badgeW, h: 0.20,
+        x: r2(ax + 0.14), y: badgeY, w: badgeW, h: badgeH,
         text: badgeLabel,
         font_family: bodyFont, font_size: 7.5, bold: true,
-        color: recommendedTextColor, align: 'center', valign: 'middle', wrap: false
+        color: '#FFFFFF', align: 'center', valign: 'middle', wrap: false
+      })
+    } else {
+      // No badge — name centred in full row height
+      blocks.push({
+        block_type: 'text_box',
+        x: r2(ax + 0.14), y: rowY, w: r2(labelW - 0.24), h: rowH,
+        text: String(option?.name || ''),
+        font_family: titleFont, font_size: cs.label_font_size || 11, bold: true,
+        color: isRecommended ? recommendedTextColor : bodyTextColor,
+        align: 'left', valign: 'middle', wrap: false
       })
     }
 
-    // ── Criterion cells ────────────────────────────────────────────────────
+    // (d) Row-level subtext flag — ALL cells in this row share the same vertical split
+    //     so every pill lands at exactly the same Y coordinate
+    const rowHasSubtext = (option?.ratings || []).some(r => r.note && r.note.trim())
+    const valueSectH    = rowHasSubtext ? r2(rowH * 0.56) : rowH
+    const noteSectH     = r2(rowH - valueSectH - 0.04)
+    const noteSectY     = r2(rowY + valueSectH + 0.02)
+    const valueCenterY  = r2(rowY + valueSectH / 2)
+
+    // (f) Subtext font: proportional to available height, capped at 8pt min 6pt
+    const subtextFontSize = Math.min(8, Math.max(6, Math.floor(noteSectH * 62)))
+
+    // ── Criterion cells ──────────────────────────────────────────────────────
     criteria.forEach((criterion, ci) => {
-      const ratingObj = (option?.ratings || []).find(r => String(r?.criterion || '') === String(criterion))
+      const ratingObj    = (option?.ratings || []).find(r => String(r?.criterion || '') === String(criterion))
         || (option?.ratings || [])[ci] || {}
       const displayValue = String(ratingObj?.display_value || '')
+      const iconType     = String(ratingObj?.icon_type || '').trim()
       const noteText     = String(ratingObj?.note || '').trim()
       const tonality     = String(ratingObj?.tonality || '').toLowerCase()
       const colX         = r2(ax + labelW + ci * colW)
       const textPad      = 0.07
       const pillStyle    = pillStyleFor(tonality)
 
-      // Vertical layout: if subtext exists split the row into value (upper) + note (lower)
-      const hasNote     = !!noteText
-      const valueSectH  = hasNote ? r2(rowH * 0.56) : rowH
-      const noteSectY   = r2(rowY + valueSectH + 0.02)
-      const noteSectH   = r2(rowH - valueSectH - 0.04)
-      const valueCenterY = r2(rowY + valueSectH / 2)
-
-      if (pillStyle && displayValue) {
-        // Colored pill — fixed height, no wrap, centred in value section
+      if (pillStyle && displayValue && !iconType) {
+        // (d) Pill Y derived from shared valueCenterY — consistent across all cells in the row
         const pillH = 0.26
         const pillW = r2(Math.min(colW - 2 * textPad, Math.max(0.44, displayValue.length * 0.075 + 0.22)))
         const pillX = r2(colX + (colW - pillW) / 2)
@@ -4390,7 +4442,6 @@ function _comparisonTableToBlocks(art, content_y, blocks, bt, r2) {
           color: pillStyle.color, align: 'center', valign: 'middle'
         })
       } else if (displayValue) {
-        // Plain text value (no tonality fill)
         const textColor = isRecommended ? recommendedTextColor : bodyTextColor
         blocks.push({
           block_type: 'text_box',
@@ -4400,30 +4451,27 @@ function _comparisonTableToBlocks(art, content_y, blocks, bt, r2) {
           bold: false, wrap: false,
           color: textColor, align: 'center', valign: 'middle'
         })
-      } else if (tonality) {
-        // No value — emit an icon badge (check / cross / partial) derived from tone
-        const iconName  = tonality === 'positive' ? 'check' : tonality === 'negative' ? 'cross' : 'partial'
+      } else if (iconType || (!displayValue && tonality)) {
+        const iconName  = iconType || (tonality === 'positive' ? 'check' : tonality === 'negative' ? 'cross' : 'partial')
         const badgeSize = r2(Math.min(0.25, rowH * 0.40))
         const badgeCx   = r2(colX + colW / 2)
-        const badgeCy   = r2(rowY + valueSectH / 2)
         blocks.push({
           block_type: 'icon_badge',
           icon: iconName,
-          x: r2(badgeCx - badgeSize / 2),
-          y: r2(badgeCy - badgeSize / 2),
+          x: r2(badgeCx - badgeSize / 2), y: r2(valueCenterY - badgeSize / 2),
           w: badgeSize, h: badgeSize,
-          fill_color:  pillStyle ? pillStyle.fill  : (cs.neutral_fill_color || '#F4F5F7'),
-          icon_color:  pillStyle ? pillStyle.color : bodyTextColor
+          fill_color: pillStyle ? pillStyle.fill  : (cs.neutral_fill_color || '#F4F5F7'),
+          icon_color: pillStyle ? pillStyle.color : bodyTextColor
         })
       }
 
-      // Subtext line — muted caption below the value pill
-      if (hasNote) {
+      // (f) Subtext — only for cells that have it; font sized to available space
+      if (rowHasSubtext && noteText) {
         blocks.push({
           block_type: 'text_box',
           x: r2(colX + textPad), y: noteSectY, w: r2(colW - 2 * textPad), h: noteSectH,
           text: noteText,
-          font_family: bodyFont, font_size: r2((cs.body_font_size || 9) * 0.82),
+          font_family: bodyFont, font_size: subtextFontSize,
           bold: false, wrap: true,
           color: captionColor, align: 'center', valign: 'top'
         })

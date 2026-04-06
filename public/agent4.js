@@ -1327,21 +1327,31 @@ comparison_table:
         "is_recommended": true,
         "badge": "Recommended",
         "cells": [
-          { "value": "string — option name", "subtext": null, "tone": "label" },
-          { "value": "string — metric or verdict", "subtext": "string — ≤6-word annotation, or null", "tone": "positive" }
+          { "value": "string — option name", "icon_type": null, "subtext": null, "tone": "label" },
+          { "value": "8.1%", "icon_type": null, "subtext": "3× lower than COD", "tone": "positive" },
+          { "value": null, "icon_type": "check", "subtext": "Best in class", "tone": "positive" }
         ]
       }
     ]
   }
-  comparison_table usage:
-  - columns[] is a flat array of strings. First entry is the option-label column header.
-  - rows[] each represent one option. cells[] are positionally matched to columns[] by index.
-  - cells[0] always has tone:"label" — this is the row's option name, not a criterion rating.
-  - is_recommended: true visually distinguishes the preferred row with a highlight fill.
-  - badge: short pill text on the recommended row (e.g. "Recommended"). null on other rows.
-  - tone on data cells: "positive" = green, "negative" = red, "neutral" = grey.
-  - subtext: optional short supporting annotation rendered below the value (≤6 words). null if not needed.
-  - value: the primary display text for the cell (metric, percentage, currency, or short verdict).
+  comparison_table cell rules — each data cell (cells[1..n]) has EITHER value OR icon_type, never both:
+  - value:     the metric/percentage/currency text → rendered as a colored pill (e.g. "8.1%", "₹2,547")
+               set to null when the cell conveys a verdict rather than a measurement
+  - icon_type: named vector icon → rendered as an icon inside a colored circle
+               set to null when the cell shows a metric value
+               valid values: check | cross | partial | arrow_up | arrow_down | arrow_right |
+                             star | warning | diamond | chevron
+  - tone:      drives ALL coloring — agent 5 applies brand colors automatically
+               "positive" = green  (use when the option wins on this criterion)
+               "negative" = red    (use when the option loses on this criterion)
+               "neutral"  = grey   (use for factual / neither-better context)
+               "label"    = cells[0] only (the option name column)
+  - subtext:   optional ≤6-word annotation below the value or icon. null if not needed.
+
+  When to use value vs icon_type:
+  - Measurable metric (%, ₹, count, ratio) → use value, set icon_type: null
+  - Verdict with no specific metric (good/bad/partial) → use icon_type, set value: null
+  - Never put text like "Yes" / "No" / "✓" in value — use icon_type: "check" / "cross" instead
   NEVER use plain table for option-vs-criteria data.
 
 initiative_map:
@@ -3524,9 +3534,10 @@ function pruneAgent4SlideForOutput(slide) {
             is_recommended: !!r?.is_recommended,
             badge: r?.badge || undefined,
             cells: (Array.isArray(r?.cells) ? r.cells : []).map(cell => ({
-              value:   cell?.value   != null ? String(cell.value)   : '',
-              subtext: cell?.subtext != null ? String(cell.subtext) : undefined,
-              tone:    cell?.tone    || 'neutral'
+              value:     cell?.value     != null ? String(cell.value)     : undefined,
+              icon_type: cell?.icon_type != null ? String(cell.icon_type) : undefined,
+              subtext:   cell?.subtext   != null ? String(cell.subtext)   : undefined,
+              tone:      cell?.tone      || 'neutral'
             }))
           })),
           ...coverage

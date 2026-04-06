@@ -3386,20 +3386,85 @@ def render_block_line(slide, block, bt):
         pass
 
 
-def render_block_icon_badge(slide, block):
-    """Render a toned circle with a vector icon using PowerPoint preset shapes.
-    icon: 'check'  → checkMark preset shape (PowerPoint built-in vector)
-    icon: 'cross'  → two diagonal connector lines forming an X
-    icon: 'partial'→ thin horizontal rect as a minus sign
-    """
+# ── Icon name → OOXML preset geometry map ────────────────────────────────────
+# These are all native PowerPoint vector shapes (no external assets needed).
+# Agent 5 emits icon_badge blocks with an `icon` string; this table resolves it.
+# To add a new icon: add the name here and map it to an OOXML prst string,
+# or to None (meaning it is rendered by custom geometry in render_block_icon_badge).
+ICON_PRESET_MAP = {
+    # ── Verdict / status ───────────────────────────────────────────────────────
+    'check':           'checkMark',       # ✓  comparison_table positive verdict
+    'cross':           None,              # ✗  two diagonal lines (no OOXML preset)
+    'partial':         None,              # –  thin rect (no OOXML preset)
+    # ── Directional ───────────────────────────────────────────────────────────
+    'arrow_right':     'rightArrow',
+    'arrow_left':      'leftArrow',
+    'arrow_up':        'upArrow',
+    'arrow_down':      'downArrow',
+    'arrow_up_right':  'upRightArrow',
+    'chevron_right':   'rightArrowCallout',
+    'chevron':         'chevron',
+    # ── Priority / emphasis ────────────────────────────────────────────────────
+    'star':            'star5',
+    'star4':           'star4',
+    'star6':           'star6',
+    'ribbon':          'ribbon',
+    'badge':           'flowChartPredefinedProcess',
+    # ── Warning / risk ────────────────────────────────────────────────────────
+    'warning':         'flowChartDecision',
+    'diamond':         'diamond',
+    'shield':          'actionButtonBlankPrev',   # closest available
+    # ── Shapes used as icons ──────────────────────────────────────────────────
+    'circle':          'ellipse',
+    'square':          'rect',
+    'pentagon':        'pentagon',
+    'hexagon':         'hexagon',
+    'cloud':           'cloud',
+    'heart':           'heart',
+    'lightning':       'lightningBolt',
+    'moon':            'moon',
+    'sun':             'sun',
+    'smiley':          'smileyFace',
+}
+
+
+def _apply_preset_geometry(shape, prst):
+    """Replace a shape's preset geometry with the given OOXML prst name."""
     from pptx.oxml.ns import qn
+    try:
+        prstGeom = shape._element.find('.//' + qn('a:prstGeom'))
+        if prstGeom is not None:
+            prstGeom.set('prst', prst)
+            avLst = prstGeom.find(qn('a:avLst'))
+            if avLst is not None:
+                prstGeom.remove(avLst)
+        return True
+    except Exception:
+        return False
+
+
+def render_block_icon_badge(slide, block):
+    """Render a filled circle background with a named vector icon inside.
+
+    block fields:
+      icon       — icon name from ICON_PRESET_MAP (e.g. 'check', 'arrow_right')
+      fill_color — background circle fill hex
+      icon_color — icon shape fill / line color hex
+      x, y, w, h — position and size in inches (square; w == h)
+
+    Rendering strategy per icon name:
+      • Name in ICON_PRESET_MAP with a prst value → OOXML preset geometry shape
+      • 'cross'   → two diagonal MSO_CONNECTOR.STRAIGHT lines
+      • 'partial' → thin horizontal filled rectangle
+      • Unknown   → falls back to 'check' (checkMark preset)
+    """
     from pptx.enum.shapes import MSO_CONNECTOR
     x      = float(block.get('x', 0))
     y      = float(block.get('y', 0))
     size   = float(block.get('w', 0.22))
     fill   = block.get('fill_color') or '#E4F2DE'
     icolor = block.get('icon_color') or '#386B2A'
-    icon   = str(block.get('icon', 'check')).lower()
+    icon   = str(block.get('icon', 'check')).lower().replace('-', '_').replace(' ', '_')
 
     # ── Outer circle (background) ─────────────────────────────────────────────
     circle = slide.shapes.add_shape(9, inches(x), inches(y), inches(size), inches(size))
@@ -3412,24 +3477,11 @@ def render_block_icon_badge(slide, block):
     ix    = x + pad
     iy    = y + pad
 
-    if icon == 'check':
-        # PowerPoint's built-in checkMark preset geometry — clean vector shape
-        try:
-            shape = slide.shapes.add_shape(1, inches(ix), inches(iy), inches(isize), inches(isize))
-            prstGeom = shape._element.find('.//' + qn('a:prstGeom'))
-            if prstGeom is not None:
-                prstGeom.set('prst', 'checkMark')
-                avLst = prstGeom.find(qn('a:avLst'))
-                if avLst is not None:
-                    prstGeom.remove(avLst)
-            shape.fill.solid()
-            shape.fill.fore_color.rgb = hex_to_rgb(icolor)
-            shape.line.fill.background()
-        except Exception:
-            pass
+    # ── Resolve icon → rendering path ─────────────────────────────────────────
+    prst = ICON_PRESET_MAP.get(icon, 'checkMark')   # unknown → fallback to check
 
-    elif icon == 'cross':
-        # Two diagonal connectors forming an X
+    if icon == 'cross':
+        # Two diagonal connectors forming an X (no OOXML preset exists)
         lw_pt = max(1.0, round(isize * 20, 1))
         try:
             for (x1, y1, x2, y2) in [
@@ -3454,6 +3506,17 @@ def render_block_icon_badge(slide, block):
             rect.fill.solid()
             rect.fill.fore_color.rgb = hex_to_rgb(icolor)
             rect.line.fill.background()
+        except Exception:
+            pass
+
+    else:
+        # OOXML preset geometry — covers check, all arrows, stars, warning, etc.
+        try:
+            shape = slide.shapes.add_shape(1, inches(ix), inches(iy), inches(isize), inches(isize))
+            _apply_preset_geometry(shape, prst)
+            shape.fill.solid()
+            shape.fill.fore_color.rgb = hex_to_rgb(icolor)
+            shape.line.fill.background()
         except Exception:
             pass
 
