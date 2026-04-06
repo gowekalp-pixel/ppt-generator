@@ -654,16 +654,16 @@ Count content items from the Phase 3 artifact object. Assign density_tier: compa
     dense     >5 cols OR >6 rows
 
   FAMILY 5B — STRUCTURED DISPLAY
-    stat_bar:          compact ≤3 rows;   standard 4–5 rows;   dense 6–8 rows
-    comparison_table:  compact ≤3 opt × ≤3 crit;  standard ≤4 opt × ≤4 crit;  dense larger
-    initiative_map:    compact ≤3 rows × ≤3 dims;  standard ≤5 rows × ≤4 dims;  dense larger
-    profile_card_set:  compact 2–3;  standard 4–5;  dense 6+
-    risk_register:     compact ≤4 risks;  standard 5–6;  dense 7–8
+    stat_bar:          No compact; standard 4–5 rows;   dense 6–8 rows
+    comparison_table:  No compact; standard ≤4 opt × ≤4 crit;  dense larger
+    initiative_map:    No compact; standard ≤5 rows × ≤4 dims;  dense larger
+    profile_card_set:  compact 2;  standard 3–5;  dense 6+
+    risk_register:     No compact; standard <6 risks;  dense >=6
 
   FAMILY 6 — REASONING ARTIFACTS
     matrix:          No compact;  standard <4-8>;  dense >8
     driver_tree:     compact ≤2 levels;  standard 3 levels ≤6 branches;  dense 4+ levels OR 7+ branches
-    prioritization:  compact ≤4 items;  standard 5–7;  dense 8+
+    prioritization:  No compact;  standard <=4>;  dense 8+
 
 
 TABLE C — DENSITY-CAPACITY COMPATIBILITY MATRIX
