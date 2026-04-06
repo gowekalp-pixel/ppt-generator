@@ -434,7 +434,7 @@ OPTIONAL zones:
   (use matrix instead).
  
   
-  stat_bar        
+  stat_bar
   A horizontal bar chart where each bar is accompanied by an inline qualitative
   annotation (label or descriptor) placed to the right of or alongside the bar.
   Use when: ranking is the primary message AND each entity needs a one-phrase
@@ -442,6 +442,11 @@ OPTIONAL zones:
   Examples: courier partners ranked by cost with "use case" label; SKUs ranked
   by revenue with "growth trajectory" label; cities ranked by orders with
   "priority tier" label.
+  HARD SIZE RULES:
+  - Width (based on number of "bar" columns): 1 bar → ≥50% slide width; 2 bars → ≥75%; 3 bars → 100% (full width). Maximum 3 bar columns.
+  - Height: ≥ 30% of slide height for 2 rows. Each additional row adds ~11% (4 rows ≈ 53%, 6 rows ≈ 77%, 8 rows = 100%). Maximum 8 rows.
+  - Every "bar" column is ALWAYS immediately followed by a "normal" column (no header, "value": "") that displays that bar's numeric value as text.
+  Never compress stat_bar below these minimums — trim rows or reduce bar columns instead.
 
 
   comparison_table
@@ -658,7 +663,7 @@ Count content items from the Phase 3 artifact object. Assign density_tier: compa
     dense     >5 cols OR >6 rows
 
   FAMILY 5B — STRUCTURED DISPLAY
-    stat_bar:          No compact; standard 4–5 rows;   dense 6–8 rows
+    stat_bar:          minimum 2 rows; standard 3–5 rows; dense 6–8 rows (hard max 8)
     comparison_table:  No compact; standard ≤4 opt × ≤4 crit;  dense larger
     initiative_map:    No compact; standard ≤5 rows × ≤4 dims;  dense larger
     profile_card_set:  compact 2;  standard 3–5;  dense 6+
@@ -1312,30 +1317,36 @@ stat_bar:
     "type": "stat_bar",
     "artifact_header": "string — the one-line insight the ranking proves",
     "annotation_style": "inline" | "trailing",
-    "column_headers": {
-      "label": "string",
-      "metric": "string",
-      "value": "string",
-      "annotation": "string"
-    },
+    "scale_UL": number — upper limit of bar scale (e.g. 100 for percentages); omit to auto-scale to max row value,
+    "column_headers": [
+      {"id": "col1", "value": "string — column header label", "display_type": "text" | "bar" | "normal"}
+    ],
     "rows": [
       {
-        "id": "string — optional stable key",
-        "label": "string — left-side row label",
-        "value": number,
-        "unit": "string — unit suffix for the displayed value",
-        "display_value": "string — optional preformatted value label",
-        "annotation": "string — right-side qualifier text",
-        "annotation_representation": "text" | "pill",
-        "bar_color": "string — optional override",
-        "highlight": true | false
+        "row_id": number — 1-based row index,
+        "row_focus": "Y" | "N" — "Y" visually highlights this row; use sparingly (1–2 rows max),
+        "cells": [
+          {"col_id": "col1", "value": "string — cell value (numeric string for bar columns)"}
+        ]
       }
     ]
   }
-  annotation_style default: "trailing". Do NOT encode as raw table rows — emit semantic row
-  objects a renderer can map to label / bar / value / annotation regions.
-  highlight: set explicitly — never infer from rank.
-  column_headers: optional; include only when column labels differ from defaults.
+  column_headers rules:
+    "text"   — plain text column (entity name or annotation). First text col = left label; others = trailing text.
+    "bar"    — renders as a proportional horizontal bar. 1–3 bar columns allowed. Each cell value must be a numeric string.
+              Optional: add "scale_UL": number on the column header to fix that column's bar scale (e.g. 100 for a percentage bar).
+    "normal" — secondary display value, right-aligned (e.g. a formatted metric like "₹8.2" or "16.5 Days").
+  COLUMN PAIRING RULE: Every "bar" column MUST be immediately followed in column_headers by a "normal" column with an empty header ("value": "") — that normal column holds the bar's numeric value as readable text. Never place a "bar" column as the last column or adjacent to another "bar" column.
+  scale_UL: if provided, bars are scaled 0→scale_UL. If omitted, bars scale relative to the max bar-column value.
+  row_focus "Y": highlighted row — never infer from rank, set explicitly. Do NOT mark all rows "Y".
+  annotation_style default: "trailing".
+  SIZE RULES (match zone allocation to these):
+    Columns → minimum zone width: 
+    1 column with "bar" representation → minimum 50% width;
+    2 columns with "bar" representation → minimum 75% width;
+    3 columns with "bar" representation → 100% width (full width);
+    Rows → minimum zone height: 2 rows → ≥30% slide height; each extra row adds ~11% (8 rows = 100%).
+    Minimum 2 rows, maximum 8 rows.
 
 comparison_table:
   IMPORTANT: Use ONLY the flat schema below. Do NOT use column_headers[], criteria[], options[], or any other old field names — they are deprecated and will cause validation failure.
@@ -1527,6 +1538,10 @@ GATE 3 — ARTIFACT HARD CONSTRAINTS
   [ ] matrix / driver_tree / prioritization appear only in PRIMARY zones
   [ ] matrix / driver_tree / prioritization accompanied only by insight_text
   [ ] matrix occupies ≥ 70% of slide width AND ≥ 50% of slide height (hard minimum)
+  [ ] stat_bar zone width: 1 bar col → ≥50%, 2 bar cols → ≥75%, 3 bar cols → 100% of slide width
+  [ ] stat_bar zone height ≥ 30% slide height for 2 rows; each additional row adds ~11% (8 rows = 100%)
+  [ ] Every stat_bar "bar" column is immediately followed by a "normal" column with empty header
+  [ ] stat_bar has 2–8 rows and 1–3 "bar" columns (no two "bar" columns adjacent)
   [ ] Every left_to_right / timeline workflow spans FULL HORIZONTAL WIDTH
   [ ] No zone placed beside (left/right of) a left_to_right workflow
   [ ] Every top_to_bottom / top_down_branching workflow spans FULL VERTICAL HEIGHT
@@ -1798,13 +1813,45 @@ function validateArtifact(artifact) {
   if (t === 'stat_bar') {
     const rows = artifact.rows || []
     if (rows.length < 2) return { valid: false, reason: 'stat_bar needs 2+ rows' }
-    if (!artifact.stat_header || String(artifact.stat_header).trim().length < 3) return { valid: false, reason: 'stat_bar missing stat_header' }
+    const header = artifact.artifact_header || artifact.stat_header || artifact.chart_header || ''
+    if (String(header).trim().length < 3) return { valid: false, reason: 'stat_bar missing artifact_header' }
     if (!artifact.annotation_style) return { valid: false, reason: 'stat_bar missing annotation_style' }
-    for (const row of rows) {
-      if (!String(row?.label || '').trim()) return { valid: false, reason: 'stat_bar row missing label' }
-      if (!Number.isFinite(+row?.value)) return { valid: false, reason: 'stat_bar row missing numeric value' }
+    const colHeaders = artifact.column_headers
+    if (Array.isArray(colHeaders)) {
+      // New flexible schema: rows have cells arrays
+      const barCols = colHeaders.filter(c => c?.display_type === 'bar')
+      if (barCols.length < 1) return { valid: false, reason: 'stat_bar must have at least one column with display_type "bar"' }
+      if (barCols.length > 3) return { valid: false, reason: 'stat_bar supports at most 3 bar columns' }
+      // Enforce: every "bar" column must be immediately followed by a "normal" column
+      for (let bi = 0; bi < colHeaders.length; bi++) {
+        if (colHeaders[bi]?.display_type === 'bar') {
+          if (bi === colHeaders.length - 1 || colHeaders[bi + 1]?.display_type !== 'normal') {
+            return { valid: false, reason: `stat_bar bar column "${colHeaders[bi].id}" must be immediately followed by a "normal" column` }
+          }
+        }
+      }
+      // Validate bar column cell values in each row
+      for (const barCol of barCols) {
+        const barColId = String(barCol.id)
+        for (const row of rows) {
+          if (!Array.isArray(row?.cells) || row.cells.length === 0) return { valid: false, reason: 'stat_bar row missing cells array' }
+          const barCell = row.cells.find(c => String(c?.col_id) === barColId)
+          if (!barCell) return { valid: false, reason: `stat_bar row missing cell for bar column "${barColId}"` }
+          if (!Number.isFinite(+barCell.value)) return { valid: false, reason: `stat_bar bar column "${barColId}" cell value must be numeric` }
+        }
+        if (rows.every(r => {
+          const barCell = (r?.cells || []).find(c => String(c?.col_id) === barColId)
+          return (+barCell?.value || 0) === 0
+        })) return { valid: false, reason: `stat_bar bar column "${barColId}" has all-zero values` }
+      }
+    } else {
+      // Old schema (backward compat): rows have label/value fields
+      for (const row of rows) {
+        if (!String(row?.label || '').trim()) return { valid: false, reason: 'stat_bar row missing label' }
+        if (!Number.isFinite(+row?.value)) return { valid: false, reason: 'stat_bar row missing numeric value' }
+      }
+      if (rows.every(r => (+r.value || 0) === 0)) return { valid: false, reason: 'stat_bar has all-zero row values' }
     }
-    if (rows.every(r => (+r.value || 0) === 0)) return { valid: false, reason: 'stat_bar has all-zero row values' }
     return { valid: true }
   }
 
@@ -2507,21 +2554,68 @@ function normaliseArtifact(a) {
 
   if (t === 'stat_bar') {
     if (!a.stat_header) a.stat_header = a.artifact_header || a.chart_header || ''
+    if (!a.artifact_header) a.artifact_header = a.stat_header || ''
     if (!a.stat_decision) a.stat_decision = a.chart_decision || ''
     if (!a.rows) a.rows = []
-    if (!a.column_headers) a.column_headers = {}
     if (!a.annotation_style) a.annotation_style = 'trailing'
-    a.rows = a.rows.map((row, idx) => ({
-      id:                      row?.id || `row_${idx + 1}`,
-      label:                   row?.label || '',
-      value:                   typeof row?.value === 'number' ? row.value : (parseFloat(String(row?.value || '').replace(/[^0-9.-]/g, '')) || 0),
-      unit:                    row?.unit || '',
-      display_value:           row?.display_value || '',
-      annotation:              row?.annotation || '',
-      annotation_representation: row?.annotation_representation || 'text',
-      bar_color:               row?.bar_color || '',
-      highlight:               row?.highlight === true
-    }))
+    if (Array.isArray(a.column_headers)) {
+      // New flexible schema: normalise cells
+      if (a.scale_UL != null) a.scale_UL = +a.scale_UL || null
+      // Auto-fix: ensure every "bar" column is immediately followed by a "normal" column
+      const fixedCols = []
+      for (let i = 0; i < a.column_headers.length; i++) {
+        const col = a.column_headers[i]
+        fixedCols.push(col)
+        if (col?.display_type === 'bar') {
+          const next = a.column_headers[i + 1]
+          if (!next || next.display_type !== 'normal') {
+            // Inject a companion normal column for the bar value
+            fixedCols.push({ id: String(col.id) + '_val', value: '', display_type: 'normal' })
+          }
+        }
+      }
+      a.column_headers = fixedCols
+      // Collect injected companion col ids (bar_id → companion_id)
+      const injectedCompanions = {}
+      for (let i = 0; i < fixedCols.length - 1; i++) {
+        if (fixedCols[i].display_type === 'bar' && fixedCols[i + 1].id === String(fixedCols[i].id) + '_val') {
+          injectedCompanions[String(fixedCols[i].id)] = fixedCols[i + 1].id
+        }
+      }
+      a.rows = a.rows.map((row, idx) => {
+        const normCells = Array.isArray(row?.cells) ? row.cells.map(cell => ({
+          col_id: String(cell?.col_id ?? ''),
+          value:  String(cell?.value ?? '')
+        })) : []
+        // For any auto-injected companion, copy bar value if companion cell is absent
+        for (const [barId, companionId] of Object.entries(injectedCompanions)) {
+          const hasCompanion = normCells.some(c => c.col_id === companionId)
+          if (!hasCompanion) {
+            const barCell = normCells.find(c => c.col_id === barId)
+            normCells.push({ col_id: companionId, value: barCell ? barCell.value : '' })
+          }
+        }
+        return {
+          row_id:    row?.row_id ?? (idx + 1),
+          row_focus: row?.row_focus === 'Y' ? 'Y' : 'N',
+          cells:     normCells
+        }
+      })
+    } else {
+      // Old schema (backward compat)
+      if (!a.column_headers) a.column_headers = {}
+      a.rows = a.rows.map((row, idx) => ({
+        id:                        row?.id || `row_${idx + 1}`,
+        label:                     row?.label || '',
+        value:                     typeof row?.value === 'number' ? row.value : (parseFloat(String(row?.value || '').replace(/[^0-9.-]/g, '')) || 0),
+        unit:                      row?.unit || '',
+        display_value:             row?.display_value || '',
+        annotation:                row?.annotation || '',
+        annotation_representation: row?.annotation_representation || 'text',
+        bar_color:                 row?.bar_color || '',
+        highlight:                 row?.highlight === true
+      }))
+    }
   }
 
   if (t === 'chart') {
@@ -3439,11 +3533,37 @@ function pruneAgent4SlideForOutput(slide) {
       }
     }
     if (type === 'stat_bar') {
+      const colHeaders = artifact.column_headers
+      if (Array.isArray(colHeaders)) {
+        // New flexible schema
+        return {
+          type: 'stat_bar',
+          artifact_header: artifact.artifact_header || artifact.stat_header || artifact.chart_header || '',
+          stat_decision: artifact.stat_decision || artifact.chart_insight || '',
+          annotation_style: artifact.annotation_style || 'trailing',
+          ...(artifact.scale_UL != null ? { scale_UL: artifact.scale_UL } : {}),
+          column_headers: colHeaders.map(c => ({
+            id: String(c?.id ?? ''),
+            value: String(c?.value ?? ''),
+            display_type: c?.display_type || 'text'
+          })),
+          rows: Array.isArray(artifact.rows) ? artifact.rows.map((row, idx) => ({
+            row_id: row?.row_id ?? (idx + 1),
+            row_focus: row?.row_focus === 'Y' ? 'Y' : 'N',
+            cells: Array.isArray(row?.cells) ? row.cells.map(cell => ({
+              col_id: String(cell?.col_id ?? ''),
+              value: String(cell?.value ?? '')
+            })) : []
+          })) : [],
+          ...coverage
+        }
+      }
+      // Old schema (backward compat)
       return {
         type: 'stat_bar',
         stat_header: artifact.stat_header || artifact.artifact_header || artifact.chart_header || '',
         stat_decision: artifact.stat_decision || artifact.chart_insight || '',
-        column_headers: artifact.column_headers || {},
+        column_headers: colHeaders || {},
         rows: Array.isArray(artifact.rows) ? artifact.rows.map((row, idx) => ({
           id: row?.id || `row_${idx + 1}`,
           label: row?.label || '',

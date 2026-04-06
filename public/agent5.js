@@ -1019,12 +1019,9 @@ Prioritization rules:
   "type": "stat_bar",
   "x": number, "y": number, "w": number, "h": number,
   "artifact_header": "string — artifact section label",
-  "column_headers": {
-    "label": "string — header for the entity/partner name column",
-    "metric": "string — header for the bar chart column",
-    "value": "string — header for the numeric value column",
-    "annotation": "string — header for the annotation/use-case column"
-  },
+  "column_headers": [
+    {"id": "col1", "value": "string — column header label", "display_type": "text" | "bar" | "normal"}
+  ],
   "annotation_style": {
     "label_font_family": "string",
     "axis_color": "hex — muted color for column header labels, dividers, and neutral bars",
@@ -1033,15 +1030,14 @@ Prioritization rules:
     "border_color": "hex — non-highlighted row border color",
     "background_color": "hex — empty bar track fill and highlighted row background tint"
   },
+  "scale_UL": number or null — upper limit for bar scale; null = auto-scale to max row value,
   "rows": [
     {
-      "label": "string — entity/partner name",
-      "value": number,
-      "display_value": "string — formatted value string (e.g. '₹8.2Cr')",
-      "unit": "string — unit suffix if no display_value",
-      "annotation": "string — short use-case or context note (max 6 words)",
-      "highlight": true | false,
-      "bar_color": "hex or null — per-row bar color override; null = auto from highlight state"
+      "row_id": number,
+      "row_focus": "Y" | "N" — "Y" = highlighted row,
+      "cells": [
+        {"col_id": "col1", "value": "string — numeric string for bar columns, display text for others"}
+      ]
     }
   ],
   "header_block": null or { "text": "string", "x": number, "y": number, "w": number, "h": number,
@@ -1051,11 +1047,12 @@ Prioritization rules:
 
 Stat_bar rules:
 - Layout (column widths, bar geometry, row heights) is computed by JS from x/y/w/h — do NOT set internal positions
+- column_headers: array of column descriptors. display_type "text" = label/annotation text; "bar" = proportional bar (1–3 allowed, each with optional "scale_UL" on the column); "normal" = secondary display value
+- COLUMN PAIRING: every "bar" column MUST be immediately followed by a "normal" column with "value": "" — that column renders the bar's numeric value as readable text. No two "bar" columns may be adjacent.
 - axis_color: use a muted caption gray (NOT a brand primary — too vibrant for column headers)
 - background_color: use a very light tint for the bar track background and highlighted row fill
 - Highlighted bar fill comes automatically from brand chart_palette[0]; do not set it in annotation_style
-- Max 10 rows; mark the most important row highlight: true (at most 1–2 highlighted rows)
-- display_value overrides value+unit in the rendered number column — always set it for formatted numbers
+- Max 8 rows; mark the most important row row_focus: "Y" (at most 1–2 highlighted rows)
 
 ═══════════════════════════
 10. COMPARISON_TABLE
@@ -1432,7 +1429,7 @@ async function designSlideBatch(batchManifest, brand, batchNum) {
     '\n- prioritization: must have priority_style plus semantic fields from Agent 4 (items[], qualifiers[])' +
     '\n- insight_text (standard mode): must have insight_mode:"standard", style, heading_style, body_style' +
     '\n- insight_text (grouped mode):  must have insight_mode:"grouped", heading_style, group_layout, group_header_style, group_bullet_box_style, bullet_style, group_gap_in, header_to_box_gap_in' +
-    '\n- charts: include final legend_position, data_label_size, category_label_rotation, and series styling; stat_bar must have rows[], column_headers{}, and annotation_style{}' +
+    '\n- charts: include final legend_position, data_label_size, category_label_rotation, and series styling; stat_bar must have rows[], column_headers[] (array with display_type per column), and annotation_style{}' +
     '\n- workflows: include final node geometry, connection paths, node_inner_padding, and external_label_gap' +
     '\n- tables: include column_widths, column_types, column_alignments, header_row_height, row_heights, and cell_padding (do NOT compute column_x_positions, row_y_positions, header_cell_frames, body_cell_frames — these are computed automatically)' +
     '\n- comparison_table / initiative_map / profile_card_set / risk_register are flattened locally into rect/text blocks, so emphasize rounded rows, semantic fills, and explicit labels rather than native table behavior' +
@@ -2517,7 +2514,8 @@ function buildSafeArtifactShell(manifestArt, bt) {
       artifact_header,
       stat_header: manifestArt?.stat_header || artifact_header || manifestArt?.chart_header || '',
       stat_decision: manifestArt?.stat_decision || manifestArt?.chart_insight || '',
-      column_headers: manifestArt?.column_headers || {},
+      column_headers: manifestArt?.column_headers ?? {},
+      scale_UL: manifestArt?.scale_UL ?? null,
       rows: Array.isArray(manifestArt?.rows) ? manifestArt.rows : [],
       annotation_style: manifestArt?.annotation_style || 'trailing',
       header_block
@@ -5375,7 +5373,176 @@ function _riskRegisterToBlocks(art, content_y, blocks, bt, r2) {
 
 function _statBarToBlocks(art, content_y, blocks, bt, r2) {
   const cs = art.annotation_style || art.chart_style || {}
-  const headers = art.column_headers || {}
+  const colHeaders = art.column_headers
+  const isNewSchema = Array.isArray(colHeaders) && colHeaders.length > 0
+
+  const ax = art.x || 0
+  const ay = content_y
+  const aw = art.w || 0
+  const ah = r2((art.y || 0) + (art.h || 0) - content_y)
+
+  // ── Shared color tokens ────────────────────────────────────────────────────
+  const bodyFont           = cs.label_font_family || bt.body_font_family || 'Arial'
+  const bodyTextColor      = bt.body_color || '#111111'
+  const captionColor       = bt.caption_color || bodyTextColor
+  const headerColor        = cs.axis_color || captionColor
+  const annotationColor    = cs.annotation_color || cs.axis_color || captionColor
+  const dividerColor       = cs.gridline_color || cs.border_color || '#CFCFCF'
+  const rowBorder          = cs.border_color || cs.gridline_color || '#E1E5EF'
+  const trackFill          = cs.background_color || '#EEF1F5'
+  const highlightBarFill   = (bt.chart_palette && bt.chart_palette[0])
+    || (bt.accent_colors && bt.accent_colors[0])
+    || bt.primary_color || '#CFE0A9'
+  const highlightFill      = cs.background_color || '#EBF4E2'
+  const neutralBarColor    = cs.axis_color || '#7B7B7B'
+  const highlightTextColor = bodyTextColor
+
+  if (isNewSchema) {
+    // ── New flexible-column schema ─────────────────────────────────────────────
+    const rows  = Array.isArray(art.rows) ? art.rows : []
+    const items = rows.slice(0, 8)
+    if (!items.length || aw <= 0 || ah <= 0) return
+
+    const headerH   = r2(Math.min(0.48, Math.max(0.30, ah * 0.11)))
+    const headerGap = r2(Math.max(0.08, Math.min(0.16, ah * 0.03)))
+    const bodyH     = Math.max(0.6, ah - headerH - headerGap)
+    const rowGap    = items.length > 1 ? r2(Math.max(0.14, Math.min(0.28, bodyH * 0.06))) : 0
+    const rowH      = r2(Math.max(0.56, (bodyH - rowGap * Math.max(0, items.length - 1)) / Math.max(items.length, 1)))
+    const rowPadX   = r2(Math.max(0.08, Math.min(0.14, aw * 0.018)))
+    const colGap    = 0.12
+    const headerFontSize     = Math.max(10, Math.min(13,   rowH * 20))
+    const labelFontSize      = Math.max(11, Math.min(15,   rowH * 21))
+    const valueFontSize      = Math.max(11, Math.min(14.5, rowH * 20))
+    const annotationFontSize = Math.max(10, Math.min(14,   rowH * 19))
+
+    // ── Column width allocation ────────────────────────────────────────────────
+    const barCols_r  = colHeaders.filter(c => c.display_type === 'bar')   // 1–3 bar columns
+    const textCols   = colHeaders.filter(c => c.display_type === 'text')
+    const normalCols = colHeaders.filter(c => c.display_type === 'normal')
+    const numBars    = barCols_r.length || 1
+    const totalGaps  = colGap * (colHeaders.length - 1)
+    const normalColW = r2(Math.min(Math.max(0.92, aw * 0.12), 1.2))
+    const totalNormalW = normalColW * normalCols.length
+    // Bar cols collectively take ~40% of zone width, split equally (shrinks per-bar as numBars grows)
+    const totalBarW  = r2(Math.max(numBars * 1.0, (aw - totalGaps - totalNormalW) * 0.40))
+    const barColW    = r2(totalBarW / numBars)
+    const totalTextW = aw - totalGaps - totalNormalW - totalBarW
+    const perTextColW = textCols.length > 0 ? r2(totalTextW / textCols.length) : 0
+
+    // Map col id → { x, w, display_type, barCompanionOf?, barScale }
+    // Per-column bar scale: column-level scale_UL → artifact-level scale_UL → auto max
+    const artScaleUL = art.scale_UL > 0 ? +art.scale_UL : null
+    const barScales  = {}
+    for (const bc of barCols_r) {
+      const colId  = String(bc.id)
+      const colUL  = bc.scale_UL > 0 ? +bc.scale_UL : null
+      const useUL  = colUL || artScaleUL
+      const maxVal = useUL || Math.max(1, ...items.map(row => {
+        const cell = (row?.cells || []).find(c => String(c.col_id) === colId)
+        return Math.abs(+cell?.value || 0)
+      }))
+      barScales[colId] = maxVal
+    }
+
+    const colLayout = {}
+    let curX = ax
+    for (let ci = 0; ci < colHeaders.length; ci++) {
+      const col   = colHeaders[ci]
+      const colId = String(col.id)
+      const w = col.display_type === 'bar' ? barColW
+              : col.display_type === 'normal' ? normalColW
+              : perTextColW
+      const prevCol = colHeaders[ci - 1]
+      const isBarCompanion = col.display_type === 'normal' && prevCol?.display_type === 'bar' && !col.value
+      colLayout[colId] = {
+        x: r2(curX), w,
+        display_type: col.display_type,
+        barCompanionOf: isBarCompanion ? String(prevCol.id) : null
+      }
+      curX += w + colGap
+    }
+
+    const bodyTop  = r2(ay + headerH + headerGap)
+
+    // ── Column header row ──────────────────────────────────────────────────────
+    for (const col of colHeaders) {
+      const colId     = String(col.id)
+      const lay       = colLayout[colId]
+      const isNormal  = col.display_type === 'normal'
+      blocks.push({
+        block_type: 'text_box',
+        x: lay.x + (isNormal ? 0 : rowPadX), y: ay,
+        w: lay.w - (isNormal ? 0 : rowPadX), h: headerH,
+        text: String(col.value || ''),
+        font_family: bodyFont, font_size: headerFontSize, bold: true,
+        color: headerColor, align: isNormal ? 'right' : 'left', valign: 'middle'
+      })
+    }
+    blocks.push({ block_type: 'rule', x: ax, y: r2(ay + headerH + 0.01), w: aw, h: 0.005, color: dividerColor, line_width: 0.6 })
+
+    // ── Data rows ──────────────────────────────────────────────────────────────
+    items.forEach((row, ri) => {
+      const y            = r2(bodyTop + ri * (rowH + rowGap))
+      const isHighlighted = row?.row_focus === 'Y'
+      const trackY       = r2(y + rowH * 0.40)
+      const trackH       = r2(Math.max(0.14, Math.min(0.20, rowH * 0.18)))
+
+      blocks.push({
+        block_type: 'rect',
+        x: ax, y: r2(y + 0.01), w: aw, h: r2(rowH - 0.02),
+        fill_color: isHighlighted ? highlightFill : '#FFFFFF',
+        border_color: isHighlighted ? null : rowBorder,
+        border_width: isHighlighted ? 0 : 0.5, corner_radius: 10
+      })
+
+      for (const col of colHeaders) {
+        const colId     = String(col.id)
+        const lay       = colLayout[colId]
+        const cell      = (row?.cells || []).find(c => String(c.col_id) === colId)
+        const cellValue = cell?.value ?? ''
+
+        if (col.display_type === 'bar') {
+          const rawVal = Math.abs(+cellValue || 0)
+          const barLen = r2(Math.max(0.06, lay.w * Math.max(0.05, Math.min(1, rawVal / (barScales[colId] || 1)))))
+          blocks.push({ block_type: 'rect', x: lay.x, y: trackY, w: lay.w, h: trackH, fill_color: trackFill, border_color: null, border_width: 0, corner_radius: 8 })
+          blocks.push({ block_type: 'rect', x: lay.x, y: trackY, w: Math.max(0.04, barLen), h: trackH, fill_color: isHighlighted ? highlightBarFill : neutralBarColor, border_color: null, border_width: 0, corner_radius: 8 })
+        } else if (col.display_type === 'normal') {
+          // If this is a bar's companion column and its cell is empty, fall back to the bar cell value
+          let displayVal = cellValue
+          if (!displayVal && lay.barCompanionOf) {
+            const barCell = (row?.cells || []).find(c => String(c.col_id) === lay.barCompanionOf)
+            displayVal = barCell?.value ?? ''
+          }
+          blocks.push({
+            block_type: 'text_box',
+            x: lay.x, y, w: lay.w, h: rowH,
+            text: _truncateText(String(displayVal), 20),
+            font_family: bodyFont, font_size: valueFontSize, bold: true,
+            color: isHighlighted ? highlightTextColor : bodyTextColor, align: 'right', valign: 'middle'
+          })
+        } else {
+          // text column — first text col is the entity label (bold), others are annotations
+          const isLabel = col === textCols[0]
+          blocks.push({
+            block_type: 'text_box',
+            x: lay.x + rowPadX, y, w: lay.w - rowPadX, h: rowH,
+            text: _truncateText(String(cellValue), isLabel ? 34 : 38),
+            font_family: bodyFont,
+            font_size: isLabel ? labelFontSize : annotationFontSize,
+            bold: isLabel,
+            color: isHighlighted
+              ? (isLabel ? highlightTextColor : highlightBarFill)
+              : (isLabel ? bodyTextColor : annotationColor),
+            align: 'left', valign: 'middle'
+          })
+        }
+      }
+    })
+    return
+  }
+
+  // ── Legacy fixed-column schema (backward compat) ───────────────────────────
+  const headers = colHeaders || {}
   const rows = Array.isArray(art.rows) && art.rows.length
     ? art.rows
     : ((art.categories || []).map((label, i) => ({
@@ -5385,161 +5552,57 @@ function _statBarToBlocks(art, content_y, blocks, bt, r2) {
         annotation: ''
       })))
   const items = rows.slice(0, 10)
-  const ax = art.x || 0
-  const ay = content_y
-  const aw = art.w || 0
-  const ah = r2((art.y || 0) + (art.h || 0) - content_y)
   if (!items.length || aw <= 0 || ah <= 0) return
 
-  const headerH = r2(Math.min(0.48, Math.max(0.30, ah * 0.11)))
+  const headerH   = r2(Math.min(0.48, Math.max(0.30, ah * 0.11)))
   const headerGap = r2(Math.max(0.08, Math.min(0.16, ah * 0.03)))
-  const bodyH = Math.max(0.6, ah - headerH - headerGap)
-  const rowGap = items.length > 1
-    ? r2(Math.max(0.14, Math.min(0.28, bodyH * 0.06)))
-    : 0
-  const rowH = r2(Math.max(0.56, (bodyH - rowGap * Math.max(0, items.length - 1)) / Math.max(items.length, 1)))
-  const labelW = r2(Math.min(Math.max(1.9, aw * 0.27), 3.2))
-  const valueW = r2(Math.min(Math.max(0.92, aw * 0.12), 1.2))
+  const bodyH     = Math.max(0.6, ah - headerH - headerGap)
+  const rowGap    = items.length > 1 ? r2(Math.max(0.14, Math.min(0.28, bodyH * 0.06))) : 0
+  const rowH      = r2(Math.max(0.56, (bodyH - rowGap * Math.max(0, items.length - 1)) / Math.max(items.length, 1)))
+  const labelW    = r2(Math.min(Math.max(1.9, aw * 0.27), 3.2))
+  const valueW    = r2(Math.min(Math.max(0.92, aw * 0.12), 1.2))
   const annotationW = r2(Math.min(Math.max(1.8, aw * 0.28), 3.25))
-  const colGap = 0.12
-  const barW = r2(Math.max(1.0, aw - labelW - valueW - annotationW - colGap * 3))
-  const values = items.map(r => Math.abs(+r?.value || 0))
-  const maxValue = Math.max(...values, 1)
-  const bodyFont         = cs.label_font_family || bt.body_font_family || 'Arial'
-  const bodyTextColor    = bt.body_color || '#111111'
-  const captionColor     = bt.caption_color || bodyTextColor
-
-  // ── All colors from brand tokens / Claude-set chart_style ─────────────────
-  // cs.* fields are populated by Claude from the brand rulebook in Agent 5's batch call
-  const headerColor     = cs.axis_color || captionColor               // muted column header labels
-  const annotationColor = cs.annotation_color || cs.axis_color || captionColor
-  const dividerColor    = cs.gridline_color || cs.border_color || '#CFCFCF'  // header divider rule
-  const rowBorder       = cs.border_color || cs.gridline_color || '#E1E5EF'  // non-highlighted row border
-  const trackFill       = cs.background_color || '#EEF1F5'            // empty bar track background
-
-  // Highlight bar: first brand chart color; falls back to first accent, then primary
-  const highlightBarFill = (bt.chart_palette && bt.chart_palette[0])
-    || (bt.accent_colors && bt.accent_colors[0])
-    || bt.primary_color || '#CFE0A9'
-
-  // Highlight row bg: lighter tint — use chart background_color if light, else surface neutral
-  // (A full tint-computation utility is not yet available; background_color is brand-sourced)
-  const highlightFill   = cs.background_color || '#EBF4E2'
-
-  // Neutral bar: use chart_style axis color (Claude sets this muted from brand);
-  // avoid bt.secondary_color — it can be a vibrant brand accent (e.g. EY yellow)
-  const neutralBarColor    = cs.axis_color || '#7B7B7B'
-  // Highlighted text: body color guarantees readability on any brand's highlight bg
-  const highlightTextColor = bodyTextColor
-  // Dynamic font sizes — multiplier calibrated so scaling is live across rowH range (0.4"–1.2")
-  const headerFontSize     = Math.max(10,   Math.min(13,   rowH * 20))
-  const labelFontSize      = Math.max(11,   Math.min(15,   rowH * 21))
-  const valueFontSize      = Math.max(11,   Math.min(14.5, rowH * 20))
-  const annotationFontSize = Math.max(10,   Math.min(14,   rowH * 19))
-  // Inner horizontal padding so label/annotation text clears the row box rounded corners
-  const rowPadX = r2(Math.max(0.08, Math.min(0.14, aw * 0.018)))
-  const labelX = ax
-  const barX = r2(labelX + labelW + colGap)
-  const valueX = r2(barX + barW + colGap)
+  const colGap    = 0.12
+  const barW      = r2(Math.max(1.0, aw - labelW - valueW - annotationW - colGap * 3))
+  const values    = items.map(r => Math.abs(+r?.value || 0))
+  const maxValue  = Math.max(...values, 1)
+  const headerFontSize     = Math.max(10, Math.min(13,   rowH * 20))
+  const labelFontSize      = Math.max(11, Math.min(15,   rowH * 21))
+  const valueFontSize      = Math.max(11, Math.min(14.5, rowH * 20))
+  const annotationFontSize = Math.max(10, Math.min(14,   rowH * 19))
+  const rowPadX   = r2(Math.max(0.08, Math.min(0.14, aw * 0.018)))
+  const labelX    = ax
+  const barX      = r2(labelX + labelW + colGap)
+  const valueX    = r2(barX + barW + colGap)
   const annotationX = r2(valueX + valueW + colGap)
-  const bodyTop = r2(ay + headerH + headerGap)
+  const bodyTop   = r2(ay + headerH + headerGap)
 
-  blocks.push({
-    block_type: 'text_box',
-    x: labelX + rowPadX, y: ay, w: labelW - rowPadX, h: headerH,
-    text: String(headers.label || 'PARTNER'),
-    font_family: bodyFont, font_size: headerFontSize, bold: true,
-    color: headerColor, align: 'left', valign: 'middle'
-  })
-  blocks.push({
-    block_type: 'text_box',
-    x: barX, y: ay, w: barW, h: headerH,
-    text: String(headers.metric || art.metric_header || 'AVG. CHARGE (₹/ORDER)'),
-    font_family: bodyFont, font_size: headerFontSize, bold: true,
-    color: headerColor, align: 'left', valign: 'middle'
-  })
-  blocks.push({
-    block_type: 'text_box',
-    x: valueX, y: ay, w: valueW, h: headerH,
-    text: String(headers.value || art.value_header || (art.y_label ? String(art.y_label).toUpperCase() : 'VALUE')),
-    font_family: bodyFont, font_size: headerFontSize, bold: true,
-    color: headerColor, align: 'right', valign: 'middle'
-  })
-  blocks.push({
-    block_type: 'text_box',
-    x: annotationX, y: ay, w: annotationW - rowPadX, h: headerH,
-    text: String(headers.annotation || art.annotation_header || 'USE CASE'),
-    font_family: bodyFont, font_size: headerFontSize, bold: true,
-    color: headerColor, align: 'left', valign: 'middle'
-  })
-  blocks.push({
-    block_type: 'rule',
-    x: ax, y: r2(ay + headerH + 0.01), w: aw, h: 0.005,
-    color: dividerColor,
-    line_width: 0.6
-  })
+  blocks.push({ block_type: 'text_box', x: labelX + rowPadX, y: ay, w: labelW - rowPadX, h: headerH, text: String(headers.label || 'PARTNER'), font_family: bodyFont, font_size: headerFontSize, bold: true, color: headerColor, align: 'left', valign: 'middle' })
+  blocks.push({ block_type: 'text_box', x: barX, y: ay, w: barW, h: headerH, text: String(headers.metric || art.metric_header || 'AVG. CHARGE (₹/ORDER)'), font_family: bodyFont, font_size: headerFontSize, bold: true, color: headerColor, align: 'left', valign: 'middle' })
+  blocks.push({ block_type: 'text_box', x: valueX, y: ay, w: valueW, h: headerH, text: String(headers.value || art.value_header || (art.y_label ? String(art.y_label).toUpperCase() : 'VALUE')), font_family: bodyFont, font_size: headerFontSize, bold: true, color: headerColor, align: 'right', valign: 'middle' })
+  blocks.push({ block_type: 'text_box', x: annotationX, y: ay, w: annotationW - rowPadX, h: headerH, text: String(headers.annotation || art.annotation_header || 'USE CASE'), font_family: bodyFont, font_size: headerFontSize, bold: true, color: headerColor, align: 'left', valign: 'middle' })
+  blocks.push({ block_type: 'rule', x: ax, y: r2(ay + headerH + 0.01), w: aw, h: 0.005, color: dividerColor, line_width: 0.6 })
 
   items.forEach((row, ri) => {
-    const y = r2(bodyTop + ri * (rowH + rowGap))
+    const y            = r2(bodyTop + ri * (rowH + rowGap))
     const isHighlighted = row?.highlight === true
-    const fill = row?.bar_color || (isHighlighted ? highlightBarFill : neutralBarColor)
-    const rawValue = Math.abs(+row?.value || 0)
+    const fill         = row?.bar_color || (isHighlighted ? highlightBarFill : neutralBarColor)
+    const rawValue     = Math.abs(+row?.value || 0)
     // Normalize against maxValue (not the range) so bars are always proportional to the actual value.
     // This correctly handles tight-range datasets (e.g. margin % 77–80%) where range-normalization
     // would amplify noise and push the top row to near-zero when the fallback fires.
-    const normalized = maxValue > 0 ? rawValue / maxValue : 1
-    const fillFrac = Math.max(0.05, Math.min(1, normalized))
-    const barLen = r2(Math.max(0.06, barW * fillFrac))
-    const trackY = r2(y + rowH * 0.40)
-    const trackH = r2(Math.max(0.14, Math.min(0.20, rowH * 0.18)))
+    const normalized   = maxValue > 0 ? rawValue / maxValue : 1
+    const fillFrac     = Math.max(0.05, Math.min(1, normalized))
+    const barLen       = r2(Math.max(0.06, barW * fillFrac))
+    const trackY       = r2(y + rowH * 0.40)
+    const trackH       = r2(Math.max(0.14, Math.min(0.20, rowH * 0.18)))
 
-    if (isHighlighted) {
-      blocks.push({
-        block_type: 'rect',
-        x: ax, y: r2(y + 0.01), w: aw, h: r2(rowH - 0.02),
-        fill_color: highlightFill,
-        border_color: null, border_width: 0, corner_radius: 10
-      })
-    } else {
-      blocks.push({
-        block_type: 'rect',
-        x: ax, y: r2(y + 0.01), w: aw, h: r2(rowH - 0.02),
-        fill_color: '#FFFFFF',
-        border_color: rowBorder, border_width: 0.5, corner_radius: 10
-      })
-    }
-
-    blocks.push({
-      block_type: 'text_box',
-      x: labelX + rowPadX, y, w: labelW - rowPadX, h: rowH,
-      text: _truncateText(row?.label || '', 34),
-      font_family: bodyFont, font_size: labelFontSize, bold: true,
-      color: isHighlighted ? highlightTextColor : bodyTextColor, align: 'left', valign: 'middle'
-    })
-    blocks.push({
-      block_type: 'rect',
-      x: barX, y: trackY, w: barW, h: trackH,
-      fill_color: trackFill, border_color: null, border_width: 0, corner_radius: 8
-    })
-    blocks.push({
-      block_type: 'rect',
-      x: barX, y: trackY, w: Math.max(0.04, barLen), h: trackH,
-      fill_color: isHighlighted ? highlightBarFill : fill, border_color: null, border_width: 0, corner_radius: 8
-    })
-    blocks.push({
-      block_type: 'text_box',
-      x: valueX, y, w: valueW, h: rowH,
-      text: String(row?.display_value || `${row?.value ?? ''}${row?.unit ? ' ' + row.unit : ''}`.trim()),
-      font_family: bodyFont, font_size: valueFontSize, bold: true,
-      color: isHighlighted ? highlightTextColor : bodyTextColor, align: 'right', valign: 'middle'
-    })
-    blocks.push({
-      block_type: 'text_box',
-      x: annotationX, y, w: annotationW - rowPadX, h: rowH,
-      text: _truncateText(row?.annotation || '', 38),
-      font_family: bodyFont, font_size: annotationFontSize, bold: false,
-      color: isHighlighted ? highlightBarFill : annotationColor, align: 'left', valign: 'middle'
-    })
+    blocks.push({ block_type: 'rect', x: ax, y: r2(y + 0.01), w: aw, h: r2(rowH - 0.02), fill_color: isHighlighted ? highlightFill : '#FFFFFF', border_color: isHighlighted ? null : rowBorder, border_width: isHighlighted ? 0 : 0.5, corner_radius: 10 })
+    blocks.push({ block_type: 'text_box', x: labelX + rowPadX, y, w: labelW - rowPadX, h: rowH, text: _truncateText(row?.label || '', 34), font_family: bodyFont, font_size: labelFontSize, bold: true, color: isHighlighted ? highlightTextColor : bodyTextColor, align: 'left', valign: 'middle' })
+    blocks.push({ block_type: 'rect', x: barX, y: trackY, w: barW, h: trackH, fill_color: trackFill, border_color: null, border_width: 0, corner_radius: 8 })
+    blocks.push({ block_type: 'rect', x: barX, y: trackY, w: Math.max(0.04, barLen), h: trackH, fill_color: isHighlighted ? highlightBarFill : fill, border_color: null, border_width: 0, corner_radius: 8 })
+    blocks.push({ block_type: 'text_box', x: valueX, y, w: valueW, h: rowH, text: String(row?.display_value || `${row?.value ?? ''}${row?.unit ? ' ' + row.unit : ''}`.trim()), font_family: bodyFont, font_size: valueFontSize, bold: true, color: isHighlighted ? highlightTextColor : bodyTextColor, align: 'right', valign: 'middle' })
+    blocks.push({ block_type: 'text_box', x: annotationX, y, w: annotationW - rowPadX, h: rowH, text: _truncateText(row?.annotation || '', 38), font_family: bodyFont, font_size: annotationFontSize, bold: false, color: isHighlighted ? highlightBarFill : annotationColor, align: 'left', valign: 'middle' })
     // No row divider — the border box around each row already separates them
   })
 }
