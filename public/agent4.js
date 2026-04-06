@@ -280,6 +280,16 @@ STEP 2 — READ THE ZONE BRIEF STRATEGICALLY
 STEP 3 — ARTIFACT SELECTION
 ──────────────────────────────────────────────────────────
 
+STRATEGY ARTIFACT — ONE PER SLIDE HARD RULE
+  The following artifact types are classified as STRATEGY ARTIFACTS:
+    matrix | driver_tree | prioritization | stat_bar | comparison_table | initiative_map | profile_card_set | risk_register
+
+  A slide may contain AT MOST ONE strategy artifact across ALL zones combined.
+  If one zone already uses a strategy artifact, every other zone on that slide must use only:
+    chart | insight_text | cards | workflow | table
+  This rule is absolute — no exception for co-primary zones, benchmark_comparison archetypes, or any other reason.
+  If two strategy artifacts are needed for the same narrative, split them onto separate slides.
+
 AVAILABLE ARTIFACT TYPES:
   chart:            bar | clustered_bar | horizontal_bar | line | area | pie | donut | combo | waterfall | group_pie
   stat_bar
@@ -685,15 +695,26 @@ SINGLE-ARTIFACT ZONE
   small           compact
 
 TWO-ARTIFACT ZONE — primary takes the lead share; secondary fills the remainder
-  capacity_tier   primary max   secondary max   pattern
-  ──────────────────────────────────────────────────────────────────────────────
-  large           dense         compact         primary dominates; secondary annotates
-  large           standard      standard        co-equal — neither artifact dominates
-  medium          standard      compact         primary leads; secondary supports
-  small           compact       compact         prefer single artifact; both must be compact
+  capacity_tier   primary max   secondary max   primary share   secondary share   pattern
+  ──────────────────────────────────────────────────────────────────────────────────────────────
+  large           dense         compact         ≥70%            ≤30%              primary dominates; secondary annotates
+  large           standard      standard        ~50%            ~50%              co-equal — neither artifact dominates
+  medium          standard      compact         ≥70%            ≤30%              primary leads; secondary supports
+  small           compact       compact         ≥60%            ≤40%              prefer single artifact; both must be compact
 
-  Selection rule: default to the "dense / compact" row. Use "standard / standard" only when
-  both artifacts carry equal narrative weight (co-equal zone_role or deliberate pairing).
+  Selection rule: default to the "dense / compact" row (≥70% / ≤30%). Use "standard / standard" (~50% / ~50%)
+  only when both artifacts carry equal narrative weight (co-equal zone_role or deliberate pairing).
+
+SPATIAL ALLOCATION OVERRIDES — apply after the share column above, in this order:
+  1. insight_text and table are ALWAYS secondary artifacts. Their share is hard-capped at ≤30% of any
+     paired zone regardless of capacity_tier or density. The paired primary artifact receives ≥70%.
+     Set artifact_split_hint accordingly — never give insight_text or table the leading share.
+  2. stat_bar minimum share: when stat_bar is the primary artifact, its zone share must satisfy
+     30% + (N_rows − 2) × 11% of total slide height. If the zone itself occupies less than 100% of
+     slide height, scale the artifact_split_hint up proportionally so the stat_bar's absolute height
+     still meets the minimum. If it cannot fit, give stat_bar the full zone and move the secondary artifact.
+  3. cards (1–2 items) are compact summary anchors — cap their share at ≤40% of the zone.
+  4. All other artifact pairs: use the share column from the table above.
 
 RESOLUTION — apply in order when density exceeds the allowed max:
   1. Trim      — reduce content items until density_tier drops to the allowed max
@@ -859,6 +880,7 @@ In Scratch Mode:
 - PRIMARY artifact gets first claim on space
 - SECONDARY artifact may occupy only the remaining valid share
 - If a valid secondary share does not exist, compress or remove the secondary artifact only if Phase 3 rules allow that; otherwise reject the geometry and expand the zone allocation
+- Use TABLE C SPATIAL ALLOCATION OVERRIDES to determine artifact_split_hint values
 
 4. Derive zone splits
 - Use the nearest valid split family consistent with zone_structure:
@@ -896,6 +918,7 @@ STEP 7 — FINAL ENFORCEMENT
 - Never change zone_structure unless a hard artifact rule makes the original structure impossible.
 - Never change artifact choice in Phase 4.
 - Never invent additional artifacts.
+- ONE STRATEGY ARTIFACT PER SLIDE: scan all zones — if more than one strategy artifact (matrix | driver_tree | prioritization | stat_bar | comparison_table | initiative_map | profile_card_set | risk_register) is present, this is a Phase 3 violation. Flag it; do not emit the slide; require the slide to be split.
 - Never ignore a hard artifact placement rule to force a brand layout fit.
 - MATRIX SIZE HARD RULE: if any zone contains a matrix as the primary artifact, confirm that
   the zone allocation gives the matrix ≥ 70% of slide width AND ≥ 50% of slide height.
@@ -903,13 +926,10 @@ STEP 7 — FINAL ENFORCEMENT
   until the constraint is satisfied. Do NOT use a layout that makes the matrix smaller than this.
 - STAT_BAR SIZE HARD RULE: if any zone contains a stat_bar, confirm:
   (a) Zone width satisfies: 1 bar col → ≥50% slide width; 2 bar cols → ≥75%; 3 bar cols → 100%.
-  (b) The stat_bar's share of slide height ≥ 30% + (N_rows - 2) × 11%, where N_rows is the row count.
-      When stat_bar shares its zone with another artifact (e.g., insight_text), set artifact_split_hint
-      so stat_bar receives at least this minimum as a fraction of the zone height.
-      Example: 5-row stat_bar in a full-height zone needs ≥ 53% → set artifact_split_hint to [55, 45] or higher.
-      Example: 5-row stat_bar in a right_50 zone (50% of slide height) needs ≥ 53% of slide = 106% of zone →
-      stat_bar cannot fit alongside another artifact in that zone; give it the full zone or expand zone to full height.
+  (b) artifact_split_hint satisfies TABLE C SPATIAL ALLOCATION OVERRIDES rule 2 (stat_bar minimum share).
   Never compress stat_bar below these minimums — trim rows or reduce bar columns instead.
+- SECONDARY ARTIFACT CAP: confirm artifact_split_hint satisfies TABLE C SPATIAL ALLOCATION OVERRIDES
+  rule 1 (insight_text and table ≤30%) and rule 3 (cards 1–2 items ≤40%) for all paired zones.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PHASE 5 — FINAL SLIDE MANIFEST ASSEMBLY
@@ -1529,6 +1549,7 @@ GATE 2 — STRUCTURAL LIMITS
   [ ] No more than 2 primary zones per slide
 
 GATE 3 — ARTIFACT HARD CONSTRAINTS
+  [ ] No slide contains more than one strategy artifact (matrix | driver_tree | prioritization | stat_bar | comparison_table | initiative_map | profile_card_set | risk_register) — count across ALL zones; if two are found, split onto separate slides
   [ ] Every bar/line/clustered_bar/horizontal_bar has ≥ 3 categories
   [ ] Every clustered_bar has exactly 2 series with matching units
   [ ] Every pie/donut has ≤ 5 segments
@@ -3301,6 +3322,13 @@ function applyArtifactArrangementForScratch(zone, dominantShare = 60) {
     firstShare = Math.min(firstShare, 40)
     secondShare = Math.min(secondShare, 40)
   }
+
+  // insight_text and table are always secondary — cap their share at 30% when paired with a primary artifact
+  const secondaryOnlyTypes = ['insight_text', 'table']
+  if (secondaryOnlyTypes.includes(firstType) && !secondaryOnlyTypes.includes(secondType)) firstShare = Math.min(firstShare, 30)
+  if (secondaryOnlyTypes.includes(secondType) && !secondaryOnlyTypes.includes(firstType)) secondShare = Math.min(secondShare, 30)
+  if (secondaryOnlyTypes.includes(firstType) && !secondaryOnlyTypes.includes(secondType)) secondShare = 100 - firstShare
+  if (secondaryOnlyTypes.includes(secondType) && !secondaryOnlyTypes.includes(firstType)) firstShare = 100 - secondShare
 
   // stat_bar minimum height enforcement: 30% + (rows-2)*11% of zone.
   // Assumes zone is full-height (conservative — better to over-allocate than clip rows).
