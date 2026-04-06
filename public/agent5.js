@@ -905,14 +905,16 @@ Matrix rules:
 - Quadrant fills are tone-driven (positive/negative/neutral set on each quadrant in Agent 4)
 - Quadrant text colors (title, body) also driven by tone — not a single global color
 - Center dividers are dashed thin lines (not solid bars)
+- Each quadrant renders: title (bold) + primary_message (italic axis descriptor). No secondary_message in quadrants.
 - Each point renders as two shapes: filled abbreviation circle + outlined label bubble below
-- Point dot color comes from the quadrant tone the point falls in (not a palette index)
+- Point dot color comes from quadrant_id → that quadrant's tone (not a palette index)
 - short_label (2-3 chars) goes inside the filled dot; full label goes in the bubble below
+- Points carry NO primary_message or secondary_message — those belong in the paired insight_text
 - emphasis=high → larger dot (0.26"), medium=0.20", low=0.16"
-- Axis mid-labels (high/low) position at the center divider crosshair, NOT at the grid outer edges
-- Y-axis label is rotated 270° (reads bottom-to-top)
-- Plot point positions semantically: low=25%, medium=50%, high=75% of axis span
-- Y increases upward: y=high plots near the TOP of the matrix grid
+- Axis mid-labels (low_label/high_label) position at the center divider crosshair, NOT at outer edges — they are the ONLY axis text rendered; they must be self-contained (axis name + threshold)
+- xAxis.label and yAxis.label are metadata only — do NOT render them; no rotated Y-axis label, no X-axis label below grid
+- Point x/y are NUMERIC 0–100 (percentage of full grid width/height). Y increases upward: y=100 plots at the TOP.
+- Use quadrant_id to determine which quadrant a point belongs to for color; do NOT re-derive from x/y geometry
 
 7. DRIVER_TREE
 ═══════════════════════════
@@ -1405,7 +1407,7 @@ async function designSlideBatch(batchManifest, brand, batchNum) {
     '\n- profile_card_set: must have profile_style, profiles[], layout_direction' +
     '\n- risk_register: must have risk_style, risks[], show_mitigation' +
     '\n- cards: must have card_style, card_frames[] with x/y/w/h per card' +
-    '\n- matrix: must have matrix_style plus semantic fields from Agent 4 (x_axis, y_axis, quadrants, points)' +
+    '\n- matrix: must have matrix_style plus semantic fields from Agent 4 (x_axis, y_axis, quadrants[id/title/primary_message/tone], points[label/short_label/quadrant_id/x/y/emphasis]); quadrant has NO secondary_message; points have NO primary_message or secondary_message; x/y are numeric 0–100' +
     '\n- driver_tree: must have tree_style plus semantic fields from Agent 4 (root, branches)' +
     '\n- prioritization: must have priority_style plus semantic fields from Agent 4 (items[], qualifiers[])' +
     '\n- insight_text (standard mode): must have insight_mode:"standard", style, heading_style, body_style' +
@@ -1414,7 +1416,7 @@ async function designSlideBatch(batchManifest, brand, batchNum) {
     '\n- workflows: include final node geometry, connection paths, node_inner_padding, and external_label_gap' +
     '\n- tables: include column_widths, column_types, column_alignments, header_row_height, row_heights, and cell_padding (do NOT compute column_x_positions, row_y_positions, header_cell_frames, body_cell_frames — these are computed automatically)' +
     '\n- comparison_table / initiative_map / profile_card_set / risk_register are flattened locally into rect/text blocks, so emphasize rounded rows, semantic fills, and explicit labels rather than native table behavior' +
-    '\n- matrix: include final matrix_style and preserve semantic matrix content for block flattening' +
+    '\n- matrix: include final matrix_style; preserve x_axis, y_axis, quadrants (id/title/primary_message/tone only — no secondary_message), and points (label/short_label/quadrant_id/x/y numeric 0–100/emphasis — no primary_message/secondary_message) for block flattening' +
     '\n- driver_tree: include final tree_style and preserve root/branches for block flattening' +
     '\n- prioritization: include final priority_style and preserve ranked items/qualifiers for block flattening' +
     '\n- non-chart/table artifacts are flattened into primitive blocks locally, so their geometry and style must be complete and render-ready' +
@@ -1517,6 +1519,14 @@ function validateDesignedSlide(slide) {
       if (normalizedType === 'matrix'   && !a.y_axis?.label)   issues.push(p + ': matrix missing y_axis.label')
       if (normalizedType === 'matrix'   && (a.quadrants || []).length !== 4) issues.push(p + ': matrix must define 4 quadrants')
       if (normalizedType === 'matrix'   && !(a.points || []).length) issues.push(p + ': matrix missing points')
+      if (normalizedType === 'matrix') {
+        const validQids = new Set(['q1','q2','q3','q4'])
+        ;(a.points || []).forEach((pt, pi) => {
+          if (!pt.quadrant_id || !validQids.has(String(pt.quadrant_id).toLowerCase())) issues.push(p + `: matrix point[${pi}] missing valid quadrant_id`)
+          if (typeof pt.x !== 'number') issues.push(p + `: matrix point[${pi}] x must be numeric 0–100`)
+          if (typeof pt.y !== 'number') issues.push(p + `: matrix point[${pi}] y must be numeric 0–100`)
+        })
+      }
       if (normalizedType === 'driver_tree' && !a.tree_style)   issues.push(p + ': driver_tree missing tree_style')
       if (normalizedType === 'driver_tree' && !a.root?.label && !a.root?.node_label)  issues.push(p + ': driver_tree missing root.label/root.node_label')
       if (normalizedType === 'driver_tree' && !(a.branches || []).length) issues.push(p + ': driver_tree missing branches')
@@ -2389,19 +2399,24 @@ function normalizeMatrixManifest(artifact) {
     id: q?.id || `q${i + 1}`,
     name: q?.title || q?.name || '',
     primary_message: q?.primary_message || '',
-    secondary_message: q?.secondary_message || '',
-    insight: [q?.primary_message, q?.secondary_message, q?.insight].filter(Boolean).join(' — '),
     tone: String(q?.tone || 'neutral').toLowerCase()
   }))
-  const points = (Array.isArray(artifact?.points) ? artifact.points : []).map((pt) => ({
-    label: pt?.label || '',
-    short_label: pt?.short_label || '',
-    x: pt?.x || 'medium',
-    y: pt?.y || 'medium',
-    primary_message: pt?.primary_message || '',
-    secondary_message: pt?.secondary_message || '',
-    emphasis: pt?.emphasis || 'medium'
-  }))
+  const points = (Array.isArray(artifact?.points) ? artifact.points : []).map((pt) => {
+    // Support both new numeric x/y and legacy semantic low/medium/high
+    const semToNum = { low: 25, medium: 50, high: 75 }
+    const rawX = pt?.x
+    const rawY = pt?.y
+    const xNum = typeof rawX === 'number' ? rawX : (semToNum[String(rawX || 'medium').toLowerCase()] ?? 50)
+    const yNum = typeof rawY === 'number' ? rawY : (semToNum[String(rawY || 'medium').toLowerCase()] ?? 50)
+    return {
+      label: pt?.label || '',
+      short_label: pt?.short_label || '',
+      quadrant_id: pt?.quadrant_id || '',
+      x: xNum,
+      y: yNum,
+      emphasis: pt?.emphasis || 'medium'
+    }
+  })
   return { quadrants, points }
 }
 
@@ -3048,7 +3063,7 @@ function buildMinimalSafeSlide(manifestSlide, tokens) {
 //   workflow     : workflow_type, flow_direction, workflow_title, workflow_insight,
 //                  node_label/primary_message/secondary_message mapped into node labels/values/descriptions/levels, connection from/to/type
 //   table        : title, headers[], rows[][], highlight_rows[], note
-//   matrix       : matrix_type, artifact_header, x_axis, y_axis, quadrants[], points[]
+//   matrix       : matrix_type, artifact_header, x_axis, y_axis, quadrants[id/title/primary_message/tone], points[label/short_label/quadrant_id/x(0-100)/y(0-100)/emphasis]
 //   driver_tree  : artifact_header, root, branches[]
 //   prioritization: artifact_header, items[]
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -5572,7 +5587,7 @@ function _statBarToBlocks(art, content_y, blocks, bt, r2) {
 // matrix renders as a 2×2 grid:
 // - Quadrant fill color per tone (positive/negative/neutral)
 // - Dashed center dividers
-// - Quadrant label + primary_message + secondary_message (per-tone text color)
+// - Quadrant title (bold) + primary_message axis descriptor (per-tone text color); no secondary_message
 // - Each point: filled abbreviation circle + outlined label bubble below
 // - Axis mid-labels at the divider crosshair; rotated Y-axis label
 function _matrixToBlocks(art, content_y, blocks, bt, r2) {
@@ -5589,8 +5604,10 @@ function _matrixToBlocks(art, content_y, blocks, bt, r2) {
   if (aw <= 0 || ah <= 0) return
 
   // ── Layout bands ──────────────────────────────────────────────────────────
-  const leftBand  = r2(Math.min(Math.max(0.80, aw * 0.16), 1.10))
-  const bottomBand= r2(Math.min(Math.max(0.58, ah * 0.16), 0.90))
+  // Outer axis labels are NOT rendered — low_label/high_label are self-descriptive.
+  // leftBand and bottomBand are kept as minimal margins only (no rotated label / no bottom label).
+  const leftBand  = 0.14
+  const bottomBand= 0.16
   const topPad    = 0.02
   const rightPad  = 0.04
 
@@ -5712,89 +5729,72 @@ function _matrixToBlocks(art, content_y, blocks, bt, r2) {
     })
   }
 
-  // ── Outer axis labels ─────────────────────────────────────────────────────
-  // X-axis label below grid (centered, bold)
-  if (xAxis.label) {
-    blocks.push({
-      block_type: 'text_box',
-      x: gridX, y: r2(gridY + gridH + 0.10), w: gridW, h: 0.22,
-      text: xAxis.label,
-      font_family: axisFont, font_size: axisFs + 1, bold: true,
-      color: axisTextColor, align: 'center', valign: 'middle'
-    })
-  }
-  // Y-axis label (rotated 270° = reads bottom-to-top)
-  // The text_box is sized in PRE-rotation coordinates:
-  //   pre-rotation w = visual height (gridH * 0.80 span of the label)
-  //   pre-rotation h = visual width  (leftBand width)
-  // Center of rotation = (ax + leftBand/2, gridY + gridH/2)
-  if (yAxis.label) {
-    const yLblW = r2(gridH * 0.80)
-    const yLblH = r2(leftBand * 0.60)
-    const yLblCX= r2(ax + leftBand / 2)
-    const yLblCY= r2(gridY + gridH / 2)
-    blocks.push({
-      block_type: 'text_box',
-      x: r2(yLblCX - yLblW / 2),
-      y: r2(yLblCY - yLblH / 2),
-      w: yLblW, h: yLblH,
-      text: yAxis.label,
-      rotation: 270,
-      font_family: axisFont, font_size: axisFs + 1, bold: true,
-      color: axisTextColor, align: 'center', valign: 'middle'
-    })
+  // ── Outer axis labels suppressed ──────────────────────────────────────────
+  // xAxis.label and yAxis.label are metadata only.
+  // low_label / high_label are self-descriptive and carry the axis name — no outer label needed.
+
+  // ── Quadrant labels — anchored at the far corner from the centre crosshair ──
+  // q1 top-left  → outer corner = top-left   → stack downward, left-aligned
+  // q2 top-right → outer corner = top-right  → stack downward, right-aligned
+  // q3 bot-left  → outer corner = bottom-left → stack upward from bottom, left-aligned
+  // q4 bot-right → outer corner = bottom-right→ stack upward from bottom, right-aligned
+  const qPad    = 0.12   // inner margin from the outer corner
+  const titleFs = ms.quadrant_title_font_size || 11
+  const msgFs   = Math.max(7, titleFs - 2)    // 2pt smaller than title
+  const titleH  = 0.22
+  const msgH    = 0.18
+  const txtGap  = 0.04   // gap between title and message
+  const txtW    = r2(quadW - qPad * 2)
+
+  const quadLabelLayout = {
+    q1: { align: 'left',  titleY: q => r2(q.y + qPad),                              msgY: q => r2(q.y + qPad + titleH + txtGap) },
+    q2: { align: 'right', titleY: q => r2(q.y + qPad),                              msgY: q => r2(q.y + qPad + titleH + txtGap) },
+    q3: { align: 'left',  titleY: q => r2(q.y + quadH - qPad - msgH - txtGap - titleH), msgY: q => r2(q.y + quadH - qPad - msgH) },
+    q4: { align: 'right', titleY: q => r2(q.y + quadH - qPad - msgH - txtGap - titleH), msgY: q => r2(q.y + quadH - qPad - msgH) }
   }
 
-  // ── Quadrant labels ────────────────────────────────────────────────────────
   quadDefs.forEach((def, idx) => {
     const q    = quadMap[def.id] || quadrants[idx] || {}
     const tone = String(q.tone || 'neutral').toLowerCase()
     const tc   = toneTitleColor(tone)
     const bc   = toneBodyColor(tone)
-    // Title
+    const layout = quadLabelLayout[def.id] || quadLabelLayout.q1
+    const txtX = r2(def.x + qPad)
+
+    // Title — bold, at the far corner
     blocks.push({
       block_type: 'text_box',
-      x: r2(def.x + 0.14), y: r2(def.y + 0.12), w: r2(quadW - 0.28), h: 0.24,
+      x: txtX, y: layout.titleY(def), w: txtW, h: titleH,
       text: q.name || '',
-      font_family: titleFont, font_size: ms.quadrant_title_font_size || 11, bold: true,
-      color: tc, align: 'left', valign: 'top'
+      font_family: titleFont, font_size: titleFs, bold: true,
+      color: tc, align: layout.align, valign: 'top'
     })
-    // Primary message (italic axis descriptor)
+    // Primary message — 2pt smaller, directly below the title
     if (q.primary_message) {
       blocks.push({
         block_type: 'text_box',
-        x: r2(def.x + 0.14), y: r2(def.y + 0.40), w: r2(quadW - 0.28), h: 0.20,
+        x: txtX, y: layout.msgY(def), w: txtW, h: msgH,
         text: q.primary_message,
-        font_family: bodyFont, font_size: ms.quadrant_body_font_size || 9, bold: false,
-        color: bc, align: 'left', valign: 'top'
-      })
-    }
-    // Secondary message (action line)
-    if (q.secondary_message) {
-      blocks.push({
-        block_type: 'text_box',
-        x: r2(def.x + 0.14), y: r2(def.y + 0.64), w: r2(quadW - 0.28), h: 0.20,
-        text: q.secondary_message,
-        font_family: bodyFont, font_size: ms.quadrant_body_font_size || 9, bold: false,
-        color: bc, align: 'left', valign: 'top'
+        font_family: bodyFont, font_size: msgFs, bold: false,
+        color: bc, align: layout.align, valign: 'top'
       })
     }
   })
 
   // ── Points: filled abbreviation circle + outlined label bubble ────────────
-  const semanticToRatio = { low: 0.25, medium: 0.50, high: 0.75 }
   const emphSize = { high: 0.26, medium: 0.20, low: 0.16 }
 
   points.slice(0, 6).forEach(pt => {
-    const xRatio = semanticToRatio[String(pt.x || 'medium').toLowerCase()] || 0.5
-    const yRatio = semanticToRatio[String(pt.y || 'medium').toLowerCase()] || 0.5
+    // x/y are numeric 0–100 (percentage of full grid), y increases upward
+    const xRatio = Math.min(Math.max((typeof pt.x === 'number' ? pt.x : 50) / 100, 0.02), 0.98)
+    const yRatio = Math.min(Math.max((typeof pt.y === 'number' ? pt.y : 50) / 100, 0.02), 0.98)
     const px = r2(gridX + gridW * xRatio)
     const py = r2(gridY + gridH * (1 - yRatio))
 
-    // Derive which quadrant this point is in, then get its tone for color
-    const inLeft = xRatio < 0.5
-    const inTop  = yRatio >= 0.5
-    const ptQId  = inLeft && inTop ? 'q1' : !inLeft && inTop ? 'q2' : inLeft && !inTop ? 'q3' : 'q4'
+    // Use quadrant_id from manifest for tone; fall back to geometric derivation
+    const ptQId  = pt.quadrant_id
+      ? String(pt.quadrant_id).toLowerCase()
+      : (xRatio < 0.5 && yRatio >= 0.5 ? 'q1' : xRatio >= 0.5 && yRatio >= 0.5 ? 'q2' : xRatio < 0.5 && yRatio < 0.5 ? 'q3' : 'q4')
     const ptQ    = quadMap[ptQId] || {}
     const ptTone = String(ptQ.tone || 'neutral').toLowerCase()
     const dotFill= tonePointFill(ptTone)

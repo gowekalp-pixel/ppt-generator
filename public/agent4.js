@@ -336,7 +336,7 @@ AVAILABLE ARTIFACT TYPES:
   initiative_map                            insight_text standard (framing headline — 1–2 points), max 25% of zone size
   profile_card_set                          no second artifact permitted
   risk_register                             no second artifact permitted
-  matrix                                    insight_text grouped, max 30% of zone size
+  matrix                                    insight_text grouped, max 30% of zone size — this insight_text is the ONLY place for per-point takeaways; write one bullet per point using its label as anchor (e.g. "Maharashtra: 122k orders — fulfilment SLA is the lever")
   driver_tree                               insight_text grouped, max 30% of zone size
   prioritization                            no second artifact permitted 
   process_flow / timeline                   no second artifact permitted
@@ -407,6 +407,9 @@ OPTIONAL zones:
   importance vs performance).
   NEVER use when one axis is merely decorative or when the message is simple rank order
   (use prioritization) or causal logic (use driver_tree).
+  HARD SIZE RULE: matrix must occupy ≥ 70% of slide width AND ≥ 50% of slide height.
+  The matrix is the primary artifact; any paired insight_text must be stacked to the right
+  or below and may use at most 30% of the zone. Never compress the matrix below these minimums.
 
 
   driver_tree
@@ -889,6 +892,10 @@ STEP 7 — FINAL ENFORCEMENT
 - Never change artifact choice in Phase 4.
 - Never invent additional artifacts.
 - Never ignore a hard artifact placement rule to force a brand layout fit.
+- MATRIX SIZE HARD RULE: if any zone contains a matrix as the primary artifact, confirm that
+  the zone allocation gives the matrix ≥ 70% of slide width AND ≥ 50% of slide height.
+  If the current split violates this, expand the matrix zone (compress the insight_text zone)
+  until the constraint is satisfied. Do NOT use a layout that makes the matrix smaller than this.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PHASE 5 — FINAL SLIDE MANIFEST ASSEMBLY
@@ -1193,14 +1200,13 @@ matrix:
     "type": "matrix",
     "matrix_type": "2x2",
     "artifact_header": "string",
-    "x_axis": { "label": "string", "low_label": "string", "high_label": "string" },
-    "y_axis": { "label": "string", "low_label": "string", "high_label": "string" },
+    "x_axis": { "label": "string — axis name (metadata only, not displayed)", "low_label": "string — self-contained: embed axis name + value (e.g. 'Low AOV  <₹2,000')", "high_label": "string — self-contained: embed axis name + value (e.g. 'High AOV  ₹3,500+')" },
+    "y_axis": { "label": "string — axis name (metadata only, not displayed)", "low_label": "string — self-contained: embed axis name + value (e.g. 'Low Volume  <30k orders')", "high_label": "string — self-contained: embed axis name + value (e.g. 'High Volume  >50k orders')" },
     "quadrants": [
       {
         "id": "q1",
         "title": "string",
         "primary_message": "string — one-line axis descriptor (e.g. 'High ASP · low scale')",
-        "secondary_message": "string — action implication (e.g. 'Protect margin, selective growth')",
         "tone": "positive" | "negative" | "neutral"
       }
     ],
@@ -1208,25 +1214,39 @@ matrix:
       {
         "label": "string — full display name (e.g. 'Own Store')",
         "short_label": "string — 2-3 char abbreviation for the inner dot (e.g. 'OS')",
-        "x": "low|medium|high",
-        "y": "low|medium|high",
-        "primary_message": "string",
-        "secondary_message": "string",
+        "quadrant_id": "q1|q2|q3|q4 — which quadrant this point belongs to",
+        "x": "number 0–100 — precise horizontal position as % of full grid width (e.g. 22, 68, 81)",
+        "y": "number 0–100 — precise vertical position as % of full grid height (e.g. 15, 57, 83)",
         "emphasis": "high" | "medium" | "low"
       }
     ]
   }
   Max 6 points. Must define both axes and all 4 quadrants.
+  Axis label rule:
+  - low_label and high_label are the ONLY axis text rendered on the slide — make them self-contained.
+  - Each must include the axis dimension name AND the threshold value (e.g. "Low AOV  <₹2k", "High Orders  >50k").
+  - label is metadata only (not rendered); keep it concise (e.g. "Average Order Value").
+  - Do NOT use generic labels like "Low" / "High" alone — the viewer must understand the axis from these alone.
   Quadrant usage:
   - id: q1=top-left, q2=top-right, q3=bottom-left, q4=bottom-right
   - title = quadrant strategic label (e.g. "Scale with margin")
   - primary_message = one-line axis descriptor showing WHERE in the matrix (e.g. "High ASP · high scale")
-  - secondary_message = recommended action for items in this quadrant
   - tone = "positive" (favourable quadrant), "negative" (unfavourable), "neutral" (monitor/mixed)
-  Point usage:
-  - label = full item name shown in the label bubble below the dot
-  - short_label = 2-3 char abbreviation shown INSIDE the filled dot (initials of words)
-  - x/y = semantic position within the grid (low=25%, medium=50%, high=75%)
+  Point placement — TWO-STEP mandatory process:
+  STEP 1 — QUADRANT ASSIGNMENT (decide before any coordinates):
+    - For each point, reason explicitly which quadrant (q1/q2/q3/q4) it belongs to based on the data.
+    - Consider spread: if all points cluster in one quadrant the matrix is misleading — adjust axes or rethink.
+    - Assign quadrant_id. The point MUST land inside that quadrant's half of the grid.
+  STEP 2 — COORDINATE ASSIGNMENT (within the assigned quadrant):
+    - q1 (top-left):    x ∈ 5–45,  y ∈ 55–95
+    - q2 (top-right):   x ∈ 55–95, y ∈ 55–95
+    - q3 (bottom-left): x ∈ 5–45,  y ∈ 5–45
+    - q4 (bottom-right):x ∈ 55–95, y ∈ 5–45
+    - Vary x and y within those ranges to reflect the point's relative strength on each axis.
+    - Never place two points at the same (x, y) — offset by ≥8 units to avoid overlap.
+    - Provide exact integer values (e.g. x=22, y=71) so Agent 5 can render without ambiguity.
+  Label and short_label are the only display elements on the dot — do NOT add primary_message or secondary_message to points.
+  Per-point insights belong in the paired insight_text artifact (see pairing rule below).
   - emphasis = "high" for the largest dot (typically the dominant or most critical item), "medium" default, "low" for minor items
 
 driver_tree:
@@ -1510,6 +1530,7 @@ GATE 3 — ARTIFACT HARD CONSTRAINTS
   [ ] group_pie paired with insight_text standard only (in multi-zone slides)
   [ ] matrix / driver_tree / prioritization appear only in PRIMARY zones
   [ ] matrix / driver_tree / prioritization accompanied only by insight_text
+  [ ] matrix occupies ≥ 70% of slide width AND ≥ 50% of slide height (hard minimum)
   [ ] Every left_to_right / timeline workflow spans FULL HORIZONTAL WIDTH
   [ ] No zone placed beside (left/right of) a left_to_right workflow
   [ ] Every top_to_bottom / top_down_branching workflow spans FULL VERTICAL HEIGHT
@@ -1828,6 +1849,12 @@ function validateArtifact(artifact) {
     if (!artifact.x_axis?.label || !artifact.y_axis?.label) return { valid: false, reason: 'matrix missing axis labels' }
     if ((artifact.quadrants || []).length !== 4) return { valid: false, reason: 'matrix must define 4 quadrants' }
     if (!(artifact.points || []).length) return { valid: false, reason: 'matrix has no points' }
+    const validQids = new Set(['q1','q2','q3','q4'])
+    for (const p of artifact.points || []) {
+      if (!p.quadrant_id || !validQids.has(p.quadrant_id)) return { valid: false, reason: `matrix point "${p.label}" missing valid quadrant_id` }
+      if (typeof p.x !== 'number' || p.x < 0 || p.x > 100) return { valid: false, reason: `matrix point "${p.label}" x must be a number 0–100` }
+      if (typeof p.y !== 'number' || p.y < 0 || p.y > 100) return { valid: false, reason: `matrix point "${p.label}" y must be a number 0–100` }
+    }
     return { valid: true }
   }
 
@@ -3483,14 +3510,36 @@ function pruneAgent4SlideForOutput(slide) {
       }
     }
     if (type === 'matrix') {
+      const semToNum = { low: 25, medium: 50, high: 75 }
+      const normalizedQuadrants = (Array.isArray(artifact.quadrants) ? artifact.quadrants : []).map((q, i) => ({
+        id: q.id || `q${i + 1}`,
+        title: q.title || q.name || '',
+        primary_message: q.primary_message || '',
+        tone: q.tone || 'neutral'
+        // secondary_message intentionally omitted — moved to paired insight_text
+      }))
+      const normalizedPoints = (Array.isArray(artifact.points) ? artifact.points : []).map(pt => {
+        const rawX = pt.x; const rawY = pt.y
+        const xNum = typeof rawX === 'number' ? rawX : (semToNum[String(rawX || 'medium').toLowerCase()] ?? 50)
+        const yNum = typeof rawY === 'number' ? rawY : (semToNum[String(rawY || 'medium').toLowerCase()] ?? 50)
+        return {
+          label: pt.label || '',
+          short_label: pt.short_label || '',
+          quadrant_id: pt.quadrant_id || '',
+          x: xNum,
+          y: yNum,
+          emphasis: pt.emphasis || 'medium'
+          // primary_message / secondary_message intentionally omitted — in paired insight_text
+        }
+      })
       return {
         type: 'matrix',
         matrix_type: artifact.matrix_type || '2x2',
-        matrix_header: artifact.matrix_header || '',
+        matrix_header: artifact.matrix_header || artifact.artifact_header || '',
         x_axis: artifact.x_axis || { label: '', low_label: '', high_label: '' },
         y_axis: artifact.y_axis || { label: '', low_label: '', high_label: '' },
-        quadrants: Array.isArray(artifact.quadrants) ? artifact.quadrants : [],
-        points: Array.isArray(artifact.points) ? artifact.points : [],
+        quadrants: normalizedQuadrants,
+        points: normalizedPoints,
         ...coverage
       }
     }
