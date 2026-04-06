@@ -969,7 +969,6 @@ Driver tree rules:
     "rank_palette": ["hex"],
     "rank_font_family": "string",
     "rank_font_size": number,
-    "rank_text_color": "hex",
     "title_font_family": "string",
     "title_font_size": number,
     "title_color": "hex",
@@ -997,9 +996,9 @@ Prioritization rules:
 - Rows must be stacked vertically in rank order
 - Each row contains:
   - left rank badge (two-layer design — JS renders this automatically):
-      Layer 1: brand primary color background (full badge height, left-only rounded corners) — driven by bt.primary_color, no style field needed
-      Layer 2: severity chip inset on top — filled with rank_palette[idx], fully rounded corners
-      Text: "#N" in upper chip area and priority label (CRITICAL/HIGH/MEDIUM/LOW) in lower chip area, both in rank_text_color
+      Layer 1: brand primary color background (fully rounded all corners) — driven by bt.primary_color, no style field needed
+      Layer 2: white inner box inset from the left (brand strip visible on left edge), slight inset top/bottom
+      Text: "#N" in upper half and priority label (CRITICAL/HIGH/MEDIUM/LOW) in lower half — both colored with rank_palette[idx] (severity color)
   - action title
   - action description
   - up to 2 qualifier pills on the right
@@ -5933,7 +5932,7 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
   const badgeW = r2(Math.min(0.88, Math.max(0.62, aw * 0.11)))
   const rightPad = 0.14
   const cr = ps.row_corner_radius != null ? ps.row_corner_radius : 6
-  const cr_in = r2(cr / 72)
+
   const rankPalette = ps.rank_palette || [bt.secondary_color || '#E0B324', bt.primary_color || '#0078AE']
   const qualifierPalette = ps.qualifier_value_palette || [bt.primary_color || '#0078AE']
   const baseTitleFs = ps.title_font_size || 14
@@ -6012,54 +6011,51 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
       corner_radius: cr
     })
 
-    // === BADGE: two-layer — brand BG (JS-coded, bt.primary_color) + severity chip (LLM-driven, rank_palette[idx]) ===
-    const chipInsetX = 0.07
-    const chipInsetY = 0.09
-    const chipX = r2(ax + chipInsetX)
-    const chipY = r2(rowY + chipInsetY)
-    const chipW = r2(badgeW - 2 * chipInsetX)
-    const chipH = r2(rowH - 2 * chipInsetY)
+    // === BADGE: two-layer — brand BG (fully rounded) + white inner box + severity-colored text ===
+    // Structure is JS-coded; brand BG color = bt.primary_color; text color = rank_palette[idx] (LLM-decided)
+    const badgeStripW  = 0.12   // brand color strip visible on the left
+    const badgePadY    = 0.08   // vertical gap around white inner box
+    const badgePadRight= 0.06   // right inset for white inner box
+    const innerX = r2(ax + badgeStripW)
+    const innerY = r2(rowY + badgePadY)
+    const innerW = r2(badgeW - badgeStripW - badgePadRight)
+    const innerH = r2(rowH - 2 * badgePadY)
+    const innerCr = Math.max(2, cr - 2)
     const labelFontSize = Math.max(6, Math.min(9, Math.round(rowH * 13)))
 
-    // Layer 1: Brand BG rect (left-only rounded via extend+cover trick — JS-coded structure)
+    // Layer 1: Brand BG — fully rounded rect (all four corners)
     blocks.push({
       block_type: 'rect',
-      x: ax, y: rowY, w: r2(badgeW + cr_in), h: rowH,
+      x: ax, y: rowY, w: badgeW, h: rowH,
       fill_color: bt.primary_color || '#0078AE', border_color: null, border_width: 0, corner_radius: cr
     })
-    // Cover rect: squares off the brand BG right edge
+
+    // Layer 2: White inner box (brand strip visible on left)
     blocks.push({
       block_type: 'rect',
-      x: r2(ax + badgeW), y: rowY, w: r2(cr_in + 0.01), h: rowH,
-      fill_color: bt.primary_color || '#0078AE', border_color: null, border_width: 0, corner_radius: 0
+      x: innerX, y: innerY, w: innerW, h: innerH,
+      fill_color: '#FFFFFF', border_color: null, border_width: 0, corner_radius: innerCr
     })
 
-    // Layer 2: Severity chip inset (LLM-decided fill via rank_palette[idx])
-    blocks.push({
-      block_type: 'rect',
-      x: chipX, y: chipY, w: chipW, h: chipH,
-      fill_color: rankFill, border_color: null, border_width: 0, corner_radius: 4
-    })
-
-    // Badge number "#N" — upper portion of chip
+    // "#N" — upper portion of white box, in severity color (rank_palette[idx])
     blocks.push({
       block_type: 'text_box',
-      x: chipX, y: chipY, w: chipW, h: r2(chipH * 0.55),
+      x: innerX, y: innerY, w: innerW, h: r2(innerH * 0.55),
       text: '#' + rankNum,
       font_family: ps.rank_font_family || bt.title_font_family || 'Arial',
       font_size: numFontSize, bold: true,
-      color: ps.rank_text_color || '#FFFFFF',
+      color: rankFill,
       align: 'center', valign: 'bottom'
     })
 
-    // Badge priority label — lower portion of chip
+    // Rank label — lower portion of white box, in severity color
     blocks.push({
       block_type: 'text_box',
-      x: chipX, y: r2(chipY + chipH * 0.55), w: chipW, h: r2(chipH * 0.40),
+      x: innerX, y: r2(innerY + innerH * 0.55), w: innerW, h: r2(innerH * 0.40),
       text: rankLabel,
       font_family: ps.rank_font_family || bt.title_font_family || 'Arial',
       font_size: labelFontSize, bold: false,
-      color: ps.rank_text_color || '#FFFFFF',
+      color: rankFill,
       align: 'center', valign: 'top'
     })
 
