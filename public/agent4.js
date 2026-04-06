@@ -93,11 +93,12 @@ STEP 3 — DERIVE ZONE CONFIGURATION
   - narrative_role is segmentation -> 2-3 zones, comparison-led
   - narrative_role is waterfall_decomposition -> 2 zones, dominant proof plus explanation
   - narrative_role is scenario_analysis -> 3-4 zones, grid or structured comparison preferred
-  - narrative_role is decision_framework -> 3-4 zones, option comparison or criteria grid preferred
-  - narrative_role is risk_register -> 2-3 zones, dominant register plus mitigation / implication support
+  - narrative_role is option_evaluation -> 3-4 zones, option comparison or criteria grid preferred
+  - narrative_role is risk_assessment -> 2-3 zones, dominant register plus mitigation / implication support
   - narrative_role is recommendations -> 2-3 zones, recommendation plus rationale / ask support
   - narrative_role is exception_highlight -> 2 zones, dominant issue plus implication / action support
   - narrative_role is context_setter or problem_statement -> 2 zones, framing plus consequence / evidence support
+  - narrative_role is additional_information -> 1-2 zones; compact supporting evidence only
   - zone_count_signal is 1, 2, 3, or 4 -> use that count as the baseline when no stronger rule above applies
   - strategic_objective implies comparing options, scenarios, or alternatives -> 3-4 zones
   - strategic_objective implies a single core proof with one takeaway -> 2 zones
@@ -107,7 +108,7 @@ STEP 3 — DERIVE ZONE CONFIGURATION
   MODIFIERS (adjust the baseline count after rules above):
   - dominant_zone_signal is yes -> Zone 1 must be DOMINANT regardless of count
   - dominant_zone_signal is no and co_primary_signal is no -> prefer balanced weights across zones
-  - narrative_role is scenario_analysis, decision_framework, or recommendations -> minimum 2 zones; options need space
+  - narrative_role is scenario_analysis, option_evaluation, or recommendations -> minimum 2 zones; options need space
   - if strategic_objective is primarily "align" or "understand" one core fact -> do not exceed 2 zones
     (choose the reading direction from narrative_role, dominant/co-primary signals, and strategic_objective)
 
@@ -139,7 +140,7 @@ STEP 5 — FINALIZE THE ZONE STRUCTURE
   - CO-PRIMARY → always side-by-side, never stacked
   - DOMINANT zone → must occupy the physically largest cell
   - waterfall_decomposition → prefer vertical codes: ZS02, ZS11, ZS04, ZS05
-  - risk_register, decision_framework → prefer grid/column codes: ZS08, ZW04, ZW01
+  - risk_assessment, option_evaluation → prefer grid/column codes: ZS08, ZW04, ZW01
   - scenario_analysis → prefer left-to-right codes: ZW01, ZS06
   - context_setter, explainer_to_summary → prefer stacked codes: ZS11, ZS02
   - benchmark_comparison → prefer side-by-side codes: ZS03, ZW01
@@ -161,10 +162,10 @@ STEP 6 — CONSULTANT CHALLENGE ROUND
   1. Maximum 4 zones; a fifth zone is a second slide.
   2. Zone labels are navigation aids only: 1–3 words.
   3. CO-PRIMARY zones are always side-by-side.
-  4. In scenario_analysis and decision_framework, Zone 1 establishes the current reality or decision criteria — never label it "Proof" or "Recommendation."
+  4. In scenario_analysis and option_evaluation, Zone 1 establishes the current reality or decision criteria — never label it "Proof" or "Recommendation."
   5. In recommendations, the recommendation itself must land in the final zone, not Zone 1.
-  6. In risk_register and decision_framework, green/stable KPIs are SUBORDINATE weight.
-  7. In alert slides (exception_highlight, problem_statement, risk_register), Zone 1 is DOMINANT.
+  6. In risk_assessment and option_evaluation, green/stable KPIs are SUBORDINATE weight.
+  7. In alert slides (exception_highlight, problem_statement, risk_assessment), Zone 1 is DOMINANT.
   8. Never choose a structure with more cells than zones assigned.
   9. strategic_purpose cannot be generic.
 
@@ -2788,8 +2789,8 @@ INSTRUCTIONS:
   - narrative_role = segmentation -> 2-3 zones, comparison-led
   - narrative_role = waterfall_decomposition -> 2 zones, dominant proof plus explanation
   - narrative_role = scenario_analysis -> 3-4 zones, grid or structured comparison preferred
-  - narrative_role = decision_framework -> 3-4 zones, option comparison or criteria grid preferred
-  - narrative_role = risk_register -> 2-3 zones, dominant register plus mitigation / implication support
+  - narrative_role = option_evaluation -> 3-4 zones, option comparison or criteria grid preferred
+  - narrative_role = risk_assessment -> 2-3 zones, dominant register plus mitigation / implication support
   - narrative_role = recommendations -> 2-3 zones, recommendation plus rationale / ask support
   - narrative_role = exception_highlight -> 2 zones, dominant issue plus implication / action support
   - narrative_role = context_setter or problem_statement -> 2 zones, framing plus consequence / evidence support
@@ -2801,7 +2802,7 @@ INSTRUCTIONS:
 - Apply these modifiers after selecting the baseline:
   - dominant_zone_signal = yes -> Zone 1 must be dominant
   - dominant_zone_signal = no and co_primary_signal = no -> prefer balanced weights across zones
-  - scenario_analysis, decision_framework, and recommendations should not collapse below 2 zones
+  - scenario_analysis, option_evaluation, and recommendations should not collapse below 2 zones
 - Write the title from slide_title_draft and sharpen it only if needed.
 - Before finalizing artifacts for a content slide, choose ONE zone_structure that matches the zone count and narrative geometry:
   1-zone:  ZS01_single_full

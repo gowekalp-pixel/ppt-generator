@@ -1316,9 +1316,9 @@ function validateDesignedSlide(slide) {
       if (normalizedType === 'comparison_table' && !Array.isArray(a.criteria)) issues.push(p + ': comparison_table missing criteria')
       if (normalizedType === 'comparison_table' && !Array.isArray(a.options)) issues.push(p + ': comparison_table missing options')
       if (normalizedType === 'comparison_table' && !a.comparison_style) issues.push(p + ': comparison_table missing comparison_style')
-      if (normalizedType === 'initiative_map' && !Array.isArray(a.dimension_labels)) issues.push(p + ': initiative_map missing dimension_labels')
-      if (normalizedType === 'initiative_map' && !Array.isArray(a.initiatives)) issues.push(p + ': initiative_map missing initiatives')
-      if (normalizedType === 'initiative_map' && !a.initiative_style) issues.push(p + ': initiative_map missing initiative_style')
+      if (normalizedType === 'initiative_map' && !Array.isArray(a.dimension_labels) && !Array.isArray(a.column_headers)) issues.push(p + ': initiative_map missing dimension_labels/column_headers')
+      if (normalizedType === 'initiative_map' && !Array.isArray(a.initiatives) && !Array.isArray(a.rows)) issues.push(p + ': initiative_map missing initiatives/rows')
+      if (normalizedType === 'initiative_map' && !a.initiative_style && !Array.isArray(a.rows)) issues.push(p + ': initiative_map missing initiative_style')
       if (normalizedType === 'profile_card_set' && !Array.isArray(a.profiles)) issues.push(p + ': profile_card_set missing profiles')
       if (normalizedType === 'profile_card_set' && !a.profile_style) issues.push(p + ': profile_card_set missing profile_style')
       if (normalizedType === 'risk_register' && !Array.isArray(a.risks)) issues.push(p + ': risk_register missing risks')
@@ -4754,21 +4754,27 @@ function _initiativeMapToBlocks(art, content_y, blocks, bt, r2) {
         const titleH     = r2(titleLines * textLineH)
         const subH       = r2(subLines   * subLineH)
 
-        // Decide what fits — subtitle shown only when both fit together
-        const showSub = cellSubtitle && titleLines > 0 && (titleH + elemGap + subH) <= available
-        const totalH  = (titleLines > 0 ? titleH : 0) + (showSub ? elemGap + subH : 0)
-        let curY      = r2(rowY + cellPad + Math.max(0, (available - totalH) / 2))
+        // Always show secondary when present — word limits (9/8 words) keep text short.
+        // If the combined height exceeds the available cell space, scale both boxes
+        // proportionally so they stay within the row (text may clip but won't overflow).
+        const showSub    = Boolean(cellSubtitle) && titleLines > 0
+        const rawTotalH  = (titleLines > 0 ? titleH : 0) + (showSub ? elemGap + subH : 0)
+        const scale      = rawTotalH > available && available > 0 ? available / rawTotalH : 1.0
+        const rTitleH    = r2(titleH * scale)
+        const rSubH      = r2(subH   * scale)
+        const totalH     = r2(rawTotalH * scale)
+        let curY         = r2(rowY + cellPad + Math.max(0, (available - totalH) / 2))
 
         if (cellTitle) {
           const isPositive = /^\+/.test(cellTitle.trim())
           const textColor  = isPositive ? (istyle.positive_color || bodyTextColor) : bodyTextColor
-          blocks.push({ block_type: 'text_box', x: contentX, y: curY, w: contentW, h: r2(titleH),
+          blocks.push({ block_type: 'text_box', x: contentX, y: curY, w: contentW, h: rTitleH,
             text: cellTitle, font_family: bodyFont, font_size: bodyFontSize, bold: false,
             color: textColor, align: 'left', valign: 'middle' })
-          curY = r2(curY + titleH + elemGap)
+          curY = r2(curY + rTitleH + elemGap)
         }
         if (showSub) {
-          blocks.push({ block_type: 'text_box', x: contentX, y: curY, w: contentW, h: r2(subH),
+          blocks.push({ block_type: 'text_box', x: contentX, y: curY, w: contentW, h: rSubH,
             text: cellSubtitle, font_family: bodyFont, font_size: cellSubFontSize, bold: false,
             color: captionColor, align: 'left', valign: 'middle' })
         }
