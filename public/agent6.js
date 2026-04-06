@@ -129,7 +129,7 @@ function slimSlideForRender(slide, useTemplate) {
   if (!slide || typeof slide !== 'object') return slide
   const out = {}
   const keep = new Set([
-    'slide_number', 'slide_type', 'slide_archetype',
+    'slide_number', 'slide_type',
     'canvas', 'global_elements',
     'layout_mode', 'selected_layout_name',
     'title', 'subtitle', 'speaker_note',

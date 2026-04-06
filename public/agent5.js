@@ -126,13 +126,13 @@ Only if the brand guideline is missing or incomplete:
 TITLE & DIVIDER SLIDES (template mode)
 â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-When slide_type is "title" or "divider" AND uses_template is true:
+When slide_type is "title", "divider", or "thank_you" AND uses_template is true:
 The master provides ALL visual elements â€” background, logo, decorations, footer.
 Agent 6 places text directly into the master's title/subtitle placeholders.
 
 Output ONLY:
-- title_block: { text, font_family, font_size, font_weight, color } â€” NO x/y/w/h
-- subtitle_block: same, or null
+- title_block: { text: "Thank You", font_family, font_size, font_weight, color } â€” NO x/y/w/h; for thank_you use exactly "Thank You" as text
+- subtitle_block: null (always null for thank_you)
 - zones: []
 - global_elements: {}
 - canvas.background: null
@@ -178,6 +178,7 @@ CONTENT SLIDES â€” SCRATCH MODE (selected_layout_name is empty)
 When uses_template is false OR selected_layout_name is empty:
 Compute all coordinates from layout_hint splits.
 - Set layout_mode: false
+- For thank_you slides in scratch mode: zones: [], subtitle_block: null, title_block text = "Thank You" with full x/y/w/h centered on slide
 - zones: compute full frame coordinates from layout_hint splits
 - Artifacts: compute x/y/w/h within zone bounds
 - Artifact headers: compute header_block at top of zone inner bounds; shrink artifact area
@@ -948,13 +949,14 @@ Matrix rules:
 }
 
 Driver tree rules:
-- Use ONLY primitive geometry in the final blocks: rect, text_box, rule
-- Root node centered at top; branch nodes on next row; leaf nodes on final row
-- Max 3 levels
-- Use orthogonal connectors only: vertical + horizontal segments
-- Node labels inside the node box; values as second line or lower text block inside the same box
-- Root must be visually dominant, level 2 medium, leaves smallest
-- Keep branch distribution symmetric across the container
+- JS owns ALL geometry (node positions, sizes, connector paths, level distribution).
+  Do NOT attempt to compute or output node x/y/w/h or connection waypoints.
+- Your ONLY job is tree_style: choose node fill colors per level (root/branch/leaf),
+  connector color and width, label fonts, corner_radius.
+- Visual hierarchy is enforced by JS via node_fill_color (root) → node_fill_color_secondary
+  (branch) → node_fill_color_leaf (leaf). Make these visually distinct.
+- Max 3 levels; content (root label/value, branch labels/values, children) comes
+  from the Agent 4 manifest — do NOT duplicate it in tree_style.
 
 8. PRIORITIZATION
 â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -1167,6 +1169,9 @@ Profile card set rules:
     "body_font_size": number,
     "primary_message_font_size": number,
     "secondary_message_font_size": number,
+    "band_height_in": number,
+    "row_height_in": number,
+    "right_col_width_in": number,
     "row_border_color": "hex", "row_border_width": number, "row_corner_radius": number,
     "critical_fill_color": "hex", "high_fill_color": "hex", "medium_fill_color": "hex", "low_fill_color": "hex",
     "critical_badge_color": "hex", "high_badge_color": "hex", "medium_badge_color": "hex", "low_badge_color": "hex",
@@ -1207,9 +1212,14 @@ RISK_REGISTER STYLING â€” decided by YOU (LLM) using brand tokens:
     negative tags: use critical_badge_color tint (same brand red family)
     positive tags: use brand success green if available, else #7AA243 family
     warning tags:  use medium_badge_color tint (amber family)
-  Font sizes: YOU decide â€” all primary_messages at one consistent size (recommend 11â€“12pt), all secondary_messages at one consistent size (recommend 9â€“10pt, 2pt smaller than primary)
+  Font sizes: YOU decide â€” all primary_messages at one consistent size (recommend 11â€”12pt), all secondary_messages at one consistent size (recommend 9â€”10pt, 2pt smaller than primary)
   label_font_size: band header size (recommend 10pt)
   body_font_size: pip labels, item count (recommend 9pt)
+  Layout density: YOU decide â€” scale these to the artifact height and item count:
+    band_height_in: height of each severity section-header band (recommend 0.28â€”0.40”; default 0.34)
+    row_height_in:  height of each risk item row (recommend 0.70â€”1.10”; default 0.90)
+                    use lower end when many items must fit, upper end for spacious decks
+    right_col_width_in: width of the right column that holds pip grid + tags (recommend 1.60â€”2.20”; default 1.90)
 
 ARTIFACT HEADER
 â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -1401,7 +1411,7 @@ async function designSlideBatch(batchManifest, brand, batchNum) {
     ...s,
     _mode: (brand.uses_template && s.selected_layout_name)
       ? 'layout_mode'
-      : (brand.uses_template && (s.slide_type === 'title' || s.slide_type === 'divider'))
+      : (brand.uses_template && (s.slide_type === 'title' || s.slide_type === 'divider' || s.slide_type === 'thank_you'))
         ? 'template_title_divider'
         : 'scratch_mode'
   }))
@@ -4075,8 +4085,8 @@ function _riskRegisterToBlocks(art, content_y, blocks, bt, r2) {
 
   const pipSize    = 0.10
   const pipGap     = 0.03
-  const bandH      = 0.34
-  const rowH       = 0.90
+  const bandH      = rs.band_height_in      != null ? +rs.band_height_in      : 0.34
+  const rowH       = rs.row_height_in       != null ? +rs.row_height_in       : 0.90
   const dividerH   = 0.005
   const sectionGap = 0.18
 
@@ -4119,7 +4129,7 @@ function _riskRegisterToBlocks(art, content_y, blocks, bt, r2) {
   }
 
   // Right column: enough for 2 tags + pip grid
-  const rightColW = 1.90
+  const rightColW = rs.right_col_width_in != null ? +rs.right_col_width_in : 1.90
   const leftX     = r2(ax + 0.16)
   const leftW     = r2(aw - rightColW - 0.28)
 
@@ -4283,10 +4293,19 @@ function _statBarToBlocks(art, content_y, blocks, bt, r2) {
       }))
       barScales[colId] = maxVal
     }
-    // Per-column lower limit for bar normalisation: scale_LL → default 0
+    // Per-column lower limit for bar normalisation: scale_LL if set, else 50% of column minimum
     const barScaleLLs = {}
     for (const bc of barCols_r) {
-      barScaleLLs[String(bc.id)] = bc.scale_LL != null ? Math.max(0, +bc.scale_LL) : 0
+      const colId = String(bc.id)
+      if (bc.scale_LL != null) {
+        barScaleLLs[colId] = Math.max(0, +bc.scale_LL)
+      } else {
+        const minVal = Math.min(...items.map(row => {
+          const cell = (row?.cells || []).find(c => String(c.col_id) === colId)
+          return Math.abs(+cell?.value || 0)
+        }))
+        barScaleLLs[colId] = Math.max(0, minVal * 0.5)
+      }
     }
 
     const colLayout = {}

@@ -248,7 +248,7 @@ function showResults() {
         '<span class="slide-num">S' + s.slide_number + '</span>' +
         '<span class="slide-type ' + (s.slide_type || 'content') + '">' + (s.slide_type || 'content') + '</span>' +
         '<span class="slide-title">' + (s.title || '—') + '</span>' +
-        '<span class="slide-layout">' + (s.slide_archetype || '—') + (flagged ? ' ⚠' : '') + '</span>' +
+        (flagged ? '<span class="slide-layout">⚠</span>' : '') +
       '</div>'
     }).join('')
   }

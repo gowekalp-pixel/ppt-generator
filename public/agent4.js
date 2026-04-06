@@ -524,6 +524,11 @@ OPTIONAL zones:
   A slide CANNOT contain only cards. Cards must always be paired with at least one of:
   chart | workflow | table | insight_text | Stat_Bar
 
+  ZONE ROLE HARD RULE FOR CARDS:
+  A zone whose ONLY artifact is cards (1–2 items) must NEVER be assigned zone_role PRIMARY.
+  Assign it SECONDARY or SUPPORTING. 1–2 cards cannot carry the primary proof burden of a slide.
+  A cards-only zone with 3+ cards may be PRIMARY only if no other proof artifact is available.
+
 ─── WORKFLOW SELECTION Indicators ─────────────────────────────
 
 ─── WORKFLOW SELECTION INDICATORS ───────────────────────
@@ -956,7 +961,6 @@ STEP 2 — APPLY SLIDE-TYPE RULES
 
 Title slide:
   - zones: []
-  - slide_archetype: "summary"
   - narrative_role: ""
   - speaker_note: ""
   - title: short presentation name (4–8 words)
@@ -965,7 +969,6 @@ Title slide:
 
 Divider slide:
   - zones: []
-  - slide_archetype: "summary"
   - narrative_role: ""
   - speaker_note: ""
   - title: section name only
@@ -974,7 +977,6 @@ Divider slide:
 
 Thank-you slide:
   - zones: []
-  - slide_archetype: "summary"
   - narrative_role: ""
   - speaker_note: ""
   - title: "Thank You" or equivalent closing phrase
@@ -983,7 +985,6 @@ Thank-you slide:
 
 Content slide:
   - zones: array of 1–4 zone objects (never [])
-  - slide_archetype: derived from zone structure — do not set manually
   - narrative_role: carry forward from Agent 3 plan
   - speaker_note: Phase 2 overflow content (1–4 sentences; "" if none)
   - title: insight-led (see SLIDE TYPE RULES)
@@ -1017,7 +1018,6 @@ Each slide object must contain EXACTLY these top-level fields:
 {
   "slide_number": number,
   "slide_type": "title" | "divider" | "content" | "thank_you",
-  "slide_archetype": "string — see SLIDE TYPE RULES below for allowed values per type",
   "narrative_role": "string — carry forward from Agent 3 plan; empty string for structural slides",
   "selected_layout_name": "string — empty string for structural slides",
   "title": "string",
@@ -1363,13 +1363,15 @@ stat_bar:
   column_headers rules:
     "text"   — plain text column (entity name or annotation). First text col = left label; others = trailing text.
     "bar"    — renders as a proportional horizontal bar. 1–3 bar columns allowed. Each cell value must be a numeric string.
-              Per-column scale: add "scale_LL": number (lower limit) and "scale_UL": number (upper limit) on the column header.
-              Bar fill fraction = (value − scale_LL) / (scale_UL − scale_LL). Always set these per bar column for meaningful visual differentiation.
-              Example: on-time rate 97–100% → scale_LL: 94, scale_UL: 100 so bars span the full track and small differences are visible.
-              Example: avg charge ₹0–₹15 → scale_LL: 0, scale_UL: 15.
+              Per-column scale: add "scale_UL": number (upper limit) on the column header to fix the bar ceiling.
+              Optionally add "scale_LL": number (lower limit) to override the auto lower limit (default: 50% of the column minimum).
+              Bar fill fraction = (value − scale_LL) / (scale_UL − scale_LL) — bars are always normalised for visual differentiation.
+              Example: on-time rate → scale_UL: 100 (scale_LL auto-computed as ~48.5 for a 97–100% dataset).
+              Example: avg charge ₹0–₹15 → scale_UL: 15, scale_LL: 0.
     "normal" — secondary display value, right-aligned (e.g. a formatted metric like "₹8.2" or "16.5 Days").
   COLUMN PAIRING RULE: Every "bar" column MUST be immediately followed in column_headers by a "normal" column with an empty header ("value": "") — that normal column holds the bar's numeric value as readable text. Never place a "bar" column as the last column or adjacent to another "bar" column.
-  scale_LL / scale_UL: always set per bar column. Bars are normalised between scale_LL and scale_UL so relative differences are visible across the full bar track width. Do NOT set a single global scale_UL at artifact level — use per-column values instead.
+  scale_UL: set per bar column to fix the bar ceiling (e.g. 100 for percentages, realistic max for currency/count columns). Do NOT set a single global scale_UL at artifact level.
+  scale_LL: optional override. If omitted, the renderer auto-computes it as 50% of the column minimum, ensuring bars always span a meaningful portion of the track width.
   row_focus "Y": highlighted row — never infer from rank, set explicitly. Do NOT mark all rows "Y".
   annotation_style default: "trailing".
   SIZE RULES (match zone allocation to these):
@@ -1723,50 +1725,6 @@ function defaultZonesForArchetype(archetype) {
   }
 }
 
-function inferArchetype(sectionType, slideIndex) {
-  switch (sectionType) {
-    case 'financial_data':     return slideIndex === 0 ? 'dashboard' : 'comparison'
-    case 'executive_summary':  return 'dashboard'
-    case 'strategic_analysis': return slideIndex % 2 === 0 ? 'comparison' : 'breakdown'
-    case 'market_analysis':    return 'comparison'
-    case 'recommendations':    return 'recommendation'
-    case 'conclusion':         return 'roadmap'
-    case 'operational_review': return 'dashboard'
-    default:                   return 'summary'
-  }
-}
-
-function inferArchetypeFromZones(slide) {
-  const zones = slide?.zones || []
-  const artifacts = zones.flatMap(z => z.artifacts || []).map(a => String(a.type || '').toLowerCase())
-  const zoneCount = zones.length
-  const has = t => artifacts.includes(t)
-  const hasOnlyInsight = artifacts.length > 0 && artifacts.every(t => t === 'insight_text')
-  const hasCards = has('cards')
-  const hasWorkflow = has('workflow')
-  const hasChart = has('chart')
-  const hasTable = has('table')
-  const hasReasoning = artifacts.some(t => ['matrix', 'driver_tree', 'prioritization'].includes(t))
-
-  if (slide?.slide_type === 'title' || slide?.slide_type === 'divider') return 'summary'
-  if (hasReasoning) {
-    if (has('prioritization')) return 'recommendation'
-    if (has('driver_tree')) return 'driver_analysis'
-    if (has('matrix')) return 'comparison'
-  }
-  if (hasWorkflow) {
-    const workflowTypes = zones.flatMap(z => z.artifacts || []).filter(a => String(a.type || '').toLowerCase() === 'workflow')
-    const hasRoadmapLike = workflowTypes.some(a => /timeline|roadmap/i.test(String(a.workflow_type || '')) || /timeline/i.test(String(a.flow_direction || '')))
-    return hasRoadmapLike ? 'roadmap' : 'process'
-  }
-  if (hasChart && hasCards && zoneCount >= 3) return 'dashboard'
-  if (hasCards && !hasChart && !hasTable && !hasWorkflow && !hasReasoning) return 'summary'
-  if (hasChart && zoneCount >= 3) return 'dashboard'
-  if (hasChart && zoneCount === 2) return 'comparison'
-  if (hasTable) return 'proof'
-  if (hasOnlyInsight) return 'summary'
-  return slide?.slide_archetype || 'proof'
-}
 
 function compactList(arr, limit = 6, maxChars = 280) {
   const items = (arr || []).filter(Boolean).slice(0, limit).map(v => String(v).trim())
@@ -2515,18 +2473,7 @@ function enforceReasoningArtifactUsage(slide) {
 }
 
 function enforceStructuralPatternRules(slide) {
-  if (!slide || slide.slide_type !== 'content') return slide
-  const zones = (slide.zones || []).map(zone => {
-    const arts = zone.artifacts || []
-    if ((zone.narrative_weight || '').toLowerCase() === 'primary' && arts.some(isSparseCardsArtifact) && arts.length === 1) {
-      return {
-        ...zone,
-        narrative_weight: zone.zone_role === 'summary' ? 'secondary' : 'secondary'
-      }
-    }
-    return zone
-  })
-  return { ...slide, zones }
+  return slide
 }
 
 function validateSlideArtifactMix(slide) {
@@ -2790,9 +2737,8 @@ function normaliseSlide(slide, plan) {
     if (slide.zones && Array.isArray(slide.zones) && slide.zones.length > 0) {
       zones = slide.zones.map(normaliseZone).filter(Boolean)
     } else {
-      // Build default zones from archetype
-      const archetype = slide.slide_archetype || 'proof'
-      zones = defaultZonesForArchetype(archetype).map(normaliseZone).filter(Boolean)
+      // Build default fallback zones
+      zones = defaultZonesForArchetype('proof').map(normaliseZone).filter(Boolean)
     }
 
     // Cap at 4 zones
@@ -2803,7 +2749,6 @@ function normaliseSlide(slide, plan) {
     slide_number:                 slide.slide_number                 || plan.slide_number,
     slide_type:                   slideType,
     narrative_role:               slide.narrative_role               || plan.narrative_role  || '',
-    slide_archetype:              slide.slide_archetype              || 'proof',
     zone_structure:               slide.zone_structure               || '',
     selected_layout_name:         slide.selected_layout_name         || '',
     title:                        slide.title                        || plan.slide_title_draft || ('Slide ' + plan.slide_number),
@@ -2814,11 +2759,7 @@ function normaliseSlide(slide, plan) {
     zones:                        zones,
     speaker_note:                 (slideType === 'content' ? (slide.speaker_note || plan.strategic_objective || '') : '')
   }
-  const enforced = applyZoneStructureMetadata(enforceStructuralPatternRules(enforceReasoningArtifactUsage(normalized)))
-  return {
-    ...enforced,
-    slide_archetype: inferArchetypeFromZones(enforced)
-  }
+  return applyZoneStructureMetadata(enforceStructuralPatternRules(enforceReasoningArtifactUsage(normalized)))
 }
 
 
@@ -2946,7 +2887,6 @@ INSTRUCTIONS:
            ZS10_top_full_bottom_three | ZW04_four_columns_equal |
            ZW02_three_columns_right_stack | ZW03_three_columns_left_stack
 - After choosing zone_structure, decide which slot is dominant vs support, then pick allowed artifacts for each slot. For asymmetric structures, dominant slots may carry chart / workflow / table / reasoning artifacts, while support slots should prefer insight_text, grouped insight_text, compact cards, or compact charts.
-- slide_archetype is a descriptive label only; it must summarize the final zone/artifact structure and must never drive artifact selection or layout choice
 - Pull all numbers from the attached source document — no invented figures
 - Title slides: zones = []
 - Divider slides: zones = []
@@ -3820,7 +3760,6 @@ function pruneAgent4SlideForOutput(slide) {
     slide_number: slide.slide_number,
     slide_type: slide.slide_type,
     narrative_role: slide.narrative_role || '',
-    slide_archetype: slide.slide_archetype,
     selected_layout_name: slide.selected_layout_name || '',
     title: slide.title || '',
     subtitle: slide.subtitle || '',
@@ -3886,7 +3825,6 @@ Fix rules:
 - Replace all placeholder or empty content with real, specific data from the source document
 - Keep the same zones[] structure and zone count — do not add or remove zones
 - Keep artifact types UNLESS they violate the NARRATIVE ROLE CONSTRAINTS above — if forbidden, replace with the best permitted type and populate fully
-- Do NOT change the slide structure to fit slide_archetype; slide_archetype is metadata only
 - Preserve the chosen zone_structure. For asymmetric zone structures, keep dense proof artifacts in the dominant slot and compact support artifacts in the smaller support slots.
 - Keep structure compatible with these rules:
   - 1 zone / 2 artifacts only for tightly paired proof + interpretation
@@ -4084,7 +4022,7 @@ async function runAgent4(state) {
         console.log('  No compatible layout for slide', s.slide_number, '→ using scratch splits')
         return assignScratchSplits(s)
       }
-      if (s.slide_type === 'content' && (!s.selected_layout_name || _isNonContent({ name: s.selected_layout_name }) || layoutConflictsWithSlide(s, s.selected_layout_name))) {
+      if (s.slide_type === 'content' && !s.selected_layout_name) {
         const assigned = pickBestLayout(s, layoutNames)
         console.log('  Auto-assigned layout for slide', s.slide_number, '→', assigned)
         return { ...s, selected_layout_name: assigned }
@@ -4134,7 +4072,7 @@ async function runAgent4(state) {
         console.log('  Post-repair: no compatible layout for slide', s.slide_number, '→ using scratch splits')
         return assignScratchSplits(s)
       }
-      if (s.slide_type === 'content' && (!s.selected_layout_name || _isNonContent({ name: s.selected_layout_name }) || layoutConflictsWithSlide(s, s.selected_layout_name))) {
+      if (s.slide_type === 'content' && !s.selected_layout_name) {
         const assigned = pickBestLayout(s, layoutNames)
         console.log('  Post-repair layout assignment for slide', s.slide_number, '→', assigned)
         return { ...s, selected_layout_name: assigned }
@@ -4146,13 +4084,11 @@ async function runAgent4(state) {
   }
 
   // Summary log
-  const archetypes = {}
   const artifactTypes = {}
   let totalZones = 0
   let totalArtifacts = 0
 
   allSlides.forEach(s => {
-    archetypes[s.slide_archetype] = (archetypes[s.slide_archetype] || 0) + 1
     ;(s.zones || []).forEach(z => {
       totalZones++
       ;(z.artifacts || []).forEach(a => {
@@ -4166,7 +4102,6 @@ async function runAgent4(state) {
   console.log('  Total slides:', allSlides.length)
   console.log('  Total zones:', totalZones)
   console.log('  Total artifacts:', totalArtifacts)
-  console.log('  Archetypes:', JSON.stringify(archetypes))
   console.log('  Artifact types:', JSON.stringify(artifactTypes))
   console.log('  Placeholder remaining:', allSlides.filter(s => hasPlaceholderContent(s)).length)
 
