@@ -6032,12 +6032,11 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
       fill_color: rankFill, border_color: null, border_width: 0, corner_radius: cr
     })
 
-    // Layer 2: White inner rect — inset by corner-radius on top/bottom and strip width on left
-    // corner_radius: 0 so edges are straight; BG rounded corners frame all four sides naturally
+    // Layer 2: White inner rect — same corner_radius as BG; right corners match badge outline
     blocks.push({
       block_type: 'rect',
       x: innerX, y: innerY, w: innerW, h: innerH,
-      fill_color: '#FFFFFF', border_color: null, border_width: 0, corner_radius: 0
+      fill_color: '#FFFFFF', border_color: null, border_width: 0, corner_radius: cr
     })
 
     // "#N" — upper half of white area, colored with rankFill

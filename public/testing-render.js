@@ -1354,7 +1354,7 @@
       const type = block.block_type
       if (type === 'rect') {
         const x = sx(block.x), y = sy(block.y), w = sx(block.w), h = sy(block.h)
-        roundedRect(x, y, w, h, Number(block.corner_radius || 0) * Math.min(scaleX, scaleY))
+        roundedRect(x, y, w, h, Number(block.corner_radius || 0) / 72 * Math.min(scaleX, scaleY))
         ctx.fillStyle = block.fill_color || 'rgba(0,0,0,0)'
         ctx.fill()
         if (block.border_color && Number(block.border_width || 0) > 0) {
