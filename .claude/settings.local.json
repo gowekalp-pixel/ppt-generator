@@ -6,7 +6,9 @@
       "Bash(node -e ':*)",
       "Bash(ls public/agent*.js)",
       "Bash(ls public/*.js)",
-      "Bash(grep -rn \"low.*25\\\\|medium.*50\\\\|high.*75\\\\|semantic.*position\\\\|point.*position\\\\|renderMatrix\\\\|flattenMatrix\\\\|matrix.*block\\\\|block.*matrix\" public/*.js)"
+      "Bash(grep -rn \"low.*25\\\\|medium.*50\\\\|high.*75\\\\|semantic.*position\\\\|point.*position\\\\|renderMatrix\\\\|flattenMatrix\\\\|matrix.*block\\\\|block.*matrix\" public/*.js)",
+      "Bash(python3 -c ':*)",
+      "Bash(python3)"
     ]
   }
 }

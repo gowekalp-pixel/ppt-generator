@@ -4283,6 +4283,11 @@ function _statBarToBlocks(art, content_y, blocks, bt, r2) {
       }))
       barScales[colId] = maxVal
     }
+    // Per-column lower limit for bar normalisation: scale_LL → default 0
+    const barScaleLLs = {}
+    for (const bc of barCols_r) {
+      barScaleLLs[String(bc.id)] = bc.scale_LL != null ? Math.max(0, +bc.scale_LL) : 0
+    }
 
     const colLayout = {}
     let curX = ax
@@ -4299,7 +4304,10 @@ function _statBarToBlocks(art, content_y, blocks, bt, r2) {
         display_type: col.display_type,
         barCompanionOf: isBarCompanion ? String(prevCol.id) : null
       }
-      curX += w + colGap
+      // Use a tight gap between a bar column and its value companion; standard gap everywhere else
+      const nextCol = colHeaders[ci + 1]
+      const nextIsCompanion = nextCol?.display_type === 'normal' && !nextCol?.value && col.display_type === 'bar'
+      curX += w + (nextIsCompanion ? 0.03 : colGap)
     }
 
     const bodyTop  = r2(ay + headerH + headerGap)
@@ -4346,7 +4354,10 @@ function _statBarToBlocks(art, content_y, blocks, bt, r2) {
 
         if (col.display_type === 'bar') {
           const rawVal = Math.abs(+cellValue || 0)
-          const barLen = r2(Math.max(0.06, lay.w * Math.max(0.05, Math.min(1, rawVal / (barScales[colId] || 1)))))
+          const ll = barScaleLLs[colId] ?? 0
+          const ul = barScales[colId] || 1
+          const frac = Math.max(0.05, Math.min(1, (rawVal - ll) / Math.max(ul - ll, 1)))
+          const barLen = r2(Math.max(0.06, lay.w * frac))
           blocks.push({ block_type: 'rect', x: lay.x, y: trackY, w: lay.w, h: trackH, fill_color: trackFill, border_color: null, border_width: 0, corner_radius: 8 })
           blocks.push({ block_type: 'rect', x: lay.x, y: trackY, w: Math.max(0.04, barLen), h: trackH, fill_color: isHighlighted ? highlightBarFill : neutralBarColor, border_color: null, border_width: 0, corner_radius: 8 })
         } else if (col.display_type === 'normal') {
@@ -4356,9 +4367,10 @@ function _statBarToBlocks(art, content_y, blocks, bt, r2) {
             const barCell = (row?.cells || []).find(c => String(c.col_id) === lay.barCompanionOf)
             displayVal = barCell?.value ?? ''
           }
+          const isLastCol = ci === colHeaders.length - 1
           blocks.push({
             block_type: 'text_box',
-            x: lay.x, y, w: lay.w, h: rowH,
+            x: lay.x, y, w: isLastCol ? lay.w - rowPadX : lay.w, h: rowH,
             text: _truncateText(String(displayVal), 20),
             font_family: bodyFont, font_size: valueFontSize, bold: true,
             color: isHighlighted ? highlightTextColor : bodyTextColor, align: 'right', valign: 'middle'
@@ -4366,9 +4378,10 @@ function _statBarToBlocks(art, content_y, blocks, bt, r2) {
         } else {
           // text column â€” first text col is the entity label (bold), others are annotations
           const isLabel = col === textCols[0]
+          const isLastCol = ci === colHeaders.length - 1
           blocks.push({
             block_type: 'text_box',
-            x: lay.x + rowPadX, y, w: lay.w - rowPadX, h: rowH,
+            x: lay.x + rowPadX, y, w: lay.w - rowPadX - (isLastCol ? rowPadX : 0), h: rowH,
             text: _truncateText(String(cellValue), isLabel ? 34 : 38),
             font_family: bodyFont,
             font_size: isLabel ? labelFontSize : annotationFontSize,

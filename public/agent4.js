@@ -1363,10 +1363,13 @@ stat_bar:
   column_headers rules:
     "text"   — plain text column (entity name or annotation). First text col = left label; others = trailing text.
     "bar"    — renders as a proportional horizontal bar. 1–3 bar columns allowed. Each cell value must be a numeric string.
-              Optional: add "scale_UL": number on the column header to fix that column's bar scale (e.g. 100 for a percentage bar).
+              Per-column scale: add "scale_LL": number (lower limit) and "scale_UL": number (upper limit) on the column header.
+              Bar fill fraction = (value − scale_LL) / (scale_UL − scale_LL). Always set these per bar column for meaningful visual differentiation.
+              Example: on-time rate 97–100% → scale_LL: 94, scale_UL: 100 so bars span the full track and small differences are visible.
+              Example: avg charge ₹0–₹15 → scale_LL: 0, scale_UL: 15.
     "normal" — secondary display value, right-aligned (e.g. a formatted metric like "₹8.2" or "16.5 Days").
   COLUMN PAIRING RULE: Every "bar" column MUST be immediately followed in column_headers by a "normal" column with an empty header ("value": "") — that normal column holds the bar's numeric value as readable text. Never place a "bar" column as the last column or adjacent to another "bar" column.
-  scale_UL: if provided, bars are scaled 0→scale_UL. If omitted, bars scale relative to the max bar-column value.
+  scale_LL / scale_UL: always set per bar column. Bars are normalised between scale_LL and scale_UL so relative differences are visible across the full bar track width. Do NOT set a single global scale_UL at artifact level — use per-column values instead.
   row_focus "Y": highlighted row — never infer from rank, set explicitly. Do NOT mark all rows "Y".
   annotation_style default: "trailing".
   SIZE RULES (match zone allocation to these):
@@ -2581,6 +2584,12 @@ function normaliseArtifact(a) {
     if (Array.isArray(a.column_headers)) {
       // New flexible schema: normalise cells
       if (a.scale_UL != null) a.scale_UL = +a.scale_UL || null
+      // Normalise per-column scale_LL and scale_UL
+      a.column_headers = a.column_headers.map(col => ({
+        ...col,
+        ...(col?.scale_LL != null ? { scale_LL: Math.max(0, +col.scale_LL) } : {}),
+        ...(col?.scale_UL != null ? { scale_UL: +col.scale_UL } : {})
+      }))
       // Auto-fix: ensure every "bar" column is immediately followed by a "normal" column
       const fixedCols = []
       for (let i = 0; i < a.column_headers.length; i++) {
@@ -3571,6 +3580,7 @@ function pruneAgent4SlideForOutput(slide) {
             id: String(c?.id ?? ''),
             value: String(c?.value ?? ''),
             display_type: c?.display_type || 'text',
+            ...(c?.scale_LL != null ? { scale_LL: +c.scale_LL } : {}),
             ...(c?.scale_UL != null ? { scale_UL: +c.scale_UL } : {})
           })),
           rows: Array.isArray(artifact.rows) ? artifact.rows.map((row, idx) => ({
