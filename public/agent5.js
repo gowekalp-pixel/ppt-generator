@@ -976,9 +976,8 @@ Driver tree rules:
     "description_font_family": "string",
     "description_font_size": number,
     "description_color": "hex",
-    "qualifier_fill_color": "hex",
-    "qualifier_text_color": "hex",
-    "qualifier_value_palette": ["hex"],
+    "qualifier_text_color": "hex — text color inside qualifier pills",
+    "qualifier_value_palette": ["hex", "hex"],
     "qualifier_label_font_family": "string",
     "qualifier_label_font_size": number,
     "qualifier_value_font_family": "string",
@@ -997,11 +996,15 @@ Prioritization rules:
 - Use ONLY primitive geometry in the final blocks: rect, text_box
 - Rows must be stacked vertically in rank order
 - Each row contains:
-  - left rank badge (square rect filling full row height): shows "#N" and priority label (CRITICAL/HIGH/MEDIUM/LOW) stacked vertically in white text
+  - left rank badge (two-layer design — JS renders this automatically):
+      Layer 1: brand primary color background (full badge height, left-only rounded corners) — driven by bt.primary_color, no style field needed
+      Layer 2: severity chip inset on top — filled with rank_palette[idx], fully rounded corners
+      Text: "#N" in upper chip area and priority label (CRITICAL/HIGH/MEDIUM/LOW) in lower chip area, both in rank_text_color
   - action title
   - action description
   - up to 2 qualifier pills on the right
-- Rank badge is a rect flush to the row left edge, same height as the row — NOT a circle
+- rank_palette: set colors for each rank severity chip — rank 1 gets palette[0], rank 2 gets palette[1], etc. Make each step visually distinct.
+- qualifier_value_palette: MUST have exactly 2 entries — qualifier 1 always uses palette[0], qualifier 2 always uses palette[1]. Use visually distinct colors so dual qualifiers are immediately distinguishable.
 - Qualifier slots may be empty; do not render empty pills
 - Rank 1 should be visually strongest; later ranks may step down subtly through the rank palette
 - Title must dominate description; qualifiers must remain compact, secondary metadata
@@ -5924,8 +5927,9 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
     return lines * (fontSize * lineHeight / 72)
   }
 
-  const rowGap = ps.row_gap_in != null ? ps.row_gap_in : 0.16
-  const rowH = r2((ah - rowGap * Math.max(0, items.length - 1)) / Math.max(items.length, 1))
+  const rowGap    = ps.row_gap_in != null ? ps.row_gap_in : 0.16
+  const bottomPad = 0.08   // breathing room below last row before next artifact header
+  const rowH      = r2((ah - bottomPad - rowGap * Math.max(0, items.length - 1)) / Math.max(items.length, 1))
   const badgeW = r2(Math.min(0.88, Math.max(0.62, aw * 0.11)))
   const rightPad = 0.14
   const cr = ps.row_corner_radius != null ? ps.row_corner_radius : 6
@@ -6008,23 +6012,39 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
       corner_radius: cr
     })
 
-    // Badge rect (extends cr_in past visual edge so right corners go into the gap)
+    // === BADGE: two-layer — brand BG (JS-coded, bt.primary_color) + severity chip (LLM-driven, rank_palette[idx]) ===
+    const chipInsetX = 0.07
+    const chipInsetY = 0.09
+    const chipX = r2(ax + chipInsetX)
+    const chipY = r2(rowY + chipInsetY)
+    const chipW = r2(badgeW - 2 * chipInsetX)
+    const chipH = r2(rowH - 2 * chipInsetY)
+    const labelFontSize = Math.max(6, Math.min(9, Math.round(rowH * 13)))
+
+    // Layer 1: Brand BG rect (left-only rounded via extend+cover trick — JS-coded structure)
     blocks.push({
       block_type: 'rect',
       x: ax, y: rowY, w: r2(badgeW + cr_in), h: rowH,
-      fill_color: rankFill, border_color: null, border_width: 0, corner_radius: cr
+      fill_color: bt.primary_color || '#0078AE', border_color: null, border_width: 0, corner_radius: cr
     })
-    // Cover rect: squares off the badge right edge (within the gap, never touches text)
+    // Cover rect: squares off the brand BG right edge
     blocks.push({
       block_type: 'rect',
       x: r2(ax + badgeW), y: rowY, w: r2(cr_in + 0.01), h: rowH,
-      fill_color: rankFill, border_color: null, border_width: 0, corner_radius: 0
+      fill_color: bt.primary_color || '#0078AE', border_color: null, border_width: 0, corner_radius: 0
     })
 
-    // Badge number "#N"
+    // Layer 2: Severity chip inset (LLM-decided fill via rank_palette[idx])
+    blocks.push({
+      block_type: 'rect',
+      x: chipX, y: chipY, w: chipW, h: chipH,
+      fill_color: rankFill, border_color: null, border_width: 0, corner_radius: 4
+    })
+
+    // Badge number "#N" — upper portion of chip
     blocks.push({
       block_type: 'text_box',
-      x: ax, y: r2(rowY + rowH * 0.08), w: badgeW, h: r2(rowH * 0.50),
+      x: chipX, y: chipY, w: chipW, h: r2(chipH * 0.55),
       text: '#' + rankNum,
       font_family: ps.rank_font_family || bt.title_font_family || 'Arial',
       font_size: numFontSize, bold: true,
@@ -6032,11 +6052,10 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
       align: 'center', valign: 'bottom'
     })
 
-    // Badge priority label
-    const labelFontSize = Math.max(6, Math.min(9, Math.round(rowH * 13)))
+    // Badge priority label — lower portion of chip
     blocks.push({
       block_type: 'text_box',
-      x: ax, y: r2(rowY + rowH * 0.58), w: badgeW, h: r2(rowH * 0.36),
+      x: chipX, y: r2(chipY + chipH * 0.55), w: chipW, h: r2(chipH * 0.40),
       text: rankLabel,
       font_family: ps.rank_font_family || bt.title_font_family || 'Arial',
       font_size: labelFontSize, bold: false,
@@ -6096,7 +6115,7 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
           blocks.push({
             block_type: 'rect',
             x: pillX, y: pillY, w: halfW, h: sidePillH,
-            fill_color: ps.qualifier_fill_color || valueColor, border_color: null, border_width: 0, corner_radius: 4
+            fill_color: valueColor, border_color: null, border_width: 0, corner_radius: 4
           })
           blocks.push({
             block_type: 'text_box',
@@ -6119,7 +6138,7 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
           blocks.push({
             block_type: 'rect',
             x: qualifierX, y: pillY, w: qualifierAreaW, h: pillH,
-            fill_color: ps.qualifier_fill_color || valueColor, border_color: null, border_width: 0, corner_radius: 4
+            fill_color: valueColor, border_color: null, border_width: 0, corner_radius: 4
           })
           blocks.push({
             block_type: 'text_box',
