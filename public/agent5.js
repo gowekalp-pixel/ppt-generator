@@ -5727,29 +5727,29 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
     for (const word of words) {
       const nextLen = lineLen === 0 ? word.length : lineLen + 1 + word.length
       if (nextLen <= charsPerLine) lineLen = nextLen
-      else {
-        lines += 1
-        lineLen = word.length
-      }
+      else { lines += 1; lineLen = word.length }
     }
     return lines * (fontSize * lineHeight / 72)
   }
 
-  const gap = ps.row_gap_in != null ? ps.row_gap_in : 0.16
-  const rowH = r2((ah - gap * Math.max(0, items.length - 1)) / Math.max(items.length, 1))
+  const rowGap = ps.row_gap_in != null ? ps.row_gap_in : 0.16
+  const rowH = r2((ah - rowGap * Math.max(0, items.length - 1)) / Math.max(items.length, 1))
   const badgeW = r2(Math.min(0.88, Math.max(0.62, aw * 0.11)))
   const rightPad = 0.14
+  const cr = ps.row_corner_radius != null ? ps.row_corner_radius : 6
+  const cr_in = r2(cr / 72)
   const rankPalette = ps.rank_palette || [bt.secondary_color || '#E0B324', bt.primary_color || '#0078AE']
   const qualifierPalette = ps.qualifier_value_palette || [bt.primary_color || '#0078AE']
   const baseTitleFs = ps.title_font_size || 14
   const baseDescFs = ps.description_font_size || 11
   const baseQualifierFs = ps.qualifier_label_font_size || 10
   const rankLabels = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'LOW']
+  const numFontSize = Math.max(10, Math.min(18, Math.round(rowH * 30)))
+  const rowPad = 0.10
+  const minTitleDescGap = 0.06
 
-  items.forEach((item, idx) => {
-    const rowY = r2(ay + idx * (rowH + gap))
-    const rowX = ax
-    const rowW = aw
+  // Pre-compute per-item layout data (qualifier widths drive textW)
+  const itemData = items.map((item) => {
     const qualifiers = Array.isArray(item.qualifiers) ? item.qualifiers.slice(0, 2) : []
     const nonEmptyQualifiers = qualifiers.filter(q => String(q?.label || '').trim() || String(q?.value || '').trim())
     const qualifierTexts = nonEmptyQualifiers.map(q => {
@@ -5761,135 +5761,186 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
     const qualifierAreaW = nonEmptyQualifiers.length
       ? r2(Math.min(2.55, Math.max(1.55, aw * 0.28, longestQualifier * 0.055)))
       : 0
-    const textX = r2(rowX + badgeW + 0.14)
-    const textW = r2(Math.max(1.1, rowW - (textX - rowX) - qualifierAreaW - rightPad - (qualifierAreaW ? 0.14 : 0)))
-    const qualifierX = qualifierAreaW ? r2(rowX + rowW - rightPad - qualifierAreaW) : 0
+    const textX = r2(ax + badgeW + 0.14)
+    const textW = r2(Math.max(1.1, aw - (textX - ax) - qualifierAreaW - rightPad - (qualifierAreaW ? 0.14 : 0)))
+    const qualifierX = qualifierAreaW ? r2(ax + aw - rightPad - qualifierAreaW) : 0
+    return { nonEmptyQualifiers, qualifierTexts, qualifierAreaW, textX, textW, qualifierX }
+  })
+
+  // Global title font: same across all rows — shrink until every title fits
+  const minTextW = Math.min(...itemData.map(d => d.textW))
+  const maxTitleH = Math.max(0.30, rowH * 0.42)
+  let globalTitleFs = baseTitleFs
+  for (const item of items) {
+    while (globalTitleFs > 10 && estimateTextHeight(String(item.title || ''), minTextW, globalTitleFs, 1.22) > maxTitleH) {
+      globalTitleFs--
+    }
+  }
+
+  // Global desc font: same across all rows — capped at 70% of badge number font
+  const maxDescFs = Math.min(baseDescFs, Math.round(numFontSize * 0.7))
+  const maxDescH = Math.max(0.20, rowH * 0.42)
+  let globalDescFs = maxDescFs
+  for (const item of items) {
+    while (globalDescFs > 8 && estimateTextHeight(String(item.description || ''), minTextW, globalDescFs, 1.24) > maxDescH) {
+      globalDescFs--
+    }
+  }
+
+  items.forEach((item, idx) => {
+    const rowY = r2(ay + idx * (rowH + rowGap))
+    const { nonEmptyQualifiers, qualifierTexts, qualifierAreaW, textX, textW, qualifierX } = itemData[idx]
     const rankFill = rankPalette[idx % Math.max(rankPalette.length, 1)] || bt.primary_color || '#0078AE'
     const titleText = String(item.title || '')
     const descText = String(item.description || '')
     const rankLabel = rankLabels[Math.min(idx, rankLabels.length - 1)]
     const rankNum = String(item.rank != null ? item.rank : idx + 1)
 
-    let titleFs = baseTitleFs
-    while (titleFs > 10 && estimateTextHeight(titleText, textW, titleFs, 1.22) > Math.max(0.32, rowH * 0.42)) {
-      titleFs -= 1
-    }
-    const titleH = r2(Math.min(Math.max(0.26, estimateTextHeight(titleText, textW, titleFs, 1.22) + 0.04), Math.max(0.28, rowH * 0.46)))
-
-    let descFs = baseDescFs
-    const descY = r2(rowY + 0.12 + titleH)
-    const descH = r2(Math.max(0.22, rowH - (descY - rowY) - 0.12))
-    while (descFs > 9 && estimateTextHeight(descText, textW, descFs, 1.24) > descH) {
-      descFs -= 1
-    }
+    // Vertically center title + desc block within the row
+    const titleH = r2(Math.max(0.20, estimateTextHeight(titleText, textW, globalTitleFs, 1.22) + 0.04))
+    const descH = r2(Math.max(0.18, estimateTextHeight(descText, textW, globalDescFs, 1.24) + 0.04))
+    const contentH = titleH + minTitleDescGap + descH
+    const availContentH = rowH - 2 * rowPad
+    const contentStartY = r2(rowY + rowPad + Math.max(0, (availContentH - contentH) / 2))
+    const titleY = contentStartY
+    const descY = r2(contentStartY + titleH + minTitleDescGap)
+    const descAvailH = r2(Math.max(descH, rowY + rowH - rowPad - descY))
 
     // Row background
     blocks.push({
       block_type: 'rect',
-      x: rowX, y: rowY, w: rowW, h: rowH,
+      x: ax, y: rowY, w: aw, h: rowH,
       fill_color: ps.row_fill_color || '#FFFFFF',
       border_color: ps.row_border_color || '#D7DEE8',
       border_width: ps.row_border_width != null ? ps.row_border_width : 0.6,
-      corner_radius: ps.row_corner_radius != null ? ps.row_corner_radius : 6
+      corner_radius: cr
     })
 
-    // Rank badge: square rect filling full row height
+    // Badge rect (extends cr_in past visual edge so right corners go into the gap)
     blocks.push({
       block_type: 'rect',
-      x: rowX, y: rowY, w: badgeW, h: rowH,
-      fill_color: rankFill,
-      border_color: null,
-      border_width: 0,
-      corner_radius: ps.row_corner_radius != null ? ps.row_corner_radius : 6
+      x: ax, y: rowY, w: r2(badgeW + cr_in), h: rowH,
+      fill_color: rankFill, border_color: null, border_width: 0, corner_radius: cr
+    })
+    // Cover rect: squares off the badge right edge (within the gap, never touches text)
+    blocks.push({
+      block_type: 'rect',
+      x: r2(ax + badgeW), y: rowY, w: r2(cr_in + 0.01), h: rowH,
+      fill_color: rankFill, border_color: null, border_width: 0, corner_radius: 0
     })
 
     // Badge number "#N"
-    const numFontSize = Math.max(10, Math.min(18, Math.round(rowH * 30)))
     blocks.push({
       block_type: 'text_box',
-      x: rowX, y: r2(rowY + rowH * 0.08), w: badgeW, h: r2(rowH * 0.50),
+      x: ax, y: r2(rowY + rowH * 0.08), w: badgeW, h: r2(rowH * 0.50),
       text: '#' + rankNum,
       font_family: ps.rank_font_family || bt.title_font_family || 'Arial',
-      font_size: numFontSize,
-      bold: true,
+      font_size: numFontSize, bold: true,
       color: ps.rank_text_color || '#FFFFFF',
-      align: 'center',
-      valign: 'bottom'
+      align: 'center', valign: 'bottom'
     })
 
     // Badge priority label
     const labelFontSize = Math.max(6, Math.min(9, Math.round(rowH * 13)))
     blocks.push({
       block_type: 'text_box',
-      x: rowX, y: r2(rowY + rowH * 0.58), w: badgeW, h: r2(rowH * 0.36),
+      x: ax, y: r2(rowY + rowH * 0.58), w: badgeW, h: r2(rowH * 0.36),
       text: rankLabel,
       font_family: ps.rank_font_family || bt.title_font_family || 'Arial',
-      font_size: labelFontSize,
-      bold: false,
+      font_size: labelFontSize, bold: false,
       color: ps.rank_text_color || '#FFFFFF',
-      align: 'center',
-      valign: 'top'
+      align: 'center', valign: 'top'
     })
 
+    // Title — vertically centered with description
     blocks.push({
       block_type: 'text_box',
-      x: textX, y: r2(rowY + 0.1), w: textW, h: titleH,
+      x: textX, y: titleY, w: textW, h: titleH,
       text: titleText,
       font_family: ps.title_font_family || bt.title_font_family || 'Arial',
-      font_size: titleFs,
-      bold: true,
+      font_size: globalTitleFs, bold: true,
       color: ps.title_color || '#1F2937',
-      align: 'left',
-      valign: 'top'
+      align: 'left', valign: 'top'
     })
+
+    // Description — vertically centered with title
     blocks.push({
       block_type: 'text_box',
-      x: textX, y: descY, w: textW, h: descH,
+      x: textX, y: descY, w: textW, h: descAvailH,
       text: descText,
       font_family: ps.description_font_family || bt.body_font_family || 'Arial',
-      font_size: descFs,
-      bold: false,
+      font_size: globalDescFs, bold: false,
       color: ps.description_color || '#374151',
-      align: 'left',
-      valign: 'top'
+      align: 'left', valign: 'top'
     })
 
+    // Qualifier pills: try stacked first; fall back to side-by-side if overflow
     if (nonEmptyQualifiers.length) {
       const pillGap = 0.08
-      let pillCursorY = r2(rowY + 0.12)
-      nonEmptyQualifiers.forEach((_q, qi) => {
-        const valueColor = qualifierPalette[qi % Math.max(qualifierPalette.length, 1)] || bt.primary_color || '#0078AE'
-        const pillText = qualifierTexts[qi] || ''
-        let qualifierFs = baseQualifierFs
-        const pillTextW = Math.max(0.4, qualifierAreaW - 0.16)
-        while (qualifierFs > 8 && estimateTextHeight(pillText, pillTextW, qualifierFs, 1.2) > Math.max(0.42, rowH * 0.28)) {
-          qualifierFs -= 1
-        }
-        const pillH = r2(Math.max(0.28, estimateTextHeight(pillText, pillTextW, qualifierFs, 1.2) + 0.10))
-        const maxPillBottom = rowY + rowH - 0.08
-        const pillY = r2(Math.min(pillCursorY, Math.max(rowY + 0.12, maxPillBottom - pillH)))
+      const pillPad = 0.12
 
-        blocks.push({
-          block_type: 'rect',
-          x: qualifierX, y: pillY, w: qualifierAreaW, h: pillH,
-          fill_color: ps.qualifier_fill_color || valueColor,
-          border_color: null,
-          border_width: 0,
-          corner_radius: 4
-        })
-        blocks.push({
-          block_type: 'text_box',
-          x: r2(qualifierX + 0.08), y: pillY, w: r2(qualifierAreaW - 0.16), h: pillH,
-          text: pillText,
-          font_family: ps.qualifier_label_font_family || bt.body_font_family || 'Arial',
-          font_size: qualifierFs,
-          bold: false,
-          color: ps.qualifier_text_color || '#1F2937',
-          align: 'center',
-          valign: 'middle'
-        })
-        pillCursorY = r2(pillY + pillH + pillGap)
+      // Compute stacked pill heights
+      const stackedPillData = nonEmptyQualifiers.map((_, qi) => {
+        const pillTextW = Math.max(0.4, qualifierAreaW - 0.16)
+        let fs = baseQualifierFs
+        while (fs > 8 && estimateTextHeight(qualifierTexts[qi], pillTextW, fs, 1.2) > Math.max(0.36, rowH * 0.26)) fs--
+        const pillH = r2(Math.max(0.26, estimateTextHeight(qualifierTexts[qi], pillTextW, fs, 1.2) + 0.10))
+        return { fs, pillH }
       })
+      const stackedTotalH = stackedPillData.reduce((s, d) => s + d.pillH, 0) + pillGap * Math.max(0, nonEmptyQualifiers.length - 1)
+      const useSideBySide = nonEmptyQualifiers.length === 2 && stackedTotalH > (rowH - 2 * pillPad)
+
+      if (useSideBySide) {
+        // Side-by-side: two pills arranged horizontally, vertically centered in row
+        const halfW = r2((qualifierAreaW - pillGap) / 2)
+        const pillTextW = Math.max(0.3, halfW - 0.12)
+        const sidePillH = r2(Math.max(0.24, rowH * 0.48))
+        const pillY = r2(rowY + (rowH - sidePillH) / 2)
+        nonEmptyQualifiers.forEach((_, qi) => {
+          const pillX = r2(qualifierX + qi * (halfW + pillGap))
+          let fs = baseQualifierFs
+          while (fs > 7 && estimateTextHeight(qualifierTexts[qi], pillTextW, fs, 1.2) > sidePillH - 0.08) fs--
+          const valueColor = qualifierPalette[qi % Math.max(qualifierPalette.length, 1)] || bt.primary_color || '#0078AE'
+          blocks.push({
+            block_type: 'rect',
+            x: pillX, y: pillY, w: halfW, h: sidePillH,
+            fill_color: ps.qualifier_fill_color || valueColor, border_color: null, border_width: 0, corner_radius: 4
+          })
+          blocks.push({
+            block_type: 'text_box',
+            x: r2(pillX + 0.06), y: pillY, w: r2(halfW - 0.12), h: sidePillH,
+            text: qualifierTexts[qi],
+            font_family: ps.qualifier_label_font_family || bt.body_font_family || 'Arial',
+            font_size: fs, bold: false,
+            color: ps.qualifier_text_color || '#1F2937',
+            align: 'center', valign: 'middle'
+          })
+        })
+      } else {
+        // Stacked: pills arranged vertically, starting from top padding
+        let pillCursorY = r2(rowY + pillPad)
+        nonEmptyQualifiers.forEach((_, qi) => {
+          const { fs, pillH } = stackedPillData[qi]
+          const valueColor = qualifierPalette[qi % Math.max(qualifierPalette.length, 1)] || bt.primary_color || '#0078AE'
+          const maxPillBottom = rowY + rowH - pillPad
+          const pillY = r2(Math.min(pillCursorY, Math.max(rowY + pillPad, maxPillBottom - pillH)))
+          blocks.push({
+            block_type: 'rect',
+            x: qualifierX, y: pillY, w: qualifierAreaW, h: pillH,
+            fill_color: ps.qualifier_fill_color || valueColor, border_color: null, border_width: 0, corner_radius: 4
+          })
+          blocks.push({
+            block_type: 'text_box',
+            x: r2(qualifierX + 0.08), y: pillY, w: r2(qualifierAreaW - 0.16), h: pillH,
+            text: qualifierTexts[qi],
+            font_family: ps.qualifier_label_font_family || bt.body_font_family || 'Arial',
+            font_size: fs, bold: false,
+            color: ps.qualifier_text_color || '#1F2937',
+            align: 'center', valign: 'middle'
+          })
+          pillCursorY = r2(pillY + pillH + pillGap)
+        })
+      }
     }
   })
 }
