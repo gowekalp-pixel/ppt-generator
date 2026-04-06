@@ -5932,7 +5932,8 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
   const rowH      = r2((ah - bottomPad - rowGap * Math.max(0, items.length - 1)) / Math.max(items.length, 1))
   const badgeW = r2(Math.min(0.88, Math.max(0.62, aw * 0.11)))
   const rightPad = 0.14
-  const cr = ps.row_corner_radius != null ? ps.row_corner_radius : 6
+  const cr    = ps.row_corner_radius != null ? ps.row_corner_radius : 6
+  const cr_in = r2(cr / 72)   // corner radius in inches (for extend+cover trick)
 
   const rankPalette = ps.rank_palette || [bt.secondary_color || '#E0B324', bt.primary_color || '#0078AE']
   const qualifierPalette = ps.qualifier_value_palette || [bt.primary_color || '#0078AE']
@@ -6012,13 +6013,14 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
       corner_radius: cr
     })
 
-    // === BADGE: two-layer — rank-colored BG + white overlay (same height, inset from left) ===
+    // === BADGE: two-layer — rank-colored BG + white overlay (same height, left edge squared off) ===
     // rank_palette[idx] → background color (LLM-decided per rank severity)
-    // White inner box: full row height, shifted right by stripW so colored strip shows on left
-    // Text in rankFill (same severity color) against the white background
+    // White inner box: full row height, right corners rounded (match BG), left edge squared via extend+cover trick
+    // Text in rankFill against white background
     const badgeStripW = 0.10   // colored strip width visible on left edge
-    const innerX = r2(ax + badgeStripW)
-    const innerW = r2(badgeW - badgeStripW)
+    const innerVisX   = r2(ax + badgeStripW)          // where white box visually starts
+    const innerExtX   = r2(ax + badgeStripW - cr_in)  // extended left for trick
+    const innerExtW   = r2(badgeW - badgeStripW + cr_in) // wider to maintain right edge at ax+badgeW
     const labelFontSize = Math.max(6, Math.min(9, Math.round(rowH * 13)))
 
     // Layer 1: Rank-colored BG (fully rounded, all corners) — color from rank_palette[idx]
@@ -6028,17 +6030,23 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
       fill_color: rankFill, border_color: null, border_width: 0, corner_radius: cr
     })
 
-    // Layer 2: White inner box — same height as BG, inset only from left (strip shows through)
+    // Layer 2a: White box extended left (right corners rounded, left corners extend into strip)
     blocks.push({
       block_type: 'rect',
-      x: innerX, y: rowY, w: innerW, h: rowH,
+      x: innerExtX, y: rowY, w: innerExtW, h: rowH,
       fill_color: '#FFFFFF', border_color: null, border_width: 0, corner_radius: cr
+    })
+    // Layer 2b: Cover rect (rank color) — squares off the white box's left rounded corners
+    blocks.push({
+      block_type: 'rect',
+      x: innerExtX, y: rowY, w: r2(cr_in + 0.01), h: rowH,
+      fill_color: rankFill, border_color: null, border_width: 0, corner_radius: 0
     })
 
     // "#N" — upper half of white area, colored with rankFill
     blocks.push({
       block_type: 'text_box',
-      x: innerX, y: rowY, w: innerW, h: r2(rowH * 0.55),
+      x: innerVisX, y: rowY, w: r2(badgeW - badgeStripW), h: r2(rowH * 0.55),
       text: '#' + rankNum,
       font_family: ps.rank_font_family || bt.title_font_family || 'Arial',
       font_size: numFontSize, bold: true,
@@ -6049,7 +6057,7 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
     // Rank label — lower half of white area, colored with rankFill
     blocks.push({
       block_type: 'text_box',
-      x: innerX, y: r2(rowY + rowH * 0.55), w: innerW, h: r2(rowH * 0.36),
+      x: innerVisX, y: r2(rowY + rowH * 0.55), w: r2(badgeW - badgeStripW), h: r2(rowH * 0.36),
       text: rankLabel,
       font_family: ps.rank_font_family || bt.title_font_family || 'Arial',
       font_size: labelFontSize, bold: false,
