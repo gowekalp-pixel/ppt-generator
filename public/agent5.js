@@ -5933,7 +5933,6 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
   const badgeW = r2(Math.min(0.88, Math.max(0.62, aw * 0.11)))
   const rightPad = 0.14
   const cr    = ps.row_corner_radius != null ? ps.row_corner_radius : 6
-  const cr_in = r2(cr / 72)   // corner radius in inches (for extend+cover trick)
 
   const rankPalette = ps.rank_palette || [bt.secondary_color || '#E0B324', bt.primary_color || '#0078AE']
   const qualifierPalette = ps.qualifier_value_palette || [bt.primary_color || '#0078AE']
@@ -6013,52 +6012,47 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
       corner_radius: cr
     })
 
-    // === BADGE: two-layer — rank-colored BG + white inner rect ===
-    // rank_palette[idx] → background color (LLM-decided per rank severity)
-    // White inner rect: no corner_radius (plain rect), starts at badgeStripW from left,
-    // stops before BG's right corner arc — BG's rounded corners show at all 4 badge corners naturally.
-    const badgeStripW  = 0.10   // colored strip visible on left
-    const badgePadY    = r2(cr_in)  // top/bottom inset = corner radius so white clears the arc
-    const innerX       = r2(ax + badgeStripW)
-    const innerY       = r2(rowY + badgePadY)
-    const innerW       = r2(badgeW - badgeStripW - cr_in)  // stop before right corner arc
-    const innerH       = r2(rowH - 2 * badgePadY)
+    // === BADGE — 3 steps ===
+    // Step 1: rank-colored rect, rounded corners
+    // Step 2: white rect, SAME w and h, shifted right by stripW → colored strip shows on left
+    // Step 3: text ("#N" + rank label) in rankFill over the white area
+    const badgeStripW   = 0.10  // visible colored strip width
     const labelFontSize = Math.max(6, Math.min(9, Math.round(rowH * 13)))
+    const textAreaX     = r2(ax + badgeStripW)
+    const textAreaW     = r2(badgeW - badgeStripW)
 
-    // Layer 1: Rank-colored BG (fully rounded all corners) — color from rank_palette[idx]
+    // Step 1: rank-colored background rect
     blocks.push({
       block_type: 'rect',
       x: ax, y: rowY, w: badgeW, h: rowH,
       fill_color: rankFill, border_color: null, border_width: 0, corner_radius: cr
     })
 
-    // Layer 2: White inner rect — same corner_radius as BG; right corners match badge outline
+    // Step 2: white rect — same w and h as step 1, shifted right by badgeStripW
     blocks.push({
       block_type: 'rect',
-      x: innerX, y: innerY, w: innerW, h: innerH,
+      x: textAreaX, y: rowY, w: badgeW, h: rowH,
       fill_color: '#FFFFFF', border_color: null, border_width: 0, corner_radius: cr
     })
 
-    // "#N" — upper half of white area, colored with rankFill
+    // Step 3a: "#N" in rankFill over white area, upper half
     blocks.push({
       block_type: 'text_box',
-      x: innerX, y: innerY, w: innerW, h: r2(innerH * 0.55),
+      x: textAreaX, y: rowY, w: textAreaW, h: r2(rowH * 0.55),
       text: '#' + rankNum,
       font_family: ps.rank_font_family || bt.title_font_family || 'Arial',
       font_size: numFontSize, bold: true,
-      color: rankFill,
-      align: 'center', valign: 'bottom'
+      color: rankFill, align: 'center', valign: 'bottom'
     })
 
-    // Rank label — lower half of white area, colored with rankFill
+    // Step 3b: rank label in rankFill over white area, lower half
     blocks.push({
       block_type: 'text_box',
-      x: innerX, y: r2(innerY + innerH * 0.55), w: innerW, h: r2(innerH * 0.40),
+      x: textAreaX, y: r2(rowY + rowH * 0.55), w: textAreaW, h: r2(rowH * 0.36),
       text: rankLabel,
       font_family: ps.rank_font_family || bt.title_font_family || 'Arial',
       font_size: labelFontSize, bold: false,
-      color: rankFill,
-      align: 'center', valign: 'top'
+      color: rankFill, align: 'center', valign: 'top'
     })
 
     // Title — vertically centered with description
