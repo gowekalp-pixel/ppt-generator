@@ -5327,20 +5327,28 @@ function _riskRegisterToBlocks(art, content_y, blocks, bt, r2) {
           text: _truncateText(item.secondary_message, 120), font_family: bodyFont, font_size: secondaryFs, bold: false, color: captionColor, align: 'left', valign: 'top' })
       }
 
-      // Right top: tag pills — clamp to right column, skip if they would overflow
-      const tags = Array.isArray(item.tags) ? item.tags : []
-      let pillX = r2(ax + aw - rightColW)
-      const pillMaxX = r2(ax + aw - 0.04)   // hard right edge
-      tags.forEach(tag => {
-        const tc  = tagColors(String(tag.tone || 'neutral').toLowerCase())
+      // Right top: tag pills — right-aligned so last tag flush with artifact right edge
+      const tags     = Array.isArray(item.tags) ? item.tags : []
+      const pillMaxX = r2(ax + aw - 0.04)          // hard right edge (same as pip grid)
+      const pillMinX = r2(ax + aw - rightColW)      // don't encroach on left text column
+      // Compute positions right-to-left, then render in visual (left-to-right) order
+      const visibleTags = []
+      let pillRightEdge = pillMaxX
+      ;[...tags].reverse().forEach(tag => {
         const val = String(tag.value || '')
         const tW  = r2(Math.min(1.10, Math.max(0.58, val.length * 0.068 + 0.20)))
-        if (r2(pillX + tW) > pillMaxX) return   // skip tag — no room
+        const pX  = r2(pillRightEdge - tW)
+        if (pX < pillMinX) return   // skip — no room in right column
+        visibleTags.unshift({ tag, pillX: pX, tW })
+        pillRightEdge = r2(pX - 0.07)
+      })
+      visibleTags.forEach(({ tag, pillX, tW }) => {
+        const tc  = tagColors(String(tag.tone || 'neutral').toLowerCase())
+        const val = String(tag.value || '')
         blocks.push({ block_type: 'rect', x: pillX, y: r2(rowY + 0.04), w: tW, h: 0.26,
           fill_color: tc.fill, border_color: tc.border, border_width: 0.5, corner_radius: 10 })
         blocks.push({ block_type: 'text_box', x: r2(pillX + 0.07), y: r2(rowY + 0.08), w: r2(tW - 0.10), h: 0.16,
           text: _truncateText(val, 16), font_family: bodyFont, font_size: pipLabelFs, bold: false, color: tc.text, align: 'center', valign: 'middle' })
-        pillX = r2(pillX + tW + 0.07)
       })
 
       // Right bottom: pip rows — each pip on its own row, right-aligned within rightColW
