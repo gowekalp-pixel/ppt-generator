@@ -994,13 +994,14 @@ Driver tree rules:
 }
 
 Prioritization rules:
-- Use ONLY primitive geometry in the final blocks: rect, text_box, circle
+- Use ONLY primitive geometry in the final blocks: rect, text_box
 - Rows must be stacked vertically in rank order
 - Each row contains:
-  - left rank badge
+  - left rank badge (square rect filling full row height): shows "#N" and priority label (CRITICAL/HIGH/MEDIUM/LOW) stacked vertically in white text
   - action title
   - action description
   - up to 2 qualifier pills on the right
+- Rank badge is a rect flush to the row left edge, same height as the row — NOT a circle
 - Qualifier slots may be empty; do not render empty pills
 - Rank 1 should be visually strongest; later ranks may step down subtly through the rank palette
 - Title must dominate description; qualifiers must remain compact, secondary metadata
@@ -5736,14 +5737,14 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
 
   const gap = ps.row_gap_in != null ? ps.row_gap_in : 0.16
   const rowH = r2((ah - gap * Math.max(0, items.length - 1)) / Math.max(items.length, 1))
-  const rankSize = r2(Math.min(0.62, Math.max(0.42, rowH * 0.40)))
-  const leftPad = 0.12
+  const badgeW = r2(Math.min(0.88, Math.max(0.62, aw * 0.11)))
   const rightPad = 0.14
   const rankPalette = ps.rank_palette || [bt.secondary_color || '#E0B324', bt.primary_color || '#0078AE']
   const qualifierPalette = ps.qualifier_value_palette || [bt.primary_color || '#0078AE']
   const baseTitleFs = ps.title_font_size || 14
   const baseDescFs = ps.description_font_size || 11
   const baseQualifierFs = ps.qualifier_label_font_size || 10
+  const rankLabels = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'LOW']
 
   items.forEach((item, idx) => {
     const rowY = r2(ay + idx * (rowH + gap))
@@ -5760,14 +5761,14 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
     const qualifierAreaW = nonEmptyQualifiers.length
       ? r2(Math.min(2.55, Math.max(1.55, aw * 0.28, longestQualifier * 0.055)))
       : 0
-    const rankX = r2(rowX + leftPad)
-    const rankY = r2(rowY + (rowH - rankSize) / 2)
-    const textX = r2(rankX + rankSize + 0.14)
+    const textX = r2(rowX + badgeW + 0.14)
     const textW = r2(Math.max(1.1, rowW - (textX - rowX) - qualifierAreaW - rightPad - (qualifierAreaW ? 0.14 : 0)))
     const qualifierX = qualifierAreaW ? r2(rowX + rowW - rightPad - qualifierAreaW) : 0
     const rankFill = rankPalette[idx % Math.max(rankPalette.length, 1)] || bt.primary_color || '#0078AE'
     const titleText = String(item.title || '')
     const descText = String(item.description || '')
+    const rankLabel = rankLabels[Math.min(idx, rankLabels.length - 1)]
+    const rankNum = String(item.rank != null ? item.rank : idx + 1)
 
     let titleFs = baseTitleFs
     while (titleFs > 10 && estimateTextHeight(titleText, textW, titleFs, 1.22) > Math.max(0.32, rowH * 0.42)) {
@@ -5782,6 +5783,7 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
       descFs -= 1
     }
 
+    // Row background
     blocks.push({
       block_type: 'rect',
       x: rowX, y: rowY, w: rowW, h: rowH,
@@ -5791,15 +5793,42 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
       corner_radius: ps.row_corner_radius != null ? ps.row_corner_radius : 6
     })
 
+    // Rank badge: square rect filling full row height
     blocks.push({
-      block_type: 'circle',
-      x: rankX, y: rankY, w: rankSize, h: rankSize,
+      block_type: 'rect',
+      x: rowX, y: rowY, w: badgeW, h: rowH,
       fill_color: rankFill,
-      font_color: ps.rank_text_color || '#FFFFFF',
+      border_color: null,
+      border_width: 0,
+      corner_radius: ps.row_corner_radius != null ? ps.row_corner_radius : 6
+    })
+
+    // Badge number "#N"
+    const numFontSize = Math.max(10, Math.min(18, Math.round(rowH * 30)))
+    blocks.push({
+      block_type: 'text_box',
+      x: rowX, y: r2(rowY + rowH * 0.08), w: badgeW, h: r2(rowH * 0.50),
+      text: '#' + rankNum,
       font_family: ps.rank_font_family || bt.title_font_family || 'Arial',
-      font_size: ps.rank_font_size || Math.max(12, Math.round(rankSize * 36)),
+      font_size: numFontSize,
       bold: true,
-      text: String(item.rank != null ? item.rank : idx + 1)
+      color: ps.rank_text_color || '#FFFFFF',
+      align: 'center',
+      valign: 'bottom'
+    })
+
+    // Badge priority label
+    const labelFontSize = Math.max(6, Math.min(9, Math.round(rowH * 13)))
+    blocks.push({
+      block_type: 'text_box',
+      x: rowX, y: r2(rowY + rowH * 0.58), w: badgeW, h: r2(rowH * 0.36),
+      text: rankLabel,
+      font_family: ps.rank_font_family || bt.title_font_family || 'Arial',
+      font_size: labelFontSize,
+      bold: false,
+      color: ps.rank_text_color || '#FFFFFF',
+      align: 'center',
+      valign: 'top'
     })
 
     blocks.push({

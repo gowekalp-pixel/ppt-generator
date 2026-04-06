@@ -8,7 +8,7 @@
 //                  blocks[] is the PRIMARY rendering path — Agent 5 flattens all
 //                  non-chart/table artifacts (insight_text, cards, workflow, matrix,
 //                  driver_tree, prioritization) into primitive render blocks.
-//                  (text_box, rect, line, circle, rule, image) with native chart/table
+//                  (text_box, rect, line, rule, image) with native chart/table
 //                  blocks retained only where needed. zones[] is diagnostic-only.
 //
 // ─── RENDERING CONTRACT: insight_text ────────────────────────────────────────

@@ -976,7 +976,10 @@
           rank: idx + 1,
           title: lines[idx] || `Priority ${idx + 1}`,
           description: point,
-          qualifiers: [idx === 0 ? 'High impact' : 'Test', idx % 2 === 0 ? 'Low effort' : 'Medium effort']
+          qualifiers: [
+            { label: idx === 0 ? 'High impact' : 'Medium impact', value: '' },
+            { label: idx % 2 === 0 ? 'Low effort' : 'Medium effort', value: '' }
+          ]
         }))
       }
     }
