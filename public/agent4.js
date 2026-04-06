@@ -441,11 +441,11 @@ OPTIONAL zones:
   "priority tier" label.
 
 
-  comparison_table 
+  comparison_table
     A structured grid where rows are options/candidates and columns are evaluation
-  criteria. Each cell contains a judgment rating, not a raw number.
+  criteria. Each cell shows a metric value or toned verdict for that option on that criterion.
   Use when: the board needs to see WHICH option wins against WHICH criteria.
-  The recommended option must be visually distinguished (recommended_option field).
+  The recommended option must be visually distinguished (is_recommended: true on its row).
   NEVER use plain table for option-vs-criteria data — comparison_table is mandatory.
   
   initiative_map
@@ -3514,7 +3514,25 @@ function pruneAgent4SlideForOutput(slide) {
       }
     }
     if (type === 'comparison_table') {
-      // Normalise: new schema uses column_headers/rows; legacy schema used criteria/options
+      // ── New flat schema: columns[] + rows[].cells[{value, subtext, tone}] ──
+      if (Array.isArray(artifact.columns) && artifact.columns.length) {
+        return {
+          type: 'comparison_table',
+          artifact_header: artifact.artifact_header || '',
+          columns: artifact.columns.map(c => String(c || '')),
+          rows: (Array.isArray(artifact.rows) ? artifact.rows : []).map(r => ({
+            is_recommended: !!r?.is_recommended,
+            badge: r?.badge || undefined,
+            cells: (Array.isArray(r?.cells) ? r.cells : []).map(cell => ({
+              value:   cell?.value   != null ? String(cell.value)   : '',
+              subtext: cell?.subtext != null ? String(cell.subtext) : undefined,
+              tone:    cell?.tone    || 'neutral'
+            }))
+          })),
+          ...coverage
+        }
+      }
+      // ── Previous schema: column_headers[] + rows[].cells[{column_id, rating, ...}] ──
       const columnHeaders = Array.isArray(artifact.column_headers) && artifact.column_headers.length
         ? artifact.column_headers.map(c => ({ id: c?.id || '', label: c?.label || '' }))
         : Array.isArray(artifact.criteria)
@@ -3772,6 +3790,7 @@ Fix rules:
 - Matrix: fully populate x_axis, y_axis, all 4 quadrants, and points; ensure artifact_header is set
 - Driver_tree: fully populate root and branches; ensure artifact_header is set
 - Prioritization: fully populate ranked action items; ensure artifact_header is set
+- comparison_table: use the flat schema — columns[] as a string array, rows[].cells[{value, subtext, tone}]; cells[0] is the option name with tone:"label"; data cells use tone:"positive"/"negative"/"neutral"; is_recommended:true on the best row; fully populate every cell with real values from the source document
 - If matrix / driver_tree / prioritization is present, keep it only in the PRIMARY zone and pair it only with insight_text
 - If a slide uses matrix / driver_tree / prioritization, do NOT add cards, chart, workflow, or table anywhere else on that slide
 - selected_layout_name: choose from available layouts; set to "" if none available
