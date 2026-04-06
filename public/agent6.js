@@ -116,7 +116,8 @@ function slimBlockForRender(block) {
     'header_row_height', 'header_cell_frames', 'body_cell_frames', 'column_types', 'column_alignments',
     'workflow_style', 'flow_direction', 'workflow_type', 'nodes', 'connections',
     'artifact_id', 'artifact_type', 'artifact_subtype', 'artifact_header_text', 'block_role',
-    'fallback_policy', 'sentiment', 'image_b64', 'image_path', 'src'
+    'fallback_policy', 'sentiment', 'image_b64', 'image_path', 'src',
+    'icon', 'icon_color'
   ])
   for (const [k, v] of Object.entries(block)) {
     if (keep.has(k) && v !== undefined) out[k] = v

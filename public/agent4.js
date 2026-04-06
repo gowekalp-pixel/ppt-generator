@@ -1321,39 +1321,27 @@ comparison_table:
   {
     "type": "comparison_table",
     "artifact_header": "string — the one-line insight the comparison proves",
-    "column_headers": [
-      { "id": "option", "label": "Option" },
-      { "id": "c1", "label": "string" }
-    ],
+    "columns": ["Option Label", "Criterion 1", "Criterion 2"],
     "rows": [
       {
-        "id": "string",
-        "option_name": "string",
-        "badge_text": "string — optional row badge e.g. 'recommended'",
-        "row_tone": "recommended" | "neutral",
+        "is_recommended": true,
+        "badge": "Recommended",
         "cells": [
-          {
-            "column_id": "string — matches column_headers[].id",
-            "rating": "yes" | "partial" | "no" | "text",
-            "display_value": "string — optional rendered symbol/text if not default",
-            "secondary_message": "string — optional subtext when needed",
-            "representation_type": "icon" | "text" | "icon_with_text",
-            "tonality": "positive" | "negative" | "neutral"
-          }
+          { "value": "string — option name", "subtext": null, "tone": "label" },
+          { "value": "string — metric or verdict", "subtext": "string — ≤6-word annotation, or null", "tone": "positive" }
         ]
       }
-    ],
-    "recommended_row_id": "string — id of the preferred row",
-    "recommended_option": "string — name fallback only if id is unavailable"
+    ]
   }
   comparison_table usage:
-  - column_headers[] defines the evaluation criteria columns; first column is the option label column.
-  - each row is one option being evaluated.
-  - row_tone = "recommended" visually distinguishes the selected row.
-  - cells[] should usually be icon-led judgments with optional supporting text.
-  - tonality: set on cells with representation_type "text" when display_value is a metric meant for
-    cross-row comparison (e.g. variance, %, delta). "positive" = green pill, "negative" = red pill,
-    "neutral" = grey pill. Omit when the cell is icon-only or the value carries no directional signal.
+  - columns[] is a flat array of strings. First entry is the option-label column header.
+  - rows[] each represent one option. cells[] are positionally matched to columns[] by index.
+  - cells[0] always has tone:"label" — this is the row's option name, not a criterion rating.
+  - is_recommended: true visually distinguishes the preferred row with a highlight fill.
+  - badge: short pill text on the recommended row (e.g. "Recommended"). null on other rows.
+  - tone on data cells: "positive" = green, "negative" = red, "neutral" = grey.
+  - subtext: optional short supporting annotation rendered below the value (≤6 words). null if not needed.
+  - value: the primary display text for the cell (metric, percentage, currency, or short verdict).
   NEVER use plain table for option-vs-criteria data.
 
 initiative_map:
@@ -1845,10 +1833,11 @@ function validateArtifact(artifact) {
   }
 
   if (t === 'comparison_table') {
-    const hasNewSchema = (artifact.column_headers || []).length > 0 && (artifact.rows || []).length > 0
+    const hasFlatSchema   = Array.isArray(artifact.columns) && artifact.columns.length > 0 && Array.isArray(artifact.rows) && artifact.rows.length > 0
+    const hasHeaderSchema = (artifact.column_headers || []).length > 0 && (artifact.rows || []).length > 0
     const hasLegacySchema = (artifact.criteria || []).length > 0 && (artifact.options || []).length > 0
-    if (!hasNewSchema && !hasLegacySchema) return { valid: false, reason: 'comparison_table has no column_headers/rows' }
-    if (hasNewSchema && (artifact.rows || []).some(r => !(r.cells || []).length)) return { valid: false, reason: 'comparison_table row missing cells' }
+    if (!hasFlatSchema && !hasHeaderSchema && !hasLegacySchema) return { valid: false, reason: 'comparison_table missing columns[]/rows[]' }
+    if ((hasFlatSchema || hasHeaderSchema) && (artifact.rows || []).some(r => !(r.cells || []).length)) return { valid: false, reason: 'comparison_table row missing cells' }
     if (hasLegacySchema && (artifact.options || []).some(o => !(o.cells || []).length)) return { valid: false, reason: 'comparison_table option missing cells' }
     return { valid: true }
   }

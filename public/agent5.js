@@ -1083,7 +1083,7 @@ Stat_bar rules:
 
 Comparison table rules:
 - Layout (column widths, row heights, cell positions) is computed by JS from x/y/w/h — do NOT set internal positions
-- Content (criteria[], options[], recommended_option) comes from the Agent 4 manifest — do NOT duplicate it here
+- Content (columns[], rows[]) comes from the Agent 4 manifest — do NOT duplicate it here
 - recommended_fill_color: light green tint (#EEF4E2 or brand equivalent)
 - yes/no/partial: semantic signal colors — green/red/amber respectively; do NOT use brand primary for these
 - label_font_size: 9–11pt; body_font_size: 8–10pt
@@ -1594,7 +1594,7 @@ function validateRenderCompleteness(slide) {
         issues.push(p + ': outside canvas')
       }
     }
-    if (['title', 'subtitle', 'footer', 'page_number', 'image', 'chart', 'table', 'bullet_list', 'rect', 'text_box', 'rule', 'circle', 'line'].includes(b.block_type)) {
+    if (['title', 'subtitle', 'footer', 'page_number', 'image', 'chart', 'table', 'bullet_list', 'rect', 'text_box', 'rule', 'circle', 'line', 'icon_badge'].includes(b.block_type)) {
       if (!b.artifact_type) issues.push(p + ': missing artifact_type')
       if (!b.artifact_subtype) issues.push(p + ': missing artifact_subtype')
       if (!b.fallback_policy) issues.push(p + ': missing fallback_policy')
@@ -2245,6 +2245,37 @@ function normalizeWorkflowNodes(nodes) {
 }
 
 function normalizeComparisonTableManifest(artifact) {
+  // ── New flat schema: columns[] (strings) + rows[].cells[{value, subtext, tone}] ──
+  if (Array.isArray(artifact?.columns) && artifact.columns.length) {
+    const columns  = artifact.columns.map(c => String(c || ''))
+    const criteria = columns.slice(1)   // first column is the label column
+    const rows     = Array.isArray(artifact?.rows) ? artifact.rows : []
+    const toneToRating = t => t === 'positive' ? 'yes' : t === 'negative' ? 'no' : t === 'neutral' ? 'partial' : 'text'
+    const options = rows.map((row, ri) => {
+      const cells     = Array.isArray(row?.cells) ? row.cells : []
+      const labelCell = cells[0] || {}
+      const dataCells = cells.slice(1)
+      return {
+        id:         `row_${ri + 1}`,
+        name:       String(labelCell.value || ''),
+        badge_text: row?.is_recommended ? String(row?.badge || 'Recommended') : '',
+        row_tone:   row?.is_recommended ? 'recommended' : 'neutral',
+        ratings:    dataCells.map((cell, ci) => ({
+          criterion:           criteria[ci] || '',
+          column_id:           criteria[ci] || '',
+          rating:              toneToRating(cell?.tone),
+          display_value:       String(cell?.value || ''),
+          note:                String(cell?.subtext || ''),
+          representation_type: 'text',
+          tonality:            cell?.tone === 'positive' ? 'positive' : cell?.tone === 'negative' ? 'negative' : 'neutral'
+        }))
+      }
+    })
+    const recommendedRow = options.find(o => o.row_tone === 'recommended')
+    return { criteria, options, recommended_option: recommendedRow?.name || '', recommended_row_id: '' }
+  }
+
+  // ── Previous new schema: column_headers[{id,label}] + rows[].cells[{column_id, rating, ...}] ──
   const legacyCriteria = Array.isArray(artifact?.criteria)
     ? artifact.criteria.map(c => ({ id: String(c?.id || c?.label || c?.name || c || ''), label: _displayLabel(c) }))
     : []
@@ -2524,12 +2555,17 @@ function buildSafeArtifactShell(manifestArt, bt) {
   }
   if (t === 'comparison_table') {
     const normalized = normalizeComparisonTableManifest(manifestArt)
+    // Preserve the label column header from the flat schema (columns[0]) for the renderer
+    const labelColumnHeader = Array.isArray(manifestArt?.columns) && manifestArt.columns.length
+      ? String(manifestArt.columns[0] || 'Option')
+      : String((manifestArt?.column_headers || [])[0]?.label || 'Option')
     return {
       type: 'comparison_table',
       artifact_coverage_hint,
       artifact_header,
       x: null, y: null, w: null, h: null,
       comparison_header: manifestArt?.comparison_header || artifact_header || manifestArt?.table_header || '',
+      _label_column_header: labelColumnHeader,
       criteria: normalized.criteria,
       options: normalized.options,
       recommended_option: normalized.recommended_option,
@@ -4189,11 +4225,11 @@ function _comparisonTableToBlocks_legacy(art, content_y, blocks, bt, r2) {
 
 // Override: comparison_table should render as a simple comparison grid using
 // one outer shell, plain headers, row dividers, recommended-row highlight,
-// and small judgment marks built from basic shapes.
+// and colored value pills with optional subtext built from basic shapes.
 function _comparisonTableToBlocks(art, content_y, blocks, bt, r2) {
-  const cs = art.comparison_style || {}
+  const cs      = art.comparison_style || {}
   const criteria = (art.criteria || []).slice(0, 6)
-  const options = (art.options || []).slice(0, 5)
+  const options  = (art.options  || []).slice(0, 5)
   const recommendedNameFallback = String(art.recommended_option || '').trim().toLowerCase()
   const ax = art.x || 0
   const ay = content_y
@@ -4201,32 +4237,34 @@ function _comparisonTableToBlocks(art, content_y, blocks, bt, r2) {
   const ah = r2((art.y || 0) + (art.h || 0) - content_y)
   if (!criteria.length || !options.length || aw <= 0 || ah <= 0) return
 
-  const headerH = 0.44  // tall enough for 2-line column header text at font size 10
-  const rowH = r2(Math.max(0.44, (ah - headerH) / Math.max(options.length, 1)))
-  const labelW = r2(Math.min(Math.max(1.9, aw * 0.24), 2.7))
-  const colW = r2(Math.max(0.75, (aw - labelW) / Math.max(criteria.length, 1)))
+  // Increase minimum row height when any cell has subtext so it can be shown
+  const hasAnySubtext = options.some(o => (o.ratings || []).some(r => r.note && r.note.trim()))
+  const headerH   = 0.44
+  const minRowH   = hasAnySubtext ? 0.72 : 0.50
+  const rowH      = r2(Math.max(minRowH, (ah - headerH) / Math.max(options.length, 1)))
+  const labelW    = r2(Math.min(Math.max(1.9, aw * 0.24), 2.7))
+  const colW      = r2(Math.max(0.80, (aw - labelW) / Math.max(criteria.length, 1)))
 
   // ── Brand-sourced tokens ───────────────────────────────────────────────────
-  const titleFont       = cs.label_font_family || bt.title_font_family || 'Arial'
-  const bodyFont        = cs.body_font_family  || bt.body_font_family  || 'Arial'
-  const bodyTextColor   = bt.body_color || '#111111'
-  const captionColor    = bt.caption_color || bodyTextColor
-  const shellFill       = cs.container_fill_color || '#FFFFFF'
-  const shellBorder     = cs.container_border_color || '#D7DEE8'
-  const shellBorderW    = cs.container_border_width != null ? cs.container_border_width : 0.6
-  const shellCornerR    = cs.container_corner_radius != null ? cs.container_corner_radius : 8
-  const gridColor       = cs.grid_color || shellBorder
-  const recommendedFill = cs.recommended_fill_color || '#EEF4E2'
-  const recommendedTextColor = bt.primary_color || bodyTextColor  // brand primary reads well on light green fill
+  const titleFont        = cs.label_font_family || bt.title_font_family || 'Arial'
+  const bodyFont         = cs.body_font_family  || bt.body_font_family  || 'Arial'
+  const bodyTextColor    = bt.body_color || '#111111'
+  const captionColor     = bt.caption_color || bodyTextColor
+  const shellFill        = cs.container_fill_color   || '#FFFFFF'
+  const shellBorder      = cs.container_border_color || '#D7DEE8'
+  const shellBorderW     = cs.container_border_width   != null ? cs.container_border_width   : 0.6
+  const shellCornerR     = cs.container_corner_radius  != null ? cs.container_corner_radius  : 8
+  const gridColor        = cs.grid_color || shellBorder
+  const recommendedFill  = cs.recommended_fill_color || '#EEF4E2'
+  const recommendedTextColor = bt.primary_color || bodyTextColor
 
-  // Icon semantic fills from cs (pre-populated from brand in defaults)
-  const iconFor = (rating, displayValue) => {
-    const token = String(rating || '').toLowerCase()
-    const overrideText = String(displayValue || '')
-    if (token === 'yes')     return { fill: cs.yes_fill_color     || '#EEF4E2', text: overrideText || '✓', color: cs.yes_text_color     || '#386B2A' }
-    if (token === 'no')      return { fill: cs.no_fill_color      || '#F8EAEA', text: overrideText || '✖', color: cs.no_text_color      || '#8B2C23' }
-    if (token === 'partial') return { fill: cs.partial_fill_color || '#FBF4E2', text: overrideText || '~', color: cs.partial_text_color || '#7A6220' }
-    return { fill: cs.neutral_fill_color || '#F4F5F7', text: overrideText || String(rating || ''), color: bodyTextColor }
+  // Tone → pill colors
+  const pillStyleFor = (tonality) => {
+    const t = String(tonality || '').toLowerCase()
+    if (t === 'positive') return { fill: cs.yes_fill_color     || '#E4F2DE', color: cs.yes_text_color  || '#386B2A' }
+    if (t === 'negative') return { fill: cs.no_fill_color      || '#FDE8E8', color: cs.no_text_color   || '#8B2C23' }
+    if (t === 'neutral')  return { fill: cs.neutral_fill_color || '#F4F5F7', color: bodyTextColor }
+    return null
   }
 
   // ── Outer shell ────────────────────────────────────────────────────────────
@@ -4240,12 +4278,13 @@ function _comparisonTableToBlocks(art, content_y, blocks, bt, r2) {
   })
 
   // ── Column header row ──────────────────────────────────────────────────────
+  // First column header (label column)
   blocks.push({
     block_type: 'text_box',
     x: r2(ax + 0.14), y: ay, w: r2(labelW - 0.18), h: headerH,
-    text: 'Option',
+    text: String(art._label_column_header || 'Option'),
     font_family: titleFont, font_size: cs.label_font_size || 10, bold: true,
-    color: captionColor, align: 'left', valign: 'middle'
+    color: captionColor, align: 'left', valign: 'middle', wrap: false
   })
   criteria.forEach((criterion, ci) => {
     const x = r2(ax + labelW + ci * colW)
@@ -4281,24 +4320,23 @@ function _comparisonTableToBlocks(art, content_y, blocks, bt, r2) {
       })
     }
 
-    // Option name label — spans full row height so it is always vertically centred
+    // Option name label — left column, vertically centred
     blocks.push({
       block_type: 'text_box',
       x: r2(ax + 0.14), y: rowY, w: r2(labelW - 0.24), h: rowH,
       text: String(option?.name || ''),
       font_family: titleFont, font_size: cs.label_font_size || 11, bold: true,
       color: isRecommended ? recommendedTextColor : bodyTextColor,
-      align: 'left', valign: 'middle'
+      align: 'left', valign: 'middle', wrap: false
     })
 
-    // "recommended" badge — uses badge_text from schema if provided
-    if (isRecommended) {
-      const badgeLabel = String(option?.badge_text || 'recommended')
-      const badgeW = r2(Math.min(1.10, Math.max(0.72, badgeLabel.length * 0.072 + 0.18)))
-      const badgeX = r2(ax + 0.14 + String(option?.name || '').length * 0.068 + 0.10)
+    // "Recommended" badge — sits on its own line below the option name
+    if (isRecommended && option?.badge_text) {
+      const badgeLabel = String(option.badge_text)
+      const badgeW = r2(Math.min(labelW - 0.28, Math.max(0.72, badgeLabel.length * 0.072 + 0.22)))
       blocks.push({
         block_type: 'rect',
-        x: badgeX, y: r2(rowY + 0.08), w: badgeW, h: 0.22,
+        x: r2(ax + 0.14), y: r2(rowY + rowH / 2 + 0.04), w: badgeW, h: 0.20,
         fill_color: recommendedFill,
         border_color: shellBorder,
         border_width: 0.6,
@@ -4306,90 +4344,89 @@ function _comparisonTableToBlocks(art, content_y, blocks, bt, r2) {
       })
       blocks.push({
         block_type: 'text_box',
-        x: r2(badgeX + 0.06), y: r2(rowY + 0.11), w: r2(badgeW - 0.12), h: 0.14,
+        x: r2(ax + 0.14), y: r2(rowY + rowH / 2 + 0.04), w: badgeW, h: 0.20,
         text: badgeLabel,
-        font_family: bodyFont, font_size: 8, bold: true,
-        color: recommendedTextColor, align: 'center', valign: 'middle'
+        font_family: bodyFont, font_size: 7.5, bold: true,
+        color: recommendedTextColor, align: 'center', valign: 'middle', wrap: false
       })
     }
 
-    // Icon cells
+    // ── Criterion cells ────────────────────────────────────────────────────
     criteria.forEach((criterion, ci) => {
-      const ratingObj = (option?.ratings || []).find(r => String(r?.criterion || '') === String(criterion)) || (option?.ratings || [])[ci] || {}
-      // Honour display_value and representation_type from Agent 4 schema
-      const reprType = String(ratingObj?.representation_type || 'icon').toLowerCase()
-      const visual = iconFor(ratingObj?.rating || ratingObj?.note || '', reprType === 'text' ? (ratingObj?.display_value || ratingObj?.rating) : ratingObj?.display_value)
-      const cx = r2(ax + labelW + ci * colW + colW / 2)
-      const cy = r2(rowY + rowH / 2)
-      const iconR = 0.11  // circle radius in inches
+      const ratingObj = (option?.ratings || []).find(r => String(r?.criterion || '') === String(criterion))
+        || (option?.ratings || [])[ci] || {}
+      const displayValue = String(ratingObj?.display_value || '')
+      const noteText     = String(ratingObj?.note || '').trim()
+      const tonality     = String(ratingObj?.tonality || '').toLowerCase()
+      const colX         = r2(ax + labelW + ci * colW)
+      const textPad      = 0.07
+      const pillStyle    = pillStyleFor(tonality)
 
-      if (reprType !== 'text') {
+      // Vertical layout: if subtext exists split the row into value (upper) + note (lower)
+      const hasNote     = !!noteText
+      const valueSectH  = hasNote ? r2(rowH * 0.56) : rowH
+      const noteSectY   = r2(rowY + valueSectH + 0.02)
+      const noteSectH   = r2(rowH - valueSectH - 0.04)
+      const valueCenterY = r2(rowY + valueSectH / 2)
+
+      if (pillStyle && displayValue) {
+        // Colored pill — fixed height, no wrap, centred in value section
+        const pillH = 0.26
+        const pillW = r2(Math.min(colW - 2 * textPad, Math.max(0.44, displayValue.length * 0.075 + 0.22)))
+        const pillX = r2(colX + (colW - pillW) / 2)
+        const pillY = r2(valueCenterY - pillH / 2)
         blocks.push({
-          block_type: 'circle',
-          x: r2(cx - iconR), y: r2(cy - iconR), w: r2(iconR * 2), h: r2(iconR * 2),
-          fill_color: visual.fill,
-          border_color: null, border_width: 0
+          block_type: 'rect',
+          x: pillX, y: pillY, w: pillW, h: pillH,
+          fill_color: pillStyle.fill,
+          border_color: null, border_width: 0, corner_radius: 8
         })
         blocks.push({
           block_type: 'text_box',
-          x: r2(cx - iconR - 0.02), y: r2(cy - iconR), w: r2(iconR * 2 + 0.04), h: r2(iconR * 2),
-          text: visual.text,
-          font_family: titleFont, font_size: 10,
-          bold: true,
-          color: visual.color, align: 'center', valign: 'middle'
+          x: pillX, y: pillY, w: pillW, h: pillH,
+          text: displayValue,
+          font_family: bodyFont, font_size: cs.body_font_size || 9,
+          bold: true, wrap: false,
+          color: pillStyle.color, align: 'center', valign: 'middle'
         })
-      } else {
-        // Text cell — span the full column width so values aren't clipped
-        const colX = r2(ax + labelW + ci * colW)
-        const textPad = 0.06
-        const tonality = String(ratingObj?.tonality || '').toLowerCase()
-        const tonalityText = tonality === 'positive' ? (cs.yes_text_color     || '#386B2A')
-                           : tonality === 'negative' ? (cs.no_text_color      || '#8B2C23')
-                           : tonality === 'neutral'  ? (cs.neutral_text_color || bodyTextColor)
-                           : null
-        // Pill only for short numeric/unit values (≤2 words, e.g. "28.7%", "₹1,082", "471k (68.1%)")
-        // Longer descriptive phrases get colored text only — no background pill
-        const wordCount = (visual.text || '').trim().split(/\s+/).filter(Boolean).length
-        const isNumericValue = wordCount <= 2
-        const tonalityFill = (tonality === 'positive' ? (cs.yes_fill_color   || '#E4F2DE')
-                           :  tonality === 'negative' ? (cs.no_fill_color    || '#FDE8E8')
-                           :  tonality === 'neutral'  ? (cs.neutral_fill_color || '#F4F5F7')
-                           :  null)
+      } else if (displayValue) {
+        // Plain text value (no tonality fill)
+        const textColor = isRecommended ? recommendedTextColor : bodyTextColor
+        blocks.push({
+          block_type: 'text_box',
+          x: r2(colX + textPad), y: r2(valueCenterY - valueSectH / 2), w: r2(colW - 2 * textPad), h: valueSectH,
+          text: displayValue,
+          font_family: bodyFont, font_size: cs.body_font_size || 10,
+          bold: false, wrap: false,
+          color: textColor, align: 'center', valign: 'middle'
+        })
+      } else if (tonality) {
+        // No value — emit an icon badge (check / cross / partial) derived from tone
+        const iconName  = tonality === 'positive' ? 'check' : tonality === 'negative' ? 'cross' : 'partial'
+        const badgeSize = r2(Math.min(0.25, rowH * 0.40))
+        const badgeCx   = r2(colX + colW / 2)
+        const badgeCy   = r2(rowY + valueSectH / 2)
+        blocks.push({
+          block_type: 'icon_badge',
+          icon: iconName,
+          x: r2(badgeCx - badgeSize / 2),
+          y: r2(badgeCy - badgeSize / 2),
+          w: badgeSize, h: badgeSize,
+          fill_color:  pillStyle ? pillStyle.fill  : (cs.neutral_fill_color || '#F4F5F7'),
+          icon_color:  pillStyle ? pillStyle.color : bodyTextColor
+        })
+      }
 
-        if (tonalityFill && isNumericValue && visual.text) {
-          // Pill: colored rounded-rect behind the value, centred in the cell
-          const pillW = r2(Math.min(colW - 2 * textPad, Math.max(0.42, visual.text.length * 0.072 + 0.18)))
-          const pillH = 0.24
-          const pillX = r2(colX + (colW - pillW) / 2)
-          const pillY = r2(rowY + (rowH - pillH) / 2)
-          blocks.push({
-            block_type: 'rect',
-            x: pillX, y: pillY, w: pillW, h: pillH,
-            fill_color: tonalityFill,
-            border_color: null, border_width: 0, corner_radius: 8
-          })
-          blocks.push({
-            block_type: 'text_box',
-            x: r2(pillX + 0.05), y: pillY, w: r2(pillW - 0.10), h: pillH,
-            text: visual.text,
-            font_family: bodyFont, font_size: cs.body_font_size || 9,
-            bold: true,
-            color: tonalityText, align: 'center', valign: 'middle'
-          })
-        } else {
-          // Plain text — apply tonality as font color only (no background)
-          const textColor = (tonalityText && visual.text) ? tonalityText
-                          : isRecommended ? recommendedTextColor
-                          : bodyTextColor
-          blocks.push({
-            block_type: 'text_box',
-            x: r2(colX + textPad), y: r2(rowY + 0.04), w: r2(colW - 2 * textPad), h: r2(rowH - 0.08),
-            text: visual.text,
-            font_family: bodyFont, font_size: cs.body_font_size || 10,
-            bold: !!tonalityText,
-            color: textColor, align: 'center', valign: 'middle'
-          })
-        }
+      // Subtext line — muted caption below the value pill
+      if (hasNote) {
+        blocks.push({
+          block_type: 'text_box',
+          x: r2(colX + textPad), y: noteSectY, w: r2(colW - 2 * textPad), h: noteSectH,
+          text: noteText,
+          font_family: bodyFont, font_size: r2((cs.body_font_size || 9) * 0.82),
+          bold: false, wrap: true,
+          color: captionColor, align: 'center', valign: 'top'
+        })
       }
     })
 
@@ -7746,6 +7783,9 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
           artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
           artifact_header: artifactHeader,
           comparison_header: mArt.comparison_header || artifactHeader || dArt.comparison_header || mArt.table_header || '',
+          _label_column_header: Array.isArray(mArt?.columns) && mArt.columns.length
+            ? String(mArt.columns[0] || 'Option')
+            : String((mArt?.column_headers || [])[0]?.label || dArt._label_column_header || 'Option'),
           criteria: normalized.criteria.length ? normalized.criteria : (dArt.criteria || []),
           options: normalized.options.length ? normalized.options : (dArt.options || []),
           recommended_option: normalized.recommended_option || dArt.recommended_option || ''

@@ -3386,6 +3386,78 @@ def render_block_line(slide, block, bt):
         pass
 
 
+def render_block_icon_badge(slide, block):
+    """Render a toned circle with a vector icon using PowerPoint preset shapes.
+    icon: 'check'  → checkMark preset shape (PowerPoint built-in vector)
+    icon: 'cross'  → two diagonal connector lines forming an X
+    icon: 'partial'→ thin horizontal rect as a minus sign
+    """
+    from pptx.oxml.ns import qn
+    from pptx.enum.shapes import MSO_CONNECTOR
+    x      = float(block.get('x', 0))
+    y      = float(block.get('y', 0))
+    size   = float(block.get('w', 0.22))
+    fill   = block.get('fill_color') or '#E4F2DE'
+    icolor = block.get('icon_color') or '#386B2A'
+    icon   = str(block.get('icon', 'check')).lower()
+
+    # ── Outer circle (background) ─────────────────────────────────────────────
+    circle = slide.shapes.add_shape(9, inches(x), inches(y), inches(size), inches(size))
+    circle.fill.solid()
+    circle.fill.fore_color.rgb = hex_to_rgb(fill)
+    circle.line.fill.background()
+
+    pad   = size * 0.22
+    isize = size - 2 * pad
+    ix    = x + pad
+    iy    = y + pad
+
+    if icon == 'check':
+        # PowerPoint's built-in checkMark preset geometry — clean vector shape
+        try:
+            shape = slide.shapes.add_shape(1, inches(ix), inches(iy), inches(isize), inches(isize))
+            prstGeom = shape._element.find('.//' + qn('a:prstGeom'))
+            if prstGeom is not None:
+                prstGeom.set('prst', 'checkMark')
+                avLst = prstGeom.find(qn('a:avLst'))
+                if avLst is not None:
+                    prstGeom.remove(avLst)
+            shape.fill.solid()
+            shape.fill.fore_color.rgb = hex_to_rgb(icolor)
+            shape.line.fill.background()
+        except Exception:
+            pass
+
+    elif icon == 'cross':
+        # Two diagonal connectors forming an X
+        lw_pt = max(1.0, round(isize * 20, 1))
+        try:
+            for (x1, y1, x2, y2) in [
+                (ix,         iy,         ix + isize, iy + isize),
+                (ix + isize, iy,         ix,         iy + isize),
+            ]:
+                ln = slide.shapes.add_connector(
+                    MSO_CONNECTOR.STRAIGHT,
+                    inches(x1), inches(y1), inches(x2), inches(y2)
+                )
+                ln.line.color.rgb = hex_to_rgb(icolor)
+                ln.line.width = Pt(lw_pt)
+        except Exception:
+            pass
+
+    elif icon == 'partial':
+        # Thin horizontal rectangle as a minus / partial indicator
+        mh = max(isize * 0.20, 0.020)
+        my = iy + (isize - mh) / 2
+        try:
+            rect = slide.shapes.add_shape(1, inches(ix), inches(my), inches(isize), inches(mh))
+            rect.fill.solid()
+            rect.fill.fore_color.rgb = hex_to_rgb(icolor)
+            rect.line.fill.background()
+        except Exception:
+            pass
+
+
 def render_block_bullet_list(slide, block, bt):
     """Render a bullet_list block — calls existing render_insight_text logic."""
     # Build a minimal artifact dict that render_insight_text expects.
@@ -3531,6 +3603,8 @@ def render_blocks(slide, slide_spec, bt, use_template):
                 render_block_rect(slide, block)
             elif btype == 'circle':
                 render_block_circle(slide, block, bt)
+            elif btype == 'icon_badge':
+                render_block_icon_badge(slide, block)
             elif btype == 'rule':
                 render_block_rule(slide, block, bt)
             elif btype == 'line':
