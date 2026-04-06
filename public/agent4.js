@@ -901,6 +901,15 @@ STEP 7 — FINAL ENFORCEMENT
   the zone allocation gives the matrix ≥ 70% of slide width AND ≥ 50% of slide height.
   If the current split violates this, expand the matrix zone (compress the insight_text zone)
   until the constraint is satisfied. Do NOT use a layout that makes the matrix smaller than this.
+- STAT_BAR SIZE HARD RULE: if any zone contains a stat_bar, confirm:
+  (a) Zone width satisfies: 1 bar col → ≥50% slide width; 2 bar cols → ≥75%; 3 bar cols → 100%.
+  (b) The stat_bar's share of slide height ≥ 30% + (N_rows - 2) × 11%, where N_rows is the row count.
+      When stat_bar shares its zone with another artifact (e.g., insight_text), set artifact_split_hint
+      so stat_bar receives at least this minimum as a fraction of the zone height.
+      Example: 5-row stat_bar in a full-height zone needs ≥ 53% → set artifact_split_hint to [55, 45] or higher.
+      Example: 5-row stat_bar in a right_50 zone (50% of slide height) needs ≥ 53% of slide = 106% of zone →
+      stat_bar cannot fit alongside another artifact in that zone; give it the full zone or expand zone to full height.
+  Never compress stat_bar below these minimums — trim rows or reduce bar columns instead.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PHASE 5 — FINAL SLIDE MANIFEST ASSEMBLY
@@ -1319,7 +1328,7 @@ stat_bar:
     "annotation_style": "inline" | "trailing",
     "scale_UL": number — upper limit of bar scale (e.g. 100 for percentages); omit to auto-scale to max row value,
     "column_headers": [
-      {"id": "col1", "value": "string — column header label", "display_type": "text" | "bar" | "normal"}
+      {"id": "col1", "value": "string — column header label", "display_type": "text" | "bar" | "tag/pill" }
     ],
     "rows": [
       {
@@ -1845,12 +1854,7 @@ function validateArtifact(artifact) {
         })) return { valid: false, reason: `stat_bar bar column "${barColId}" has all-zero values` }
       }
     } else {
-      // Old schema (backward compat): rows have label/value fields
-      for (const row of rows) {
-        if (!String(row?.label || '').trim()) return { valid: false, reason: 'stat_bar row missing label' }
-        if (!Number.isFinite(+row?.value)) return { valid: false, reason: 'stat_bar row missing numeric value' }
-      }
-      if (rows.every(r => (+r.value || 0) === 0)) return { valid: false, reason: 'stat_bar has all-zero row values' }
+      return { valid: false, reason: 'stat_bar column_headers must be an array — use the current schema with display_type per column' }
     }
     return { valid: true }
   }
@@ -1914,25 +1918,20 @@ function validateArtifact(artifact) {
   }
 
   if (t === 'comparison_table') {
-    const hasFlatSchema   = Array.isArray(artifact.columns) && artifact.columns.length > 0 && Array.isArray(artifact.rows) && artifact.rows.length > 0
-    const hasHeaderSchema = (artifact.column_headers || []).length > 0 && (artifact.rows || []).length > 0
-    const hasLegacySchema = (artifact.criteria || []).length > 0 && (artifact.options || []).length > 0
-    if (!hasFlatSchema && !hasHeaderSchema && !hasLegacySchema) return { valid: false, reason: 'comparison_table missing columns[]/rows[]' }
-    if ((hasFlatSchema || hasHeaderSchema) && (artifact.rows || []).some(r => !(r.cells || []).length)) return { valid: false, reason: 'comparison_table row missing cells' }
-    if (hasLegacySchema && (artifact.options || []).some(o => !(o.cells || []).length)) return { valid: false, reason: 'comparison_table option missing cells' }
+    if (!Array.isArray(artifact.columns) || !artifact.columns.length) return { valid: false, reason: 'comparison_table missing columns[]' }
+    if (!Array.isArray(artifact.rows) || !artifact.rows.length) return { valid: false, reason: 'comparison_table missing rows[]' }
+    if (artifact.rows.some(r => !(r.cells || []).length)) return { valid: false, reason: 'comparison_table row missing cells' }
     return { valid: true }
   }
 
   if (t === 'initiative_map') {
-    const hasNewSchema = (artifact.column_headers || []).length > 0 && (artifact.rows || []).length > 0
-    const hasLegacySchema = (artifact.dimension_labels || []).length > 0 && (artifact.initiatives || []).length > 0
-    if (!hasNewSchema && !hasLegacySchema) return { valid: false, reason: 'initiative_map has no column_headers/rows' }
+    if (!(artifact.column_headers || []).length) return { valid: false, reason: 'initiative_map missing column_headers[]' }
+    if (!(artifact.rows || []).length) return { valid: false, reason: 'initiative_map missing rows[]' }
     return { valid: true }
   }
 
   if (t === 'risk_register') {
-    const levels = artifact.severity_levels || artifact.rows || artifact.risks || []
-    if (!Array.isArray(levels) || !levels.length) return { valid: false, reason: 'risk_register has no severity_levels' }
+    if (!Array.isArray(artifact.severity_levels) || !artifact.severity_levels.length) return { valid: false, reason: 'risk_register missing severity_levels[]' }
     return { valid: true }
   }
 
@@ -2601,20 +2600,6 @@ function normaliseArtifact(a) {
           cells:     normCells
         }
       })
-    } else {
-      // Old schema (backward compat)
-      if (!a.column_headers) a.column_headers = {}
-      a.rows = a.rows.map((row, idx) => ({
-        id:                        row?.id || `row_${idx + 1}`,
-        label:                     row?.label || '',
-        value:                     typeof row?.value === 'number' ? row.value : (parseFloat(String(row?.value || '').replace(/[^0-9.-]/g, '')) || 0),
-        unit:                      row?.unit || '',
-        display_value:             row?.display_value || '',
-        annotation:                row?.annotation || '',
-        annotation_representation: row?.annotation_representation || 'text',
-        bar_color:                 row?.bar_color || '',
-        highlight:                 row?.highlight === true
-      }))
     }
   }
 
@@ -3191,6 +3176,7 @@ function artifactDominanceScoreForScratch(artifact) {
   const pointCount = Array.isArray(artifact?.points) ? artifact.points.length : 0
   if (['matrix', 'driver_tree', 'prioritization'].includes(type)) return 100
   if (type === 'workflow') return 92
+  if (type === 'stat_bar') return 90
   if (type === 'chart') return 88
   if (type === 'table') return 76
   if (type === 'insight_text') return 72 + Math.min(pointCount, 5) * 2 + (sentiment === 'warning' ? 4 : 0)
@@ -3315,6 +3301,17 @@ function applyArtifactArrangementForScratch(zone, dominantShare = 60) {
     firstShare = Math.min(firstShare, 40)
     secondShare = Math.min(secondShare, 40)
   }
+
+  // stat_bar minimum height enforcement: 30% + (rows-2)*11% of zone.
+  // Assumes zone is full-height (conservative — better to over-allocate than clip rows).
+  const statBarMinShare = (art) => {
+    const n = Array.isArray(art?.rows) ? Math.min(art.rows.length, 8) : 2
+    return Math.min(100, 30 + Math.max(0, n - 2) * 11)
+  }
+  if (firstType === 'stat_bar') firstShare = Math.max(firstShare, statBarMinShare(artifacts[0]))
+  if (secondType === 'stat_bar') secondShare = Math.max(secondShare, statBarMinShare(artifacts[1]))
+  if (firstType === 'stat_bar' && secondType !== 'stat_bar') secondShare = 100 - firstShare
+  if (secondType === 'stat_bar' && firstType !== 'stat_bar') firstShare = 100 - secondShare
 
   const numericCoverage = artifacts.map((_, idx) => {
     if (artifacts.length === 2) return idx === 0 ? firstShare : secondShare
@@ -3545,7 +3542,8 @@ function pruneAgent4SlideForOutput(slide) {
           column_headers: colHeaders.map(c => ({
             id: String(c?.id ?? ''),
             value: String(c?.value ?? ''),
-            display_type: c?.display_type || 'text'
+            display_type: c?.display_type || 'text',
+            ...(c?.scale_UL != null ? { scale_UL: +c.scale_UL } : {})
           })),
           rows: Array.isArray(artifact.rows) ? artifact.rows.map((row, idx) => ({
             row_id: row?.row_id ?? (idx + 1),
@@ -3558,26 +3556,8 @@ function pruneAgent4SlideForOutput(slide) {
           ...coverage
         }
       }
-      // Old schema (backward compat)
-      return {
-        type: 'stat_bar',
-        stat_header: artifact.stat_header || artifact.artifact_header || artifact.chart_header || '',
-        stat_decision: artifact.stat_decision || artifact.chart_insight || '',
-        column_headers: colHeaders || {},
-        rows: Array.isArray(artifact.rows) ? artifact.rows.map((row, idx) => ({
-          id: row?.id || `row_${idx + 1}`,
-          label: row?.label || '',
-          value: row?.value,
-          unit: row?.unit || '',
-          display_value: row?.display_value || '',
-          annotation: row?.annotation || '',
-          annotation_representation: row?.annotation_representation || 'text',
-          bar_color: row?.bar_color || '',
-          highlight: row?.highlight === true
-        })) : [],
-        annotation_style: artifact.annotation_style || 'trailing',
-        ...coverage
-      }
+      // column_headers is not an array — return empty shell; repair loop will catch it
+      return { type: 'stat_bar', artifact_header: artifact.artifact_header || '', column_headers: [], rows: [], annotation_style: 'trailing', ...coverage }
     }
     if (type === 'cards') {
       return {
@@ -3709,111 +3689,53 @@ function pruneAgent4SlideForOutput(slide) {
           ...coverage
         }
       }
-      // ── Previous schema: column_headers[] + rows[].cells[{column_id, rating, ...}] ──
-      const columnHeaders = Array.isArray(artifact.column_headers) && artifact.column_headers.length
-        ? artifact.column_headers.map(c => ({ id: c?.id || '', label: c?.label || '' }))
-        : Array.isArray(artifact.criteria)
-          ? [{ id: 'option', label: 'Option' }, ...artifact.criteria.map(c => ({ id: c?.id || '', label: c?.label || '' }))]
-          : []
-      const rows = Array.isArray(artifact.rows) && artifact.rows.length
-        ? artifact.rows.map(r => ({
-            id: r?.id || '',
-            option_name: r?.option_name || r?.name || '',
-            badge_text: r?.badge_text || undefined,
-            row_tone: r?.row_tone || 'neutral',
-            cells: Array.isArray(r?.cells) ? r.cells.map(cell => ({
-              column_id: cell?.column_id || '',
-              rating: cell?.rating || 'text',
-              display_value: cell?.display_value || undefined,
-              secondary_message: cell?.secondary_message || cell?.note || undefined,
-              representation_type: cell?.representation_type || undefined,
-              tonality: cell?.tonality || undefined
-            })) : []
-          }))
-        : Array.isArray(artifact.options)
-          ? artifact.options.map(o => ({
-              id: o?.id,
-              option_name: o?.name || '',
-              badge_text: o?.badge_text || undefined,
-              row_tone: o?.badge_text ? 'recommended' : 'neutral',
-              cells: Array.isArray(o?.cells) ? o.cells.map(cell => ({
-                column_id: cell?.criterion_id || '',
-                rating: cell?.rating || 'text',
-                display_value: cell?.display_value || undefined,
-                secondary_message: cell?.note || undefined,
-                representation_type: cell?.representation_type || undefined,
-                tonality: cell?.tonality || undefined
-              })) : []
-            }))
-          : []
       return {
         type: 'comparison_table',
         artifact_header: artifact.artifact_header || artifact.comparison_header || artifact.table_header || '',
-        column_headers: columnHeaders,
-        rows,
-        recommended_row_id: artifact.recommended_row_id || artifact.recommended_option_id || undefined,
-        recommended_option: artifact.recommended_option || undefined,
+        columns: Array.isArray(artifact.columns) ? artifact.columns : [],
+        rows: Array.isArray(artifact.rows) ? artifact.rows.map(r => ({
+          id: r?.id || '',
+          is_recommended: r?.is_recommended || false,
+          badge: r?.badge || '',
+          cells: Array.isArray(r?.cells) ? r.cells.map(cell => ({
+            value:     cell?.value     != null ? String(cell.value)     : undefined,
+            icon_type: cell?.icon_type != null ? String(cell.icon_type) : undefined,
+            subtext:   cell?.subtext   != null ? String(cell.subtext)   : undefined,
+            tone:      cell?.tone      || 'neutral'
+          })) : []
+        })) : [],
+        recommended_row_id: artifact.recommended_row_id || undefined,
         ...coverage
       }
     }
     if (type === 'initiative_map') {
-      // Normalise: new schema uses column_headers/rows; legacy schema used dimension_labels/initiatives
-      const columnHeaders = Array.isArray(artifact.column_headers) && artifact.column_headers.length
-        ? artifact.column_headers.map(c => ({ id: c?.id || '', label: c?.label || '' }))
-        : Array.isArray(artifact.dimension_labels)
-          ? [{ id: 'initiative', label: 'Initiative' }, ...artifact.dimension_labels.map(d => ({ id: d?.id || '', label: d?.label || '' }))]
-          : []
-      // Normalize a tags entry to {label, tone} regardless of whether Claude emitted strings or objects
       const normTag = t => typeof t === 'string'
         ? { label: t, tone: 'neutral' }
         : { label: String(t?.label || t?.text || t?.name || ''), tone: t?.tone || 'neutral' }
-      const rows = Array.isArray(artifact.rows) && artifact.rows.length
-        ? artifact.rows.map(r => ({
-            id: r?.id || '',
-            initiative_name: r?.initiative_name || r?.name || '',
-            initiative_subtitle: r?.initiative_subtitle || r?.subtitle || undefined,
-            cells: Array.isArray(r?.cells) ? r.cells.map(cell => ({
-              column_id: cell?.column_id || '',
-              primary_message: cell?.primary_message || '',
-              secondary_message: cell?.secondary_message || undefined,
-              tags: Array.isArray(cell?.tags) ? cell.tags.map(normTag) : undefined,
-              cell_tone: cell?.cell_tone || 'neutral'
-            })) : []
-          }))
-        : Array.isArray(artifact.initiatives)
-          ? artifact.initiatives.map(init => ({
-              id: init?.id || undefined,
-              initiative_name: init?.name || '',
-              initiative_subtitle: init?.subtitle || undefined,
-              cells: Array.isArray(init?.placements)
-                ? init.placements.map(p => ({
-                    column_id: p?.lane_id || '',
-                    primary_message: p?.title || '',
-                    secondary_message: p?.subtitle || undefined,
-                    tags: Array.isArray(p?.tags) ? p.tags.map(normTag) : undefined,
-                    cell_tone: p?.accent_tone || 'neutral'
-                  }))
-                : Array.isArray(init?.dimensions)
-                  ? init.dimensions.map(d => ({
-                      column_id: d?.label || '',
-                      primary_message: d?.value || ''
-                    }))
-                  : []
-            }))
-          : []
       return {
         type: 'initiative_map',
         artifact_header: artifact.artifact_header || artifact.initiative_header || artifact.table_header || '',
-        column_headers: columnHeaders,
-        rows,
+        column_headers: Array.isArray(artifact.column_headers) ? artifact.column_headers.map(c => ({ id: c?.id || '', label: c?.label || '' })) : [],
+        rows: Array.isArray(artifact.rows) ? artifact.rows.map(r => ({
+          id: r?.id || '',
+          initiative_name: r?.initiative_name || r?.name || '',
+          initiative_subtitle: r?.initiative_subtitle || r?.subtitle || undefined,
+          cells: Array.isArray(r?.cells) ? r.cells.map(cell => ({
+            column_id: cell?.column_id || '',
+            primary_message: cell?.primary_message || '',
+            secondary_message: cell?.secondary_message || undefined,
+            tags: Array.isArray(cell?.tags) ? cell.tags.map(normTag) : undefined,
+            cell_tone: cell?.cell_tone || 'neutral'
+          })) : []
+        })) : [],
         ...coverage
       }
     }
     if (type === 'risk_register') {
-      // Normalize new severity_levels schema; fall back to legacy rows[]/risks[] if needed
-      let severityLevels = []
-      if (Array.isArray(artifact.severity_levels) && artifact.severity_levels.length) {
-        severityLevels = artifact.severity_levels.map((lvl, li) => ({
+      return {
+        type: 'risk_register',
+        risk_header: artifact.risk_header || artifact.table_header || '',
+        severity_levels: Array.isArray(artifact.severity_levels) ? artifact.severity_levels.map((lvl, li) => ({
           id: lvl.id || `level_${li + 1}`,
           label: lvl.label || '',
           tone: String(lvl.tone || lvl.severity || 'medium').toLowerCase(),
@@ -3830,42 +3752,7 @@ function pruneAgent4SlideForOutput(slide) {
               intensity: typeof p.intensity === 'number' ? p.intensity : p.intensity
             }))
           }))
-        }))
-      } else {
-        // Legacy rows[]/risks[] → convert to severity_levels structure
-        const riskRows = Array.isArray(artifact.rows) && artifact.rows.length
-          ? artifact.rows
-          : Array.isArray(artifact.risks) ? artifact.risks : []
-        const grouped = {}
-        const order = ['critical', 'high', 'medium', 'low']
-        riskRows.forEach(r => {
-          const sev = String(r?.severity || 'medium').toLowerCase()
-          if (!grouped[sev]) grouped[sev] = []
-          grouped[sev].push(r)
-        })
-        severityLevels = order.filter(s => grouped[s]).map((s, i) => ({
-          id: `level_${i + 1}`,
-          label: { critical: 'Critical severity — immediate action required', high: 'High severity — immediate action required', medium: 'Medium severity — monitor closely', low: 'Low severity — resolved or contained' }[s] || s,
-          tone: s,
-          item_details: grouped[s].map(r => ({
-            primary_message: r?.risk_title || r?.title || '',
-            secondary_message: r?.risk_detail || r?.detail || r?.description || '',
-            tags: [
-              ...(r?.owner_tag || r?.owner ? [{ value: r.owner_tag || r.owner, tone: 'neutral' }] : []),
-              ...(r?.status_tag || r?.status ? [{ value: r.status_tag || r.status, tone: r?.status_tone === 'open' ? 'negative' : r?.status_tone === 'mitigated' ? 'positive' : 'neutral' }] : [])
-            ],
-            pips: [
-              ...(r?.likelihood ? [{ label: 'Likelihood', intensity: String(r.likelihood).toLowerCase() }] : []),
-              ...(r?.impact ? [{ label: 'Impact', intensity: String(r.impact).toLowerCase() }] : [])
-            ]
-          }))
-        }))
-      }
-      return {
-        type: 'risk_register',
-        risk_header: artifact.risk_header || artifact.table_header || '',
-        // artifact_header intentionally omitted — risk_register uses risk_header internally
-        severity_levels: severityLevels,
+        })) : [],
         ...coverage
       }
     }
@@ -3884,12 +3771,7 @@ function pruneAgent4SlideForOutput(slide) {
             value: item?.value || '',
             representation_type: item?.representation_type || 'text',
             sentiment: item?.sentiment || undefined
-          })) : (Array.isArray(p?.attributes) ? p.attributes.map(a => ({
-            label: a?.key || '',
-            value: a?.value || '',
-            representation_type: 'text',
-            sentiment: a?.sentiment || undefined
-          })) : [])
+          })) : []
         })) : [],
         ...coverage
       }
