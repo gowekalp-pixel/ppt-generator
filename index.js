@@ -30,8 +30,8 @@ app.post('/api/inject-artifact', (req, res) => {
     return res.status(400).json({ error: 'Missing required fields: artifact_type, agent4, agent5' })
   }
 
-  const a4Path = path.join(__dirname, 'public', 'agent4.js')
-  const a5Path = path.join(__dirname, 'public', 'agent5.js')
+  const a4Path = path.join(__dirname, 'public', 'agent4-R.js')
+  const a5Path = path.join(__dirname, 'public', 'agent5-R.js')
 
   // Back up originals
   const a4PathBak = a4Path + '.bak'
@@ -58,7 +58,7 @@ app.post('/api/inject-artifact', (req, res) => {
 
   // Guard: skip if already injected
   if (a4.includes(`  ${type}\n`) && a4.includes(type + ':')) {
-    return res.status(409).json({ error: `Artifact "${type}" already exists in agent4.js.` })
+    return res.status(409).json({ error: `Artifact "${type}" already exists in agent4-R.js.` })
   }
 
   // NOTE: agent4.js uses Windows line endings (\r\n); agent5.js uses Unix (\n).

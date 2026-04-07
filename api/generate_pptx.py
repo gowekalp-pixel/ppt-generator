@@ -3076,26 +3076,26 @@ def normalize_zone_artifact_stack(zone):
 
 def _shift_blocks_for_title_gap(slide, blocks, use_template):
     """
-    In template mode, Agent 5 estimates title_block.h from limited info.
-    The actual title placeholder in the template has a fixed height from the
-    layout XML — always deterministic, no font estimation needed.
+    Detect and correct overlap between the slide header (title + subtitle) and
+    the first content block.  Runs in both template and scratch mode.
 
-    Algorithm (per user spec):
-      1. Place title/subtitle (done by caller before render_blocks).
-         We read placeholder bounds BEFORE text is placed — bounds are fixed
-         by the layout and don't change when text is written.
-      2. Compute actual_header_bottom = bottom of title (or subtitle if present)
-         placeholder, in inches.
-      3. Compare with content_start_y = min Y of all non-header blocks.
-      4. If gap = content_start_y - actual_header_bottom < MIN_GAP_IN:
-         shift every non-header block down by (MIN_GAP_IN - gap).
+    Template mode: Agent 5 estimates title_block.h from limited info; the
+    actual placeholder height comes from the layout XML.  We use the block's
+    own y+h (Agent 5's pre-computed coordinates) as a proxy — the same values
+    the placeholder is sized from.
+
+    Scratch mode: Agent 5's JS overlap correction shifts zone frames, but if
+    the LLM underestimates title_block.h (common for long titles that wrap to
+    two lines), the subtitle and content can still overlap the rendered title.
+    We catch that here using the same spec coordinates.
+
+    Algorithm:
+      1. Find header_bottom = max(title y+h, subtitle y+h) from blocks[].
+      2. Find content_start_y = min Y of all non-header, non-line blocks.
+      3. If gap < MIN_GAP_IN: shift every non-header block down by the deficit.
 
     MIN_GAP_IN ≈ 2pt ≈ 0.028" — just enough to guarantee no visual overlap.
-    No font size, no line-count estimation needed.
     """
-    if not use_template:
-        return blocks
-
     title_block = next(
         (b for b in blocks if b.get('block_type') == 'title' and b.get('text')), None
     )
@@ -3691,7 +3691,12 @@ def render_blocks(slide, slide_spec, bt, use_template):
                 render_block_title(slide, subtitle_block, bt, use_template)
             except Exception as e:
                 print(f'render_blocks: error on block_type=subtitle: {e}')
-        blocks = _shift_blocks_for_title_gap(slide, blocks, use_template)
+
+    # Apply title-gap fix in both template and scratch mode.
+    # Template mode: called after the header pre-pass above.
+    # Scratch mode: uses Agent 5's spec coords to catch any underestimated title
+    #   heights (e.g. long titles that wrap to two lines) before rendering begins.
+    blocks = _shift_blocks_for_title_gap(slide, blocks, use_template)
 
     for block in blocks:
         btype = block.get('block_type', '')

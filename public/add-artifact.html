@@ -311,35 +311,35 @@
       <div id="inject-steps">
         <div class="status-row" id="inj-a4-type">
           <div class="dot dot-wait" id="dot-a4-type"></div>
-          <span>agent4.js — add to artifact type list</span>
+          <span>agent4-R.js — add to artifact type list</span>
         </div>
         <div class="status-row" id="inj-a4-primary">
           <div class="dot dot-wait" id="dot-a4-primary"></div>
-          <span>agent4.js — add to primary zone permitted list</span>
+          <span>agent4-R.js — add to primary zone permitted list</span>
         </div>
         <div class="status-row" id="inj-a4-pairing">
           <div class="dot dot-wait" id="dot-a4-pairing"></div>
-          <span>agent4.js — add pairing rule</span>
+          <span>agent4-R.js — add pairing rule</span>
         </div>
         <div class="status-row" id="inj-a4-density">
           <div class="dot dot-wait" id="dot-a4-density"></div>
-          <span>agent4.js — add density definition</span>
+          <span>agent4-R.js — add density definition</span>
         </div>
         <div class="status-row" id="inj-a4-schema">
           <div class="dot dot-wait" id="dot-a4-schema"></div>
-          <span>agent4.js — add JSON schema + usage notes</span>
+          <span>agent4-R.js — add JSON schema + usage notes</span>
         </div>
         <div class="status-row" id="inj-a5-type">
           <div class="dot dot-wait" id="dot-a5-type"></div>
-          <span>agent5.js — register in supported types set</span>
+          <span>agent5-R.js — register in supported types set</span>
         </div>
         <div class="status-row" id="inj-a5-case">
           <div class="dot dot-wait" id="dot-a5-case"></div>
-          <span>agent5.js — add switch case entry</span>
+          <span>agent5-R.js — add switch case entry</span>
         </div>
         <div class="status-row" id="inj-a5-fn">
           <div class="dot dot-wait" id="dot-a5-fn"></div>
-          <span>agent5.js — add flattening function</span>
+          <span>agent5-R.js — add flattening function</span>
         </div>
       </div>
 
@@ -347,7 +347,7 @@
 
       <div class="success-box" id="inject-success">
         <h3>Artifact Injected Successfully</h3>
-        <p id="success-detail">The new artifact type has been added to both agent4.js and agent5.js. Restart the server if running locally for changes to take effect.</p>
+        <p id="success-detail">The new artifact type has been added to both agent4-R.js and agent5-R.js. Restart the server if running locally for changes to take effect.</p>
         <a href="/" style="display:inline-block;padding:10px 24px;background:#059669;color:white;border-radius:8px;font-size:14px;font-weight:700;text-decoration:none">Back to PPT Generator</a>
         <br><br>
         <button class="btn-ghost" id="btn-add-another" style="width:auto;padding:8px 20px">Add Another Artifact</button>
@@ -545,7 +545,7 @@ async function runInjection(def) {
 
     // Show success
     document.getElementById('success-detail').textContent =
-      `"${def.display_name}" (${def.artifact_type}) has been injected into agent4.js and agent5.js. ` +
+      `"${def.display_name}" (${def.artifact_type}) has been injected into agent4-R.js and agent5-R.js. ` +
       `Restart your dev server for the changes to take effect.`
     document.getElementById('inject-success').classList.add('show')
 
