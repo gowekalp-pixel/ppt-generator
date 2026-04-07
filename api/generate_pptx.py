@@ -3079,22 +3079,28 @@ def _shift_blocks_for_title_gap(slide, blocks, use_template):
     Detect and correct overlap between the slide header (title + subtitle) and
     the first content block.  Runs in both template and scratch mode.
 
-    Template mode: Agent 5 estimates title_block.h from limited info; the
-    actual placeholder height comes from the layout XML.  We use the block's
-    own y+h (Agent 5's pre-computed coordinates) as a proxy — the same values
-    the placeholder is sized from.
+    Template mode: uses block y+h coords from Agent 5 (placeholder bounds are
+    fixed by the layout XML).  Only content blocks are shifted — the subtitle
+    placeholder is already handled by _ensure_subtitle_placeholder_clears_title.
 
-    Scratch mode: Agent 5's JS overlap correction shifts zone frames, but if
-    the LLM underestimates title_block.h (common for long titles that wrap to
-    two lines), the subtitle and content can still overlap the rendered title.
-    We catch that here using the same spec coordinates.
+    Scratch mode: Agent 5's JS correction shifts zone frames, but if the LLM
+    underestimates title_block.h (common for long titles that wrap to two lines)
+    the subtitle and content can still overlap the rendered title text.  We
+    estimate the actual number of wrapped lines, compute real title height, and
+    shift BOTH the subtitle and content blocks by the overflow.
 
     Algorithm:
-      1. Find header_bottom = max(title y+h, subtitle y+h) from blocks[].
-      2. Find content_start_y = min Y of all non-header, non-line blocks.
-      3. If gap < MIN_GAP_IN: shift every non-header block down by the deficit.
+      1. Compute spec_title_bottom = title y+h.
+      2. Scratch only: estimate actual rendered title height from font metrics;
+         overflow = max(0, actual_h − spec_h).
+      3. actual_title_bottom = spec_title_bottom + overflow.
+      4. Scratch only: if subtitle.y < actual_title_bottom + MIN_GAP, push
+         subtitle down and track subtitle_shift.
+      5. header_bottom = max(actual_title_bottom, new subtitle bottom).
+      6. If content_start_y < header_bottom + MIN_GAP, shift all content blocks
+         down by the deficit.
 
-    MIN_GAP_IN ≈ 2pt ≈ 0.028" — just enough to guarantee no visual overlap.
+    MIN_GAP_IN ≈ 0.333" (32 px at 96 dpi) — visible breathing room.
     """
     title_block = next(
         (b for b in blocks if b.get('block_type') == 'title' and b.get('text')), None
@@ -3102,54 +3108,91 @@ def _shift_blocks_for_title_gap(slide, blocks, use_template):
     if not title_block:
         return blocks
 
-    # Finalized contract uses 2px, not 2pt. Assume standard Office/render DPI.
-    MIN_GAP_IN = 32 / 96.0
+    MIN_GAP_IN = 32 / 96.0   # ≈ 0.333"
 
-    # Use the block's own y+h as the header bottom — these are Agent 5's pre-computed
-    # coordinates and are the most direct measure of where the header ends.
-    # No placeholder measurement or font estimation needed.
+    try:
+        spec_title_bottom = float(title_block['y']) + float(title_block['h'])
+    except (KeyError, TypeError, ValueError):
+        return blocks
+
     subtitle_block = next(
         (b for b in blocks if b.get('block_type') == 'subtitle' and b.get('text')),
         None
     )
 
-    try:
-        header_bottom = float(title_block['y']) + float(title_block['h'])
-    except (KeyError, TypeError, ValueError):
-        return blocks
+    # ── Scratch mode: estimate title text overflow ────────────────────────────
+    title_overflow_in = 0.0
+    if not use_template:
+        try:
+            font_size = float(title_block.get('font_size') or 18)
+            title_w   = max(0.5, float(title_block.get('w') or 9.0))
+            lines     = estimate_wrapped_lines(title_block.get('text', ''), title_w, font_size)
+            actual_h  = lines * (font_size / 72.0) * 1.25 + 0.06
+            spec_h    = float(title_block.get('h') or 0.7)
+            title_overflow_in = max(0.0, actual_h - spec_h)
+        except Exception:
+            title_overflow_in = 0.0
 
+    actual_title_bottom = spec_title_bottom + title_overflow_in
+
+    # ── Subtitle clearance (scratch mode only — template uses placeholder nudge)
+    subtitle_shift = 0.0
+    header_bottom  = actual_title_bottom
     if subtitle_block:
         try:
-            sub_bottom = float(subtitle_block['y']) + float(subtitle_block['h'])
-            header_bottom = max(header_bottom, sub_bottom)
+            sub_y = float(subtitle_block['y'])
+            sub_h = float(subtitle_block['h'])
+            if not use_template and sub_y < actual_title_bottom + MIN_GAP_IN:
+                subtitle_shift = actual_title_bottom + MIN_GAP_IN - sub_y
+                if subtitle_shift > 0:
+                    print(f'[title gap fix] scratch subtitle shift={subtitle_shift:.3f}"'
+                          f' (title overflow={title_overflow_in:.3f}")')
+            new_sub_bottom = sub_y + subtitle_shift + sub_h
+            header_bottom = max(header_bottom, new_sub_bottom)
         except (KeyError, TypeError, ValueError):
             pass
 
-    # Earliest Y of all non-header content blocks
+    # ── Content block clearance ───────────────────────────────────────────────
     content_blocks = [
         b for b in blocks
         if b.get('block_type') not in ('title', 'subtitle')
         and b.get('y') is not None
     ]
-    if not content_blocks:
+    content_shift = 0.0
+    if content_blocks:
+        content_start_y = min(float(b['y']) for b in content_blocks)
+        gap = content_start_y - header_bottom
+
+        if not subtitle_block and not use_template:
+            # No subtitle: Agent 5 already placed content with the correct gap
+            # from the spec title bottom.  Only shift by the actual overflow so
+            # we don't introduce an artificial gap on slides with a short title.
+            CLEAR_GAP_IN = 0.05   # minimal visual breathing room
+            needed = actual_title_bottom + CLEAR_GAP_IN
+            content_shift = round(max(0.0, needed - content_start_y), 16)
+        else:
+            content_shift = round(max(0.0, MIN_GAP_IN - gap), 16)
+
+        if content_shift > 0:
+            print(f'[title gap fix] header_bottom={header_bottom:.3f}" '
+                  f'content_start={content_start_y:.3f}" gap={gap:.3f}" '
+                  f'content_shift={content_shift:.3f}"')
+
+    if subtitle_shift <= 0 and content_shift <= 0:
         return blocks
-
-    content_start_y = min(float(b['y']) for b in content_blocks)
-    gap   = content_start_y - header_bottom
-    shift = round(MIN_GAP_IN - gap, 16)   # positive → content too close / overlapping
-
-    if shift <= 0:
-        return blocks   # content already clears the header by at least MIN_GAP_IN
-
-    print(f'[title gap fix] header_bottom={header_bottom:.3f}" '
-          f'content_start={content_start_y:.3f}" gap={gap:.3f}" shift={shift:.3f}"')
 
     shifted = []
     for b in blocks:
-        if b.get('block_type') in ('title', 'subtitle'):
+        btype = b.get('block_type')
+        if btype == 'title':
             shifted.append(b)
+        elif btype == 'subtitle':
+            if subtitle_shift > 0 and b.get('y') is not None:
+                shifted.append({**b, 'y': round(float(b['y']) + subtitle_shift, 3)})
+            else:
+                shifted.append(b)
         elif b.get('y') is not None:
-            shifted.append({**b, 'y': round(float(b['y']) + shift, 3)})
+            shifted.append({**b, 'y': round(float(b['y']) + content_shift, 3)})
         else:
             shifted.append(b)
     return shifted
