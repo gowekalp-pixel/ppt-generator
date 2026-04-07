@@ -3088,14 +3088,52 @@ def normalize_zone_artifact_stack(zone):
     return { **zone, 'artifacts': laid_out }
 
 
+def _get_template_title_font_size(slide):
+    """
+    Read the effective font size (in points) for the title placeholder (idx=0)
+    by walking the slide layout → slide master inheritance chain.
+    Returns None if not found.
+    """
+    PT = 12700  # 1pt = 12700 EMU in python-pptx
+    def _fs_from_tf(tf):
+        try:
+            for para in tf.paragraphs:
+                for run in para.runs:
+                    if run.font.size:
+                        return run.font.size / PT
+                if para.font.size:
+                    return para.font.size / PT
+        except Exception:
+            pass
+        return None
+
+    # Walk: layout placeholder → master placeholder
+    for source in ('slide_layout', 'slide_layout.slide_master'):
+        try:
+            obj = slide
+            for attr in source.split('.'):
+                obj = getattr(obj, attr)
+            for ph in obj.placeholders:
+                if ph.placeholder_format.idx == 0:
+                    fs = _fs_from_tf(ph.text_frame)
+                    if fs:
+                        return fs
+        except Exception:
+            pass
+    return None
+
+
 def _compute_title_bottom(slide, title_block, use_template):
     """
     Compute A = actual rendered bottom of the title text, in inches.
 
-    In template mode: reads ph.top + ph.height from the actual PPTX placeholder.
-    Because TEXT_TO_FIT_SHAPE is set on the title text frame, PowerPoint will
-    always shrink the font to stay within the placeholder box, so ph.top+ph.height
-    is the exact conservative upper bound for A.
+    In template mode: reads actual ph.top / ph.height / ph.width from the PPTX
+    placeholder (these come from the template file and may differ from spec).
+    Estimates line count using the template's effective font size (read from the
+    layout/master via _get_template_title_font_size), then computes
+    A = ph.top + min(estimated_text_h, ph.height).
+    The min() clamp is correct because TEXT_TO_FIT_SHAPE ensures PowerPoint
+    shrinks the font so text never visually overflows the placeholder box.
 
     In scratch mode: uses title_block.y + max(spec_h, estimated_h) computed from
     spec coordinates and a conservative character-wrap estimate (0.60× font_size
@@ -3112,18 +3150,35 @@ def _compute_title_bottom(slide, title_block, use_template):
 
     if use_template:
         # In template mode the title is rendered inside the template placeholder.
-        # The placeholder's geometry (top/height) is fixed by the PPTX file and
-        # can differ from Agent 5's spec coordinates (title_block.y / .h).
-        # With TEXT_TO_FIT_SHAPE set, PowerPoint guarantees text stays within the
-        # placeholder box → A = ph.top + ph.height is the exact safe upper bound.
+        # ph.top / ph.height come from the template file and may differ from spec
+        # coordinates.  We estimate the actual rendered text height using the
+        # template's effective font size (read from layout/master), then clamp to
+        # ph.height — TEXT_TO_FIT_SHAPE ensures text never exceeds the box.
         try:
             for ph in slide.placeholders:
                 if ph.placeholder_format.idx == 0:
                     ph_top = ph.top    / EMU
                     ph_h   = ph.height / EMU
+                    ph_w   = max(0.5, ph.width / EMU)
+                    # Use the template's actual font size for accurate wrap estimate
+                    tmpl_fs = _get_template_title_font_size(slide) or font_size
+                    width_pts      = max(1.0, ph_w * 72)
+                    char_w         = max(1.0, tmpl_fs * 0.60)
+                    chars_per_line = max(4, int(width_pts / char_w))
+                    text  = str(title_block.get('text', '') or '').strip()
+                    lines = 0
+                    for chunk in text.split('\n'):
+                        chunk = chunk.strip()
+                        lines += max(1, int(len(chunk) / chars_per_line) + 1)
+                    lines = max(1, lines)
+                    estimated_h = lines * (tmpl_fs / 72.0) * 1.25 + 0.06
+                    # Clamp: text never overflows beyond ph_h (TEXT_TO_FIT_SHAPE)
+                    text_h = min(estimated_h, ph_h)
+                    A = ph_top + text_h
                     print(f'[title bottom] template ph: top={ph_top:.3f}" h={ph_h:.3f}"'
-                          f' → A={ph_top + ph_h:.3f}"')
-                    return ph_top + ph_h
+                          f' font={tmpl_fs:.0f}pt lines={lines}'
+                          f' est_h={estimated_h:.3f}" text_h={text_h:.3f}" → A={A:.3f}"')
+                    return A
         except Exception as _e:
             print(f'[title bottom] ph read failed: {_e}')
 
