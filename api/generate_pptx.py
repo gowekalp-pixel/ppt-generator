@@ -626,6 +626,7 @@ def render_header_block(slide, header_block, bt, header_style='underline'):
             )
             rule_line.line.color.rgb = hex_to_rgb(primary)
             rule_line.line.width = pt(0.5)
+            _strip_connector_endpoint_refs(rule_line)
         except Exception:
             pass
         return rule_y + rule_h
@@ -2415,6 +2416,7 @@ def render_workflow(slide, artifact, bt):
                     )
                     connector.line.color.rgb = hex_to_rgb(conn_color)
                     connector.line.width     = Pt(ws.get('connector_width', 2))
+                    _strip_connector_endpoint_refs(connector)
             except Exception:
                 pass
 
@@ -3477,22 +3479,52 @@ def _apply_preset_geometry(shape, prst):
         return False
 
 
+# ── Unicode character map for icon badges ────────────────────────────────────
+# Renders icons as Unicode glyphs inside a colored oval — no XML hacking,
+# no preset geometry manipulation, no connectors.  Guaranteed valid OOXML.
+# Font: "Segoe UI Symbol" (ships with Windows 7+); auto-falls back to system font.
+ICON_UNICODE_MAP = {
+    'check':          '\u2714',   # ✔  HEAVY CHECK MARK
+    'cross':          '\u2716',   # ✖  HEAVY MULTIPLICATION X
+    'partial':        '\u2212',   # −  MINUS SIGN
+    'arrow_right':    '\u25B6',   # ▶  BLACK RIGHT-POINTING TRIANGLE
+    'arrow_left':     '\u25C0',   # ◀  BLACK LEFT-POINTING TRIANGLE
+    'arrow_up':       '\u25B2',   # ▲  BLACK UP-POINTING TRIANGLE
+    'arrow_down':     '\u25BC',   # ▼  BLACK DOWN-POINTING TRIANGLE
+    'arrow_up_right': '\u2197',   # ↗  NORTH EAST ARROW
+    'chevron_right':  '\u276F',   # ❯  MEDIUM RIGHT-POINTING ANGLE QUOTATION MARK
+    'chevron':        '\u276F',
+    'star':           '\u2605',   # ★  BLACK STAR
+    'star4':          '\u2726',   # ✦  BLACK FOUR POINTED STAR
+    'star6':          '\u2736',   # ✶  SIX POINTED BLACK STAR
+    'warning':        '\u26A0',   # ⚠  WARNING SIGN
+    'diamond':        '\u25C6',   # ◆  BLACK DIAMOND
+    'shield':         '\u26CA',   # ⛊  (fallback)
+    'circle':         '\u25CF',   # ●  BLACK CIRCLE
+    'square':         '\u25A0',   # ■  BLACK SQUARE
+    'heart':          '\u2665',   # ♥  BLACK HEART SUIT
+    'lightning':      '\u26A1',   # ⚡  HIGH VOLTAGE SIGN
+    'moon':           '\u263D',   # ☽  FIRST QUARTER MOON
+    'sun':            '\u2600',   # ☀  BLACK SUN WITH RAYS
+    'smiley':         '\u263A',   # ☺  WHITE SMILING FACE
+    'ribbon':         '\u1F397',  # 🎗  REMINDER RIBBON (fallback to star if unsupported)
+}
+
+
 def render_block_icon_badge(slide, block):
-    """Render a filled circle background with a named vector icon inside.
+    """Render a filled circle with a Unicode icon character centered inside.
+
+    Approach: add an oval shape (standard python-pptx API) and place the icon
+    as a Unicode glyph in the shape's text frame.  No XML manipulation, no
+    preset geometry hacking, no connectors — produces clean OOXML that
+    PowerPoint opens without repair warnings.
 
     block fields:
-      icon       — icon name from ICON_PRESET_MAP (e.g. 'check', 'arrow_right')
+      icon       — icon name from ICON_UNICODE_MAP
       fill_color — background circle fill hex
-      icon_color — icon shape fill / line color hex
+      icon_color — icon glyph color hex
       x, y, w, h — position and size in inches (square; w == h)
-
-    Rendering strategy per icon name:
-      • Name in ICON_PRESET_MAP with a prst value → OOXML preset geometry shape
-      • 'cross'   → two diagonal MSO_CONNECTOR.STRAIGHT lines
-      • 'partial' → thin horizontal filled rectangle
-      • Unknown   → falls back to 'check' (checkMark preset)
     """
-    from pptx.enum.shapes import MSO_CONNECTOR
     x      = float(block.get('x', 0))
     y      = float(block.get('y', 0))
     size   = float(block.get('w', 0.22))
@@ -3500,60 +3532,33 @@ def render_block_icon_badge(slide, block):
     icolor = block.get('icon_color') or '#386B2A'
     icon   = str(block.get('icon', 'check')).lower().replace('-', '_').replace(' ', '_')
 
-    # ── Outer circle (background) ─────────────────────────────────────────────
-    circle = slide.shapes.add_shape(9, inches(x), inches(y), inches(size), inches(size))
-    circle.fill.solid()
-    circle.fill.fore_color.rgb = hex_to_rgb(fill)
-    circle.line.fill.background()
+    char = ICON_UNICODE_MAP.get(icon, '\u2714')   # default: heavy check mark
 
-    pad   = size * 0.22
-    isize = size - 2 * pad
-    ix    = x + pad
-    iy    = y + pad
+    # ── Oval background ───────────────────────────────────────────────────────
+    shape = slide.shapes.add_shape(9, inches(x), inches(y), inches(size), inches(size))
+    shape.fill.solid()
+    shape.fill.fore_color.rgb = hex_to_rgb(fill)
+    shape.line.fill.background()
 
-    # ── Resolve icon → rendering path ─────────────────────────────────────────
-    prst = ICON_PRESET_MAP.get(icon, 'checkMark')   # unknown → fallback to check
+    # ── Icon glyph centered inside the oval ───────────────────────────────────
+    tf = shape.text_frame
+    tf.word_wrap = False
+    tf.vertical_anchor = MSO_ANCHOR.MIDDLE
+    # Remove internal padding so the glyph fills the circle cleanly
+    from pptx.util import Emu
+    tf.margin_left   = Emu(0)
+    tf.margin_right  = Emu(0)
+    tf.margin_top    = Emu(0)
+    tf.margin_bottom = Emu(0)
 
-    if icon == 'cross':
-        # Two diagonal connectors forming an X (no OOXML preset exists).
-        lw_pt = max(1.0, round(isize * 20, 1))
-        try:
-            for (x1, y1, x2, y2) in [
-                (ix,         iy,         ix + isize, iy + isize),
-                (ix + isize, iy,         ix,         iy + isize),
-            ]:
-                ln = slide.shapes.add_connector(
-                    MSO_CONNECTOR.STRAIGHT,
-                    inches(x1), inches(y1), inches(x2), inches(y2)
-                )
-                ln.line.color.rgb = hex_to_rgb(icolor)
-                ln.line.width = Pt(lw_pt)
-                _strip_connector_endpoint_refs(ln)
-        except Exception:
-            pass
-
-    elif icon == 'partial':
-        # Thin horizontal rectangle as a minus / partial indicator
-        mh = max(isize * 0.20, 0.020)
-        my = iy + (isize - mh) / 2
-        try:
-            rect = slide.shapes.add_shape(1, inches(ix), inches(my), inches(isize), inches(mh))
-            rect.fill.solid()
-            rect.fill.fore_color.rgb = hex_to_rgb(icolor)
-            rect.line.fill.background()
-        except Exception:
-            pass
-
-    else:
-        # OOXML preset geometry — covers check, all arrows, stars, warning, etc.
-        try:
-            shape = slide.shapes.add_shape(1, inches(ix), inches(iy), inches(isize), inches(isize))
-            _apply_preset_geometry(shape, prst)
-            shape.fill.solid()
-            shape.fill.fore_color.rgb = hex_to_rgb(icolor)
-            shape.line.fill.background()
-        except Exception:
-            pass
+    para = tf.paragraphs[0]
+    para.alignment = PP_ALIGN.CENTER
+    run = para.add_run()
+    run.text = char
+    run.font.color.rgb = hex_to_rgb(icolor)
+    run.font.size = Pt(max(6, round(size * 38)))
+    run.font.name = 'Segoe UI Symbol'
+    run.font.bold  = False
 
 
 def render_block_bullet_list(slide, block, bt):
