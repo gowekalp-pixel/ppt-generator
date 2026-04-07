@@ -3149,42 +3149,36 @@ def _compute_title_bottom(slide, title_block, use_template):
     font_size = float(title_block.get('font_size') or 18)
 
     if use_template:
-        # In template mode the title is rendered inside the template placeholder.
-        # ph.top / ph.height come from the template file and may differ from spec
-        # coordinates.  We estimate the actual rendered text height using the
-        # template's effective font size (read from layout/master), then clamp to
-        # ph.height — TEXT_TO_FIT_SHAPE ensures text never exceeds the box.
+        # In template mode the title lands inside the template placeholder.
+        # TEXT_TO_FIT_SHAPE ensures PowerPoint shrinks the font so the text is
+        # always visually contained within the placeholder box — regardless of
+        # font family, size, or character width.  Therefore:
+        #
+        #   A = ph.top + ph.height   (exact placeholder bottom — brand-agnostic)
+        #
+        # Exception: if ph.height > 1.5" the placeholder is a non-standard
+        # layout (e.g. a full-slide divider/section title).  Those slides
+        # typically carry no content blocks, so no shift would fire anyway, but
+        # we fall back to spec-based estimation as a safety net.
         try:
             for ph in slide.placeholders:
                 if ph.placeholder_format.idx == 0:
                     ph_top = ph.top    / EMU
                     ph_h   = ph.height / EMU
-                    ph_w   = max(0.5, ph.width / EMU)
-                    # Use the template's actual font size for accurate wrap estimate
-                    tmpl_fs = _get_template_title_font_size(slide) or font_size
-                    width_pts      = max(1.0, ph_w * 72)
-                    char_w         = max(1.0, tmpl_fs * 0.60)
-                    chars_per_line = max(4, int(width_pts / char_w))
-                    text  = str(title_block.get('text', '') or '').strip()
-                    lines = 0
-                    for chunk in text.split('\n'):
-                        chunk = chunk.strip()
-                        lines += max(1, int(len(chunk) / chars_per_line) + 1)
-                    lines = max(1, lines)
-                    estimated_h = lines * (tmpl_fs / 72.0) * 1.25 + 0.06
-                    # Clamp: text never overflows beyond ph_h (TEXT_TO_FIT_SHAPE)
-                    text_h = min(estimated_h, ph_h)
-                    A = ph_top + text_h
-                    print(f'[title bottom] template ph: top={ph_top:.3f}" h={ph_h:.3f}"'
-                          f' font={tmpl_fs:.0f}pt lines={lines}'
-                          f' est_h={estimated_h:.3f}" text_h={text_h:.3f}" → A={A:.3f}"')
-                    return A
+                    if ph_h <= 1.5:
+                        A = ph_top + ph_h
+                        print(f'[title bottom] template ph: top={ph_top:.3f}" h={ph_h:.3f}"'
+                              f' → A={A:.3f}" (placeholder bottom)')
+                        return A
+                    # Large placeholder — fall through to spec-based estimate
+                    print(f'[title bottom] large ph (h={ph_h:.3f}"), using spec estimate')
         except Exception as _e:
             print(f'[title bottom] ph read failed: {_e}')
 
     # Scratch mode (or template ph read failed): use spec coordinates
-    width_pts     = max(1.0, title_w * 72)
-    char_w        = max(1.0, font_size * 0.60)
+    effective_w   = max(0.5, title_w - 0.15)
+    width_pts     = max(1.0, effective_w * 72)
+    char_w        = max(1.0, font_size * 0.65)
     chars_per_line = max(4, int(width_pts / char_w))
     text  = str(title_block.get('text', '') or '').strip()
     lines = 0
