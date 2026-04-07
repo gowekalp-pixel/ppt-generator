@@ -1,15 +1,15 @@
-﻿// â”€â”€â”€ AGENT 5 â€” SLIDE LAYOUT & VISUAL DESIGN ENGINE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// Input:  state.slideManifest   â€” output from Agent 4
-//         state.brandRulebook   â€” brand guideline JSON from Agent 2
+﻿// ********* AGENT 5 **” SLIDE LAYOUT & VISUAL DESIGN ENGINE *********************************************************************************
+// Input:  state.slideManifest   **” output from Agent 4
+//         state.brandRulebook   **” brand guideline JSON from Agent 2
 //
-// Output: designedSpec â€” flat JSON array, one render-ready object per slide
+// Output: designedSpec **” flat JSON array, one render-ready object per slide
 //
 // Architecture: Claude API call per batch of 3 slides.
 // Claude receives the Agent 4 manifest + brand guideline and returns
 // a precise layout spec: canvas, title_block, subtitle_block,
 // zones (with fully positioned artifacts), and global_elements.
 // brand_tokens are derived from the brand rulebook and hoisted to the
-// top-level return value â€” Claude does NOT output them per slide.
+// top-level return value **” Claude does NOT output them per slide.
 //
 // Agent 5.1 then reviews this spec and applies targeted fixes.
 // Agent 6 (python-pptx) consumes the final reviewed spec.
@@ -21,9 +21,9 @@
 if (typeof globalThis.bt === 'undefined') globalThis.bt = {}
 var bt = globalThis.bt
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// *********************************************************************************************************************************************************************************************************************************************
 // SYSTEM PROMPT
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// *********************************************************************************************************************************************************************************************************************************************
 
 var AGENT5_SYSTEM = `You are a senior presentation designer and layout system architect.
 
@@ -31,20 +31,20 @@ You will receive:
 1. A slide content manifest created by Agent 4
 2. A brand guideline JSON for the current deck
 
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 BATCH PROCESSING RULE
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 
-You will receive slides in batches of 1â€“2.
+You will receive slides in batches of 1**“2.
 Process ONLY the slides in this batch.
 Return ONLY those slides in the JSON array.
 Do not infer slides before or after this batch.
 Do not summarize the entire deck.
 Do not renumber slides.
 
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 ROLE
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 
 Your task is to convert each slide into an exact render-ready layout specification for PowerPoint generation.
 
@@ -75,9 +75,9 @@ BLOCKS-FIRST HANDOFF:
 - Only native chart/table artifacts remain typed render blocks. stat_bar is flattened into primitive blocks.
 - Do NOT return a blocks[] array yourself. Return the designed slide spec; the local pipeline generates blocks[] after normalization.
 
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 COORDINATE SYSTEM
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 
 - unit: inches
 - origin: (0.00, 0.00) at top-left of slide
@@ -98,9 +98,9 @@ Applies to:
 - cards
 - global elements
 
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 BRAND GUIDELINE AUTHORITY RULE
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 
 The brand guideline is the primary authority for design.
 
@@ -122,47 +122,47 @@ Only if the brand guideline is missing or incomplete:
 - ensure readability and hierarchy
 - avoid decorative styling
 
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 TITLE & DIVIDER SLIDES (template mode)
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 
 When slide_type is "title", "divider", or "thank_you" AND uses_template is true:
-The master provides ALL visual elements â€” background, logo, decorations, footer.
+The master provides ALL visual elements **” background, logo, decorations, footer.
 Agent 6 places text directly into the master's title/subtitle placeholders.
 
 Output ONLY:
-- title_block: { text: "Thank You", font_family, font_size, font_weight, color } â€” NO x/y/w/h; for thank_you use exactly "Thank You" as text
+- title_block: { text: "Thank You", font_family, font_size, font_weight, color } **” NO x/y/w/h; for thank_you use exactly "Thank You" as text
 - subtitle_block: null (always null for thank_you)
 - zones: []
 - global_elements: {}
 - canvas.background: null
 - layout_mode: true
 
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-ALL CONTENT SLIDES â€” FIXED ELEMENTS (template mode)
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
+ALL CONTENT SLIDES **” FIXED ELEMENTS (template mode)
+*********************************************************************************
 
 When slide_type is "content" AND uses_template is true, regardless of layout selection:
 The master template positions slide title, subtitle, footer, and page number.
 
 ALWAYS apply these rules for ALL content slides in template mode:
-- title_block: text, font_family, font_size, font_weight, color ONLY â€” omit x/y/w/h
-- subtitle_block: same â€” omit x/y/w/h
-- global_elements: {} â€” master handles footer and page number automatically
+- title_block: text, font_family, font_size, font_weight, color ONLY **” omit x/y/w/h
+- subtitle_block: same **” omit x/y/w/h
+- global_elements: {} **” master handles footer and page number automatically
 - canvas.background: null
 
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-CONTENT SLIDES â€” LAYOUT MODE (selected_layout_name is non-empty)
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
+CONTENT SLIDES **” LAYOUT MODE (selected_layout_name is non-empty)
+*********************************************************************************
 
 When uses_template is true AND selected_layout_name is non-empty:
 The pipeline automatically maps each zone to its content area slot in the named layout.
-Your job is CONTENT QUALITY and VISUAL STYLE â€” not positioning.
+Your job is CONTENT QUALITY and VISUAL STYLE **” not positioning.
 
 Rules:
 1. Set layout_mode: true
-2. For each zone: set frame to null â€” the pipeline fills frame from the layout's content_areas
-3. Do NOT set placeholder_idx on artifacts â€” the pipeline assigns the real PPTX placeholder idx
+2. For each zone: set frame to null **” the pipeline fills frame from the layout's content_areas
+3. Do NOT set placeholder_idx on artifacts **” the pipeline assigns the real PPTX placeholder idx
 4. For each artifact (except cards): add header_block
    - layout_map[selected_layout_name].ph_count > 2 (multi-slot layout):
      â†’ set header_block.placeholder_ref: true
@@ -171,9 +171,9 @@ Rules:
 5. Focus on brand-compliant styling: chart colors from chart_color_sequence, correct fonts,
    card_frames, insight_text body_style, table column_widths, workflow_style
 
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-CONTENT SLIDES â€” SCRATCH MODE (selected_layout_name is empty)
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
+CONTENT SLIDES **” SCRATCH MODE (selected_layout_name is empty)
+*********************************************************************************
 
 When uses_template is false OR selected_layout_name is empty:
 Compute all coordinates from layout_hint splits.
@@ -185,9 +185,9 @@ Compute all coordinates from layout_hint splits.
 - global_elements: include footer and page_number when uses_template is false
 - canvas.background: set when uses_template is false
 
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 OUTPUT STRUCTURE
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 
 Each slide must return EXACTLY:
 
@@ -195,7 +195,7 @@ Each slide must return EXACTLY:
   "slide_number": number,
   "slide_type": "title" | "divider" | "content",
   "layout_mode": true | false,
-  "selected_layout_name": "string â€” brand layout name chosen by Agent 4, or empty string",
+  "selected_layout_name": "string **” brand layout name chosen by Agent 4, or empty string",
   "canvas": {
     "width_in": number,
     "height_in": number,
@@ -246,20 +246,20 @@ Each slide must return EXACTLY:
 }
 
 If subtitle_block is not needed set it to null.
-global_elements is optional â€” include when appropriate.
+global_elements is optional **” include when appropriate.
 
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 TITLE / SUBTITLE SIZING
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 
 Font sizes:
-- title slides: 24â€“34 pt
-- divider slides: 22â€“30 pt
-- content slides: 16â€“22 pt
-- subtitle is 9â€“16 pt smaller than title
+- title slides: 24**“34 pt
+- divider slides: 22**“30 pt
+- content slides: 16**“22 pt
+- subtitle is 9**“16 pt smaller than title
 
-TITLE BLOCK HEIGHT (scratch mode only â€” in template/layout mode omit x/y/w/h):
-Compute h from actual line count â€” do NOT use a generous fixed height:
+TITLE BLOCK HEIGHT (scratch mode only **” in template/layout mode omit x/y/w/h):
+Compute h from actual line count **” do NOT use a generous fixed height:
 
   chars_per_line â‰ˆ (title_block.w Ã— 72) / (font_size_pt Ã— 0.52)
   n_lines = ceil(title_char_count / chars_per_line)
@@ -271,13 +271,13 @@ Compute h from actual line count â€” do NOT use a generous fixed height:
     h = 2 Ã— (20 Ã— 1.35 / 72) + 0.12 = 2 Ã— 0.375 + 0.12 = 0.87"
 
   CRITICAL: zone frame y must start at title_block.y + title_block.h + 0.20" (minimum gap)
-  Never add extra buffer to title_block.h â€” the renderer compacts it automatically.
+  Never add extra buffer to title_block.h **” the renderer compacts it automatically.
   In template mode (uses_template=true) where title y/h are omitted, assume the title
   area ends at ~0.90" from the top and start all zones at â‰¥ 1.10" (0.90 + 0.20 gap).
 
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 ZONES
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 
 Each zone:
 
@@ -298,27 +298,27 @@ Rules:
 - zones must NOT overlap
 - must respect layout_hint from Agent 4
 - primary zones get more space than secondary
-- each zone has 1â€“2 artifacts
+- each zone has 1**“2 artifacts
 - title and subtitle sit OUTSIDE zones
 
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 ARTIFACT CONTRACT
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 
 Every artifact must be FULLY specified. No missing fields. No placeholders.
 
 Allowed types: insight_text | chart | stat_bar | cards | workflow | table | matrix | driver_tree | prioritization | comparison_table | initiative_map | profile_card_set | risk_register
 
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 1. INSIGHT TEXT
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 
-â”€â”€â”€ STEP 1: SET insight_mode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+********* STEP 1: SET insight_mode *********************************************************************************************************************************************************
 Inspect the Agent 4 artifact:
 - Agent 4 provides "groups[]"  â†’ set insight_mode: "grouped"
 - Agent 4 provides "points[]"  â†’ set insight_mode: "standard"
 
-â”€â”€â”€ STANDARD MODE SCHEMA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+********* STANDARD MODE SCHEMA *********************************************************************************************************************************************************************
 
 {
   "type": "insight_text",
@@ -348,7 +348,7 @@ Inspect the Agent 4 artifact:
     "vertical_distribution": "spread"
   },
   "header_block": null or {
-    "text": "string â€” the artifact_header value from Agent 4",
+    "text": "string **” the artifact_header value from Agent 4",
     "x": number, "y": number, "w": number, "h": number,
     "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
     "style": "underline" | "brand_fill",
@@ -359,17 +359,17 @@ Inspect the Agent 4 artifact:
 
 Standard mode styling rules:
 - style.fill_color: null (transparent) or very light brand background tint
-- style.border_color: subtle brand accent color or null â€” no heavy full-border box
+- style.border_color: subtle brand accent color or null **” no heavy full-border box
 - heading_style.color: brand primary color; risk/alert accent only for "Risk Alert"
 - list_style: "tick_cross" for positive/negative mix; "numbered" for sequential/ranked; "bullet" for parallel
-- indent_inches: 0.12â€“0.18; space_before_pt: 4â€“8pt
-- vertical_distribution "spread": distribute points evenly â€” do NOT cluster at top
+- indent_inches: 0.12**“0.18; space_before_pt: 4**“8pt
+- vertical_distribution "spread": distribute points evenly **” do NOT cluster at top
 - body font_size proportional to artifact height:
-    h < 2.0": 9â€“11pt;  h 2.0â€“3.5": 11â€“14pt;  h > 3.5": 14â€“18pt
-- Do NOT pre-shrink font â€” renderer auto-fits; use upper end of range
+    h < 2.0": 9**“11pt;  h 2.0**“3.5": 11**“14pt;  h > 3.5": 14**“18pt
+- Do NOT pre-shrink font **” renderer auto-fits; use upper end of range
 - heading_style.font_size = body_style.font_size + 2 to 4pt
 
-â”€â”€â”€ GROUPED MODE SCHEMA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+********* GROUPED MODE SCHEMA ************************************************************************************************************************************************************************
 
 {
   "type": "insight_text",
@@ -421,14 +421,14 @@ Standard mode styling rules:
   "header_to_box_gap_in": number
 }
 
-â”€â”€â”€ GROUPED MODE DESIGN RULES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+********* GROUPED MODE DESIGN RULES ******************************************************************************************************************************************************
 
-GROUP LAYOUT â€” choose based on zone dimensions and group count:
+GROUP LAYOUT **” choose based on zone dimensions and group count:
 - "columns": use when zone w > zone h AND group count â‰¤ 3 (groups side-by-side)
 - "rows":    use when zone h â‰¥ zone w OR group count â‰¥ 3 (groups stacked vertically, header left + box right)
 
-GROUP HEADER SHAPE â€” choose based on content semantics:
-- "circle_badge": ONLY when groups represent numbered priority steps (1, 2, 3â€¦) or sequential phases
+GROUP HEADER SHAPE **” choose based on content semantics:
+- "circle_badge": ONLY when groups represent numbered priority steps (1, 2, 3**¦) or sequential phases
   - Renders as a filled circle; priority number (1-based index) shown as bold text inside
 - "rounded_rect": DEFAULT for all text-label group headers
   - columns layout: spans full column width as a header bar
@@ -437,32 +437,32 @@ GROUP HEADER SHAPE â€” choose based on content semantics:
 GROUP HEADER COLORS:
 - fill_color: brand primary color (EY yellow #FFE600, or dark brand color for contrast)
 - text_color: #111111 on light/yellow fills; #FFFFFF on dark fills
-- Do NOT use a subtle/light fill â€” headers must be visually dominant
+- Do NOT use a subtle/light fill **” headers must be visually dominant
 
 GROUP BULLET BOX:
 - fill_color: null or very light near-white tint
-- border_color: light brand border â€” use brand secondary light or a neutral â€” NEVER heavy/dark
-- border_width: 0.5â€“1.0pt
+- border_color: light brand border **” use brand secondary light or a neutral **” NEVER heavy/dark
+- border_width: 0.5**“1.0pt
 - corner_radius: match group_header_style.corner_radius for visual consistency
 
-DIMENSION CALCULATION â€” derive ALL sizes from content and available area:
+DIMENSION CALCULATION **” derive ALL sizes from content and available area:
 
   Let n       = number of groups
   Let f       = bullet_style.font_size (pt)
   Let line_h  = f / 72  (inches per line, 1pt = 1/72")
   Let header_block_h = height consumed by artifact-level header_block (0 if null)
 
-  1. group_header_style.h   â€” height of the group header shape:
+  1. group_header_style.h   **” height of the group header shape:
        rounded_rect â†’ h = max(f Ã— 1.8 / 72,  artifact.h Ã— 0.06)
        circle_badge â†’ h = max(f Ã— 2.2 / 72,  artifact.h Ã— 0.08)   [w = h, always a circle]
 
-  2. group_header_style.w   â€” width of the group header shape:
+  2. group_header_style.w   **” width of the group header shape:
        columns layout â†’ NOT specified here; renderer uses full column width
        rows layout, rounded_rect â†’ estimate from longest group header label:
            w = (max_header_chars Ã— f Ã— 0.55 / 72) + (f Ã— 2.0 / 72)
        rows layout, circle_badge â†’ w = h (square bounding box)
 
-  3. group_gap_in â€” gap between adjacent groups:
+  3. group_gap_in **” gap between adjacent groups:
        columns â†’ max(artifact.w Ã— 0.015, 0.05)
        rows    â†’ max(artifact.h Ã— 0.015, 0.05)
 
@@ -473,7 +473,7 @@ DIMENSION CALCULATION â€” derive ALL sizes from content and available area:
        top = bottom = max(f Ã— 0.8 / 72, 0.05)
        left = right = max(f Ã— 1.0 / 72, 0.07)
 
-  6. bullet_style.font_size â€” derive from available box area:
+  6. bullet_style.font_size **” derive from available box area:
        columns layout:
            col_w = (artifact.w - (n-1) Ã— group_gap_in) / n
            box_h = artifact.h - header_block_h - group_header_style.h - header_to_box_gap_in
@@ -486,24 +486,24 @@ DIMENSION CALCULATION â€” derive ALL sizes from content and available area:
            box_w = artifact.w - group_header_style.w - header_to_box_gap_in
            f = floor(min_row_h Ã— 72 / (max_bullets_in_row Ã— 1.5))  â†’ clamp to [8, 14]
 
-  7. space_before_pt = max(f Ã— 0.4, 2)   (scales with font â€” tighter than standard mode)
+  7. space_before_pt = max(f Ã— 0.4, 2)   (scales with font **” tighter than standard mode)
      indent_inches   = max(f Ã— 1.0 / 72, 0.08)
 
-GEOMETRY â€” columns layout (renderer uses these formulas, NOT hardcoded values):
+GEOMETRY **” columns layout (renderer uses these formulas, NOT hardcoded values):
 - col_w[i]   = (artifact.w - (n-1) Ã— group_gap_in) / n          [equal width per column]
 - header_h   = group_header_style.h                               [same for all columns]
 - box_h[i]   = artifact.h - header_block_h - header_h - header_to_box_gap_in  [same for all columns]
 
-GEOMETRY â€” rows layout (renderer uses these formulas):
+GEOMETRY **” rows layout (renderer uses these formulas):
 - total_row_h = artifact.h - header_block_h - (n-1) Ã— group_gap_in
-- row_h[i]   = total_row_h Ã— (bullets[i].length / total_bullets)  [PROPORTIONAL to bullet count â€” NOT equal]
+- row_h[i]   = total_row_h Ã— (bullets[i].length / total_bullets)  [PROPORTIONAL to bullet count **” NOT equal]
                minimum row_h[i] = group_header_style.h + header_to_box_gap_in + (1 line of text)
 - header_w   = group_header_style.w                               [same for all rows]
 - box_w[i]   = artifact.w - header_w - header_to_box_gap_in      [same for all rows]
 
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 2. CHART
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 
 {
   "type": "chart",
@@ -539,7 +539,7 @@ GEOMETRY â€” rows layout (renderer uses these formulas):
     }
   ],
   "header_block": null or {
-    "text": "string â€” the artifact_header value from Agent 4",
+    "text": "string **” the artifact_header value from Agent 4",
     "x": number, "y": number, "w": number, "h": number,
     "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
     "style": "underline" | "brand_fill",
@@ -553,10 +553,10 @@ Chart rules:
 - data_label_color must use a brand text color token, preferably body_color; do not hardcode white
 - assume Agent 6 renders chart data labels at Outside End, so choose label colors for readability on the slide background
 - minimum axis font size: 8pt
-- if chart + table in zone: chart takes 60â€“75% of zone width
+- if chart + table in zone: chart takes 60**“75% of zone width
 - show_gridlines must always be false; no chart should display gridlines
 
-DUAL AXIS â€” MANDATORY:
+DUAL AXIS **” MANDATORY:
 - If two or more series have DIFFERENT units (e.g. one is a count/number, another is â‚¹/currency/%, etc.)
   you MUST set dual_axis: true and list the secondary-axis series names in secondary_series[].
   NEVER plot metrics with different units on the same Y axis.
@@ -565,35 +565,35 @@ DUAL AXIS â€” MANDATORY:
 LAYOUT SIZE HINTS based on category count:
 These rules apply in BOTH scratch mode (free positioning) AND layout mode (template layouts).
 
-SCRATCH MODE â€” set zone dimensions directly:
+SCRATCH MODE **” set zone dimensions directly:
 - Column/vertical bar chart with > 6 categories: set zone w â‰¥ 7" (wide/horizontal stretch)
 - Horizontal bar chart with > 6 categories: set zone h â‰¥ 5" (tall/vertical stretch)
 
-LAYOUT MODE â€” select the right layout from layout_map:
+LAYOUT MODE **” select the right layout from layout_map:
 - layout_map[name].content_areas is an array of placeholders sorted leftâ†’right, topâ†’bottom.
-  Each entry has w_in and h_in â€” the actual rendered size of that placeholder in the template.
+  Each entry has w_in and h_in **” the actual rendered size of that placeholder in the template.
   content_areas[0] is always the primary (largest/first) content slot.
 - Column/vertical bar chart with > 6 categories: scan layout_map for the layout whose
   content_areas[0].w_in is largest (â‰¥ 7" preferred). Set selected_layout_name to that layout.
 - Horizontal bar chart with > 6 categories: scan layout_map for the layout whose
   content_areas[0].h_in is largest (â‰¥ 5" preferred). Set selected_layout_name to that layout.
-- This overrides Agent 4's selected_layout_name when a better-fitting layout exists â€”
+- This overrides Agent 4's selected_layout_name when a better-fitting layout exists **”
   chart readability takes priority over the default layout choice.
 - If no template layout meets the threshold, fall back to the widest/tallest available and
   note the constraint; do NOT invent coordinates that exceed the placeholder bounds.
 
 HEADER DEDUPLICATION:
 - If the zone has a header_ph_idx (layout mode), the artifact heading is written to the layout's
-  header placeholder automatically. In that case set chart_title: "" â€” do NOT repeat the same
+  header placeholder automatically. In that case set chart_title: "" **” do NOT repeat the same
   text as both an internal chart title and a header_block / layout header.
 - Only use chart_title for a subtitle-style annotation inside the chart plot area when it adds
   information beyond what the zone header already says.
 
-LEGEND POSITION (computed by renderer from chart-to-slide ratio â€” do not specify in spec):
+LEGEND POSITION (computed by renderer from chart-to-slide ratio **” do not specify in spec):
 - chart.w > 60% of slide width                       â†’ legend RIGHT
 - chart.h > 60% of slide height (and width â‰¤ 60%)   â†’ legend TOP
 - All other cases: pie chart â†’ legend RIGHT; all other chart types â†’ legend TOP
-- Legend font size is automatically capped at chart_header font size â€” do not set legend_font_size above heading_style.font_size
+- Legend font size is automatically capped at chart_header font size **” do not set legend_font_size above heading_style.font_size
 
 PIE CHART CRITICAL: a pie has ONE series but MULTIPLE segments (one per category).
   The renderer colors each segment from series_style[i]. You MUST output one series_style
@@ -608,12 +608,12 @@ PIE CHART CRITICAL: a pie has ONE series but MULTIPLE segments (one per category
 
 GROUP PIE CHART CRITICAL: chart_type = "group_pie" renders N independent pie charts in a group.
   Data model:
-  - categories[] = the shared slice labels (same breakdown for EVERY pie) â€” max 7
+  - categories[] = the shared slice labels (same breakdown for EVERY pie) **” max 7
   - series[]     = one entry per entity/pie; series[i].name is the entity label shown BELOW pie i
   - series[i].values[] must have the same length as categories[]
   - series[i].unit should be "percent" (values sum to ~100)
 
-  series_style: EXACTLY LIKE A SINGLE PIE â€” one entry per SLICE (category), NOT per entity.
+  series_style: EXACTLY LIKE A SINGLE PIE **” one entry per SLICE (category), NOT per entity.
   The same colors are shared across every pie in the group. Output series_style.length === categories.length.
   Example for 3 slices, 3 entity pies:
     categories: ["Standard", "SMA-0", "Substandard"]
@@ -628,29 +628,29 @@ GROUP PIE CHART CRITICAL: chart_type = "group_pie" renders N independent pie cha
       { "series_name": "Substandard", "fill_color": chart_palette[2], "data_label_color": body_color, "data_label_size": 9 }
     ]
 
-  Legend: ALWAYS "top" â€” one shared legend listing the SLICES (categories), rendered once above all pies.
+  Legend: ALWAYS "top" **” one shared legend listing the SLICES (categories), rendered once above all pies.
     The legend entries come from categories[], colored by series_style[i].fill_color.
   Entity label: series[i].name is rendered BELOW each pie, center-aligned, in the brand accent color.
-    Do NOT include entity names in the chart legend â€” they appear as labels under each pie.
+    Do NOT include entity names in the chart legend **” they appear as labels under each pie.
   series_total sub-label: if series[i].series_total is present and non-empty, render it as a
     second line directly below the entity name, center-aligned under that pie.
-    Style: same horizontal alignment as the entity name; font size 1â€“2pt smaller than the
+    Style: same horizontal alignment as the entity name; font size 1**“2pt smaller than the
     entity name; color: brand body_color or secondary text color (not accent).
-    If series[i].series_total is absent or empty, render only the entity name â€” no blank line.
+    If series[i].series_total is absent or empty, render only the entity name **” no blank line.
 
   Layout size hints for group_pie:
-  - group_pie with 5â€“8 pies: set zone w â‰¥ 9" (needs near-full slide width)
-  - group_pie with 2â€“4 pies: zone w â‰¥ 5" (â‰¥ 50% of slide width)
+  - group_pie with 5**“8 pies: set zone w â‰¥ 9" (needs near-full slide width)
+  - group_pie with 2**“4 pies: zone w â‰¥ 5" (â‰¥ 50% of slide width)
   - show_legend must be true (single shared legend); the renderer places it at the top.
 
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 CHART MICRO-LAYOUT OWNERSHIP:
 - You must decide legend_position, data_label_size, and category_label_rotation in the spec
 - You must decide all series colors, line widths, marker choices, and label colors
 - Do NOT leave chart readability choices for the renderer
 
 3. CARDS
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 
 {
   "type": "cards",
@@ -689,7 +689,7 @@ CHART MICRO-LAYOUT OWNERSHIP:
 }
 
 Card styling rules:
-- card_frames: all cards must be EQUAL size â€” same w and h; divide container evenly with 0.12" gutters
+- card_frames: all cards must be EQUAL size **” same w and h; divide container evenly with 0.12" gutters
 - card_style.fill_color: derive from card sentiment (from Agent 4 cards[i].sentiment):
     positive â†’ very light green tint (e.g., "#EEF7F0") or brand secondary light
     negative â†’ very light red/amber tint (e.g., "#FDF3F1") or brand warning light
@@ -703,14 +703,14 @@ Card styling rules:
     card 3+ â†’ accent_colors in order
   Only fall back to sentiment color when a single card stands alone or no brand sequence exists
 - title_style.font_size: SAME across all cards on the slide (pick one size, apply to all)
-- subtitle_style.font_size: SAME across all cards (this is the headline metric â€” make it the largest element, 18â€“26pt)
-- body_style.font_size: SAME across all cards (9â€“11pt)
-- card_style.internal_padding: 0.12â€“0.18" â€” consistent across all cards
-- cards_layout: "row" when 3â€“4 cards side by side; "column" when 2 cards stacked; "grid" for 4-card 2Ã—2
+- subtitle_style.font_size: SAME across all cards (this is the headline metric **” make it the largest element, 18**“26pt)
+- body_style.font_size: SAME across all cards (9**“11pt)
+- card_style.internal_padding: 0.12**“0.18" **” consistent across all cards
+- cards_layout: "row" when 3**“4 cards side by side; "column" when 2 cards stacked; "grid" for 4-card 2Ã—2
 
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 4. WORKFLOW
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 
 {
   "type": "workflow",
@@ -750,7 +750,7 @@ Card styling rules:
     }
   ],
   "header_block": null or {
-    "text": "string â€” the artifact_header value from Agent 4",
+    "text": "string **” the artifact_header value from Agent 4",
     "x": number, "y": number, "w": number, "h": number,
     "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
     "style": "underline" | "brand_fill",
@@ -787,7 +787,7 @@ Workflow coordinate rules:
 - Node sizing:
     process_flow / timeline (left_to_right): node w = (container.w âˆ’ (nâˆ’1)Ã—0.20) / n; node h must include any above/below message bands
     hierarchy / decomposition (top_down_branching): root node centered; children evenly spaced across width
-    top_to_bottom / bottom_up: node box occupies roughly 35â€“45% of container.w with the remaining width reserved for the right-side message band
+    top_to_bottom / bottom_up: node box occupies roughly 35**“45% of container.w with the remaining width reserved for the right-side message band
 - Node spacing: min 0.20" gap between adjacent nodes; evenly distribute remaining space
 - Level assignment: all nodes at the same level must share the SAME y (horizontal) or x (vertical) coordinate
 - Balance: for branching layouts, distribute child nodes symmetrically around parent x-center
@@ -795,13 +795,13 @@ Workflow coordinate rules:
 - Connection paths: start at center-right of "from" node, end at center-left of "to" node (left_to_right)
   For top_to_bottom: start at bottom-center, end at top-center
 
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 WORKFLOW MICRO-LAYOUT OWNERSHIP:
 - Reserve explicit whitespace for external value / description bands so labels do not collide with nodes or connectors
 - You must decide the final node sizes, connector paths, node padding, and external text gaps
 
 5. TABLE
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 
 {
   "type": "table",
@@ -830,7 +830,7 @@ WORKFLOW MICRO-LAYOUT OWNERSHIP:
   "header_row_height": number,
   "row_heights": [number],
   "header_block": null or {
-    "text": "string â€” the artifact_header value from Agent 4",
+    "text": "string **” the artifact_header value from Agent 4",
     "x": number, "y": number, "w": number, "h": number,
     "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
     "style": "underline" | "brand_fill",
@@ -842,26 +842,26 @@ Table styling rules:
 - column_widths must sum exactly to table width (w field)
 - body font min 9pt; header font min 10pt
 - Column width heuristics (distribute table.w proportionally):
-    Numeric columns (values, %, â‚¹): narrower â€” typically 0.80â€“1.20" each
-    Label/name columns (first column, entity names): wider â€” typically 1.50â€“2.50"
-    Short categorical columns: 0.80â€“1.10"
+    Numeric columns (values, %, â‚¹): narrower **” typically 0.80**“1.20" each
+    Label/name columns (first column, entity names): wider **” typically 1.50**“2.50"
+    Short categorical columns: 0.80**“1.10"
 - Column text alignment (enforce in table_style or column_align list if available):
     First / label column: left-align
     Numeric / currency / percent columns: right-align
     Header row: center-align all columns
-- row_heights: all data rows equal height (0.30â€“0.40"); header row slightly taller (0.35â€“0.45")
+- row_heights: all data rows equal height (0.30**“0.40"); header row slightly taller (0.35**“0.45")
 - Zebra striping: set body_alt_fill_color to a very light tint of brand secondary (e.g., "#F7F8FA") for alternating rows
 - highlight_rows: apply highlight_fill_color from brand accent to the highlight_rows indices from Agent 4
-- table_style.cell_padding: 0.05â€“0.08" (enforced by renderer; set as a hint here)
+- table_style.cell_padding: 0.05**“0.08" (enforced by renderer; set as a hint here)
 
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 TABLE MICRO-LAYOUT OWNERSHIP:
 - You must output: column_widths, header_row_height, row_heights, column_types, and column_alignments
-- Cell positions and frames (column_x_positions, row_y_positions, header_cell_frames, body_cell_frames) are computed automatically from these values â€” do NOT output them
+- Cell positions and frames (column_x_positions, row_y_positions, header_cell_frames, body_cell_frames) are computed automatically from these values **” do NOT output them
 - The renderer must not infer table density, alignment, or spacing
 
 6. MATRIX
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 
 {
   "type": "matrix",
@@ -878,23 +878,23 @@ TABLE MICRO-LAYOUT OWNERSHIP:
     "quadrant_title_font_size": number,
     "quadrant_body_font_family": "string",
     "quadrant_body_font_size": number,
-    "positive_quadrant_fill": "hex â€” light tint for favourable quadrants",
-    "negative_quadrant_fill": "hex â€” light tint for unfavourable quadrants",
-    "neutral_quadrant_fill":  "hex â€” light tint for neutral/monitor quadrants",
-    "positive_title_color": "hex â€” quadrant title text color for positive tone",
-    "negative_title_color": "hex â€” quadrant title text color for negative tone",
-    "neutral_title_color":  "hex â€” quadrant title text color for neutral tone",
-    "positive_body_color":  "hex â€” quadrant body text color for positive tone",
-    "negative_body_color":  "hex â€” quadrant body text color for negative tone",
-    "neutral_body_color":   "hex â€” quadrant body text color for neutral tone",
-    "positive_point_fill":  "hex â€” dot fill for points in positive quadrants",
-    "negative_point_fill":  "hex â€” dot fill for points in negative quadrants",
-    "neutral_point_fill":   "hex â€” dot fill for points in neutral quadrants",
+    "positive_quadrant_fill": "hex **” light tint for favourable quadrants",
+    "negative_quadrant_fill": "hex **” light tint for unfavourable quadrants",
+    "neutral_quadrant_fill":  "hex **” light tint for neutral/monitor quadrants",
+    "positive_title_color": "hex **” quadrant title text color for positive tone",
+    "negative_title_color": "hex **” quadrant title text color for negative tone",
+    "neutral_title_color":  "hex **” quadrant title text color for neutral tone",
+    "positive_body_color":  "hex **” quadrant body text color for positive tone",
+    "negative_body_color":  "hex **” quadrant body text color for negative tone",
+    "neutral_body_color":   "hex **” quadrant body text color for neutral tone",
+    "positive_point_fill":  "hex **” dot fill for points in positive quadrants",
+    "negative_point_fill":  "hex **” dot fill for points in negative quadrants",
+    "neutral_point_fill":   "hex **” dot fill for points in neutral quadrants",
     "point_label_font_family": "string",
     "point_label_font_size": number
   },
   "header_block": null or {
-    "text": "string â€” the artifact_header value from Agent 4",
+    "text": "string **” the artifact_header value from Agent 4",
     "x": number, "y": number, "w": number, "h": number,
     "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
     "style": "underline" | "brand_fill",
@@ -904,21 +904,21 @@ TABLE MICRO-LAYOUT OWNERSHIP:
 
 Matrix rules:
 - Quadrant fills are tone-driven (positive/negative/neutral set on each quadrant in Agent 4)
-- Quadrant text colors (title, body) also driven by tone â€” not a single global color
+- Quadrant text colors (title, body) also driven by tone **” not a single global color
 - Center dividers are dashed thin lines (not solid bars)
 - Each quadrant renders: title (bold) + primary_message (italic axis descriptor). No secondary_message in quadrants.
 - Each point renders as two shapes: filled abbreviation circle + outlined label bubble below
 - Point dot color comes from quadrant_id â†’ that quadrant's tone (not a palette index)
 - short_label (2-3 chars) goes inside the filled dot; full label goes in the bubble below
-- Points carry NO primary_message or secondary_message â€” those belong in the paired insight_text
+- Points carry NO primary_message or secondary_message **” those belong in the paired insight_text
 - emphasis=high â†’ larger dot (0.26"), medium=0.20", low=0.16"
-- Axis mid-labels (low_label/high_label) position at the center divider crosshair, NOT at outer edges â€” they are the ONLY axis text rendered; they must be self-contained (axis name + threshold)
-- xAxis.label and yAxis.label are metadata only â€” do NOT render them; no rotated Y-axis label, no X-axis label below grid
-- Point x/y are NUMERIC 0â€“100 (percentage of full grid width/height). Y increases upward: y=100 plots at the TOP.
+- Axis mid-labels (low_label/high_label) position at the center divider crosshair, NOT at outer edges **” they are the ONLY axis text rendered; they must be self-contained (axis name + threshold)
+- xAxis.label and yAxis.label are metadata only **” do NOT render them; no rotated Y-axis label, no X-axis label below grid
+- Point x/y are NUMERIC 0**“100 (percentage of full grid width/height). Y increases upward: y=100 plots at the TOP.
 - Use quadrant_id to determine which quadrant a point belongs to for color; do NOT re-derive from x/y geometry
 
 7. DRIVER_TREE
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 
 {
   "type": "driver_tree",
@@ -930,7 +930,7 @@ Matrix rules:
     "node_border_color": "hex",
     "node_border_width": number,
     "connector_color": "hex",
-    "connector_width": "number â€” connector line thickness in pts (1â€“2pt typical; converted to inches by renderer)",
+    "connector_width": "number **” connector line thickness in pts (1**“2pt typical; converted to inches by renderer)",
     "label_font_family": "string",
     "label_font_size": number,
     "label_color": "hex",
@@ -940,7 +940,7 @@ Matrix rules:
     "corner_radius": number
   },
   "header_block": null or {
-    "text": "string â€” the artifact_header value from Agent 4",
+    "text": "string **” the artifact_header value from Agent 4",
     "x": number, "y": number, "w": number, "h": number,
     "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
     "style": "underline" | "brand_fill",
@@ -959,7 +959,7 @@ Driver tree rules:
   from the Agent 4 manifest — do NOT duplicate it in tree_style.
 
 8. PRIORITIZATION
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 
 {
   "type": "prioritization",
@@ -979,7 +979,7 @@ Driver tree rules:
     "description_font_family": "string",
     "description_font_size": number,
     "description_color": "hex",
-    "qualifier_text_color": "hex â€” text color inside qualifier pills",
+    "qualifier_text_color": "hex **” text color inside qualifier pills",
     "qualifier_value_palette": ["hex", "hex"],
     "qualifier_label_font_family": "string",
     "qualifier_label_font_size": number,
@@ -987,7 +987,7 @@ Driver tree rules:
     "qualifier_value_font_size": number
   },
   "header_block": null or {
-    "text": "string â€” the artifact_header value from Agent 4",
+    "text": "string **” the artifact_header value from Agent 4",
     "x": number, "y": number, "w": number, "h": number,
     "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
     "style": "underline" | "brand_fill",
@@ -999,46 +999,46 @@ Prioritization rules:
 - Use ONLY primitive geometry in the final blocks: rect, text_box
 - Rows must be stacked vertically in rank order
 - Each row contains:
-  - left rank badge (two-layer design â€” JS renders this automatically):
-      Layer 1: rank-colored background rect (fully rounded) â€” color = rank_palette[idx], so each rank has a distinct severity color
+  - left rank badge (two-layer design **” JS renders this automatically):
+      Layer 1: rank-colored background rect (fully rounded) **” color = rank_palette[idx], so each rank has a distinct severity color
       Layer 2: white inner box at the same height as the background, shifted right so a thin colored strip shows on the left
-      Text: "#N" in upper half and priority label (CRITICAL/HIGH/MEDIUM/LOW) in lower half â€” both colored with rank_palette[idx]
-  - rank_palette: set one color per rank (rank 1 = palette[0], rank 2 = palette[1], etc.) â€” each rank must be visually distinct
+      Text: "#N" in upper half and priority label (CRITICAL/HIGH/MEDIUM/LOW) in lower half **” both colored with rank_palette[idx]
+  - rank_palette: set one color per rank (rank 1 = palette[0], rank 2 = palette[1], etc.) **” each rank must be visually distinct
   - action title
   - action description
   - up to 2 qualifier pills on the right
-- rank_palette: set colors for each rank severity chip â€” rank 1 gets palette[0], rank 2 gets palette[1], etc. Make each step visually distinct.
-- qualifier_value_palette: MUST have exactly 2 entries â€” qualifier 1 always uses palette[0], qualifier 2 always uses palette[1]. Use visually distinct colors so dual qualifiers are immediately distinguishable.
+- rank_palette: set colors for each rank severity chip **” rank 1 gets palette[0], rank 2 gets palette[1], etc. Make each step visually distinct.
+- qualifier_value_palette: MUST have exactly 2 entries **” qualifier 1 always uses palette[0], qualifier 2 always uses palette[1]. Use visually distinct colors so dual qualifiers are immediately distinguishable.
 - Qualifier slots may be empty; do not render empty pills
 - Rank 1 should be visually strongest; later ranks may step down subtly through the rank palette
 - Title must dominate description; qualifiers must remain compact, secondary metadata
 
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 9. STAT_BAR
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 
 {
   "type": "stat_bar",
   "x": number, "y": number, "w": number, "h": number,
-  "artifact_header": "string â€” artifact section label",
+  "artifact_header": "string **” artifact section label",
   "column_headers": [
-    {"id": "col1", "value": "string â€” column header label", "display_type": "text" | "bar" | "normal"}
+    {"id": "col1", "value": "string **” column header label", "display_type": "text" | "bar" | "normal"}
   ],
   "annotation_style": {
     "label_font_family": "string",
-    "axis_color": "hex â€” muted color for column header labels, dividers, and neutral bars",
-    "annotation_color": "hex â€” annotation text column color",
-    "gridline_color": "hex â€” header divider rule color",
-    "border_color": "hex â€” non-highlighted row border color",
-    "background_color": "hex â€” empty bar track fill and highlighted row background tint"
+    "axis_color": "hex **” muted color for column header labels, dividers, and neutral bars",
+    "annotation_color": "hex **” annotation text column color",
+    "gridline_color": "hex **” header divider rule color",
+    "border_color": "hex **” non-highlighted row border color",
+    "background_color": "hex **” empty bar track fill and highlighted row background tint"
   },
-  "scale_UL": number or null â€” upper limit for bar scale; null = auto-scale to max row value,
+  "scale_UL": number or null **” upper limit for bar scale; null = auto-scale to max row value,
   "rows": [
     {
       "row_id": number,
-      "row_focus": "Y" | "N" â€” "Y" = highlighted row,
+      "row_focus": "Y" | "N" **” "Y" = highlighted row,
       "cells": [
-        {"col_id": "col1", "value": "string â€” numeric string for bar columns, display text for others"}
+        {"col_id": "col1", "value": "string **” numeric string for bar columns, display text for others"}
       ]
     }
   ],
@@ -1048,17 +1048,17 @@ Prioritization rules:
 }
 
 Stat_bar rules:
-- Layout (column widths, bar geometry, row heights) is computed by JS from x/y/w/h â€” do NOT set internal positions
-- column_headers: array of column descriptors. display_type "text" = label/annotation text; "bar" = proportional bar (1â€“3 allowed, each with optional "scale_UL" on the column); "normal" = secondary display value
-- COLUMN PAIRING: every "bar" column MUST be immediately followed by a "normal" column with "value": "" â€” that column renders the bar's numeric value as readable text. No two "bar" columns may be adjacent.
-- axis_color: use a muted caption gray (NOT a brand primary â€” too vibrant for column headers)
+- Layout (column widths, bar geometry, row heights) is computed by JS from x/y/w/h **” do NOT set internal positions
+- column_headers: array of column descriptors. display_type "text" = label/annotation text; "bar" = proportional bar (1**“3 allowed, each with optional "scale_UL" on the column); "normal" = secondary display value
+- COLUMN PAIRING: every "bar" column MUST be immediately followed by a "normal" column with "value": "" **” that column renders the bar's numeric value as readable text. No two "bar" columns may be adjacent.
+- axis_color: use a muted caption gray (NOT a brand primary **” too vibrant for column headers)
 - background_color: use a very light tint for the bar track background and highlighted row fill
 - Highlighted bar fill comes automatically from brand chart_palette[0]; do not set it in annotation_style
-- Max 8 rows; mark the most important row row_focus: "Y" (at most 1â€“2 highlighted rows)
+- Max 8 rows; mark the most important row row_focus: "Y" (at most 1**“2 highlighted rows)
 
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 10. COMPARISON_TABLE
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 
 {
   "type": "comparison_table",
@@ -1068,12 +1068,12 @@ Stat_bar rules:
     "label_font_size": number,
     "body_font_family": "string",
     "body_font_size": number,
-    "container_fill_color": "hex â€” outer shell background (usually #FFFFFF)",
+    "container_fill_color": "hex **” outer shell background (usually #FFFFFF)",
     "container_border_color": "hex",
     "container_border_width": number,
     "container_corner_radius": number,
-    "grid_color": "hex â€” horizontal row dividers",
-    "recommended_fill_color": "hex â€” highlight fill for the recommended option row",
+    "grid_color": "hex **” horizontal row dividers",
+    "recommended_fill_color": "hex **” highlight fill for the recommended option row",
     "yes_fill_color": "hex", "yes_text_color": "hex",
     "no_fill_color": "hex",  "no_text_color": "hex",
     "partial_fill_color": "hex", "partial_text_color": "hex",
@@ -1083,16 +1083,16 @@ Stat_bar rules:
 }
 
 Comparison table rules:
-- Layout (column widths, row heights, cell positions) is computed by JS from x/y/w/h â€” do NOT set internal positions
-- Content (columns[], rows[]) comes from the Agent 4 manifest â€” do NOT duplicate it here
+- Layout (column widths, row heights, cell positions) is computed by JS from x/y/w/h **” do NOT set internal positions
+- Content (columns[], rows[]) comes from the Agent 4 manifest **” do NOT duplicate it here
 - recommended_fill_color: light green tint (#EEF4E2 or brand equivalent)
-- yes/no/partial: semantic signal colors â€” green/red/amber respectively; do NOT use brand primary for these
-- label_font_size: 9â€“11pt; body_font_size: 8â€“10pt
-- container_corner_radius: 6â€“10 for a card-like container
+- yes/no/partial: semantic signal colors **” green/red/amber respectively; do NOT use brand primary for these
+- label_font_size: 9**“11pt; body_font_size: 8**“10pt
+- container_corner_radius: 6**“10 for a card-like container
 
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 11. INITIATIVE_MAP
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 
 {
   "type": "initiative_map",
@@ -1102,28 +1102,28 @@ Comparison table rules:
     "label_font_size": number,
     "body_font_family": "string",
     "body_font_size": number,
-    "row_fill_color": "hex â€” data row background (usually #FFFFFF)",
-    "row_border_color": "hex â€” row dividers and column separators",
+    "row_fill_color": "hex **” data row background (usually #FFFFFF)",
+    "row_border_color": "hex **” row dividers and column separators",
     "row_border_width": number,
     "row_corner_radius": number,
-    "primary_chip_fill": "hex â€” tag chip fill for primary-tone cells (light tint of brand primary)",
-    "secondary_chip_fill": "hex â€” tag chip fill for secondary-tone cells (light tint of brand secondary)",
-    "neutral_chip_fill": "hex â€” tag chip fill for neutral-tone cells",
-    "positive_color": "hex â€” text color for positive / delta values"
+    "primary_chip_fill": "hex **” tag chip fill for primary-tone cells (light tint of brand primary)",
+    "secondary_chip_fill": "hex **” tag chip fill for secondary-tone cells (light tint of brand secondary)",
+    "neutral_chip_fill": "hex **” tag chip fill for neutral-tone cells",
+    "positive_color": "hex **” text color for positive / delta values"
   },
   "header_block": null or { ... }
 }
 
 Initiative map rules:
-- Layout (track width, lane widths, row heights, cell text positions) is computed by JS from x/y/w/h â€” do NOT set internal positions
-- Content (column_headers, rows, cells, primary_message, secondary_message, tags) comes from the Agent 4 manifest â€” do NOT duplicate it here
+- Layout (track width, lane widths, row heights, cell text positions) is computed by JS from x/y/w/h **” do NOT set internal positions
+- Content (column_headers, rows, cells, primary_message, secondary_message, tags) comes from the Agent 4 manifest **” do NOT duplicate it here
 - row_border_color: use a light grid color (e.g. #D7DEE8)
 - primary_chip_fill: light (~10%) tint of brand primary_color; secondary_chip_fill: light tint of brand secondary_color
-- label_font_size: 9â€“11pt; body_font_size: 8â€“10pt
+- label_font_size: 9**“11pt; body_font_size: 8**“10pt
 
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 12. PROFILE_CARD_SET
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 
 {
   "type": "profile_card_set",
@@ -1132,32 +1132,32 @@ Initiative map rules:
     "label_font_family": "string",
     "label_font_size": number,
     "body_font_family": "string",
-    "card_fill_color": "hex â€” card background (usually #FFFFFF or very light brand tint)",
+    "card_fill_color": "hex **” card background (usually #FFFFFF or very light brand tint)",
     "card_border_color": "hex",
     "card_border_width": number,
     "card_corner_radius": number,
-    "muted_color": "hex â€” subtitle and attribute-key label color (muted gray)",
-    "divider_color": "hex â€” horizontal line between card header and attribute body",
-    "badge_fill_color": "hex â€” KPI badge background (light green tint default)",
-    "badge_border_color": "hex â€” KPI badge border",
-    "badge_text_color": "hex â€” KPI badge text",
-    "chip_fill_color": "hex â€” attribute chip background (warm neutral default)",
-    "chip_border_color": "hex â€” attribute chip border",
-    "chip_text_color": "hex â€” attribute chip label text"
+    "muted_color": "hex **” subtitle and attribute-key label color (muted gray)",
+    "divider_color": "hex **” horizontal line between card header and attribute body",
+    "badge_fill_color": "hex **” KPI badge background (light green tint default)",
+    "badge_border_color": "hex **” KPI badge border",
+    "badge_text_color": "hex **” KPI badge text",
+    "chip_fill_color": "hex **” attribute chip background (warm neutral default)",
+    "chip_border_color": "hex **” attribute chip border",
+    "chip_text_color": "hex **” attribute chip label text"
   },
   "header_block": null or { ... }
 }
 
 Profile card set rules:
-- Grid layout (columns Ã— rows, card width/height, internal card proportions) is computed by JS from x/y/w/h and profile count â€” do NOT set card positions
-- Content (entity_name, subtitle, badge_text, attributes) comes from the Agent 4 manifest â€” do NOT duplicate it here
+- Grid layout (columns Ã— rows, card width/height, internal card proportions) is computed by JS from x/y/w/h and profile count **” do NOT set card positions
+- Content (entity_name, subtitle, badge_text, attributes) comes from the Agent 4 manifest **” do NOT duplicate it here
 - card_fill_color: #FFFFFF or a 5% tint of brand primary
 - card_border_color: light gray or brand grid line color (#D7DEE8)
-- label_font_size: 9â€“13pt (controls the card entity name size)
+- label_font_size: 9**“13pt (controls the card entity name size)
 
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 13. RISK_REGISTER
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 
 {
   "type": "risk_register",
@@ -1187,12 +1187,12 @@ Profile card set rules:
 }
 
 Risk register rules:
-- Layout (severity bands, row heights, pip positions, column widths) is computed by JS from x/y/w/h â€” do NOT set internal positions
-- Content (severity_levels[], each with label/tone/item_details[]; each item has primary_message, secondary_message, tags[], pips[]) comes from the Agent 4 manifest â€” do NOT duplicate it here
-- risk_register never has an artifact_header or header_block â€” the risk_header is rendered as an internal section header by JS
+- Layout (severity bands, row heights, pip positions, column widths) is computed by JS from x/y/w/h **” do NOT set internal positions
+- Content (severity_levels[], each with label/tone/item_details[]; each item has primary_message, secondary_message, tags[], pips[]) comes from the Agent 4 manifest **” do NOT duplicate it here
+- risk_register never has an artifact_header or header_block **” the risk_header is rendered as an internal section header by JS
 
-RISK_REGISTER STYLING â€” decided by YOU (LLM) using brand tokens:
-  Severity palette: use the brand's red/warm sequence at decreasing intensity â€” critical=darkest, high=dark, medium=mid, low=light.
+RISK_REGISTER STYLING **” decided by YOU (LLM) using brand tokens:
+  Severity palette: use the brand's red/warm sequence at decreasing intensity **” critical=darkest, high=dark, medium=mid, low=light.
     If the brand has a primary red or error color, use it as the base. Otherwise use #DC2626 as semantic red base.
     critical_badge_color: brand error / darkest red (e.g. bt.primary_color if it is a red brand, else #DC2626)
     critical_fill_color:  very light tint of critical_badge_color (~8% opacity, e.g. #FDE8E8)
@@ -1207,24 +1207,24 @@ RISK_REGISTER STYLING â€” decided by YOU (LLM) using brand tokens:
     low_fill_color:       near-white gray tint
     low_text_color:       mid-gray
   pip_fill colors: match the badge_color for each severity level
-  Tag chip colors: derive from brand tokens â€”
+  Tag chip colors: derive from brand tokens **”
     neutral tags: use bt.body_color tint for border, near-white fill
     negative tags: use critical_badge_color tint (same brand red family)
     positive tags: use brand success green if available, else #7AA243 family
     warning tags:  use medium_badge_color tint (amber family)
-  Font sizes: YOU decide â€” all primary_messages at one consistent size (recommend 11â€”12pt), all secondary_messages at one consistent size (recommend 9â€”10pt, 2pt smaller than primary)
+  Font sizes: YOU decide **” all primary_messages at one consistent size (recommend 11**”12pt), all secondary_messages at one consistent size (recommend 9**”10pt, 2pt smaller than primary)
   label_font_size: band header size (recommend 10pt)
   body_font_size: pip labels, item count (recommend 9pt)
-  Layout density: YOU decide â€” scale these to the artifact height and item count:
-    band_height_in: height of each severity section-header band (recommend 0.28â€”0.40”; default 0.34)
-    row_height_in:  height of each risk item row (recommend 0.70â€”1.10”; default 0.90)
+  Layout density: YOU decide **” scale these to the artifact height and item count:
+    band_height_in: height of each severity section-header band (recommend 0.28**”0.40”; default 0.34)
+    row_height_in:  height of each risk item row (recommend 0.70**”1.10”; default 0.90)
                     use lower end when many items must fit, upper end for spacious decks
-    right_col_width_in: width of the right column that holds pip grid + tags (recommend 1.60â€”2.20”; default 1.90)
+    right_col_width_in: width of the right column that holds pip grid + tags (recommend 1.60**”2.20”; default 1.90)
 
 ARTIFACT HEADER
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 
-Every artifact except cards gets a header_block â€” a one-line label above the artifact
+Every artifact except cards gets a header_block **” a one-line label above the artifact
 that names the insight it proves.
 
 Source text from Agent 4:
@@ -1232,7 +1232,7 @@ Source text from Agent 4:
 
 If header text is empty or null: set header_block to null.
 
-LAYOUT MODE â€” detecting if the layout has a header area:
+LAYOUT MODE **” detecting if the layout has a header area:
   Check layout_map[selected_layout_name].ph_count:
   - ph_count > 2: layout has extra placeholders beyond title+body
     â†’ set header_block.placeholder_ref: true
@@ -1248,8 +1248,8 @@ LAYOUT MODE â€” detecting if the layout has a header area:
     â†’ adjust artifact y = body_placeholder.y_in + 0.30
     â†’ adjust artifact h = body_placeholder.h_in - 0.30
     â†’ choose style:
-        "underline"  â€” thin line under the header text using brand accent color
-        "brand_fill" â€” fill header area with brand primary/secondary, white text
+        "underline"  **” thin line under the header text using brand accent color
+        "brand_fill" **” fill header area with brand primary/secondary, white text
       Default: "underline"
 
 SCRATCH MODE:
@@ -1257,9 +1257,9 @@ SCRATCH MODE:
   - artifact y += header_block.h; artifact h -= header_block.h
   - Choose style same as above
 
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 INTERNAL ZONE LAYOUT (2 artifacts)
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 
 If 2 artifacts in a zone, split zone frame between them:
 - chart + insight_text: chart 65%, insight 35%
@@ -1269,9 +1269,9 @@ If 2 artifacts in a zone, split zone frame between them:
 - table + insight_text: table 65%, insight 35%
 Artifacts must NOT overlap.
 
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 LAYOUT DECISION RULES
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 
 Translate Agent 4 layout_hint to zone geometry.
 Content area = canvas minus margins minus title band.
@@ -1285,9 +1285,9 @@ Gutter between zones: 0.15 inches.
 - left_full_50 + top_right_50_h + bottom_right_50_h: left full + right stacked
 - tl + tr + bl + br: 2Ã—2 grid, equal gutters
 
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 QUALITY RULES
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 
 - no missing fields
 - no overlapping zones or artifacts
@@ -1296,33 +1296,33 @@ QUALITY RULES
 - reflect narrative hierarchy in space allocation
 - primary zones visually dominant
 
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 RENDER OWNERSHIP:
 - Agent 5 owns every render-critical detail for every inch of the slide canvas
 - Agent 6 is only allowed to render what Agent 5 decided
 
 OUTPUT RULE
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+*********************************************************************************
 
 Return ONLY a valid JSON array.
 No explanation. No markdown. No text outside JSON.`
 
 
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// *********************************************************************************************************************************************************************************************************************************************
 // UTILITIES
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// *********************************************************************************************************************************************************************************************************************************************
 
-// Round to 2 decimal places â€” kills JS float drift (10.219999... -> 10.22)
+// Round to 2 decimal places **” kills JS float drift (10.219999... -> 10.22)
 function r2(n) { return Math.round(n * 100) / 100 }
 
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// *********************************************************************************************************************************************************************************************************************************************
 // BRAND TOKEN EXTRACTOR
 // Strips slide_layouts and other bulky fields before sending to Claude.
-// slide_layouts contains full placeholder XML â€” can be 10K+ tokens alone.
+// slide_layouts contains full placeholder XML **” can be 10K+ tokens alone.
 // Agent 5 only needs design tokens: colors, fonts, slide size.
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// *********************************************************************************************************************************************************************************************************************************************
 
 function extractBrandTokens(brand) {
   return {
@@ -1340,7 +1340,7 @@ function extractBrandTokens(brand) {
     body_font:            brand.body_font            || {},
     caption_font:         brand.caption_font         || {},
     typography_hierarchy: brand.typography_hierarchy || {},
-    bullet_style:         brand.bullet_style         || { char: 'â€¢', indent_inches: 0.12, space_before_pt: 4 },
+    bullet_style:         brand.bullet_style         || { char: '**¢', indent_inches: 0.12, space_before_pt: 4 },
     insight_box_style:    brand.insight_box_style    || { fill_color: null, border_color: null, corner_radius: 2 },
     visual_style:         brand.visual_style         || 'corporate',
     color_scheme_name:    brand.color_scheme_name    || '',
@@ -1348,7 +1348,7 @@ function extractBrandTokens(brand) {
     uses_template:        brand.uses_template        || false,
     // Compact layout map: name â†’ { title_placeholder, body_placeholder, ph_count, content_areas, usage_guidance }
     // content_areas: large body placeholders (h > 0.5") ordered leftâ†’right, topâ†’bottom.
-    // Used in LAYOUT MODE â€” the pipeline maps zone[i] â†’ content_areas[i] for frame + placeholder_idx.
+    // Used in LAYOUT MODE **” the pipeline maps zone[i] â†’ content_areas[i] for frame + placeholder_idx.
     layout_map:           (brand.slide_layouts || []).reduce((acc, l) => {
       if (l.name) {
         const contentAreas = (l.placeholders || [])
@@ -1370,7 +1370,7 @@ function extractBrandTokens(brand) {
       }
       return acc
     }, {})
-    // slide_masters, layout_blueprints, master_blueprints intentionally excluded â€” too large for API
+    // slide_masters, layout_blueprints, master_blueprints intentionally excluded **” too large for API
   }
 }
 
@@ -1381,32 +1381,32 @@ function buildBrandBrief(brand) {
     '\n\nBRAND COMPLIANCE RULES (MUST follow exactly):' +
     '\n- Fonts: use title_font.family for all titles/headings, body_font.family for all body/bullet text' +
     '\n- Title font size: typography_hierarchy.title_size_pt (content slides), larger for title/divider slides' +
-    '\n- Body font size: typography_hierarchy.body_size_pt â€” do NOT guess; use the extracted value' +
-    '\n- Chart colors: use chart_color_sequence in order â€” each series/segment gets a DIFFERENT color' +
+    '\n- Body font size: typography_hierarchy.body_size_pt **” do NOT guess; use the extracted value' +
+    '\n- Chart colors: use chart_color_sequence in order **” each series/segment gets a DIFFERENT color' +
     '\n- Pie charts: series_style must have one entry PER DATA POINT (category), each with a unique fill_color' +
-    '\n- Bullet char: bullet_style.char â€” use exactly this character, not substitutes' +
-    '\n- Bullet spacing: bullet_style.space_before_pt â€” pass directly into body_style.space_before_pt' +
-    '\n- Insight boxes: insight_box_style.fill_color and border_color â€” a left accent bar is always rendered; do NOT add a full perimeter border' +
+    '\n- Bullet char: bullet_style.char **” use exactly this character, not substitutes' +
+    '\n- Bullet spacing: bullet_style.space_before_pt **” pass directly into body_style.space_before_pt' +
+    '\n- Insight boxes: insight_box_style.fill_color and border_color **” a left accent bar is always rendered; do NOT add a full perimeter border' +
     (tokens.uses_template
-      ? '\n- TEMPLATE MODE ACTIVE: master provides background/logo/footer â€” set global_elements:{}, canvas.background:null' +
-        '\n- Title/divider slides: text only on title_block/subtitle_block â€” omit x/y/w/h, set layout_mode:true' +
-        '\n- Content slides with selected_layout_name: LAYOUT MODE â€” set layout_mode:true, zone.frame:null; do NOT set placeholder_idx (pipeline assigns from layout content_areas)' +
-        '\n- Content slides without selected_layout_name: SCRATCH MODE â€” compute all coordinates from layout_hint'
+      ? '\n- TEMPLATE MODE ACTIVE: master provides background/logo/footer **” set global_elements:{}, canvas.background:null' +
+        '\n- Title/divider slides: text only on title_block/subtitle_block **” omit x/y/w/h, set layout_mode:true' +
+        '\n- Content slides with selected_layout_name: LAYOUT MODE **” set layout_mode:true, zone.frame:null; do NOT set placeholder_idx (pipeline assigns from layout content_areas)' +
+        '\n- Content slides without selected_layout_name: SCRATCH MODE **” compute all coordinates from layout_hint'
       : '\n- SCRATCH MODE: compute all coordinates; specify background and footer in global_elements')
 }
 
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// *********************************************************************************************************************************************************************************************************************************************
 // BATCH WRITER
 // Sends one batch of slides to Claude and returns the array of layout specs
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// *********************************************************************************************************************************************************************************************************************************************
 
 async function designSlideBatch(batchManifest, brand, batchNum) {
   const slideNums = batchManifest.map(s => s.slide_number)
   console.log('Agent 5 batch', batchNum, ':', slideNums.join(', '))
 
   // Annotate each slide with its mode so Claude doesn't have to infer it.
-  // Strip internal pipeline flags (_was_repaired) â€” Claude doesn't need them.
+  // Strip internal pipeline flags (_was_repaired) **” Claude doesn't need them.
   const annotatedManifest = batchManifest.map(({ _was_repaired: _r, ...s }) => ({
     ...s,
     _mode: (brand.uses_template && s.selected_layout_name)
@@ -1434,16 +1434,16 @@ async function designSlideBatch(batchManifest, brand, batchNum) {
     '\n- profile_card_set: must have profile_style, profiles[], layout_direction' +
     '\n- risk_register: must have risk_style and severity_levels[]; no artifact_header or header_block; tags[].tone controls chip color; each severity_level has pip_levels (numeric total scale, e.g. 5); pips[].intensity is numeric (filled blocks out of pip_levels)' +
     '\n- cards: must have card_style, card_frames[] with x/y/w/h per card' +
-    '\n- matrix: must have matrix_style plus semantic fields from Agent 4 (x_axis, y_axis, quadrants[id/title/primary_message/tone], points[label/short_label/quadrant_id/x/y/emphasis]); quadrant has NO secondary_message; points have NO primary_message or secondary_message; x/y are numeric 0â€“100' +
+    '\n- matrix: must have matrix_style plus semantic fields from Agent 4 (x_axis, y_axis, quadrants[id/title/primary_message/tone], points[label/short_label/quadrant_id/x/y/emphasis]); quadrant has NO secondary_message; points have NO primary_message or secondary_message; x/y are numeric 0**“100' +
     '\n- driver_tree: must have tree_style plus semantic fields from Agent 4 (root, branches)' +
     '\n- prioritization: must have priority_style plus semantic fields from Agent 4 (items[], qualifiers[])' +
     '\n- insight_text (standard mode): must have insight_mode:"standard", style, heading_style, body_style' +
     '\n- insight_text (grouped mode):  must have insight_mode:"grouped", heading_style, group_layout, group_header_style, group_bullet_box_style, bullet_style, group_gap_in, header_to_box_gap_in' +
     '\n- charts: include final legend_position, data_label_size, category_label_rotation, and series styling; stat_bar must have rows[], column_headers[] (array with display_type per column), and annotation_style{}' +
     '\n- workflows: include final node geometry, connection paths, node_inner_padding, and external_label_gap' +
-    '\n- tables: include column_widths, column_types, column_alignments, header_row_height, row_heights, and cell_padding (do NOT compute column_x_positions, row_y_positions, header_cell_frames, body_cell_frames â€” these are computed automatically)' +
+    '\n- tables: include column_widths, column_types, column_alignments, header_row_height, row_heights, and cell_padding (do NOT compute column_x_positions, row_y_positions, header_cell_frames, body_cell_frames **” these are computed automatically)' +
     '\n- comparison_table / initiative_map / profile_card_set / risk_register are flattened locally into rect/text blocks, so emphasize rounded rows, semantic fills, and explicit labels rather than native table behavior' +
-    '\n- matrix: include final matrix_style; preserve x_axis, y_axis, quadrants (id/title/primary_message/tone only â€” no secondary_message), and points (label/short_label/quadrant_id/x/y numeric 0â€“100/emphasis â€” no primary_message/secondary_message) for block flattening' +
+    '\n- matrix: include final matrix_style; preserve x_axis, y_axis, quadrants (id/title/primary_message/tone only **” no secondary_message), and points (label/short_label/quadrant_id/x/y numeric 0**“100/emphasis **” no primary_message/secondary_message) for block flattening' +
     '\n- driver_tree: include final tree_style and preserve root/branches for block flattening' +
     '\n- prioritization: include final priority_style and preserve ranked items/qualifiers for block flattening' +
     '\n- non-chart/table artifacts are flattened into primitive blocks locally, so their geometry and style must be complete and render-ready' +
@@ -1464,10 +1464,10 @@ async function designSlideBatch(batchManifest, brand, batchNum) {
 }
 
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// *********************************************************************************************************************************************************************************************************************************************
 // SLIDE VALIDATOR
 // Returns list of structural issues. Empty array = valid.
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// *********************************************************************************************************************************************************************************************************************************************
 
 function validateDesignedSlide(slide) {
   const issues = []
@@ -1496,7 +1496,7 @@ function validateDesignedSlide(slide) {
   }
 
   ;(slide.zones || []).forEach((z, zi) => {
-    // In layout mode, frames are filled post-process from content_areas â€” skip the check
+    // In layout mode, frames are filled post-process from content_areas **” skip the check
     if (!z.frame && !slide.layout_mode) issues.push('z' + zi + ': missing frame')
     if (!z.artifacts?.length)           issues.push('z' + zi + ': no artifacts')
     ;(z.artifacts || []).forEach((a, ai) => {
@@ -1515,8 +1515,8 @@ function validateDesignedSlide(slide) {
       if (normalizedType === 'stat_bar' && !a.artifact_header && !a.stat_header) issues.push(p + ': stat_bar missing artifact_header')
       if (normalizedType === 'stat_bar' && !a.annotation_style) issues.push(p + ': stat_bar missing annotation_style')
       if (normalizedType === 'chart'    && normalizedChartType === 'pie' && Array.isArray(a.series_style) && Array.isArray(a.categories) && a.series_style.length !== a.categories.length) issues.push(p + ': pie chart series_style.length (' + a.series_style.length + ') must equal categories.length (' + a.categories.length + ')')
-      if (normalizedType === 'chart'    && normalizedChartType === 'group_pie' && Array.isArray(a.series_style) && Array.isArray(a.categories) && a.series_style.length !== a.categories.length) issues.push(p + ': group_pie series_style.length (' + a.series_style.length + ') must equal categories.length (' + a.categories.length + ') â€” one style entry per slice')
-      if (normalizedType === 'chart'    && normalizedChartType === 'group_pie' && Array.isArray(a.series) && (a.series.length < 2 || a.series.length > 8)) issues.push(p + ': group_pie series (entities) must be 2â€“8, got ' + (a.series || []).length)
+      if (normalizedType === 'chart'    && normalizedChartType === 'group_pie' && Array.isArray(a.series_style) && Array.isArray(a.categories) && a.series_style.length !== a.categories.length) issues.push(p + ': group_pie series_style.length (' + a.series_style.length + ') must equal categories.length (' + a.categories.length + ') **” one style entry per slice')
+      if (normalizedType === 'chart'    && normalizedChartType === 'group_pie' && Array.isArray(a.series) && (a.series.length < 2 || a.series.length > 8)) issues.push(p + ': group_pie series (entities) must be 2**“8, got ' + (a.series || []).length)
       if (normalizedType === 'workflow' && !a.nodes?.length)   issues.push(p + ': workflow missing nodes')
       if (normalizedType === 'workflow' && !a.workflow_style)  issues.push(p + ': workflow missing workflow_style')
       if (normalizedType === 'workflow' && a.workflow_style && a.workflow_style.node_inner_padding == null) issues.push(p + ': workflow missing node_inner_padding')
@@ -1551,8 +1551,8 @@ function validateDesignedSlide(slide) {
         const validQids = new Set(['q1','q2','q3','q4'])
         ;(a.points || []).forEach((pt, pi) => {
           if (!pt.quadrant_id || !validQids.has(String(pt.quadrant_id).toLowerCase())) issues.push(p + `: matrix point[${pi}] missing valid quadrant_id`)
-          if (typeof pt.x !== 'number') issues.push(p + `: matrix point[${pi}] x must be numeric 0â€“100`)
-          if (typeof pt.y !== 'number') issues.push(p + `: matrix point[${pi}] y must be numeric 0â€“100`)
+          if (typeof pt.x !== 'number') issues.push(p + `: matrix point[${pi}] x must be numeric 0**“100`)
+          if (typeof pt.y !== 'number') issues.push(p + `: matrix point[${pi}] y must be numeric 0**“100`)
         })
       }
       if (normalizedType === 'driver_tree' && !a.tree_style)   issues.push(p + ': driver_tree missing tree_style')
@@ -1849,7 +1849,7 @@ function enforceArtifactBounds(zone) {
           : totalBullets > 12 || maxBullets > 4 ? Math.max(8.5, baseSize - 1)
           : baseSize
         a.bullet_style = { ...(a.bullet_style || {}), font_size: fitted }
-        // Clamp spacing proportional to artifact dimensions â€” no hardcoded defaults
+        // Clamp spacing proportional to artifact dimensions **” no hardcoded defaults
         const dimForGap = a.group_layout === 'rows' ? (a.h || 5) : (a.w || 10)
         const minGap = r2(Math.max(dimForGap * 0.01, 0.04))
         const maxGap = r2(Math.min(dimForGap * 0.03, 0.18))
@@ -1869,13 +1869,13 @@ function enforceArtifactBounds(zone) {
 
     if (a.type === 'cards') {
       // Use the artifact's own x/y/w/h as the authoritative container (respects allocated position/size
-      // within the zone), clamped within zone inner bounds. Ignore a.container â€” LLM sets it inconsistently.
+      // within the zone), clamped within zone inner bounds. Ignore a.container **” LLM sets it inconsistently.
       const artBounds = (a.x != null && a.y != null && a.w != null && a.h != null)
         ? { x: a.x, y: a.y, w: a.w, h: a.h }
         : inner
       const container = rectWithin(artBounds, inner)
       a.container = container
-      // Always recompute card_frames to fill the full container â€” never trust LLM-output frames
+      // Always recompute card_frames to fill the full container **” never trust LLM-output frames
       const _cards    = a.cards || []
       const _count    = _cards.length
       const _cs       = a.card_style || {}
@@ -1948,7 +1948,7 @@ function enforceArtifactBounds(zone) {
       }
     }
 
-    // NOTE: table sizing is handled exclusively by computeArtifactInternals() â€” do not call normalizeTableSizing() here
+    // NOTE: table sizing is handled exclusively by computeArtifactInternals() **” do not call normalizeTableSizing() here
 
     return a
   })
@@ -1966,7 +1966,7 @@ function applyBrandGuidelineOverrides(slide, manifestSlide, brand) {
   }
 
   // In layout mode or template title/divider, coordinates are driven by the template.
-  // Skip bounds enforcement â€” enforcing would corrupt placeholder-derived positions.
+  // Skip bounds enforcement **” enforcing would corrupt placeholder-derived positions.
   const isLayoutMode = normalized.layout_mode === true ||
     (brand.uses_template && (normalized.slide_type === 'title' || normalized.slide_type === 'divider'))
 
@@ -2088,21 +2088,21 @@ function applyLayoutTitleFrames(slide, layoutName, brand) {
 }
 
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// *********************************************************************************************************************************************************************************************************************************************
 // CLAUDE-BASED FALLBACK
-// When a slide fails (bad parse, missing artifacts, truncation) â€” ask Claude to
+// When a slide fails (bad parse, missing artifacts, truncation) **” ask Claude to
 // build the best possible layout for just that one slide.
 // Uses a tight focused prompt: no batch overhead, brand tokens only, one slide.
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// *********************************************************************************************************************************************************************************************************************************************
 
 var AGENT5_FALLBACK_SYSTEM = `You are a senior presentation designer.
 A slide failed to render correctly and needs to be rebuilt from scratch.
 
 Build the best possible board-ready corporate layout for this single slide.
-Use the brand design tokens exactly â€” colors, fonts, slide size.
+Use the brand design tokens exactly **” colors, fonts, slide size.
 Return a single valid JSON object (not an array) matching the full slide schema.
 
-CRITICAL â€” all artifacts must be FULLY specified:
+CRITICAL **” all artifacts must be FULLY specified:
 - chart: include chart_style{} AND series_style[]
 - workflow: include workflow_style{}, nodes[] with x/y/w/h, connections[] with path[]
 - table: include table_style{}, column_widths[], column_x_positions[], header_row_height, row_heights[], row_y_positions[], header_cell_frames[], body_cell_frames[]
@@ -2154,7 +2154,7 @@ async function buildFallbackDesign(manifestSlide, brand) {
   }
 
   // Last resort: minimal structurally valid object derived purely from brand tokens
-  // No hardcoded content â€” pull everything from manifest and brand
+  // No hardcoded content **” pull everything from manifest and brand
   return buildMinimalSafeSlide(manifestSlide, tokens)
 }
 
@@ -2242,7 +2242,7 @@ function syncArtifactHeaderBlock(artifact, headerText) {
   return {
     ...artifact,
     artifact_header: artifact.artifact_header || headerText,
-    // Only update text if header_block already exists â€” never create one here.
+    // Only update text if header_block already exists **” never create one here.
     // Charts render chart_header internally; creating a block would duplicate it.
     // Types that need a guaranteed header_block (profile_card_set, comparison_table,
     // initiative_map, risk_register) call ensureArtifactHeaderBlock explicitly.
@@ -2283,7 +2283,7 @@ function normalizeWorkflowNodes(nodes) {
 }
 
 function normalizeComparisonTableManifest(artifact) {
-  // â”€â”€ New flat schema: columns[] (strings) + rows[].cells[{value, subtext, tone}] â”€â”€
+  // ****** New flat schema: columns[] (strings) + rows[].cells[{value, subtext, tone}] ******
   if (Array.isArray(artifact?.columns) && artifact.columns.length) {
     const columns  = artifact.columns.map(c => String(c || ''))
     const criteria = columns.slice(1)   // first column is the label column
@@ -2642,16 +2642,16 @@ function buildSafeArtifactShell(manifestArt, bt) {
     return {
       type: 'risk_register',
       artifact_coverage_hint,
-      // artifact_header intentionally omitted â€” risk_register uses risk_header internally
+      // artifact_header intentionally omitted **” risk_register uses risk_header internally
       x: null, y: null, w: null, h: null,
       risk_header: manifestArt?.risk_header || manifestArt?.table_header || '',
       severity_levels: normalized.severity_levels,
       risk_style: {
-        // Structural defaults â€” LLM sets all color/font values via prompt
+        // Structural defaults **” LLM sets all color/font values via prompt
         row_border_color: null,
         row_border_width: 0.5,
         row_corner_radius: 8,
-        // All color fields null â€” LLM fills these from brand tokens per prompt instructions
+        // All color fields null **” LLM fills these from brand tokens per prompt instructions
         critical_fill_color: null, high_fill_color: null, medium_fill_color: null, low_fill_color: null,
         critical_badge_color: null, high_badge_color: null, medium_badge_color: null, low_badge_color: null,
         badge_text_color: null,
@@ -2666,10 +2666,10 @@ function buildSafeArtifactShell(manifestArt, bt) {
         label_font_size: null,           // LLM decides
         body_font_family: bt.body_font_family || 'Arial',
         body_font_size: null,            // LLM decides
-        primary_message_font_size: null, // LLM decides â€” consistent across all rows
-        secondary_message_font_size: null// LLM decides â€” consistent across all rows
+        primary_message_font_size: null, // LLM decides **” consistent across all rows
+        secondary_message_font_size: null// LLM decides **” consistent across all rows
       },
-      header_block: null   // no header_block for risk_register â€” risk_header is rendered internally
+      header_block: null   // no header_block for risk_register **” risk_header is rendered internally
     }
   }
   if (t === 'workflow') {
@@ -2766,7 +2766,7 @@ function buildSafeArtifactShell(manifestArt, bt) {
         // Center dividers (thin dashed)
         divider_color:   '#AAAAAA',
         divider_width:   0.5,
-        // Quadrant fills â€” brand-derived tints at ~10% intensity (computed in _matrixToBlocks via _hexTint)
+        // Quadrant fills **” brand-derived tints at ~10% intensity (computed in _matrixToBlocks via _hexTint)
         positive_quadrant_fill: null,
         negative_quadrant_fill: null,
         neutral_quadrant_fill:  null,
@@ -2777,7 +2777,7 @@ function buildSafeArtifactShell(manifestArt, bt) {
         positive_body_color:    bt.primary_color || '#2D7F5E',
         negative_body_color:    '#B91C1C',
         neutral_body_color:     bt.body_color || '#374151',
-        // Point dot fills â€” tone-driven
+        // Point dot fills **” tone-driven
         positive_point_fill:    bt.primary_color || '#2D7F5E',
         negative_point_fill:    '#C53030',
         neutral_point_fill:     bt.secondary_color || '#6B7280',
@@ -2866,7 +2866,7 @@ function buildSafeArtifactShell(manifestArt, bt) {
 }
 
 
-// â”€â”€â”€ Minimal safe slide â€” only used if the fallback Claude call itself fails â”€â”€
+// ********* Minimal safe slide **” only used if the fallback Claude call itself fails ******
 // This is the true last resort. It still uses real brand values and real content.
 function buildMinimalSafeSlide(manifestSlide, tokens) {
   const w         = r2(tokens.slide_width_inches  || 13.33)
@@ -3015,13 +3015,13 @@ function buildMinimalSafeSlide(manifestSlide, tokens) {
 //   matrix       : matrix_type, artifact_header, x_axis, y_axis, quadrants[id/title/primary_message/tone], points[label/short_label/quadrant_id/x(0-100)/y(0-100)/emphasis]
 //   driver_tree  : artifact_header, root, branches[]
 //   prioritization: artifact_header, items[]
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// *********************************************************************************************************************************************************************************************************************************************
 
-// â”€â”€â”€ computeArtifactInternals â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ********* computeArtifactInternals ************************************************************************************************************************************************
 // Post-processes merged zones and fills computed layout/sizing fields on each
 // artifact IN PLACE, so generate_pptx.py can act as a pure renderer.
 // Called after mergeContentIntoZones (and applyLayoutZoneFrames if used).
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ***************************************************************************************************************************************************************************************************************************************
 function computeArtifactInternals(zones, canvas, brandTokens) {
   const round2 = x => Math.round(x * 100) / 100
   const bt = brandTokens || {}
@@ -3049,7 +3049,7 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
       }
     }
 
-    // â”€â”€ 1. Multi-artifact zone stacking â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ****** 1. Multi-artifact zone stacking ******************************************************************************************************************
     if (artifacts.length >= 2) {
       const needsCompute = artifacts.some(a => a.h == null || a.w == null || a.x == null || a.y == null)
       if (needsCompute) {
@@ -3121,11 +3121,11 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
       }
     }
 
-    // â”€â”€ Per-artifact computed fields â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ****** Per-artifact computed fields ******************************************************************************************************************************
     for (const art of artifacts) {
       const artType = art.type
 
-      // â”€â”€ 2. Chart: _computed sub-object â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ****** 2. Chart: _computed sub-object ***************************************************************************************************************
       if (artType === 'chart') {
         if (!art._computed) art._computed = {}
         const computed = art._computed
@@ -3134,7 +3134,7 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
         const cs = art.chart_style || {}
 
         // legend_position
-        // combo charts always need a legend â€” force show_legend true here as a safety net
+        // combo charts always need a legend **” force show_legend true here as a safety net
         if (art.chart_type === 'combo') art.show_legend = true
         if (art.show_legend) {
           if (art.chart_type === 'group_pie') {
@@ -3185,7 +3185,7 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
           category_label_rotation: computed.category_label_rotation
         }
 
-        // Auto-repair series_style if missing or empty â€” prevents criticalRenderIssues
+        // Auto-repair series_style if missing or empty **” prevents criticalRenderIssues
         if (!art.series_style || art.series_style.length === 0) {
           const palette = bt.chart_palette || bt.accent_colors || ['#1A3C8F', '#E8A020', '#2E9E5B', '#C82333']
           const isPie = art.chart_type === 'pie' || art.chart_type === 'donut'
@@ -3214,7 +3214,7 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
         }
       }
 
-      // â”€â”€ 3. Table: column and row specs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ****** 3. Table: column and row specs ***************************************************************************************************************
       if (artType === 'table') {
         const headers = art.headers || []
         const rows    = art.rows    || []
@@ -3406,7 +3406,7 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
         }
       }
 
-      // â”€â”€ 4. Cards: pre-compute card_frames â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ****** 4. Cards: pre-compute card_frames ******************************************************************************************************
       if (artType === 'cards') {
         if (!art.card_frames || art.card_frames.length === 0) {
           const cards  = art.cards  || []
@@ -3418,7 +3418,7 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
           const ay     = art.y || 0
           const aw     = art.w || 0
           let ah       = art.h || 0
-          // Note: do NOT shrink art.h here â€” enforceArtifactBounds() recomputes frames
+          // Note: do NOT shrink art.h here **” enforceArtifactBounds() recomputes frames
           // from the authoritative zone container and always fills the full allocated area.
           const aspect = ah > 0 ? aw / ah : 1
           const minReadableCardWidth = 1.45
@@ -3486,11 +3486,11 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
         const nodes = Array.isArray(art.nodes) ? art.nodes : []
         const ws = art.workflow_style || {}
         art.workflow_style = {
-          // Level-1 (root / all process_flow nodes) â€” brand primary
+          // Level-1 (root / all process_flow nodes) **” brand primary
           node_fill_color:           ws.node_fill_color           || bt.primary_color   || '#0078AE',
-          // Level-2 nodes (hierarchy/decomposition children) â€” secondary brand or tinted
+          // Level-2 nodes (hierarchy/decomposition children) **” secondary brand or tinted
           node_fill_color_secondary: ws.node_fill_color_secondary || bt.secondary_color || '#3A6EA5',
-          // Level-3+ nodes (leaves) â€” very light neutral
+          // Level-3+ nodes (leaves) **” very light neutral
           node_fill_color_leaf:      ws.node_fill_color_leaf      || '#EAF2FB',
           node_border_color:         ws.node_border_color         || '#FFFFFF',
           node_border_width:         ws.node_border_width    != null ? ws.node_border_width    : 1,
@@ -3533,7 +3533,7 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
           const railRight = Math.min(ax + aw, headerRight)
           const padX = Math.min(0.18, Math.max(0.10, aw * 0.02))
 
-          // Compute where the body area starts â€” after the header_block (if any).
+          // Compute where the body area starts **” after the header_block (if any).
           // Value labels in horizontal flows are rendered ABOVE nodeY, so nodeY must be
           // at least topBand inches below the body start, not below art.y.
           let bodyStartY = ay
@@ -3690,7 +3690,7 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
             }
           })
         } else if (nodes.length > 0 && isVerticalLinear) {
-          // â”€â”€ top_to_bottom / bottom_up: linear vertical stack â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+          // ****** top_to_bottom / bottom_up: linear vertical stack ***************************************************
           // Node box occupies ~40% of container width; right side reserved for description band.
           const ax = art.x || 0
           const ay = art.y || 0
@@ -3740,7 +3740,7 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
         }
       }
 
-      // â”€â”€ 5. insight_text (standard): font scaling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ****** 5. insight_text (standard): font scaling *********************************************************************************
       if (artType === 'matrix') {
         const ms = art.matrix_style || {}
         art.matrix_style = {
@@ -3868,13 +3868,13 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
 }
 
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// *********************************************************************************************************************************************************************************************************************************************
 // BLOCK FLATTENER
 // Converts the final processed slide spec into a flat, ordered blocks[] array.
 // Each block is self-contained: block_type + x/y/w/h + type-specific fields.
 // Called after computeArtifactInternals in normaliseDesignedSlide.
 // generate_pptx.py reads blocks[] and dispatches each to a typed renderer.
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// *********************************************************************************************************************************************************************************************************************************************
 
 function resolveArtifactSubtype(art) {
   if (!art || typeof art !== 'object') return 'generic'
@@ -3953,7 +3953,7 @@ function estimateHeaderBlockHeight(text, widthIn, fontSizePt) {
 
 function normalizeArtifactHeaderBands(zones) {
   // Align header_block bottom edges across artifacts whose headers start at the same y.
-  // Applied to ALL header styles (underline and brand_fill) â€” the bottom-edge alignment
+  // Applied to ALL header styles (underline and brand_fill) **” the bottom-edge alignment
   // is style-agnostic and prevents ragged-looking multi-zone slides.
   const items = []
   for (const zone of (zones || [])) {
@@ -4034,7 +4034,7 @@ function _riskSeverityFill(severity, rs) {
 }
 
 function _riskSeverityBadgeColor(severity, rs) {
-  // Solid semantic badge colors â€” severity IS the signal, not brand color
+  // Solid semantic badge colors **” severity IS the signal, not brand color
   const token = String(severity || '').toLowerCase()
   if (token === 'critical') return rs.critical_badge_color || '#DC2626'
   if (token === 'high')     return rs.high_badge_color     || '#EA580C'
@@ -4045,7 +4045,7 @@ function _riskSeverityBadgeColor(severity, rs) {
 function _truncateText(text, maxChars) {
   const str = String(text || '')
   if (!maxChars || str.length <= maxChars) return str
-  return str.slice(0, Math.max(0, maxChars - 1)).trimEnd() + 'â€¦'
+  return str.slice(0, Math.max(0, maxChars - 1)).trimEnd() + '**¦'
 }
 
 function _displayLabel(value) {
@@ -4076,7 +4076,7 @@ function _riskRegisterToBlocks(art, content_y, blocks, bt, r2) {
   const bodyColor    = bt.body_color    || '#111111'
   const captionColor = bt.caption_color || bodyColor
 
-  // Font sizes â€” LLM-decided, consistent across all rows; fallback to sensible defaults
+  // Font sizes **” LLM-decided, consistent across all rows; fallback to sensible defaults
   const primaryFs   = rs.primary_message_font_size   || rs.label_font_size || 11
   const secondaryFs = rs.secondary_message_font_size || rs.body_font_size  || 9
   const bandLabelFs = rs.label_font_size || 10
@@ -4154,7 +4154,7 @@ function _riskRegisterToBlocks(art, content_y, blocks, bt, r2) {
     items.forEach((item, ii) => {
       const rowY = cursorY
 
-      // Pip layout constants â€” pipLevels drives total squares per row
+      // Pip layout constants **” pipLevels drives total squares per row
       const pips     = Array.isArray(item.pips) ? item.pips.slice(0, 4) : []
       const pipLevels= level.pip_levels || 5
       const pipRowH  = 0.22   // height per pip row
@@ -4175,7 +4175,7 @@ function _riskRegisterToBlocks(art, content_y, blocks, bt, r2) {
           text: _truncateText(item.secondary_message, 120), font_family: bodyFont, font_size: secondaryFs, bold: false, color: captionColor, align: 'left', valign: 'top' })
       }
 
-      // Right top: tag pills â€” right-aligned so last tag flush with artifact right edge
+      // Right top: tag pills **” right-aligned so last tag flush with artifact right edge
       const tags     = Array.isArray(item.tags) ? item.tags : []
       const pillMaxX = r2(ax + aw - 0.04)          // hard right edge (same as pip grid)
       const pillMinX = r2(ax + aw - rightColW)      // don't encroach on left text column
@@ -4186,7 +4186,7 @@ function _riskRegisterToBlocks(art, content_y, blocks, bt, r2) {
         const val = String(tag.value || '')
         const tW  = r2(Math.min(1.10, Math.max(0.58, val.length * 0.068 + 0.20)))
         const pX  = r2(pillRightEdge - tW)
-        if (pX < pillMinX) return   // skip â€” no room in right column
+        if (pX < pillMinX) return   // skip **” no room in right column
         visibleTags.unshift({ tag, pillX: pX, tW })
         pillRightEdge = r2(pX - 0.07)
       })
@@ -4199,7 +4199,7 @@ function _riskRegisterToBlocks(art, content_y, blocks, bt, r2) {
           text: _truncateText(val, 16), font_family: bodyFont, font_size: pipLabelFs, bold: false, color: tc.text, align: 'center', valign: 'middle' })
       })
 
-      // Right bottom: pip rows â€” each pip on its own row, right-aligned within rightColW
+      // Right bottom: pip rows **” each pip on its own row, right-aligned within rightColW
       pips.forEach((pip, pi) => {
         const pipY = r2(rowY + tagAreaH + pi * pipRowH)
         blocks.push({ block_type: 'text_box', x: pipLblX, y: pipY, w: pipLblW, h: 0.18,
@@ -4231,7 +4231,7 @@ function _statBarToBlocks(art, content_y, blocks, bt, r2) {
   const aw = art.w || 0
   const ah = r2((art.y || 0) + (art.h || 0) - content_y)
 
-  // â”€â”€ Shared color tokens â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ****** Shared color tokens ************************************************************************************************************************************************************
   const bodyFont           = cs.label_font_family || bt.body_font_family || 'Arial'
   const bodyTextColor      = bt.body_color || '#111111'
   const captionColor       = bt.caption_color || bodyTextColor
@@ -4248,7 +4248,7 @@ function _statBarToBlocks(art, content_y, blocks, bt, r2) {
   const highlightTextColor = bodyTextColor
 
   if (isNewSchema) {
-    // â”€â”€ New flexible-column schema â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ****** New flexible-column schema ***************************************************************************************************************************************
     const rows  = Array.isArray(art.rows) ? art.rows : []
     const items = rows.slice(0, 8)
     if (!items.length || aw <= 0 || ah <= 0) return
@@ -4265,8 +4265,8 @@ function _statBarToBlocks(art, content_y, blocks, bt, r2) {
     const valueFontSize      = Math.max(11, Math.min(14.5, rowH * 20))
     const annotationFontSize = Math.max(10, Math.min(14,   rowH * 19))
 
-    // â”€â”€ Column width allocation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    const barCols_r  = colHeaders.filter(c => c.display_type === 'bar')   // 1â€“3 bar columns
+    // ****** Column width allocation ************************************************************************************************************************************************
+    const barCols_r  = colHeaders.filter(c => c.display_type === 'bar')   // 1**“3 bar columns
     const textCols   = colHeaders.filter(c => c.display_type === 'text')
     const normalCols = colHeaders.filter(c => c.display_type === 'normal')
     const numBars    = barCols_r.length || 1
@@ -4331,7 +4331,7 @@ function _statBarToBlocks(art, content_y, blocks, bt, r2) {
 
     const bodyTop  = r2(ay + headerH + headerGap)
 
-    // â”€â”€ Column header row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ****** Column header row ******************************************************************************************************************************************************************
     for (const col of colHeaders) {
       const colId     = String(col.id)
       const lay       = colLayout[colId]
@@ -4347,7 +4347,7 @@ function _statBarToBlocks(art, content_y, blocks, bt, r2) {
     }
     blocks.push({ block_type: 'rule', x: ax, y: r2(ay + headerH + 0.01), w: aw, h: 0.005, color: dividerColor, line_width: 0.6 })
 
-    // â”€â”€ Data rows â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ****** Data rows ******************************************************************************************************************************************************************************************
     items.forEach((row, ri) => {
       const y            = r2(bodyTop + ri * (rowH + rowGap))
       const isHighlighted = row?.row_focus === 'Y'
@@ -4395,7 +4395,7 @@ function _statBarToBlocks(art, content_y, blocks, bt, r2) {
             color: isHighlighted ? highlightTextColor : bodyTextColor, align: 'right', valign: 'middle'
           })
         } else {
-          // text column â€” first text col is the entity label (bold), others are annotations
+          // text column **” first text col is the entity label (bold), others are annotations
           const isLabel = col === textCols[0]
           const isLastCol = ci === colHeaders.length - 1
           blocks.push({
@@ -4430,7 +4430,7 @@ function _hexTint(hex, ratio) {
 }
 
 // matrix renders as a 2Ã—2 grid:
-// - Quadrant fill color per tone (positive/negative/neutral) â€” brand-derived tints
+// - Quadrant fill color per tone (positive/negative/neutral) **” brand-derived tints
 // - Dashed center dividers
 // - Quadrant title (bold) + primary_message axis descriptor (per-tone text color); no secondary_message
 // - Each point: circle badge (â‰¤2 chars) or pill badge (>2 chars); size varies with emphasis
@@ -4448,8 +4448,8 @@ function _matrixToBlocks(art, content_y, blocks, bt, r2) {
   const ah = r2((art.y || 0) + (art.h || 0) - content_y)
   if (aw <= 0 || ah <= 0) return
 
-  // â”€â”€ Layout bands â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // Outer axis labels are NOT rendered â€” low_label/high_label are self-descriptive.
+  // ****** Layout bands ******************************************************************************************************************************************************************************
+  // Outer axis labels are NOT rendered **” low_label/high_label are self-descriptive.
   // leftBand and bottomBand are kept as minimal margins only (no rotated label / no bottom label).
   const leftBand  = 0.14
   const bottomBand= 0.16
@@ -4465,14 +4465,14 @@ function _matrixToBlocks(art, content_y, blocks, bt, r2) {
   const quadW = r2(gridW / 2)
   const quadH = r2(gridH / 2)
 
-  // â”€â”€ Brand tokens â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ****** Brand tokens ******************************************************************************************************************************************************************************
   const axisFont      = ms.axis_label_font_family || bt.body_font_family   || 'Arial'
   const titleFont     = ms.quadrant_title_font_family || bt.title_font_family || 'Arial'
   const bodyFont      = ms.quadrant_body_font_family  || bt.body_font_family  || 'Arial'
   const axisFs        = ms.axis_label_font_size || 9
   const axisTextColor = ms.axis_label_color || bt.caption_color || bt.body_color || '#6B7280'
 
-  // Per-tone helpers â€” fills derived from brand tokens at low intensity (~10% tint)
+  // Per-tone helpers **” fills derived from brand tokens at low intensity (~10% tint)
   const brandPos  = bt.primary_color   || '#1E40AF'
   const brandNeg  = '#DC2626'
   const brandNeut = bt.secondary_color || '#6B7280'
@@ -4489,7 +4489,7 @@ function _matrixToBlocks(art, content_y, blocks, bt, r2) {
                             : t === 'negative' ? (ms.negative_point_fill || brandNeg)
                             :                    (ms.neutral_point_fill  || brandNeut)
 
-  // â”€â”€ Quadrant data lookup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ****** Quadrant data lookup *********************************************************************************************************************************************************
   // q1=top-left, q2=top-right, q3=bottom-left, q4=bottom-right
   const quadMap = Object.fromEntries(quadrants.map(q => [String(q.id || '').toLowerCase(), q]))
   const quadDefs = [
@@ -4499,7 +4499,7 @@ function _matrixToBlocks(art, content_y, blocks, bt, r2) {
     { id: 'q4', x: midX,  y: midY  }
   ]
 
-  // â”€â”€ 1. White grid background (no border â€” border drawn last) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ****** 1. White grid background (no border **” border drawn last) ***************************************
   blocks.push({
     block_type: 'rect',
     x: gridX, y: gridY, w: gridW, h: gridH,
@@ -4507,7 +4507,7 @@ function _matrixToBlocks(art, content_y, blocks, bt, r2) {
     border_color: null, border_width: 0, corner_radius: 8
   })
 
-  // â”€â”€ 2. Quadrant fills â€” drawn over white background â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ****** 2. Quadrant fills **” drawn over white background ************************************************************************
   const quadFillDefs = [
     { id: 'q1', x: gridX, y: gridY,  w: quadW, h: quadH },  // top-left outer corner
     { id: 'q2', x: midX,  y: gridY,  w: r2(gridW - quadW), h: quadH },  // top-right
@@ -4525,7 +4525,7 @@ function _matrixToBlocks(art, content_y, blocks, bt, r2) {
     })
   })
 
-  // â”€â”€ 3. Center dividers â€” thin dashed lines â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ****** 3. Center dividers **” thin dashed lines *********************************************************************************************
   const divColor = ms.divider_color || '#AAAAAA'
   const divW     = ms.divider_width != null ? ms.divider_width : 0.5
   // Vertical center divider
@@ -4541,7 +4541,7 @@ function _matrixToBlocks(art, content_y, blocks, bt, r2) {
     color: divColor, line_width: divW, line_style: 'dashed'
   })
 
-  // â”€â”€ 4a. Axis mid-labels (at the divider crosshair) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ****** 4a. Axis mid-labels (at the divider crosshair) ******************************************************************
   // Y-axis high/low labels at the vertical center divider
   if (yAxis.high_label) {
     blocks.push({
@@ -4581,11 +4581,11 @@ function _matrixToBlocks(art, content_y, blocks, bt, r2) {
     })
   }
 
-  // â”€â”€ Outer axis labels suppressed â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ****** Outer axis labels suppressed ******************************************************************************************************************************
   // xAxis.label and yAxis.label are metadata only.
-  // low_label / high_label are self-descriptive and carry the axis name â€” no outer label needed.
+  // low_label / high_label are self-descriptive and carry the axis name **” no outer label needed.
 
-  // â”€â”€ 4b. Quadrant labels â€” anchored at the far corner from the centre crosshair
+  // ****** 4b. Quadrant labels **” anchored at the far corner from the centre crosshair
   // q1 top-left  â†’ outer corner = top-left   â†’ stack downward, left-aligned
   // q2 top-right â†’ outer corner = top-right  â†’ stack downward, right-aligned
   // q3 bot-left  â†’ outer corner = bottom-left â†’ stack upward from bottom, left-aligned
@@ -4613,7 +4613,7 @@ function _matrixToBlocks(art, content_y, blocks, bt, r2) {
     const layout = quadLabelLayout[def.id] || quadLabelLayout.q1
     const txtX = r2(def.x + qPad)
 
-    // Title â€” bold, at the far corner
+    // Title **” bold, at the far corner
     blocks.push({
       block_type: 'text_box',
       x: txtX, y: layout.titleY(def), w: txtW, h: titleH,
@@ -4621,7 +4621,7 @@ function _matrixToBlocks(art, content_y, blocks, bt, r2) {
       font_family: titleFont, font_size: titleFs, bold: true,
       color: tc, align: layout.align, valign: 'top'
     })
-    // Primary message â€” 2pt smaller, directly below the title
+    // Primary message **” 2pt smaller, directly below the title
     if (q.primary_message) {
       blocks.push({
         block_type: 'text_box',
@@ -4633,7 +4633,7 @@ function _matrixToBlocks(art, content_y, blocks, bt, r2) {
     }
   })
 
-  // â”€â”€ 5. Points: badge (circle or pill) + label bubble â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ****** 5. Points: badge (circle or pill) + label bubble ***************************************************************
   // ALL badges use IDENTICAL size and font regardless of emphasis:
   //   circle for short_label â‰¤ 2 chars; pill (rounded rect) for 3+ chars
   const BADGE_H  = 0.22          // fixed height for every badge
@@ -4709,7 +4709,7 @@ function _matrixToBlocks(art, content_y, blocks, bt, r2) {
       color: dotFill, align: 'center', valign: 'middle'
     })
   })
-  // No outer border rect â€” grid framing is provided by the quadrant fills and dividers only.
+  // No outer border rect **” grid framing is provided by the quadrant fills and dividers only.
 }
 
 function _driverTreeToBlocks(art, content_y, blocks, bt, r2) {
@@ -4913,7 +4913,7 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
     return { nonEmptyQualifiers, qualifierTexts, qualifierAreaW, textX, textW, qualifierX }
   })
 
-  // Global title font: same across all rows â€” shrink until every title fits
+  // Global title font: same across all rows **” shrink until every title fits
   const minTextW = Math.min(...itemData.map(d => d.textW))
   const maxTitleH = Math.max(0.30, rowH * 0.42)
   let globalTitleFs = baseTitleFs
@@ -4923,7 +4923,7 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
     }
   }
 
-  // Global desc font: same across all rows â€” capped at 70% of badge number font
+  // Global desc font: same across all rows **” capped at 70% of badge number font
   const maxDescFs = Math.min(baseDescFs, Math.round(numFontSize * 0.7))
   const maxDescH = Math.max(0.20, rowH * 0.42)
   let globalDescFs = maxDescFs
@@ -4962,7 +4962,7 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
       corner_radius: cr
     })
 
-    // === BADGE â€” 3 steps ===
+    // === BADGE **” 3 steps ===
     // Step 1: rank-colored rect, rounded corners
     // Step 2: white rect, SAME w and h, shifted right by stripW â†’ colored strip shows on left
     // Step 3: text ("#N" + rank label) in rankFill over the white area
@@ -4978,7 +4978,7 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
       fill_color: rankFill, border_color: null, border_width: 0, corner_radius: cr
     })
 
-    // Step 2: white rect â€” same w and h as step 1, shifted right by badgeStripW
+    // Step 2: white rect **” same w and h as step 1, shifted right by badgeStripW
     blocks.push({
       block_type: 'rect',
       x: textAreaX, y: rowY, w: badgeW, h: rowH,
@@ -5005,7 +5005,7 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
       color: rankFill, align: 'center', valign: 'top'
     })
 
-    // Title â€” vertically centered with description
+    // Title **” vertically centered with description
     blocks.push({
       block_type: 'text_box',
       x: textX, y: titleY, w: textW, h: titleH,
@@ -5016,7 +5016,7 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
       align: 'left', valign: 'top'
     })
 
-    // Description â€” vertically centered with title
+    // Description **” vertically centered with title
     blocks.push({
       block_type: 'text_box',
       x: textX, y: descY, w: textW, h: descAvailH,
@@ -5256,10 +5256,10 @@ function _chartLegendToBlocks(legendBox, fontFamily, fontSizePt, colorHex, block
 }
 
 // workflow renders all four subtypes:
-//   process_flow â€” horizontal linear sequence, value above/description below nodes
-//   timeline     â€” same layout as process_flow + horizontal baseline with dot markers
-//   hierarchy    â€” top_down_branching tree, level-based node fills, description below
-//   decompositionâ€” top_down_branching breakdown, level-based node fills, description below
+//   process_flow **” horizontal linear sequence, value above/description below nodes
+//   timeline     **” same layout as process_flow + horizontal baseline with dot markers
+//   hierarchy    **” top_down_branching tree, level-based node fills, description below
+//   decomposition**” top_down_branching breakdown, level-based node fills, description below
 // All connector segments emit arrowheads when conn.type === 'arrow'.
 function _workflowToBlocks(art, content_y, blocks, bt, r2) {
   const ws    = art.workflow_style || {}
@@ -5267,7 +5267,7 @@ function _workflowToBlocks(art, content_y, blocks, bt, r2) {
   const conns = Array.isArray(art.connections) ? art.connections : []
   if (!nodes.length) return
 
-  // â”€â”€ Brand tokens â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ****** Brand tokens ************************************************************************************************************************************************************************************
   const titleFont        = ws.node_title_font_family || bt.title_font_family || 'Arial'
   const valueFont        = ws.node_value_font_family || bt.body_font_family  || 'Arial'
   const nodeFill         = ws.node_fill_color           || bt.primary_color  || '#0078AE'
@@ -5286,7 +5286,7 @@ function _workflowToBlocks(art, content_y, blocks, bt, r2) {
   const titleFs          = ws.node_title_font_size || 10
   const valueFs          = ws.node_value_font_size || 9
 
-  // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ****** Helpers ***************************************************************************************************************************************************************************************************
   const estimateTextHeight = (text, widthIn, fontSizePt, lineHeight = 1.2) => {
     const textStr = String(text || '').trim()
     if (!textStr) return 0
@@ -5310,7 +5310,7 @@ function _workflowToBlocks(art, content_y, blocks, bt, r2) {
     return                 { fill: nodeFillLeaf,    text: titleColorLeaf }
   }
 
-  // â”€â”€ Flow type detection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ****** Flow type detection ***************************************************************************************************************************************************************
   const flowDir     = String(art.flow_direction || '').toLowerCase()
   const wType       = String(art.workflow_type  || '').toLowerCase()
   const isHorizFlow = flowDir === 'left_to_right' || flowDir === 'horizontal'
@@ -5320,7 +5320,7 @@ function _workflowToBlocks(art, content_y, blocks, bt, r2) {
     || wType === 'hierarchy' || wType === 'decomposition'
   const isTimeline  = wType === 'timeline'
 
-  // â”€â”€ Connector segments (drawn BEFORE nodes so nodes render on top) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ****** Connector segments (drawn BEFORE nodes so nodes render on top) ******************************
   conns.forEach(conn => {
     const path      = Array.isArray(conn.path) ? conn.path : []
     const isArrow   = String(conn.type || 'arrow').toLowerCase() === 'arrow'
@@ -5343,7 +5343,7 @@ function _workflowToBlocks(art, content_y, blocks, bt, r2) {
     }
   })
 
-  // â”€â”€ Timeline baseline (before nodes so nodes render on top) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ****** Timeline baseline (before nodes so nodes render on top) ***************************************************
   // Draw a horizontal bar at node-bottom height, spanning all phase nodes,
   // with a small filled dot at each node center and an arrowhead at the right end.
   if (isTimeline && nodes.length >= 2) {
@@ -5372,7 +5372,7 @@ function _workflowToBlocks(art, content_y, blocks, bt, r2) {
     }
   }
 
-  // â”€â”€ Node rendering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ****** Node rendering ******************************************************************************************************************************************************************************
   nodes.forEach(node => {
     const nx    = r2(node.x || 0)
     const ny    = r2(node.y || content_y)
@@ -5978,7 +5978,7 @@ function _artifactToBlocks(art, blocks, bt, r2, fontSizeFloor) {
   const ah = art.h || 0
   const blockStart = blocks.length
 
-  // â”€â”€ Artifact header band (if present) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ****** Artifact header band (if present) ************************************************************************************************************
   // header_block sits above the artifact body, already has its own x/y/w/h
   const hb          = art.header_block || null
   let   content_y   = ay   // top of the body area (after header_block)
@@ -6038,7 +6038,7 @@ function _artifactToBlocks(art, blocks, bt, r2, fontSizeFloor) {
     }
   }
 
-  // â”€â”€ Artifact body â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ****** Artifact body ***************************************************************************************************************************************************************************
   const headerEnd = blocks.length
   switch (art.type) {
 
@@ -6087,7 +6087,7 @@ function _artifactToBlocks(art, blocks, bt, r2, fontSizeFloor) {
           legend_position: 'none'
         },
         series_style:            art.series_style  || [],
-        // Pre-computed by computeArtifactInternals â€” renderer reads these directly
+        // Pre-computed by computeArtifactInternals **” renderer reads these directly
         legend_position:         computed.legend_position        || 'none',
         data_label_size:         computed.data_label_size        || 9,
         category_label_rotation: computed.category_label_rotation || 0
@@ -6264,7 +6264,7 @@ function _computeInsightFontSize(art, content_y) {
     }
     return fontSize
   } else {
-    // grouped â€” return the bullet font size (not the header font)
+    // grouped **” return the bullet font size (not the header font)
     const groups      = art.groups || []
     if (!groups.length) return 10
     const total_content_h = r2(ay + ah - content_y)
@@ -6360,7 +6360,7 @@ function _standardInsightToBlocks(art, content_y, blocks, r2, fontSizeFloor) {
     ? { top: padV, bottom: padV, left: padH, right: padH }
     : {}
 
-  // â”€â”€ Dynamic font size â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ****** Dynamic font size ***************************************************************************************************************************************************************
   // Scale so bullets fill ~80% of the available interior height
   const points     = art.points || []
   const nPoints    = Math.max(1, points.length)
@@ -6381,7 +6381,7 @@ function _standardInsightToBlocks(art, content_y, blocks, r2, fontSizeFloor) {
   // Apply cross-artifact harmonisation floor (min font across all insights on slide)
   if (fontSizeFloor && fontSizeFloor < fontSize) fontSize = fontSizeFloor
 
-  // â”€â”€ Vertical centering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ****** Vertical centering ************************************************************************************************************************************************************
   // Shrink the bullet_list to its estimated content height, then offset y to centre it
   const contentH  = Math.min(estimatedH(fontSize) + 2 * padV, body_h)
   const vOffset   = r2(Math.max(0, (body_h - contentH) / 2))
@@ -6420,7 +6420,7 @@ function _groupedInsightToBlocks(art, content_y, blocks, bt, r2, fontSizeFloor) 
 
   const total_content_h = r2(ay + ah - content_y)
 
-  // â”€â”€ Shared bullet-size estimator â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ****** Shared bullet-size estimator ***************************************************************************************************************************
   // Returns the font size (pt) that makes bullets fill ~80% of available height
   const _bulletFontSize = (bullets, areaW, areaH, styleFs) => {
     const pts = Array.isArray(bullets) ? bullets : []
@@ -6622,7 +6622,7 @@ function _cardsToBlocks(art, content_y, blocks, bt, r2) {
   const aw = art.w || 0
   const ab = (art.y || 0) + (art.h || 0)   // bottom of art zone
 
-  // â”€â”€ Recompute card frames from content_y â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ****** Recompute card frames from content_y ***************************************************************************************************
   // Leave a gap between the artifact header rule and the first card
   const headerGap = 0.12
   const cardsTop  = r2(content_y + headerGap)
@@ -6696,7 +6696,7 @@ function _cardsToBlocks(art, content_y, blocks, bt, r2) {
       })
     }
 
-    // â”€â”€ Inner layout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ****** Inner layout ************************************************************************************************************************************************************************
     const inner_x = r2(fx + pad + accentW + accentGap)
     const inner_y = r2(fy + pad)
     const inner_w = r2(Math.max(0.3, fw - (pad * 2) - accentW - accentGap))
@@ -6711,8 +6711,8 @@ function _cardsToBlocks(art, content_y, blocks, bt, r2) {
     const subtitleY = r2(titleY + title_h + 0.04)
     const bodyY     = r2(subtitleY + sub_h + 0.06)
 
-    // â”€â”€ Dynamic font sizes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    // 1. Subtitle (centre message) sized first â€” it is the primary element
+    // ****** Dynamic font sizes ******************************************************************************************************************************************************
+    // 1. Subtitle (centre message) sized first **” it is the primary element
     const subtitleFontSize = Math.max(18, Math.min(38, sub_h * 58))
     // 2. Title and body scale from their own zones, capped relative to subtitle
     const titleFontSize    = Math.max(10, Math.min(subtitleFontSize * 0.45, title_h * 55))
@@ -6762,7 +6762,7 @@ function flattenToBlocks(slideSpec, brandTokens) {
   const blocks = []
   const r2     = x => Math.round(x * 100) / 100
 
-  // â”€â”€ 1. Title block â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ****** 1. Title block ************************************************************************************************************************************************************************
   const tb = slideSpec.title_block || {}
   if (tb.text) {
     blocks.push({
@@ -6793,7 +6793,7 @@ function flattenToBlocks(slideSpec, brandTokens) {
     })
   }
 
-  // â”€â”€ 2. Subtitle block â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ****** 2. Subtitle block ***************************************************************************************************************************************************************
   const sb = slideSpec.subtitle_block || {}
   if (sb.text) {
     blocks.push({
@@ -6824,10 +6824,10 @@ function flattenToBlocks(slideSpec, brandTokens) {
     })
   }
 
-  // â”€â”€ 3. Zones â†’ Artifacts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ****** 3. Zones â†’ Artifacts ******************************************************************************************************************************************************
   // Pre-pass: compute each insight artifact's standalone font size, then
   // harmonise all insight bullet text on this slide to the minimum found.
-  // Group headers are excluded â€” only bullet/body text is harmonised.
+  // Group headers are excluded **” only bullet/body text is harmonised.
   const allArts = (slideSpec.zones || []).flatMap(z => z.artifacts || [])
   const insightArts = allArts.filter(a => a.type === 'insight_text')
   let slideFontSizeFloor = null
@@ -6849,11 +6849,11 @@ function flattenToBlocks(slideSpec, brandTokens) {
     }
   }
 
-  // â”€â”€ 4. Global elements â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ****** 4. Global elements ************************************************************************************************************************************************************
   const ge = slideSpec.global_elements || {}
 
   // Logo is intentionally not included in blocks[]:
-  // Logo is not rendered â€” template mode always active; master layout carries logo automatically.
+  // Logo is not rendered **” template mode always active; master layout carries logo automatically.
 
   if (ge.footer && ge.footer.text) {
     const ft = ge.footer
@@ -6915,7 +6915,7 @@ function flattenToBlocks(slideSpec, brandTokens) {
   return blocks
 }
 
-// â”€â”€ groupBlocksByArtifact â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ****** groupBlocksByArtifact ***************************************************************************************************************************************************************
 // Converts a flat blocks[] into artifact_groups[] where artifact-level metadata
 // (artifact_id, artifact_type, artifact_subtype, artifact_header_text,
 //  fallback_policy) is hoisted to the group and removed from each block.
@@ -6962,7 +6962,7 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
 
   const result = designedZones.map((dZone, zi) => {
     // Zone matching: zone_id takes priority over index so reordered zones still merge correctly.
-    // Agent 5's LLM may reorder zones vs Agent 4's spec â€” index-first matching would then
+    // Agent 5's LLM may reorder zones vs Agent 4's spec **” index-first matching would then
     // pair initiative_map with insight_text data (or vice-versa), causing empty content.
     const mZoneById    = manifestZones.find(z => z.zone_id && z.zone_id === dZone.zone_id)
     const mZoneByIndex = manifestZones[zi]
@@ -6993,7 +6993,7 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
       const t = dType
 
       if (t === 'insight_text') {
-        // â”€â”€ Determine mode: manifest (Agent 4) is authoritative for content structure â”€â”€
+        // ****** Determine mode: manifest (Agent 4) is authoritative for content structure ******
         const mGroups = mArt.groups && mArt.groups.length > 0 ? mArt.groups : null
         const mPoints = mArt.points && mArt.points.length > 0 ? mArt.points : null
         const resolvedMode = mArt.insight_mode
@@ -7003,7 +7003,7 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
         const insight_header = getArtifactHeader(mArt) || dArt.insight_header || dArt.artifact_header || heading || 'Key Insight'
         const sentiment      = mArt.sentiment      || dArt.sentiment      || 'neutral'
 
-        // â”€â”€ FLOW 2: Grouped â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ****** FLOW 2: Grouped ******************************************************************************************************************************************************************
         if (resolvedMode === 'grouped') {
           const primary   = bt.primary_color      || '#1A3C8F'
           const titleFont = bt.title_font_family  || 'Arial'
@@ -7021,7 +7021,7 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
           const agentHasGrouped = dArt.insight_mode === 'grouped' && !!dArt.group_header_style
           const f = agentHasGrouped ? ((dArt.bullet_style || {}).font_size || 10) : 10
 
-          // â”€â”€ Content-aware header dimension calculation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+          // ****** Content-aware header dimension calculation *********************************************************************
           // Estimate the minimum w (rows) or h (columns) needed to render each
           // group header text without character-level wrapping.
           // Uses the same approximation the renderer will use: avg char width â‰ˆ
@@ -7096,7 +7096,7 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
             line_spacing:    1.35,
             indent_inches:   0.10,
             space_before_pt: r2(Math.max(f * 0.4, 2)),
-            char:            'â€¢'
+            char:            '**¢'
           }
 
           const dimForGap = gLayout === 'rows' ? artH : artW
@@ -7121,7 +7121,7 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
           }, insight_header)
         }
 
-        // â”€â”€ FLOW 1: Standard (points) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ****** FLOW 1: Standard (points) ************************************************************************************************************************************
         const body_style = dArt.body_style || {
           font_family:           bt.body_font_family || 'Arial',
           font_size:             10,
@@ -7428,7 +7428,7 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
         frame: null,  // geometry assigned by buildScratchZoneFrames
         artifacts: recoveredArts
       })
-      console.warn('Agent 5 â€” zone recovery: manifest zone', mZone.zone_id || mi, 'not matched; re-injected from manifest')
+      console.warn('Agent 5 **” zone recovery: manifest zone', mZone.zone_id || mi, 'not matched; re-injected from manifest')
     })
   }
 
@@ -7436,12 +7436,12 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
 }
 
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// *********************************************************************************************************************************************************************************************************************************************
 // NORMALISER
 // 1. Validates the designed slide structure
 // 2. Merges Agent 4 artifact content into Agent 5 layout artifacts
 // 3. Carries all manifest metadata through for Agent 5.1 and Agent 6
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// *********************************************************************************************************************************************************************************************************************************************
 
 // Fills zone frames and artifact placeholder_idx from the layout's ordered content_areas.
 // Called AFTER mergeContentIntoZones so artifact content comes from Agent 4, not Agent 5.
@@ -7466,7 +7466,7 @@ function applyLayoutZoneFrames(zones, layoutName, brand) {
 
   const zoneCount = (zones || []).length
   if (contentAreas.length < Math.max(zoneCount, 1)) {
-    console.warn('Agent 5 applyLayoutZoneFrames: layout "' + layoutName + '" has only ' + contentAreas.length + ' content area(s) but spec has ' + zoneCount + ' zone(s) â€” falling back to scratch mode for this slide')
+    console.warn('Agent 5 applyLayoutZoneFrames: layout "' + layoutName + '" has only ' + contentAreas.length + ' content area(s) but spec has ' + zoneCount + ' zone(s) **” falling back to scratch mode for this slide')
     return null
   }
 
@@ -7608,7 +7608,7 @@ function chooseScratchSplitOrientation(zones) {
 }
 
 function parseScratchSplitToken(split) {
-  // Handle array format [pct0, pct1] e.g. [60, 40] â€” treat as left/top split
+  // Handle array format [pct0, pct1] e.g. [60, 40] **” treat as left/top split
   if (Array.isArray(split) && split.length >= 2) {
     const pct = Math.max(1, Math.min(99, parseFloat(split[0]) || 50))
     return { side: 'left', pct, frac: pct / 100, orientation: 'horizontal' }
@@ -7719,7 +7719,7 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
     artifacts: (zone.artifacts || []).map(normalizeArtifactDefinition)
   }))
 
-  // Derive bt from the brand rulebook â€” authoritative source, never depends on
+  // Derive bt from the brand rulebook **” authoritative source, never depends on
   // what Claude returned per-slide (brand_tokens is no longer in Claude output).
   const bt = {
     primary_color:      (brand.primary_colors    || [])[0] || '#1A3C8F',
@@ -7736,7 +7736,7 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
     slide_width_inches:  brand.slide_width_inches  || 13.33,
     slide_height_inches: brand.slide_height_inches || 7.50
   }
-  // Keep brand_tokens on the slide object for internal processing only â€”
+  // Keep brand_tokens on the slide object for internal processing only **”
   // it is stripped from every slide before runAgent5 returns.
   branded.brand_tokens = bt
 
@@ -7772,7 +7772,7 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
     finalZones = buildScratchZoneFrames(mergedZones, brandedWithLayoutTitle)
   }
 
-  // â”€â”€ Enforce minimum gap between slide title and content zones â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ****** Enforce minimum gap between slide title and content zones *********************************************
   // MUST run BEFORE computeArtifactInternals: that function reads zone.frame.y
   // to compute art.y for artifacts without explicit positions.  Running after
   // would leave those positions computed from the un-enforced frame.
@@ -7808,7 +7808,7 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
         frame.y = minContentY
         if (frame.h != null) frame.h = r2(Math.max(0.20, +frame.h - shift))
         // Shift artifact absolute positions so they stay in sync.
-        // computeArtifactInternals only fills nulls â€” it won't correct explicit values.
+        // computeArtifactInternals only fills nulls **” it won't correct explicit values.
         ;(zone.artifacts || []).forEach(art => {
           if (art.y != null) art.y = r2(+art.y + shift)
           if (art.header_block && art.header_block.y != null) {
@@ -7822,7 +7822,7 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
     })
   }
 
-  // â”€â”€ Canvas overflow correction (scratch-mode slides) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ****** Canvas overflow correction (scratch-mode slides) ************************************************************************
   // Fixes cases where Claude emits an oversized title_block.h, pushing all zones
   // below the canvas bottom.  Runs AFTER gap enforcement, BEFORE computeArtifactInternals.
   if (!isLayoutMode) {
@@ -7895,7 +7895,7 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
     console.warn('Agent 5 -- S' + (manifestSlide.slide_number || '?') + ' final spec issues:', finalArtifactIssues.join('; '))
   }
 
-  // Flatten to blocks[] â€” ordered, self-contained render units.
+  // Flatten to blocks[] **” ordered, self-contained render units.
   // Validation runs on the raw flat blocks; output is grouped into artifact_groups[]
   // to eliminate repeated artifact metadata (artifact_id, artifact_type, etc.) on
   // every block. generate_pptx.py / Agent 6 call flattenArtifactGroups() to restore.
@@ -7948,7 +7948,7 @@ function normaliseDesignedSlide(designed, manifestSlide, brand) {
     // Always override with manifest ground truth (Claude may drift on slide_number etc.)
     slide_number:          manifestSlide.slide_number,
     slide_type:            manifestSlide.slide_type            || designed.slide_type,
-    // Layout mode fields â€” ground truth from Agent 4 manifest
+    // Layout mode fields **” ground truth from Agent 4 manifest
     layout_mode:           isLayoutMode,
     selected_layout_name:  manifestSlide.selected_layout_name  || designed.selected_layout_name || '',
     // Slide-level content metadata
@@ -8018,9 +8018,9 @@ function inferLayoutName(manifestSlide, brand) {
 }
 
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// *********************************************************************************************************************************************************************************************************************************************
 // MAIN RUNNER
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// *********************************************************************************************************************************************************************************************************************************************
 
 async function runAgent5(state) {
   const manifest = state.slideManifest
@@ -8091,7 +8091,7 @@ async function runAgent5(state) {
     const result = await designSlideBatch(batch, brand, b + 1)
 
     if (!result) {
-      // Entire batch failed to parse â€” brief pause then fall back per slide via Claude.
+      // Entire batch failed to parse **” brief pause then fall back per slide via Claude.
       // Without a pause, consecutive Claude calls after a truncation/rate-limit failure
       // would immediately hit the same limit and produce minimal-safe-slides.
       console.warn('Agent 5 -- batch', b + 1, 'failed entirely, pausing 5s before per-slide fallbacks')
@@ -8172,7 +8172,7 @@ async function runAgent5(state) {
     return buildMinimalSafeSlide(manifestSlide, tokens)
   })
 
-  // Hoist brand_tokens to the top level â€” derived authoritatively from the brand
+  // Hoist brand_tokens to the top level **” derived authoritatively from the brand
   // rulebook (same source used throughout Agent 5), not from slide output which
   // may be absent (e.g. single-slide decks or fallback paths that skip brand_tokens).
   const hoistedBrandTokens = {
@@ -8191,7 +8191,7 @@ async function runAgent5(state) {
 
   // Sort slides into the exact sequence defined by Agent 4 (slide_number ascending).
   // Batches can complete in insertion order but repaired-slide interleaving or any
-  // future parallelism could disturb position â€” sort here so the renderer always gets
+  // future parallelism could disturb position **” sort here so the renderer always gets
   // title â†’ content â†’ dividers â†’ closing in the right order.
   const manifestOrder = new Map((manifest || []).map((s, i) => [s.slide_number, i]))
   finalDesigned.sort((a, b) => {
@@ -8210,7 +8210,7 @@ async function runAgent5(state) {
 
   // Strip internal-only fields from every slide before handing off to Agent 6 / renderer.
   // brand_tokens: renderer reads from the top-level key.
-  // zones_summary, _*_validation_issues: debug metadata â€” not read by Agent 6 or generate_pptx.
+  // zones_summary, _*_validation_issues: debug metadata **” not read by Agent 6 or generate_pptx.
   const slides = finalDesigned.map(slide => {
     if (!slide) return slide
     const out = Object.assign({}, slide)

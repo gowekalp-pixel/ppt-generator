@@ -532,6 +532,14 @@ def place_in_placeholder(slide, ph_idx, text, style_spec, bt,
                 tf = ph.text_frame
                 tf.clear()
                 tf.word_wrap = True
+                # For the title placeholder, allow the text frame to shrink text
+                # so it fits within the placeholder box height when the template's
+                # actual font is larger than the spec value (preserve_template_style=True).
+                if ph_idx == 0:
+                    try:
+                        tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
+                    except Exception:
+                        pass
                 # Reset any vertical text direction inherited from the template layout.
                 # Some layouts (e.g. "2 Column") have the title placeholder's bodyPr
                 # set to vert="vert" which makes the title render sideways on the slide.
@@ -3084,33 +3092,58 @@ def _compute_title_bottom(slide, title_block, use_template):
     """
     Compute A = actual rendered bottom of the title text, in inches.
 
-    Template mode: read the title placeholder's real position and width from
-    the layout XML, then estimate line count from font metrics.
-    Scratch mode:  use the block's own x/y/w + font_size.
+    Always uses title_block.y as the vertical anchor — this is the same
+    reference Agent 5 used when placing content blocks (B), so both A and B
+    are in the same coordinate space and the gap comparison is meaningful.
 
-    Returns A as a float, or None if the title block is invalid.
+    In template mode, reads the real placeholder width from the layout XML for
+    a more accurate character-wrap estimate (placeholder width may differ from
+    the block spec's w field).
+
+    Line-count estimation uses char_w = font_size * 0.60 (more conservative
+    than the generic 0.52 used elsewhere) because slide titles are bold,
+    mixed-case, and often contain wide characters (₹, em-dash, capitals).
+
+    Returns: title_block.y + max(spec_h, estimated_actual_h)
+    — A is never less than spec_title_bottom, so no shift fires when the
+    title fits within the LLM-specified height.
     """
     EMU = 914400.0
     if not title_block or not title_block.get('text'):
         return None
 
-    title_y = float(title_block.get('y') or 0.15)
-    title_w = max(0.5, float(title_block.get('w') or 9.0))
+    # Always use the spec y — same reference frame Agent 5 used for content B
+    title_y   = float(title_block.get('y') or 0.15)
+    title_w   = max(0.5, float(title_block.get('w') or 9.0))
+    spec_h    = max(0.1, float(title_block.get('h') or 0.7))
     font_size = float(title_block.get('font_size') or 18)
 
+    # In template mode, refine width from the actual placeholder XML
     if use_template:
         try:
             for ph in slide.placeholders:
                 if ph.placeholder_format.idx == 0:
-                    title_y = ph.top / EMU
                     title_w = max(0.5, ph.width / EMU)
                     break
         except Exception:
             pass
 
-    lines = estimate_wrapped_lines(title_block.get('text', ''), title_w, font_size)
-    actual_h = lines * (font_size / 72.0) * 1.25 + 0.06
-    return title_y + actual_h
+    # Conservative wrap estimate: 0.60× font_size per char (vs generic 0.52)
+    width_pts     = max(1.0, title_w * 72)
+    char_w        = max(1.0, font_size * 0.60)
+    chars_per_line = max(4, int(width_pts / char_w))
+    text  = str(title_block.get('text', '') or '').strip()
+    lines = 0
+    for chunk in text.split('\n'):
+        chunk = chunk.strip()
+        lines += max(1, int(len(chunk) / chars_per_line) + 1)
+    lines = max(1, lines)
+
+    estimated_h = lines * (font_size / 72.0) * 1.25 + 0.06
+
+    # A = spec bottom OR estimated bottom, whichever is larger
+    # This guarantees A >= spec_title_bottom, so no shift fires for short titles
+    return title_y + max(spec_h, estimated_h)
 
 
 def _shift_blocks_for_title_gap(slide, blocks, use_template):
