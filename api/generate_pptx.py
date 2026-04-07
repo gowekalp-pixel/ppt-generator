@@ -3481,7 +3481,11 @@ def render_block_icon_badge(slide, block):
     prst = ICON_PRESET_MAP.get(icon, 'checkMark')   # unknown → fallback to check
 
     if icon == 'cross':
-        # Two diagonal connectors forming an X (no OOXML preset exists)
+        # Two diagonal connectors forming an X (no OOXML preset exists).
+        # After creation we strip the <a:stCxn> / <a:endCxn> endpoint refs that
+        # python-pptx leaves in the XML — PowerPoint reports "content is lost"
+        # when it finds those dangling connection references on open.
+        from pptx.oxml.ns import qn as _qn
         lw_pt = max(1.0, round(isize * 20, 1))
         try:
             for (x1, y1, x2, y2) in [
@@ -3494,6 +3498,13 @@ def render_block_icon_badge(slide, block):
                 )
                 ln.line.color.rgb = hex_to_rgb(icolor)
                 ln.line.width = Pt(lw_pt)
+                # Strip dangling endpoint refs → prevents PowerPoint repair warning
+                cxnSpPr = ln._element.find('.//' + _qn('p:cNvCxnSpPr'))
+                if cxnSpPr is not None:
+                    for ref_tag in [_qn('a:stCxn'), _qn('a:endCxn')]:
+                        ref = cxnSpPr.find(ref_tag)
+                        if ref is not None:
+                            cxnSpPr.remove(ref)
         except Exception:
             pass
 
