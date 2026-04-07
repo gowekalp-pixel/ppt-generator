@@ -3080,198 +3080,108 @@ def normalize_zone_artifact_stack(zone):
     return { **zone, 'artifacts': laid_out }
 
 
+def _compute_title_bottom(slide, title_block, use_template):
+    """
+    Compute A = actual rendered bottom of the title text, in inches.
+
+    Template mode: read the title placeholder's real position and width from
+    the layout XML, then estimate line count from font metrics.
+    Scratch mode:  use the block's own x/y/w + font_size.
+
+    Returns A as a float, or None if the title block is invalid.
+    """
+    EMU = 914400.0
+    if not title_block or not title_block.get('text'):
+        return None
+
+    title_y = float(title_block.get('y') or 0.15)
+    title_w = max(0.5, float(title_block.get('w') or 9.0))
+    font_size = float(title_block.get('font_size') or 18)
+
+    if use_template:
+        try:
+            for ph in slide.placeholders:
+                if ph.placeholder_format.idx == 0:
+                    title_y = ph.top / EMU
+                    title_w = max(0.5, ph.width / EMU)
+                    break
+        except Exception:
+            pass
+
+    lines = estimate_wrapped_lines(title_block.get('text', ''), title_w, font_size)
+    actual_h = lines * (font_size / 72.0) * 1.25 + 0.06
+    return title_y + actual_h
+
+
 def _shift_blocks_for_title_gap(slide, blocks, use_template):
     """
-    Detect and correct overlap between the slide header (title + subtitle) and
-    the first content block.  Runs in both template and scratch mode.
+    After the title has been placed, shift all non-title blocks so they clear
+    the actual rendered title text.
 
-    Agent 5 can underestimate title_block.h when long titles wrap to multiple
-    lines, causing the subtitle and content blocks to sit inside the rendered
-    title text.  We estimate actual line count from font metrics, compute any
-    overflow, and shift the subtitle and content blocks accordingly.
+    Algorithm (per spec):
+      A = actual bottom of title text  (from _compute_title_bottom)
+      B = min Y of all non-title blocks (subtitle + content)
+      gap = B - A
 
-    In template mode, _ensure_subtitle_placeholder_clears_title() additionally
-    nudges the actual subtitle placeholder.  We still shift the subtitle block
-    here so that the place_in_placeholder fallback (used when the template has
-    no subtitle placeholder at idx=1) renders at the correct position.
+      if gap >= MIN_GAP (10 px):  nothing to do
+      else:  shift = A - B + MIN_GAP
+             add shift to the Y of every non-title block that has a y coord
 
-    Algorithm:
-      1. spec_title_bottom = title y + title h (from Agent 5 spec).
-      2. Estimate actual rendered title height from font size + line-wrap count.
-         overflow = max(0, actual_h − spec_h).
-      3. actual_title_bottom = spec_title_bottom + overflow.
-      4. If subtitle.y < actual_title_bottom + MIN_GAP: compute subtitle_shift.
-      5. header_bottom = max(actual_title_bottom, new subtitle bottom).
-      6. If content_start_y < header_bottom + MIN_GAP (or overflow > 0 for
-         no-subtitle slides): compute content_shift.
-
-    MIN_GAP_IN ≈ 0.333" (32 px at 96 dpi) — visible breathing room.
+    Returns (shifted_blocks, shift_applied) — shift_applied is 0 if no shift.
+    MIN_GAP = 10 px at 96 dpi ≈ 0.104"
     """
+    MIN_GAP_IN = 10 / 96.0   # 10 px
+
     title_block = next(
         (b for b in blocks if b.get('block_type') == 'title' and b.get('text')), None
     )
     if not title_block:
-        return blocks
+        return blocks, 0.0
 
-    MIN_GAP_IN = 32 / 96.0   # ≈ 0.333"
+    A = _compute_title_bottom(slide, title_block, use_template)
+    if A is None:
+        return blocks, 0.0
 
-    try:
-        spec_title_bottom = float(title_block['y']) + float(title_block['h'])
-    except (KeyError, TypeError, ValueError):
-        return blocks
+    non_title = [b for b in blocks if b.get('block_type') != 'title' and b.get('y') is not None]
+    if not non_title:
+        return blocks, 0.0
 
-    subtitle_block = next(
-        (b for b in blocks if b.get('block_type') == 'subtitle' and b.get('text')),
-        None
-    )
+    B = min(float(b['y']) for b in non_title)
+    gap = B - A
 
-    # ── Estimate actual rendered title height (both modes) ───────────────────
-    # Agent 5 can underestimate title_block.h for long titles that wrap to
-    # multiple lines (e.g. font_size=20, width≈9.2", text >60 chars → 2 lines).
-    # We compute the overflow so the subtitle and content can be pushed down.
-    title_overflow_in = 0.0
-    try:
-        font_size = float(title_block.get('font_size') or 18)
-        title_w   = max(0.5, float(title_block.get('w') or 9.0))
-        lines     = estimate_wrapped_lines(title_block.get('text', ''), title_w, font_size)
-        actual_h  = lines * (font_size / 72.0) * 1.25 + 0.06
-        spec_h    = float(title_block.get('h') or 0.7)
-        title_overflow_in = max(0.0, actual_h - spec_h)
-    except Exception:
-        title_overflow_in = 0.0
+    if gap >= MIN_GAP_IN:
+        return blocks, 0.0
 
-    actual_title_bottom = spec_title_bottom + title_overflow_in
-
-    # ── Subtitle clearance ────────────────────────────────────────────────────
-    # In template mode, _ensure_subtitle_placeholder_clears_title() moves the
-    # actual placeholder when it exists — but if the template has no subtitle
-    # placeholder (idx=1), place_in_placeholder falls back to a free text box
-    # using the block's y coordinate.  We shift the block in both modes so
-    # that fallback path also renders at the correct position.
-    subtitle_shift = 0.0
-    header_bottom  = actual_title_bottom
-    if subtitle_block:
-        try:
-            sub_y = float(subtitle_block['y'])
-            sub_h = float(subtitle_block['h'])
-            if sub_y < actual_title_bottom + MIN_GAP_IN:
-                subtitle_shift = actual_title_bottom + MIN_GAP_IN - sub_y
-                if subtitle_shift > 0:
-                    print(f'[title gap fix] subtitle shift={subtitle_shift:.3f}"'
-                          f' (title overflow={title_overflow_in:.3f}",'
-                          f' mode={"template" if use_template else "scratch"})')
-            new_sub_bottom = sub_y + subtitle_shift + sub_h
-            header_bottom = max(header_bottom, new_sub_bottom)
-        except (KeyError, TypeError, ValueError):
-            pass
-
-    # ── Content block clearance ───────────────────────────────────────────────
-    content_blocks = [
-        b for b in blocks
-        if b.get('block_type') not in ('title', 'subtitle')
-        and b.get('y') is not None
-    ]
-    content_shift = 0.0
-    if content_blocks:
-        content_start_y = min(float(b['y']) for b in content_blocks)
-        gap = content_start_y - header_bottom
-
-        if not subtitle_block and title_overflow_in == 0.0:
-            # No subtitle, no overflow: Agent 5 already placed content with
-            # the correct gap — don't introduce an artificial extra gap.
-            content_shift = 0.0
-        elif not subtitle_block:
-            # No subtitle but title overflowed: shift content by overflow only
-            # (plus minimal clearance) so it doesn't overlap the extra title lines.
-            CLEAR_GAP_IN = 0.05
-            needed = actual_title_bottom + CLEAR_GAP_IN
-            content_shift = round(max(0.0, needed - content_start_y), 16)
-        else:
-            content_shift = round(max(0.0, MIN_GAP_IN - gap), 16)
-
-        if content_shift > 0:
-            print(f'[title gap fix] header_bottom={header_bottom:.3f}" '
-                  f'content_start={content_start_y:.3f}" gap={gap:.3f}" '
-                  f'content_shift={content_shift:.3f}"')
-
-    if subtitle_shift <= 0 and content_shift <= 0:
-        return blocks
+    shift = round(A - B + MIN_GAP_IN, 3)
+    print(f'[title gap fix] A={A:.3f}" B={B:.3f}" gap={gap:.3f}" shift={shift:.3f}"'
+          f' mode={"template" if use_template else "scratch"}')
 
     shifted = []
     for b in blocks:
-        btype = b.get('block_type')
-        if btype == 'title':
+        if b.get('block_type') == 'title':
             shifted.append(b)
-        elif btype == 'subtitle':
-            if subtitle_shift > 0 and b.get('y') is not None:
-                shifted.append({**b, 'y': round(float(b['y']) + subtitle_shift, 3)})
-            else:
-                shifted.append(b)
         elif b.get('y') is not None:
-            shifted.append({**b, 'y': round(float(b['y']) + content_shift, 3)})
+            shifted.append({**b, 'y': round(float(b['y']) + shift, 3)})
         else:
             shifted.append(b)
-    return shifted
+    return shifted, shift
 
 
-def _ensure_subtitle_placeholder_clears_title(slide, blocks):
-    """
-    In template mode, a long wrapped title can visually extend into the subtitle
-    placeholder area. Before placing subtitle text, nudge the subtitle
-    placeholder down so its top clears the estimated rendered title text bottom.
-    """
+def _nudge_subtitle_placeholder(slide, shift_in):
+    """Move the subtitle placeholder (idx=1) down by shift_in inches."""
     EMU = 914400.0
-    MIN_GAP_IN = 2 / 96.0
-
-    title_block = next(
-        (b for b in blocks if b.get('block_type') == 'title' and b.get('text')),
-        None
-    )
-    subtitle_block = next(
-        (b for b in blocks if b.get('block_type') == 'subtitle' and b.get('text')),
-        None
-    )
-    if not title_block or not subtitle_block:
+    if shift_in <= 0:
         return
-
-    def _ph(idx):
-        try:
-            for ph in slide.placeholders:
-                if ph.placeholder_format.idx == idx:
-                    return ph
-        except Exception:
-            pass
-        return None
-
-    title_ph = _ph(0)
-    subtitle_ph = _ph(1)
-    if not title_ph or not subtitle_ph:
-        return
-
     try:
-        title_top = title_ph.top / EMU
-        title_w = max(0.5, title_ph.width / EMU)
-        font_size = int(title_block.get('font_size') or 18)
-        lines = estimate_wrapped_lines(title_block.get('text', ''), title_w, font_size)
-        line_h = (font_size / 72.0) * 1.25
-        title_text_h = max(0.22, lines * line_h + 0.06)
-        title_bottom = title_top + title_text_h
-
-        subtitle_top = subtitle_ph.top / EMU
-        min_subtitle_top = title_bottom + MIN_GAP_IN
-        if subtitle_top >= min_subtitle_top:
-            return
-
-        delta_in = min_subtitle_top - subtitle_top
-        delta_emu = int(delta_in * EMU)
-        subtitle_ph.top = subtitle_ph.top + delta_emu
-    except Exception as e:
-        print('_ensure_subtitle_placeholder_clears_title error:', e)
+        for ph in slide.placeholders:
+            if ph.placeholder_format.idx == 1:
+                ph.top = int(ph.top + shift_in * EMU)
+                return
+    except Exception:
+        pass
 
 
-# Backward-compatible alias: build_slide historically called this helper by the
-# older "title_overflow" name. Keep both spellings so template content slides
-# cannot fail before render_blocks() runs.
+# Backward-compatible alias
 def _shift_blocks_for_title_overflow(slide, blocks, use_template):
     return _shift_blocks_for_title_gap(slide, blocks, use_template)
 
@@ -3731,39 +3641,37 @@ def render_blocks(slide, slide_spec, bt, use_template):
     """
     blocks = list(slide_spec.get('blocks') or [])
 
-    # Template mode needs a two-pass header render:
-    # 1. place title
-    # 2. ensure subtitle placeholder clears the wrapped title text
-    # 3. place subtitle
-    # 4. shift remaining content blocks based on the actual header text bottom
-    if use_template and blocks:
+    # ── Header render + overlap correction ───────────────────────────────────
+    # Step 1: Place the slide title first (into the placeholder or as a text box).
+    # Step 2: Compute A = actual bottom of rendered title text (font metrics).
+    # Step 3: B = min Y of all non-title blocks (subtitle + content).
+    # Step 4: if B - A >= 10 px → no shift; else shift every non-title block
+    #         (and the subtitle placeholder in template mode) by (A - B + 10 px).
+    # Step 5: Place subtitle at the (possibly shifted) y coordinate.
+    if blocks:
         title_block = next((b for b in blocks if b.get('block_type') == 'title'), None)
-        subtitle_block = next((b for b in blocks if b.get('block_type') == 'subtitle'), None)
         if title_block:
             try:
                 render_block_title(slide, title_block, bt, use_template)
             except Exception as e:
                 print(f'render_blocks: error on block_type=title: {e}')
+
+        blocks, shift = _shift_blocks_for_title_gap(slide, blocks, use_template)
+
+        subtitle_block = next((b for b in blocks if b.get('block_type') == 'subtitle'), None)
         if subtitle_block:
-            _ensure_subtitle_placeholder_clears_title(slide, blocks)
+            if use_template and shift > 0:
+                _nudge_subtitle_placeholder(slide, shift)
             try:
                 render_block_title(slide, subtitle_block, bt, use_template)
             except Exception as e:
                 print(f'render_blocks: error on block_type=subtitle: {e}')
 
-    # Apply title-gap fix in both template and scratch mode.
-    # Template mode: called after the header pre-pass above.
-    # Scratch mode: uses Agent 5's spec coords to catch any underestimated title
-    #   heights (e.g. long titles that wrap to two lines) before rendering begins.
-    blocks = _shift_blocks_for_title_gap(slide, blocks, use_template)
-
     for block in blocks:
         btype = block.get('block_type', '')
         try:
-            if use_template and btype in ('title', 'subtitle'):
-                continue
             if btype in ('title', 'subtitle'):
-                render_block_title(slide, block, bt, use_template)
+                continue   # already rendered above
             elif btype == 'text_box':
                 render_block_text_box(slide, block, bt)
             elif btype == 'rect':
