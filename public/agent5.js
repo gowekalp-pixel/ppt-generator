@@ -5471,6 +5471,506 @@ function _workflowToBlocks(art, content_y, blocks, bt, r2) {
   })
 }
 
+function _comparisonTableToBlocks(art, content_y, blocks, bt, r2) {
+  const cs = art.comparison_style || art.table_style || {}
+  const columns = Array.isArray(art.columns) ? art.columns : []
+  const rows    = Array.isArray(art.rows)    ? art.rows    : []
+  const ax = art.x || 0
+  const ay = content_y
+  const aw = art.w || 0
+  const ah = r2((art.y || 0) + (art.h || 0) - content_y)
+  if (!columns.length || !rows.length || aw <= 0 || ah <= 0) return
+
+  const numCols  = columns.length
+  const numRows  = rows.length
+  const titleFont = bt.title_font_family || 'Arial'
+  const bodyFont  = bt.body_font_family  || 'Arial'
+
+  // Column widths: first col ~28% (option name), remainder split equally
+  const rowGap      = 0.04
+  const colPad      = 0.10
+  const col0Frac    = cs.first_col_frac || 0.28
+  const col0W       = r2(aw * col0Frac)
+  const dataCols    = Math.max(1, numCols - 1)
+  const dataColW    = r2((aw - col0W) / dataCols)
+  const headerH     = cs.header_height || 0.34
+  const rowH        = r2((ah - headerH - rowGap * Math.max(0, numRows - 1)) / Math.max(numRows, 1))
+  const iconSize    = Math.min(0.26, rowH * 0.65)
+
+  const colX = [ax]
+  for (let ci = 1; ci < numCols; ci++) colX.push(r2(ax + col0W + (ci - 1) * dataColW))
+  const colW = [col0W, ...Array(dataCols).fill(dataColW)]
+
+  // Tone → pill colours
+  const toneClr = {
+    positive: { fill: cs.positive_fill || '#D1FAE5', text: cs.positive_text || '#065F46' },
+    negative: { fill: cs.negative_fill || '#FEE2E2', text: cs.negative_text || '#991B1B' },
+    warning:  { fill: cs.warning_fill  || '#FEF3C7', text: cs.warning_text  || '#92400E' },
+    neutral:  { fill: cs.neutral_fill  || '#F3F4F6', text: cs.neutral_text  || '#374151' },
+  }
+  const getToneClr = t => toneClr[t] || toneClr.neutral
+  const iconClr = {
+    positive: { fill: '#D1FAE5', icon: '#065F46' },
+    negative: { fill: '#FEE2E2', icon: '#991B1B' },
+    warning:  { fill: '#FEF3C7', icon: '#92400E' },
+    neutral:  { fill: '#F3F4F6', icon: '#374151' },
+  }
+  const getIconClr = t => iconClr[t] || iconClr.neutral
+
+  // ── Header row ────────────────────────────────────────────────
+  const headerFill     = cs.header_fill      || bt.primary_color || '#0078AE'
+  const headerTextClr  = cs.header_text_color || '#FFFFFF'
+  const headerFs       = cs.header_font_size  || 10
+  blocks.push({ block_type: 'rect', x: ax, y: ay, w: aw, h: headerH,
+    fill_color: headerFill, border_color: null, border_width: 0, corner_radius: 6 })
+  columns.forEach((col, ci) => {
+    blocks.push({ block_type: 'text_box',
+      x: r2(colX[ci] + (ci === 0 ? colPad : colPad * 0.5)), y: ay,
+      w: r2(colW[ci] - colPad), h: headerH,
+      text: String(col || ''), font_family: titleFont,
+      font_size: headerFs, bold: true, color: headerTextClr,
+      align: ci === 0 ? 'left' : 'center', valign: 'middle' })
+  })
+
+  // ── Data rows ─────────────────────────────────────────────────
+  const recBorderClr = cs.recommended_border_color || bt.secondary_color || '#E0B324'
+  const recFill      = cs.recommended_fill         || '#FFFBEA'
+  const dividerClr   = cs.divider_color            || '#E5E7EB'
+  const rowFill      = cs.row_fill                 || '#FFFFFF'
+  const altRowFill   = cs.alt_row_fill             || '#F8FAFC'
+
+  rows.forEach((row, ri) => {
+    const rowY  = r2(ay + headerH + ri * (rowH + rowGap))
+    const isRec = !!row.is_recommended
+    blocks.push({ block_type: 'rect', x: ax, y: rowY, w: aw, h: rowH,
+      fill_color: isRec ? recFill : (ri % 2 === 0 ? rowFill : altRowFill),
+      border_color: isRec ? recBorderClr : dividerClr,
+      border_width: isRec ? 1.2 : 0.5, corner_radius: 4 })
+    // Recommended accent strip on left edge
+    if (isRec) {
+      blocks.push({ block_type: 'rect', x: ax, y: rowY, w: 0.05, h: rowH,
+        fill_color: recBorderClr, border_color: null, border_width: 0, corner_radius: 4 })
+    }
+
+    const cells = Array.isArray(row.cells) ? row.cells : []
+    cells.forEach((cell, ci) => {
+      if (ci >= numCols) return
+      const cx      = colX[ci]
+      const cw      = colW[ci]
+      const tone    = cell.tone || 'neutral'
+      const value   = cell.value != null ? String(cell.value) : ''
+      const iconType = String(cell.icon_type || '')
+      const subtext  = String(cell.subtext   || '')
+
+      if (ci === 0) {
+        // Option name — bold, no pill
+        const nameFs = cs.option_name_font_size || 11
+        const nameH  = r2(rowH > 0.5 ? rowH * 0.52 : rowH)
+        const nameY  = r2(rowY + (rowH - nameH) / 2)
+        blocks.push({ block_type: 'text_box',
+          x: r2(cx + colPad), y: nameY, w: r2(cw - colPad - 0.04), h: nameH,
+          text: value, font_family: titleFont,
+          font_size: nameFs, bold: true,
+          color: cs.option_name_color || '#1F2937', align: 'left', valign: 'middle' })
+        if (subtext) {
+          blocks.push({ block_type: 'text_box',
+            x: r2(cx + colPad), y: r2(nameY + nameH * 0.55), w: r2(cw - colPad - 0.04), h: r2(nameH * 0.45),
+            text: subtext, font_family: bodyFont,
+            font_size: cs.subtext_font_size || 9, bold: false,
+            color: '#6B7280', align: 'left', valign: 'top' })
+        }
+      } else if (iconType) {
+        // Icon badge
+        const ic  = getIconClr(tone)
+        const bx  = r2(cx + (cw - iconSize) / 2)
+        const by  = r2(rowY + (rowH - iconSize) / 2 - (subtext ? 0.10 : 0))
+        blocks.push({ block_type: 'icon_badge', x: bx, y: by, w: iconSize, h: iconSize,
+          icon: iconType, fill_color: ic.fill, icon_color: ic.icon })
+        if (subtext) {
+          blocks.push({ block_type: 'text_box',
+            x: r2(cx + colPad * 0.5), y: r2(by + iconSize + 0.02), w: r2(cw - colPad), h: 0.16,
+            text: subtext, font_family: bodyFont,
+            font_size: cs.subtext_font_size || 8, bold: false,
+            color: ic.icon, align: 'center', valign: 'top' })
+        }
+      } else if (value) {
+        // Value pill
+        const tc     = getToneClr(tone)
+        const pillW  = r2(Math.min(cw - colPad, Math.max(0.50, value.length * 0.068 + 0.20)))
+        const pillH  = Math.min(0.26, rowH * 0.55)
+        const pillX  = r2(cx + (cw - pillW) / 2)
+        const pillY  = r2(rowY + (rowH - pillH) / 2 - (subtext ? 0.10 : 0))
+        const valueFs = cs.value_font_size || 10
+        blocks.push({ block_type: 'rect', x: pillX, y: pillY, w: pillW, h: pillH,
+          fill_color: tc.fill, border_color: null, border_width: 0, corner_radius: 10 })
+        blocks.push({ block_type: 'text_box',
+          x: r2(pillX + 0.06), y: pillY, w: r2(pillW - 0.12), h: pillH,
+          text: value, font_family: bodyFont,
+          font_size: valueFs, bold: true, color: tc.text,
+          align: 'center', valign: 'middle' })
+        if (subtext) {
+          blocks.push({ block_type: 'text_box',
+            x: r2(cx + colPad * 0.5), y: r2(pillY + pillH + 0.03), w: r2(cw - colPad), h: 0.16,
+            text: subtext, font_family: bodyFont,
+            font_size: cs.subtext_font_size || 8, bold: false,
+            color: tc.text, align: 'center', valign: 'top' })
+        }
+      }
+    })
+  })
+}
+
+function _initiativeMapToBlocks(art, content_y, blocks, bt, r2) {
+  const ms = art.initiative_style || art.table_style || {}
+  const columnHeaders = Array.isArray(art.column_headers) ? art.column_headers : []
+  const rows          = Array.isArray(art.rows)           ? art.rows           : []
+  const ax = art.x || 0
+  const ay = content_y
+  const aw = art.w || 0
+  const ah = r2((art.y || 0) + (art.h || 0) - content_y)
+  if (!columnHeaders.length || !rows.length || aw <= 0 || ah <= 0) return
+
+  const numCols   = columnHeaders.length
+  const numRows   = rows.length
+  const titleFont = bt.title_font_family || 'Arial'
+  const bodyFont  = bt.body_font_family  || 'Arial'
+  const primaryClr   = bt.primary_color   || '#0078AE'
+  const secondaryClr = bt.secondary_color || '#E0B324'
+
+  const rowGap   = 0.04
+  const colPad   = 0.10
+  const headerH  = ms.header_height  || 0.34
+  const rowH     = r2((ah - headerH - rowGap * Math.max(0, numRows - 1)) / Math.max(numRows, 1))
+
+  // First column ~28%, rest equal
+  const col0W    = r2(aw * (ms.first_col_frac || 0.28))
+  const dataCols = Math.max(1, numCols - 1)
+  const dataColW = r2((aw - col0W) / dataCols)
+  const colX = [ax]
+  for (let ci = 1; ci < numCols; ci++) colX.push(r2(ax + col0W + (ci - 1) * dataColW))
+  const colW = [col0W, ...Array(dataCols).fill(dataColW)]
+
+  // Tag chip colours (per-tag tone)
+  const tagFills = { primary: primaryClr, secondary: secondaryClr, neutral: '#E5E7EB' }
+  const tagTexts = { primary: '#FFFFFF',  secondary: '#1F2937',    neutral: '#374151' }
+
+  // Cell background tint for non-neutral cell_tone
+  const cellToneFills = {
+    primary:   ms.primary_cell_fill   || '#EFF6FF',
+    secondary: ms.secondary_cell_fill || '#FFFBEA',
+  }
+
+  // ── Header row ────────────────────────────────────────────────
+  const headerFill    = ms.header_fill       || primaryClr
+  const headerTextClr = ms.header_text_color || '#FFFFFF'
+  const headerFs      = ms.header_font_size  || 10
+  blocks.push({ block_type: 'rect', x: ax, y: ay, w: aw, h: headerH,
+    fill_color: headerFill, border_color: null, border_width: 0, corner_radius: 6 })
+  columnHeaders.forEach((col, ci) => {
+    blocks.push({ block_type: 'text_box',
+      x: r2(colX[ci] + (ci === 0 ? colPad : colPad * 0.5)), y: ay,
+      w: r2(colW[ci] - colPad), h: headerH,
+      text: col.label || '', font_family: titleFont,
+      font_size: headerFs, bold: true, color: headerTextClr,
+      align: 'left', valign: 'middle' })
+  })
+
+  // ── Data rows ─────────────────────────────────────────────────
+  rows.forEach((row, ri) => {
+    const rowY = r2(ay + headerH + ri * (rowH + rowGap))
+
+    // Row background
+    blocks.push({ block_type: 'rect', x: ax, y: rowY, w: aw, h: rowH,
+      fill_color: ri % 2 === 0 ? (ms.row_fill || '#FFFFFF') : (ms.alt_row_fill || '#F9FAFB'),
+      border_color: ms.row_border_color || '#E5E7EB', border_width: 0.5, corner_radius: 4 })
+
+    // First cell: initiative_name + subtitle
+    const name     = String(row.initiative_name     || '')
+    const subtitle = String(row.initiative_subtitle || '')
+    const nameFs   = ms.name_font_size     || 11
+    const subFs    = ms.subtitle_font_size || 9
+    if (name) {
+      const hasSubtitle = !!subtitle
+      blocks.push({ block_type: 'text_box',
+        x: r2(ax + colPad), y: r2(rowY + (hasSubtitle ? rowH * 0.12 : 0)),
+        w: r2(col0W - colPad * 1.5), h: r2(hasSubtitle ? rowH * 0.52 : rowH),
+        text: name, font_family: titleFont, font_size: nameFs, bold: true,
+        color: ms.name_color || '#1F2937', align: 'left',
+        valign: hasSubtitle ? 'top' : 'middle' })
+    }
+    if (subtitle) {
+      blocks.push({ block_type: 'text_box',
+        x: r2(ax + colPad), y: r2(rowY + rowH * 0.55),
+        w: r2(col0W - colPad * 1.5), h: r2(rowH * 0.38),
+        text: subtitle, font_family: bodyFont, font_size: subFs, bold: false,
+        color: ms.subtitle_color || '#6B7280', align: 'left', valign: 'top' })
+    }
+
+    // Build cell lookup by column_id
+    const cellMap = {}
+    ;(Array.isArray(row.cells) ? row.cells : []).forEach(c => { if (c?.column_id) cellMap[c.column_id] = c })
+
+    // Data columns (ci >= 1)
+    columnHeaders.slice(1).forEach((col, di) => {
+      const ci    = di + 1
+      const cx    = colX[ci]
+      const cw    = colW[ci]
+      const cell  = cellMap[col.id] || {}
+      const tags  = Array.isArray(cell.tags) ? cell.tags.filter(t => String(t?.label || '').trim()) : []
+      const primMsg = String(cell.primary_message   || '')
+      const secMsg  = String(cell.secondary_message || '')
+      const cellTone = cell.cell_tone || 'neutral'
+
+      // Optional cell tint
+      if (cellTone !== 'neutral' && cellToneFills[cellTone]) {
+        blocks.push({ block_type: 'rect',
+          x: r2(cx + 0.04), y: r2(rowY + 0.04), w: r2(cw - 0.08), h: r2(rowH - 0.08),
+          fill_color: cellToneFills[cellTone], border_color: null, border_width: 0, corner_radius: 4 })
+      }
+
+      if (tags.length) {
+        // Tags as coloured chips (primary visual signal)
+        const chipH   = Math.min(0.22, rowH * 0.38)
+        const chipGap = 0.06
+        const chipPadX = 0.08
+        const tagFs   = ms.tag_font_size || 8
+        const maxTags = Math.min(3, tags.length)
+        const chipWidths = tags.slice(0, maxTags).map(t =>
+          r2(Math.min(cw - 0.18, Math.max(0.42, String(t.label || '').length * 0.065 + 0.18))))
+        const totalW  = chipWidths.reduce((s, w) => s + w, 0) + chipGap * Math.max(0, maxTags - 1)
+        let chipCurX  = r2(cx + Math.max(chipPadX, (cw - totalW) / 2))
+        const chipsY  = r2(rowY + (secMsg ? rowH * 0.14 : (rowH - chipH) / 2))
+
+        tags.slice(0, maxTags).forEach((tag, ti) => {
+          const chipW = chipWidths[ti]
+          const cFill = tagFills[tag.tone] || tagFills.neutral
+          const cText = tagTexts[tag.tone] || tagTexts.neutral
+          blocks.push({ block_type: 'rect',
+            x: chipCurX, y: chipsY, w: chipW, h: chipH,
+            fill_color: cFill, border_color: null, border_width: 0, corner_radius: 10 })
+          blocks.push({ block_type: 'text_box',
+            x: r2(chipCurX + chipPadX * 0.5), y: chipsY, w: r2(chipW - chipPadX), h: chipH,
+            text: String(tag.label || ''), font_family: bodyFont,
+            font_size: tagFs, bold: false, color: cText,
+            align: 'center', valign: 'middle' })
+          chipCurX = r2(chipCurX + chipW + chipGap)
+        })
+
+        // secondary_message below chips
+        if (secMsg) {
+          blocks.push({ block_type: 'text_box',
+            x: r2(cx + colPad * 0.5), y: r2(chipsY + chipH + 0.04), w: r2(cw - colPad), h: r2(rowH * 0.36),
+            text: secMsg, font_family: bodyFont,
+            font_size: ms.secondary_font_size || 8, bold: false,
+            color: ms.secondary_color || '#374151', align: 'left', valign: 'top' })
+        }
+      } else {
+        // No tags — primary_message headline + optional secondary
+        const primFs = ms.primary_font_size || 10
+        const secFs  = ms.secondary_font_size || 8
+        const hasBoth = primMsg && secMsg
+        const primH   = hasBoth ? r2(rowH * 0.50) : rowH
+        const primY   = hasBoth ? r2(rowY + rowH * 0.10) : rowY
+        if (primMsg) {
+          blocks.push({ block_type: 'text_box',
+            x: r2(cx + colPad * 0.5), y: primY, w: r2(cw - colPad), h: primH,
+            text: primMsg, font_family: bodyFont, font_size: primFs, bold: !!hasBoth,
+            color: ms.primary_color_text || '#1F2937',
+            align: 'left', valign: hasBoth ? 'top' : 'middle' })
+        }
+        if (secMsg) {
+          blocks.push({ block_type: 'text_box',
+            x: r2(cx + colPad * 0.5), y: r2(rowY + rowH * 0.54), w: r2(cw - colPad), h: r2(rowH * 0.38),
+            text: secMsg, font_family: bodyFont, font_size: secFs, bold: false,
+            color: ms.secondary_color || '#6B7280', align: 'left', valign: 'top' })
+        }
+      }
+    })
+  })
+}
+
+function _profileCardSetToBlocks(art, content_y, blocks, bt, r2) {
+  const ps       = art.profile_style || {}
+  const profiles = Array.isArray(art.profiles) ? art.profiles : []
+  const ax = art.x || 0
+  const ay = content_y
+  const aw = art.w || 0
+  const ah = r2((art.y || 0) + (art.h || 0) - content_y)
+  if (!profiles.length || aw <= 0 || ah <= 0) return
+
+  const titleFont = bt.title_font_family || 'Arial'
+  const bodyFont  = bt.body_font_family  || 'Arial'
+  const layoutDir = art.layout_direction || 'horizontal'
+  const count     = profiles.length
+  const cardGap   = ps.card_gap || 0.12
+
+  // Card dimensions
+  let cardW, cardH, cols
+  if (layoutDir === 'grid') {
+    cols  = Math.min(3, Math.ceil(Math.sqrt(count)))
+    const gridRows = Math.ceil(count / cols)
+    cardW = r2((aw - cardGap * (cols - 1)) / cols)
+    cardH = r2((ah - cardGap * (gridRows - 1)) / gridRows)
+  } else {
+    cols  = count
+    cardW = r2((aw - cardGap * Math.max(0, count - 1)) / Math.max(count, 1))
+    cardH = ah
+  }
+
+  const cardFill  = ps.card_fill         || '#FFFFFF'
+  const cardBorder = ps.card_border_color || '#E5E7EB'
+  const headerFill = ps.header_fill       || bt.primary_color || '#0078AE'
+  const headerH   = ps.header_height      || Math.min(0.60, cardH * 0.30)
+  const cr        = ps.corner_radius      || 8
+
+  const sentClr = {
+    positive: { fill: '#D1FAE5', text: '#065F46' },
+    negative: { fill: '#FEE2E2', text: '#991B1B' },
+    warning:  { fill: '#FEF3C7', text: '#92400E' },
+    neutral:  { fill: '#F3F4F6', text: '#374151' },
+  }
+  const getSentClr = s => sentClr[String(s || 'neutral').toLowerCase()] || sentClr.neutral
+
+  profiles.forEach((profile, pi) => {
+    const col = pi % cols
+    const row = Math.floor(pi / cols)
+    const cx  = r2(ax + col * (cardW + cardGap))
+    const cy  = r2(ay + row * (cardH + cardGap))
+
+    // Card background
+    blocks.push({ block_type: 'rect', x: cx, y: cy, w: cardW, h: cardH,
+      fill_color: cardFill, border_color: cardBorder, border_width: 0.5, corner_radius: cr })
+
+    // Header strip (coloured top section)
+    blocks.push({ block_type: 'rect', x: cx, y: cy, w: cardW, h: headerH,
+      fill_color: headerFill, border_color: null, border_width: 0, corner_radius: cr })
+    // Square off the bottom of the header so only top corners are rounded
+    blocks.push({ block_type: 'rect',
+      x: cx, y: r2(cy + headerH * 0.5), w: cardW, h: r2(headerH * 0.55),
+      fill_color: headerFill, border_color: null, border_width: 0, corner_radius: 0 })
+
+    const namePadX  = 0.14
+    const badgeText = String(profile.badge_text || '')
+    const nameW     = r2(cardW - namePadX * 2 - (badgeText ? 0.50 : 0))
+    const nameFs    = ps.name_font_size || Math.max(10, Math.min(14, Math.round(headerH * 22)))
+    const hasSubtitle = !!(profile.subtitle)
+    const nameH     = hasSubtitle ? r2(headerH * 0.55) : headerH
+
+    blocks.push({ block_type: 'text_box',
+      x: r2(cx + namePadX), y: cy, w: nameW, h: nameH,
+      text: String(profile.entity_name || ''),
+      font_family: titleFont, font_size: nameFs, bold: true,
+      color: ps.name_color || '#FFFFFF', align: 'left', valign: hasSubtitle ? 'bottom' : 'middle' })
+
+    if (hasSubtitle) {
+      const subFs = ps.subtitle_font_size || Math.max(8, nameFs - 3)
+      blocks.push({ block_type: 'text_box',
+        x: r2(cx + namePadX), y: r2(cy + nameH), w: r2(cardW - namePadX * 2), h: r2(headerH - nameH),
+        text: String(profile.subtitle || ''),
+        font_family: bodyFont, font_size: subFs, bold: false,
+        color: ps.subtitle_color || '#D1D5DB', align: 'left', valign: 'top' })
+    }
+
+    // Badge pill at top-right
+    if (badgeText) {
+      const badgeW = r2(Math.min(0.80, Math.max(0.40, badgeText.length * 0.075 + 0.18)))
+      const badgeH = 0.22
+      const badgeX = r2(cx + cardW - badgeW - 0.10)
+      const badgeY = r2(cy + 0.08)
+      blocks.push({ block_type: 'rect', x: badgeX, y: badgeY, w: badgeW, h: badgeH,
+        fill_color: ps.badge_fill || bt.secondary_color || '#E0B324',
+        border_color: null, border_width: 0, corner_radius: 10 })
+      blocks.push({ block_type: 'text_box',
+        x: r2(badgeX + 0.06), y: badgeY, w: r2(badgeW - 0.12), h: badgeH,
+        text: badgeText, font_family: bodyFont,
+        font_size: ps.badge_font_size || 8, bold: true,
+        color: ps.badge_text_color || '#1F2937', align: 'center', valign: 'middle' })
+    }
+
+    // Body: secondary_items (or fallback attributes[])
+    const rawItems = Array.isArray(profile.secondary_items) ? profile.secondary_items
+      : (Array.isArray(profile.attributes) ? profile.attributes.map(a => ({
+          label: a.key || '', value: a.value || '',
+          representation_type: 'text', sentiment: a.sentiment || 'neutral'
+        })) : [])
+
+    if (rawItems.length) {
+      const bodyTop  = r2(cy + headerH + 0.08)
+      const bodyH    = r2(cardH - headerH - 0.10)
+      const itemH    = r2(bodyH / rawItems.length)
+      const labelFs  = ps.label_font_size || Math.max(7, Math.min(9, Math.round(itemH * 18)))
+      const valueFs  = ps.value_font_size || Math.max(8, Math.min(10, Math.round(itemH * 20)))
+      const padX     = 0.14
+      const labelW   = r2(cardW * 0.38)
+      const valueX   = r2(cx + padX + labelW + 0.06)
+      const valueW   = r2(cardW - padX * 2 - labelW - 0.06)
+
+      rawItems.forEach((item, ii) => {
+        const iy       = r2(bodyTop + ii * itemH)
+        const label    = String(item.label || '')
+        const rawVal   = item.value
+        const valueStr = Array.isArray(rawVal) ? rawVal.join(', ') : String(rawVal || '')
+        const repType  = item.representation_type || 'text'
+        const sc       = getSentClr(item.sentiment)
+
+        // Row divider (skip first)
+        if (ii > 0) {
+          blocks.push({ block_type: 'rule',
+            x: r2(cx + 0.10), y: r2(iy - 0.02), w: r2(cardW - 0.20), h: 0.005,
+            color: '#E5E7EB', line_width: 0.5 })
+        }
+
+        // Label (left)
+        blocks.push({ block_type: 'text_box',
+          x: r2(cx + padX), y: r2(iy + 0.04), w: labelW, h: r2(itemH - 0.04),
+          text: label, font_family: bodyFont, font_size: labelFs, bold: false,
+          color: ps.label_color || '#6B7280', align: 'left', valign: 'middle' })
+
+        // Value (right) — varies by representation_type
+        if (repType === 'pill') {
+          const pillH = Math.min(0.22, itemH * 0.62)
+          const pillW = r2(Math.min(valueW, Math.max(0.40, valueStr.length * 0.065 + 0.18)))
+          const pillX = r2(valueX)
+          const pillY = r2(iy + (itemH - pillH) / 2)
+          blocks.push({ block_type: 'rect', x: pillX, y: pillY, w: pillW, h: pillH,
+            fill_color: sc.fill, border_color: null, border_width: 0, corner_radius: 10 })
+          blocks.push({ block_type: 'text_box',
+            x: r2(pillX + 0.06), y: pillY, w: r2(pillW - 0.12), h: pillH,
+            text: valueStr, font_family: bodyFont,
+            font_size: Math.max(7, valueFs - 1), bold: true, color: sc.text,
+            align: 'center', valign: 'middle' })
+        } else if (repType === 'chip_list') {
+          const chips   = Array.isArray(rawVal) ? rawVal : valueStr.split(',').map(v => v.trim()).filter(Boolean)
+          const chipH   = Math.min(0.20, itemH * 0.55)
+          const chipGap = 0.05
+          let chipCurX  = r2(valueX)
+          chips.slice(0, 4).forEach(v => {
+            const chipW = r2(Math.min(1.2, Math.max(0.36, v.length * 0.065 + 0.14)))
+            if (chipCurX + chipW > cx + cardW - 0.10) return
+            blocks.push({ block_type: 'rect',
+              x: chipCurX, y: r2(iy + (itemH - chipH) / 2), w: chipW, h: chipH,
+              fill_color: sc.fill, border_color: null, border_width: 0, corner_radius: 8 })
+            blocks.push({ block_type: 'text_box',
+              x: r2(chipCurX + 0.05), y: r2(iy + (itemH - chipH) / 2), w: r2(chipW - 0.10), h: chipH,
+              text: v, font_family: bodyFont,
+              font_size: Math.max(6, labelFs - 1), bold: false, color: sc.text,
+              align: 'center', valign: 'middle' })
+            chipCurX = r2(chipCurX + chipW + chipGap)
+          })
+        } else {
+          // plain text
+          blocks.push({ block_type: 'text_box',
+            x: valueX, y: r2(iy + 0.04), w: valueW, h: r2(itemH - 0.04),
+            text: valueStr, font_family: bodyFont, font_size: valueFs,
+            bold: item.sentiment && item.sentiment !== 'neutral',
+            color: item.sentiment && item.sentiment !== 'neutral' ? sc.text : (ps.value_color || '#1F2937'),
+            align: 'left', valign: 'middle' })
+        }
+      })
+    }
+  })
+}
+
 function _artifactToBlocks(art, blocks, bt, r2, fontSizeFloor) {
   const ax = art.x || 0
   const ay = art.y || 0
