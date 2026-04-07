@@ -3092,43 +3092,42 @@ def _compute_title_bottom(slide, title_block, use_template):
     """
     Compute A = actual rendered bottom of the title text, in inches.
 
-    Always uses title_block.y as the vertical anchor — this is the same
-    reference Agent 5 used when placing content blocks (B), so both A and B
-    are in the same coordinate space and the gap comparison is meaningful.
+    In template mode: reads ph.top + ph.height from the actual PPTX placeholder.
+    Because TEXT_TO_FIT_SHAPE is set on the title text frame, PowerPoint will
+    always shrink the font to stay within the placeholder box, so ph.top+ph.height
+    is the exact conservative upper bound for A.
 
-    In template mode, reads the real placeholder width from the layout XML for
-    a more accurate character-wrap estimate (placeholder width may differ from
-    the block spec's w field).
-
-    Line-count estimation uses char_w = font_size * 0.60 (more conservative
-    than the generic 0.52 used elsewhere) because slide titles are bold,
-    mixed-case, and often contain wide characters (₹, em-dash, capitals).
-
-    Returns: title_block.y + max(spec_h, estimated_actual_h)
-    — A is never less than spec_title_bottom, so no shift fires when the
-    title fits within the LLM-specified height.
+    In scratch mode: uses title_block.y + max(spec_h, estimated_h) computed from
+    spec coordinates and a conservative character-wrap estimate (0.60× font_size
+    per char for bold/mixed-case titles).
     """
     EMU = 914400.0
     if not title_block or not title_block.get('text'):
         return None
 
-    # Always use the spec y — same reference frame Agent 5 used for content B
     title_y   = float(title_block.get('y') or 0.15)
     title_w   = max(0.5, float(title_block.get('w') or 9.0))
     spec_h    = max(0.1, float(title_block.get('h') or 0.7))
     font_size = float(title_block.get('font_size') or 18)
 
-    # In template mode, refine width from the actual placeholder XML
     if use_template:
+        # In template mode the title is rendered inside the template placeholder.
+        # The placeholder's geometry (top/height) is fixed by the PPTX file and
+        # can differ from Agent 5's spec coordinates (title_block.y / .h).
+        # With TEXT_TO_FIT_SHAPE set, PowerPoint guarantees text stays within the
+        # placeholder box → A = ph.top + ph.height is the exact safe upper bound.
         try:
             for ph in slide.placeholders:
                 if ph.placeholder_format.idx == 0:
-                    title_w = max(0.5, ph.width / EMU)
-                    break
-        except Exception:
-            pass
+                    ph_top = ph.top    / EMU
+                    ph_h   = ph.height / EMU
+                    print(f'[title bottom] template ph: top={ph_top:.3f}" h={ph_h:.3f}"'
+                          f' → A={ph_top + ph_h:.3f}"')
+                    return ph_top + ph_h
+        except Exception as _e:
+            print(f'[title bottom] ph read failed: {_e}')
 
-    # Conservative wrap estimate: 0.60× font_size per char (vs generic 0.52)
+    # Scratch mode (or template ph read failed): use spec coordinates
     width_pts     = max(1.0, title_w * 72)
     char_w        = max(1.0, font_size * 0.60)
     chars_per_line = max(4, int(width_pts / char_w))
@@ -3138,11 +3137,7 @@ def _compute_title_bottom(slide, title_block, use_template):
         chunk = chunk.strip()
         lines += max(1, int(len(chunk) / chars_per_line) + 1)
     lines = max(1, lines)
-
     estimated_h = lines * (font_size / 72.0) * 1.25 + 0.06
-
-    # A = spec bottom OR estimated bottom, whichever is larger
-    # This guarantees A >= spec_title_bottom, so no shift fires for short titles
     return title_y + max(spec_h, estimated_h)
 
 
