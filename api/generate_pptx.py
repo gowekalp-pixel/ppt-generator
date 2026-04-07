@@ -3330,6 +3330,27 @@ def render_block_circle(slide, block, bt):
             run.font.name = fam
 
 
+def _strip_connector_endpoint_refs(connector):
+    """Remove dangling stCxn/endCxn refs from a connector shape's XML.
+
+    python-pptx may leave <a:stCxn> / <a:endCxn> inside <p:cNvCxnSpPr> when
+    a connector is created free-floating (not snapped to another shape).
+    PowerPoint treats these empty refs as broken relationships and reports
+    'content is lost' during file repair.  Stripping them makes the connector
+    a valid free-floating line with no connection endpoints.
+    """
+    from pptx.oxml.ns import qn as _qn
+    try:
+        cxnSpPr = connector._element.find('.//' + _qn('p:cNvCxnSpPr'))
+        if cxnSpPr is not None:
+            for tag in [_qn('a:stCxn'), _qn('a:endCxn')]:
+                ref = cxnSpPr.find(tag)
+                if ref is not None:
+                    cxnSpPr.remove(ref)
+    except Exception:
+        pass
+
+
 def render_block_rule(slide, block, bt):
     """Render a horizontal rule line — uses a connector for true hairline weight."""
     from pptx.enum.shapes import MSO_CONNECTOR
@@ -3345,6 +3366,7 @@ def render_block_rule(slide, block, bt):
         )
         line.line.color.rgb = hex_to_rgb(color)
         line.line.width = pt(line_width_pt)
+        _strip_connector_endpoint_refs(line)
     except Exception:
         pass
 
@@ -3369,6 +3391,7 @@ def render_block_line(slide, block, bt):
         )
         line.line.color.rgb = hex_to_rgb(color)
         line.line.width = pt(width_pt)
+        _strip_connector_endpoint_refs(line)
         ln = line.line._get_or_add_ln()
         if line_style == 'dashed':
             prstDash = ln.find(qn('a:prstDash'))
@@ -3429,15 +3452,26 @@ ICON_PRESET_MAP = {
 
 
 def _apply_preset_geometry(shape, prst):
-    """Replace a shape's preset geometry with the given OOXML prst name."""
+    """Replace a shape's preset geometry with the given OOXML prst name.
+
+    IMPORTANT: a:avLst is a REQUIRED child of a:prstGeom per the OOXML schema
+    (CT_PresetGeometry2D requires avLst [1..1]).  We must NOT remove it — we
+    clear its children instead so default adjustment values are used.
+    """
     from pptx.oxml.ns import qn
+    from lxml import etree
     try:
         prstGeom = shape._element.find('.//' + qn('a:prstGeom'))
         if prstGeom is not None:
             prstGeom.set('prst', prst)
             avLst = prstGeom.find(qn('a:avLst'))
-            if avLst is not None:
-                prstGeom.remove(avLst)
+            if avLst is None:
+                # Add the required empty avLst element
+                prstGeom.append(etree.SubElement(prstGeom, qn('a:avLst')))
+            else:
+                # Clear any existing adjustment values (use preset defaults)
+                for child in list(avLst):
+                    avLst.remove(child)
         return True
     except Exception:
         return False
@@ -3482,10 +3516,6 @@ def render_block_icon_badge(slide, block):
 
     if icon == 'cross':
         # Two diagonal connectors forming an X (no OOXML preset exists).
-        # After creation we strip the <a:stCxn> / <a:endCxn> endpoint refs that
-        # python-pptx leaves in the XML — PowerPoint reports "content is lost"
-        # when it finds those dangling connection references on open.
-        from pptx.oxml.ns import qn as _qn
         lw_pt = max(1.0, round(isize * 20, 1))
         try:
             for (x1, y1, x2, y2) in [
@@ -3498,13 +3528,7 @@ def render_block_icon_badge(slide, block):
                 )
                 ln.line.color.rgb = hex_to_rgb(icolor)
                 ln.line.width = Pt(lw_pt)
-                # Strip dangling endpoint refs → prevents PowerPoint repair warning
-                cxnSpPr = ln._element.find('.//' + _qn('p:cNvCxnSpPr'))
-                if cxnSpPr is not None:
-                    for ref_tag in [_qn('a:stCxn'), _qn('a:endCxn')]:
-                        ref = cxnSpPr.find(ref_tag)
-                        if ref is not None:
-                            cxnSpPr.remove(ref)
+                _strip_connector_endpoint_refs(ln)
         except Exception:
             pass
 
