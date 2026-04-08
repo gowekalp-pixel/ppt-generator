@@ -6114,7 +6114,7 @@ function _artifactToBlocks(art, blocks, bt, r2, fontSizeFloor) {
       if (art.insight_mode === 'grouped') {
         _groupedInsightToBlocks(art, content_y, blocks, bt, r2, fontSizeFloor)
       } else {
-        _standardInsightToBlocks(art, content_y, blocks, r2, fontSizeFloor)
+        _standardInsightToBlocks(art, content_y, blocks, bt, r2, fontSizeFloor)
       }
       break
     }
@@ -6245,10 +6245,9 @@ function _computeInsightFontSize(art, content_y) {
     // standard — no background box ever
     const body_y     = r2(content_y)
     const body_h     = r2(Math.max(0.3, ay + ah - body_y))
-    const padV   = 0
     const padH   = 0.04
-    const TOP_GAP = 0.06
-    const innerH     = Math.max(0.2, body_h - 2 * padV - TOP_GAP)
+    const TOP_GAP = 0.02
+    const innerH     = Math.max(0.2, body_h - TOP_GAP)
     const points     = art.points || []
     const nPoints    = Math.max(1, points.length)
     const st         = art.body_style || {}
@@ -6323,71 +6322,49 @@ function _computeInsightFontSize(art, content_y) {
   }
 }
 
-function _standardInsightToBlocks(art, content_y, blocks, r2, fontSizeFloor) {
+function _standardInsightToBlocks(art, content_y, blocks, bt, r2, fontSizeFloor) {
   const ax = art.x || 0
   const ay = art.y || 0
   const aw = art.w || 0
   const ah = art.h || 0
   const st  = art.body_style || {}
-  // insight_text standard never renders a background box — strip fill/border regardless of AI output
-  const hasBox = false
-  const cr     = 0
 
-  const hasHeader     = !!(art.header_block && art.header_block.text)
-  const BOX_TOP_GUARD = (hasBox && hasHeader) ? 0.06 : 0
-  const body_y = r2(content_y + BOX_TOP_GUARD)
+  // No background box — render bullets directly on the slide background
+  const body_y = r2(content_y)
   const body_h = r2(Math.max(0.3, ay + ah - body_y))
 
-  // Container rect
-  if (hasBox) {
-    blocks.push({
-      block_type:    'rect',
-      x: ax, y: body_y, w: aw, h: body_h,
-      fill_color:    sty.fill_color   || null,
-      border_color:  sty.border_color || null,
-      border_width:  sty.border_width || 0.75,
-      corner_radius: cr
-    })
-  }
+  const padH    = 0.04
+  const TOP_GAP = 0.02   // tight gap between artifact header rule and first bullet
+  const bulletPadding = { top: 0, bottom: 0, left: padH, right: 0 }
 
-  const cornerInset   = cr >= 4 ? 0.04 : 0
-  const padV = hasBox ? (0.10 + cornerInset) : 0
-  const padH = hasBox ? (0.12 + cornerInset) : 0.04
-  const TOP_GAP = hasBox ? 0 : 0.06
-  const bulletPadding = hasBox
-    ? { top: padV, bottom: padV, left: padH, right: padH }
-    : { top: 0, bottom: 0, left: padH, right: 0 }
-
-  // ****** Dynamic font size ***************************************************************************************************************************************************************
-  // Scale so bullets fill ~80% of the available interior height
-  const points     = art.points || []
-  const nPoints    = Math.max(1, points.length)
-  const innerH     = Math.max(0.2, body_h - 2 * padV - TOP_GAP)
+  // ****** Dynamic font size ****
+  const points      = art.points || []
+  const nPoints     = Math.max(1, points.length)
+  const innerH      = Math.max(0.2, body_h - TOP_GAP)
   const lineSpacing = st.line_spacing || 1.3
-  // Estimate average chars per bullet; assume ~55 chars per inch at given font size
-  const avgChars   = points.reduce((s, p) => s + String(p?.text || p || '').length, 0) / nPoints
-  const charsPerInch = (fs) => Math.max(1, aw * 72 / (fs * 0.56))
+  const avgChars    = points.reduce((s, p) => s + String(p?.text || p || '').length, 0) / nPoints
+  const charsPerInch   = (fs) => Math.max(1, aw * 72 / (fs * 0.56))
   const linesPerBullet = (fs) => Math.max(1, Math.ceil(avgChars / charsPerInch(fs)))
-  const lineHIn    = (fs) => (fs / 72) * lineSpacing
-  const estimatedH = (fs) => nPoints * linesPerBullet(fs) * lineHIn(fs) + (nPoints - 1) * 0.04
+  const lineHIn        = (fs) => (fs / 72) * lineSpacing
+  const estimatedH     = (fs) => nPoints * linesPerBullet(fs) * lineHIn(fs) + (nPoints - 1) * 0.04
 
   let fontSize = st.font_size || 10
-  // Grow font until content fills ~82% of available interior, cap at 18pt
   for (let tryFs = 18; tryFs >= Math.max(9, fontSize); tryFs--) {
     if (estimatedH(tryFs) <= innerH * 0.82) { fontSize = tryFs; break }
   }
-  // Apply cross-artifact harmonisation floor (min font across all insights on slide)
   if (fontSizeFloor && fontSizeFloor < fontSize) fontSize = fontSizeFloor
 
-  // ****** Top alignment: start bullets after a small gap from the artifact header ****
-  const list_y    = r2(body_y + TOP_GAP)
-  const list_h    = r2(Math.max(0.2, ay + ah - list_y))
+  // Brand primary color for bullet text
+  const bulletColor = bt.primary_color || st.color || '#111111'
+
+  const list_y = r2(body_y + TOP_GAP)
+  const list_h = r2(Math.max(0.2, ay + ah - list_y))
 
   blocks.push({
     block_type:  'bullet_list',
     x: ax, y: list_y, w: aw, h: list_h,
     points,
-    body_style:  { ...st, font_size: fontSize },
+    body_style:  { ...st, font_size: fontSize, color: bulletColor },
     padding:     bulletPadding,
     sentiment:   art.sentiment || 'neutral'
   })
