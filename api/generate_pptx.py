@@ -3298,16 +3298,14 @@ def _shift_blocks_for_title_gap(slide, blocks, use_template):
 
     if use_template:
         # Algorithm:
-        # Step 1 — derive content_start from placeholder geometry (fixed reference):
-        #            1-line title:  content_start = ph_top + ph_h + MIN_GAP
-        #            2+ line title: content_start = ph_top + est_h + MIN_GAP
+        # Step 1 — derive content_start using actual text height (est_h) for ALL titles,
+        #          not the placeholder box height. This gives a consistent MIN_GAP visual
+        #          gap below the title text regardless of whether it is 1-line or multi-line.
+        #          content_start = ph_top + est_h + MIN_GAP  (always)
         # Step 2 — shift = content_start - B  (positive=down, negative=up)
         # Step 3 — apply shift to every non-title block Y (both directions)
-        #
-        # This fully normalises the title→content gap on every slide regardless
-        # of what Agent 5 placed as B.
         EMU       = 914400.0
-        MIN_GAP   = 0.10        # gap below title text before content starts (~10px)
+        MIN_GAP   = 0.15        # gap below title text before content starts
         shift     = 0.0
         try:
             for ph in slide.placeholders:
@@ -3323,14 +3321,12 @@ def _shift_blocks_for_title_gap(slide, blocks, use_template):
                     est_h     = lines * line_h + 0.06
                     B         = min(float(b['y']) for b in non_title)
 
-                    if est_h > ph_h + SKIP_PX:
-                        # 2+ line title: content starts below estimated text bottom
-                        content_start = ph_top + est_h + MIN_GAP
-                        label = f'2-line (est_h={est_h:.3f}")'
-                    else:
-                        # 1-line title: content starts below the placeholder box
-                        content_start = ph_top + ph_h + MIN_GAP
-                        label = f'1-line (ph_bottom={ph_top+ph_h:.3f}")'
+                    # Always anchor to actual text height — never the placeholder box.
+                    # ph_h > est_h for single-line titles, which previously produced a
+                    # larger-than-intended visual gap on short-title slides.
+                    content_start = ph_top + est_h + MIN_GAP
+                    n_lines = f'{lines}-line'
+                    label   = f'{n_lines} (est_h={est_h:.3f}")'
 
                     shift = round(content_start - B, 3)
                     if abs(shift) < SKIP_PX:
