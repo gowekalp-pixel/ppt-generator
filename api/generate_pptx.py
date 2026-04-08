@@ -3267,22 +3267,24 @@ def _compute_title_bottom(slide, title_block, use_template):
 
 def _shift_blocks_for_title_gap(slide, blocks, use_template):
     """
-    After the title has been placed, shift all non-title blocks so they clear
-    the actual rendered title text.
+    After the title has been placed, normalize the gap between the title bottom
+    and the first content block to exactly TARGET_GAP — both pushing down (when
+    content is too close) and pulling up (when Agent 5 left too much space).
 
-    Algorithm (per spec):
+    Algorithm:
       A = actual bottom of title text  (from _compute_title_bottom)
       B = min Y of all non-title blocks (subtitle + content)
-      gap = B - A
+      target = A + TARGET_GAP
+      shift  = target - B          (positive = push down, negative = pull up)
 
-      if gap >= MIN_GAP (10 px):  nothing to do
-      else:  shift = A - B + MIN_GAP
-             add shift to the Y of every non-title block that has a y coord
+      Skip if |shift| < 2px (no meaningful change).
 
-    Returns (shifted_blocks, shift_applied) — shift_applied is 0 if no shift.
-    MIN_GAP = 10 px at 96 dpi ≈ 0.104"
+    TARGET_GAP = 0.15" (~14px) — consistent comfortable gap on every slide.
+
+    Returns (shifted_blocks, shift_applied).
     """
-    MIN_GAP_IN = 10 / 96.0   # 10 px
+    TARGET_GAP_IN = 0.15          # consistent gap after title on every slide
+    SKIP_THRESHOLD = 2 / 96.0    # ignore sub-2px shifts (rounding noise)
 
     title_block = next(
         (b for b in blocks if b.get('block_type') == 'title' and b.get('text')), None
@@ -3299,13 +3301,13 @@ def _shift_blocks_for_title_gap(slide, blocks, use_template):
         return blocks, 0.0
 
     B = min(float(b['y']) for b in non_title)
-    gap = B - A
+    shift = round((A + TARGET_GAP_IN) - B, 3)
 
-    if gap >= MIN_GAP_IN:
+    if abs(shift) < SKIP_THRESHOLD:
         return blocks, 0.0
-
-    shift = round(A - B + MIN_GAP_IN, 3)
-    print(f'[title gap fix] A={A:.3f}" B={B:.3f}" gap={gap:.3f}" shift={shift:.3f}"'
+    direction = 'down' if shift > 0 else 'up'
+    print(f'[title gap fix] A={A:.3f}" B={B:.3f}" target={A+TARGET_GAP_IN:.3f}"'
+          f' shift={shift:+.3f}" ({direction})'
           f' mode={"template" if use_template else "scratch"}')
 
     shifted = []
@@ -3320,9 +3322,9 @@ def _shift_blocks_for_title_gap(slide, blocks, use_template):
 
 
 def _nudge_subtitle_placeholder(slide, shift_in):
-    """Move the subtitle placeholder (idx=1) down by shift_in inches."""
+    """Move the subtitle placeholder (idx=1) by shift_in inches (±)."""
     EMU = 914400.0
-    if shift_in <= 0:
+    if shift_in == 0:
         return
     try:
         for ph in slide.placeholders:

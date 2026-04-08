@@ -2855,7 +2855,7 @@ function buildSafeArtifactShell(manifestArt, bt) {
     artifact_header,
     insight_mode: 'standard',
     x: null, y: null, w: null, h: null,
-    style: { fill_color: null, border_color: (bt.primary_color || '#0078AE') + '33', border_width: 0.5, corner_radius: 3 },
+    style: { fill_color: null, border_color: null, border_width: 0, corner_radius: 0 },
     heading_style: { font_family: bt.title_font_family || 'Arial', font_size: 12, font_weight: 'bold', color: bt.primary_color || '#0078AE' },
     body_style: { font_family: bt.body_font_family || 'Arial', font_size: 11, font_weight: 'regular', color: bt.body_color || '#111111', line_spacing: 1.4, indent_inches: 0.15, list_style: 'bullet', space_before_pt: 5, vertical_distribution: 'spread' },
     heading: manifestArt?.heading || artifact_header || manifestArt?.insight_header || 'Key Insight',
@@ -6246,9 +6246,10 @@ function _computeInsightFontSize(art, content_y) {
     const body_y     = r2(content_y + BOX_TOP_GUARD)
     const body_h     = r2(Math.max(0.3, ay + ah - body_y))
     const cornerInset = cr >= 4 ? 0.04 : 0
-    const padV = hasBox ? (0.10 + cornerInset) : 0.06
+    const padV = hasBox ? (0.10 + cornerInset) : 0
     const padH = hasBox ? (0.12 + cornerInset) : 0.04
-    const innerH     = Math.max(0.2, body_h - 2 * padV)
+    const TOP_GAP = hasBox ? 0 : 0.06
+    const innerH     = Math.max(0.2, body_h - 2 * padV - TOP_GAP)
     const points     = art.points || []
     const nPoints    = Math.max(1, points.length)
     const st         = art.body_style || {}
@@ -6354,17 +6355,18 @@ function _standardInsightToBlocks(art, content_y, blocks, r2, fontSizeFloor) {
   }
 
   const cornerInset   = cr >= 4 ? 0.04 : 0
-  const padV = hasBox ? (0.10 + cornerInset) : 0.06
+  const padV = hasBox ? (0.10 + cornerInset) : 0
   const padH = hasBox ? (0.12 + cornerInset) : 0.04
+  const TOP_GAP = hasBox ? 0 : 0.06
   const bulletPadding = hasBox
     ? { top: padV, bottom: padV, left: padH, right: padH }
-    : {}
+    : { top: 0, bottom: 0, left: padH, right: 0 }
 
   // ****** Dynamic font size ***************************************************************************************************************************************************************
   // Scale so bullets fill ~80% of the available interior height
   const points     = art.points || []
   const nPoints    = Math.max(1, points.length)
-  const innerH     = Math.max(0.2, body_h - 2 * padV)
+  const innerH     = Math.max(0.2, body_h - 2 * padV - TOP_GAP)
   const lineSpacing = st.line_spacing || 1.3
   // Estimate average chars per bullet; assume ~55 chars per inch at given font size
   const avgChars   = points.reduce((s, p) => s + String(p?.text || p || '').length, 0) / nPoints
@@ -6381,12 +6383,9 @@ function _standardInsightToBlocks(art, content_y, blocks, r2, fontSizeFloor) {
   // Apply cross-artifact harmonisation floor (min font across all insights on slide)
   if (fontSizeFloor && fontSizeFloor < fontSize) fontSize = fontSizeFloor
 
-  // ****** Vertical centering ************************************************************************************************************************************************************
-  // Shrink the bullet_list to its estimated content height, then offset y to centre it
-  const contentH  = Math.min(estimatedH(fontSize) + 2 * padV, body_h)
-  const vOffset   = r2(Math.max(0, (body_h - contentH) / 2))
-  const list_y    = r2(body_y + vOffset)
-  const list_h    = r2(Math.max(0.2, Math.min(contentH, body_h - vOffset)))
+  // ****** Top alignment: start bullets after a small gap from the artifact header ****
+  const list_y    = r2(body_y + TOP_GAP)
+  const list_h    = r2(Math.max(0.2, ay + ah - list_y))
 
   blocks.push({
     block_type:  'bullet_list',
