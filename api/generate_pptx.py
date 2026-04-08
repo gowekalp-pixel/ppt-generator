@@ -3227,8 +3227,18 @@ def _compute_title_bottom(slide, title_block, use_template):
 
                     # Resize the placeholder so the PPTX physically accommodates
                     # the text — prevents content from being drawn inside the title.
+                    # IMPORTANT: setting ph.height materialises a new <a:xfrm> in
+                    # the slide XML (overriding layout inheritance) that only writes
+                    # cy, leaving cx=0. We must read all four geometry values first
+                    # and restore them after, so width/position are not lost.
                     new_ph_h = max(ph_h, estimated_h)
                     try:
+                        saved_left = ph.left
+                        saved_top  = ph.top
+                        saved_w    = ph.width
+                        ph.left   = saved_left
+                        ph.top    = saved_top
+                        ph.width  = saved_w
                         ph.height = int(new_ph_h * EMU)
                     except Exception:
                         pass
