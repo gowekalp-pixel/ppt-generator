@@ -532,12 +532,13 @@ def place_in_placeholder(slide, ph_idx, text, style_spec, bt,
                 tf = ph.text_frame
                 tf.clear()
                 tf.word_wrap = True
-                # For the title placeholder, allow the text frame to shrink text
-                # so it fits within the placeholder box height when the template's
-                # actual font is larger than the spec value (preserve_template_style=True).
+                # For the title placeholder, let the shape grow to fit the text.
+                # _compute_title_bottom already resizes ph.height to the estimated
+                # text height; SHAPE_TO_FIT_TEXT acts as a safety net for any
+                # remaining underestimation so the title is never visually clipped.
                 if ph_idx == 0:
                     try:
-                        tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
+                        tf.auto_size = MSO_AUTO_SIZE.SHAPE_TO_FIT_TEXT
                     except Exception:
                         pass
                 # Reset any vertical text direction inherited from the template layout.
@@ -3090,11 +3091,36 @@ def normalize_zone_artifact_stack(zone):
 
 def _get_template_title_font_size(slide):
     """
-    Read the effective font size (in points) for the title placeholder (idx=0)
-    by walking the slide layout → slide master inheritance chain.
-    Returns None if not found.
+    Read the effective font size (in points) for the title placeholder (idx=0).
+
+    Priority order (most → least authoritative):
+      1. Slide master txStyles/titleStyle/lvl1pPr/defRPr[@sz]  — definitive source
+         (sz is stored in hundredths of a point, e.g. 2800 → 28pt)
+      2. Master placeholder text frame (runs / paragraph font)
+      3. Layout placeholder text frame
+
+    Returns float points, or None if nothing found.
     """
-    PT = 12700  # 1pt = 12700 EMU in python-pptx
+    try:
+        from pptx.oxml.ns import qn
+        sm = slide.slide_layout.slide_master
+        tx_styles = sm._element.find(qn('p:txStyles'))
+        if tx_styles is not None:
+            title_style = tx_styles.find(qn('p:titleStyle'))
+            if title_style is not None:
+                for lvl_tag in (qn('a:lvl1pPr'), qn('a:defPPr')):
+                    lvl = title_style.find(lvl_tag)
+                    if lvl is not None:
+                        def_rpr = lvl.find(qn('a:defRPr'))
+                        if def_rpr is not None:
+                            sz = def_rpr.get('sz')
+                            if sz:
+                                return int(sz) / 100.0   # hundredths-of-point → pt
+    except Exception:
+        pass
+
+    # Fallback: read from placeholder text frame (runs / paragraph style)
+    PT = 12700
     def _fs_from_tf(tf):
         try:
             for para in tf.paragraphs:
@@ -3107,8 +3133,7 @@ def _get_template_title_font_size(slide):
             pass
         return None
 
-    # Walk: layout placeholder → master placeholder
-    for source in ('slide_layout', 'slide_layout.slide_master'):
+    for source in ('slide_layout.slide_master', 'slide_layout'):
         try:
             obj = slide
             for attr in source.split('.'):
@@ -3123,21 +3148,46 @@ def _get_template_title_font_size(slide):
     return None
 
 
+def _estimate_text_lines(text, font_size_pt, available_width_in):
+    """
+    Estimate how many lines `text` wraps to at `font_size_pt` in a box
+    `available_width_in` inches wide.
+
+    Uses char_w = font_size × 0.55 (points per character).  0.55 is a
+    conservative average for proportional fonts (including bold/display faces)
+    — meaning we err toward more lines rather than fewer.
+
+    Subtracts 0.15" from available_width for internal text-frame margins.
+    """
+    effective_w    = max(0.5, available_width_in - 0.15)
+    width_pts      = max(1.0, effective_w * 72.0)
+    char_w         = max(1.0, font_size_pt * 0.55)
+    chars_per_line = max(4, int(width_pts / char_w))
+    lines = 0
+    for chunk in (text or '').split('\n'):
+        chunk = chunk.strip()
+        lines += max(1, int(len(chunk) / chars_per_line) + 1)
+    return max(1, lines)
+
+
 def _compute_title_bottom(slide, title_block, use_template):
     """
     Compute A = actual rendered bottom of the title text, in inches.
 
-    In template mode: reads actual ph.top / ph.height / ph.width from the PPTX
-    placeholder (these come from the template file and may differ from spec).
-    Estimates line count using the template's effective font size (read from the
-    layout/master via _get_template_title_font_size), then computes
-    A = ph.top + min(estimated_text_h, ph.height).
-    The min() clamp is correct because TEXT_TO_FIT_SHAPE ensures PowerPoint
-    shrinks the font so text never visually overflows the placeholder box.
+    In template mode:
+      • Reads ph.top / ph.width from the PPTX placeholder (template geometry).
+      • Reads the template's title font size from the slide master's
+        txStyles/titleStyle element (the authoritative source), falling back to
+        placeholder text-frame inspection and finally to the spec value.
+      • Estimates line count with _estimate_text_lines (char_w = 0.55× — errs
+        toward more lines to avoid under-shifting).
+      • A = ph.top + max(ph.height, estimated_text_h)
+        — never smaller than the original placeholder height.
+      • Resizes ph.height to estimated_text_h so the PPTX placeholder physically
+        matches the text, preventing content overlap in the rendered file.
 
-    In scratch mode: uses title_block.y + max(spec_h, estimated_h) computed from
-    spec coordinates and a conservative character-wrap estimate (0.60× font_size
-    per char for bold/mixed-case titles).
+    In scratch mode:
+      Uses title_block.y + max(spec_h, estimated_h) from spec coordinates.
     """
     EMU = 914400.0
     if not title_block or not title_block.get('text'):
@@ -3147,46 +3197,51 @@ def _compute_title_bottom(slide, title_block, use_template):
     title_w   = max(0.5, float(title_block.get('w') or 9.0))
     spec_h    = max(0.1, float(title_block.get('h') or 0.7))
     font_size = float(title_block.get('font_size') or 18)
+    text      = str(title_block.get('text', '') or '').strip()
 
     if use_template:
-        # In template mode the title lands inside the template placeholder.
-        # TEXT_TO_FIT_SHAPE ensures PowerPoint shrinks the font so the text is
-        # always visually contained within the placeholder box — regardless of
-        # font family, size, or character width.  Therefore:
-        #
-        #   A = ph.top + ph.height   (exact placeholder bottom — brand-agnostic)
-        #
-        # Exception: if ph.height > 1.5" the placeholder is a non-standard
-        # layout (e.g. a full-slide divider/section title).  Those slides
-        # typically carry no content blocks, so no shift would fire anyway, but
-        # we fall back to spec-based estimation as a safety net.
         try:
             for ph in slide.placeholders:
                 if ph.placeholder_format.idx == 0:
                     ph_top = ph.top    / EMU
                     ph_h   = ph.height / EMU
-                    if ph_h <= 1.5:
-                        A = ph_top + ph_h
-                        print(f'[title bottom] template ph: top={ph_top:.3f}" h={ph_h:.3f}"'
-                              f' → A={A:.3f}" (placeholder bottom)')
-                        return A
-                    # Large placeholder — fall through to spec-based estimate
-                    print(f'[title bottom] large ph (h={ph_h:.3f}"), using spec estimate')
+                    ph_w   = ph.width  / EMU
+
+                    # Non-standard layouts (e.g. full-slide divider title):
+                    # fall back to spec-based estimate instead.
+                    if ph_h > 1.5:
+                        print(f'[title bottom] large ph (h={ph_h:.3f}"), using spec estimate')
+                        break
+
+                    # Use template font size (txStyles is most authoritative)
+                    tmpl_fs = _get_template_title_font_size(slide) or font_size
+                    lines   = _estimate_text_lines(text, tmpl_fs, ph_w)
+
+                    # Estimated actual text height for `lines` lines
+                    line_h       = (tmpl_fs / 72.0) * 1.25   # inches per line
+                    estimated_h  = lines * line_h + 0.06      # + small top/bottom margin
+                    # A is at least the original placeholder bottom (conservative)
+                    A = ph_top + max(ph_h, estimated_h)
+
+                    # Resize the placeholder so the PPTX physically accommodates
+                    # the text — prevents content from being drawn inside the title.
+                    new_ph_h = max(ph_h, estimated_h)
+                    try:
+                        ph.height = int(new_ph_h * EMU)
+                    except Exception:
+                        pass
+
+                    print(f'[title bottom] template ph: top={ph_top:.3f}" orig_h={ph_h:.3f}"'
+                          f' font={tmpl_fs:.0f}pt lines={lines}'
+                          f' est_h={estimated_h:.3f}" new_h={new_ph_h:.3f}" → A={A:.3f}"')
+                    return A
         except Exception as _e:
             print(f'[title bottom] ph read failed: {_e}')
 
-    # Scratch mode (or template ph read failed): use spec coordinates
-    effective_w   = max(0.5, title_w - 0.15)
-    width_pts     = max(1.0, effective_w * 72)
-    char_w        = max(1.0, font_size * 0.65)
-    chars_per_line = max(4, int(width_pts / char_w))
-    text  = str(title_block.get('text', '') or '').strip()
-    lines = 0
-    for chunk in text.split('\n'):
-        chunk = chunk.strip()
-        lines += max(1, int(len(chunk) / chars_per_line) + 1)
-    lines = max(1, lines)
-    estimated_h = lines * (font_size / 72.0) * 1.25 + 0.06
+    # Scratch mode (or template fallback): use spec coordinates
+    lines       = _estimate_text_lines(text, font_size, title_w)
+    line_h      = (font_size / 72.0) * 1.25
+    estimated_h = lines * line_h + 0.06
     return title_y + max(spec_h, estimated_h)
 
 
