@@ -530,11 +530,11 @@ OPTIONAL zones:
   A cards-only zone with 3+ cards may be PRIMARY only if no other proof artifact is available.
 
   ZONE ROLE HARD RULE FOR INSIGHT_TEXT:
-  A zone whose ONLY artifact is insight_text must NEVER be assigned zone_role PRIMARY or CO-PRIMARY.
-  insight_text is always a supporting/secondary element — it annotates and explains a primary proof artifact;
-  it cannot carry the primary proof burden of a zone on its own.
-  Assign such a zone zone_role SECONDARY. If this zone was intended as primary, add a chart, stat_bar,
-  table, or other data artifact as the lead artifact and pair insight_text alongside it.
+  A primary, secondary, or co-primary zone is PROHIBITED from having insight_text as its primary (lead) artifact.
+  insight_text is always a companion element — it annotates a data artifact, never replaces one.
+  If a zone tagged primary, secondary, or co-primary ends up with insight_text as its only or lead artifact,
+  replace it with a data artifact (chart, stat_bar, table, cards, workflow) that proves the zone's message,
+  then pair insight_text alongside it as the secondary artifact within that zone.
 
 ─── WORKFLOW SELECTION Indicators ─────────────────────────────
 

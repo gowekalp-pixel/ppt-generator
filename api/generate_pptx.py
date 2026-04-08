@@ -3297,53 +3297,51 @@ def _shift_blocks_for_title_gap(slide, blocks, use_template):
         return blocks, 0.0
 
     if use_template:
-        # Two cases that require shifting content down:
+        # Algorithm:
+        # Step 1 — derive content_start from placeholder geometry (fixed reference):
+        #            1-line title:  content_start = ph_top + ph_h + MIN_GAP
+        #            2+ line title: content_start = ph_top + est_h + MIN_GAP
+        # Step 2 — shift = content_start - B  (positive=down, negative=up)
+        # Step 3 — apply shift to every non-title block Y (both directions)
         #
-        # 1. Title overflows the placeholder (2+ lines):
-        #    shift = est_h - ph_h  (exact overflow)
-        #
-        # 2. Title fits in 1 line BUT Agent 5 placed content inside the
-        #    placeholder zone (B < ph_top + ph_h + MIN_GAP):
-        #    shift = (ph_top + ph_h + MIN_GAP) - B
-        #    This is a safety floor — Agent 5's layout is respected when
-        #    content already clears the placeholder bottom.
-        EMU = 914400.0
-        MIN_GAP_IN = 0.10   # minimum clearance below placeholder bottom (~10px)
-        shift = 0.0
+        # This fully normalises the title→content gap on every slide regardless
+        # of what Agent 5 placed as B.
+        EMU       = 914400.0
+        MIN_GAP   = 0.10        # gap below title text before content starts (~10px)
+        shift     = 0.0
         try:
             for ph in slide.placeholders:
                 if ph.placeholder_format.idx == 0:
                     ph_top    = ph.top    / EMU
                     ph_h      = ph.height / EMU
                     ph_w      = ph.width  / EMU
-                    ph_bottom = ph_top + ph_h
                     font_size = float(title_block.get('font_size') or 18)
                     tmpl_fs   = _get_template_title_font_size(slide) or font_size
                     text      = str(title_block.get('text', '') or '').strip()
                     lines     = _estimate_text_lines(text, tmpl_fs, ph_w)
                     line_h    = (tmpl_fs / 72.0) * 1.25
                     est_h     = lines * line_h + 0.06
-                    overflow  = est_h - ph_h   # positive only for 2+ line titles
                     B         = min(float(b['y']) for b in non_title)
 
-                    if overflow > SKIP_PX:
-                        # 2-line title: shift content down by the overflow amount
-                        shift = round(overflow, 3)
-                        print(f'[title gap fix] overflow: ph_h={ph_h:.3f}" est_h={est_h:.3f}"'
-                              f' overflow={overflow:.3f}" B={B:.3f}"'
-                              f' shift=+{shift:.3f}" (down) mode=template')
+                    if est_h > ph_h + SKIP_PX:
+                        # 2+ line title: content starts below estimated text bottom
+                        content_start = ph_top + est_h + MIN_GAP
+                        label = f'2-line (est_h={est_h:.3f}")'
                     else:
-                        # 1-line title: only shift if content is inside placeholder zone
-                        floor = ph_bottom + MIN_GAP_IN
-                        safety_shift = floor - B
-                        if safety_shift > SKIP_PX:
-                            shift = round(safety_shift, 3)
-                            print(f'[title gap fix] safety floor: ph_bottom={ph_bottom:.3f}"'
-                                  f' B={B:.3f}" floor={floor:.3f}"'
-                                  f' shift=+{shift:.3f}" (down) mode=template')
-                        else:
-                            print(f'[title gap fix] no shift — 1-line title, B={B:.3f}"'
-                                  f' clears ph_bottom={ph_bottom:.3f}" + gap={MIN_GAP_IN:.2f}"')
+                        # 1-line title: content starts below the placeholder box
+                        content_start = ph_top + ph_h + MIN_GAP
+                        label = f'1-line (ph_bottom={ph_top+ph_h:.3f}")'
+
+                    shift = round(content_start - B, 3)
+                    if abs(shift) < SKIP_PX:
+                        print(f'[title gap fix] no shift — {label}'
+                              f' content_start={content_start:.3f}" B={B:.3f}"')
+                        shift = 0.0
+                    else:
+                        direction = 'down' if shift > 0 else 'up'
+                        print(f'[title gap fix] {label}'
+                              f' content_start={content_start:.3f}" B={B:.3f}"'
+                              f' shift={shift:+.3f}" ({direction}) mode=template')
                     break
         except Exception as _e:
             print(f'[title gap fix] ph read failed: {_e}')
