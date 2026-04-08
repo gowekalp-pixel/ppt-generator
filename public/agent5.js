@@ -1189,7 +1189,8 @@ Profile card set rules:
 Risk register rules:
 - Layout (severity bands, row heights, pip positions, column widths) is computed by JS from x/y/w/h **” do NOT set internal positions
 - Content (severity_levels[], each with label/tone/item_details[]; each item has primary_message, secondary_message, tags[], pips[]) comes from the Agent 4 manifest **” do NOT duplicate it here
-- risk_register never has an artifact_header or header_block **” the risk_header is rendered as an internal section header by JS
+- risk_register may have an artifact_header and header_block like any other artifact; the risk_header is an additional internal section header rendered by JS inside the body
+- EXCEPTION: any slide that has exactly 1 zone with exactly 1 artifact must NOT have an artifact_header on that artifact (the slide title already serves as the header)
 
 RISK_REGISTER STYLING **” decided by YOU (LLM) using brand tokens:
   Severity palette: use the brand's red/warm sequence at decreasing intensity **” critical=darkest, high=dark, medium=mid, low=light.
@@ -1432,7 +1433,7 @@ async function designSlideBatch(batchManifest, brand, batchNum) {
     '\n- comparison_table: must have comparison_style, criteria[], options[], recommended_option' +
     '\n- initiative_map: must have initiative_style, dimension_labels[], initiatives[]' +
     '\n- profile_card_set: must have profile_style, profiles[], layout_direction' +
-    '\n- risk_register: must have risk_style and severity_levels[]; no artifact_header or header_block; tags[].tone controls chip color; each severity_level has pip_levels (numeric total scale, e.g. 5); pips[].intensity is numeric (filled blocks out of pip_levels)' +
+    '\n- risk_register: must have risk_style and severity_levels[]; tags[].tone controls chip color; each severity_level has pip_levels (numeric total scale, e.g. 5); pips[].intensity is numeric (filled blocks out of pip_levels)' +
     '\n- cards: must have card_style, card_frames[] with x/y/w/h per card' +
     '\n- matrix: must have matrix_style plus semantic fields from Agent 4 (x_axis, y_axis, quadrants[id/title/primary_message/tone], points[label/short_label/quadrant_id/x/y/emphasis]); quadrant has NO secondary_message; points have NO primary_message or secondary_message; x/y are numeric 0**“100' +
     '\n- driver_tree: must have tree_style plus semantic fields from Agent 4 (root, branches)' +
@@ -2642,7 +2643,7 @@ function buildSafeArtifactShell(manifestArt, bt) {
     return {
       type: 'risk_register',
       artifact_coverage_hint,
-      // artifact_header intentionally omitted **” risk_register uses risk_header internally
+      artifact_header,
       x: null, y: null, w: null, h: null,
       risk_header: manifestArt?.risk_header || manifestArt?.table_header || '',
       severity_levels: normalized.severity_levels,
@@ -2669,7 +2670,7 @@ function buildSafeArtifactShell(manifestArt, bt) {
         primary_message_font_size: null, // LLM decides **” consistent across all rows
         secondary_message_font_size: null// LLM decides **” consistent across all rows
       },
-      header_block: null   // no header_block for risk_register **” risk_header is rendered internally
+      header_block
     }
   }
   if (t === 'workflow') {
@@ -4158,7 +4159,7 @@ function _riskRegisterToBlocks(art, content_y, blocks, bt, r2) {
       const pips     = Array.isArray(item.pips) ? item.pips.slice(0, 4) : []
       const pipLevels= level.pip_levels || 5
       const pipRowH  = 0.22   // height per pip row
-      const tagAreaH = 0.30   // height reserved for tags row
+      const tagAreaH = 0.42   // height reserved for tags row (0.30 = tag bottom; extra 0.12 = gap before pips)
       // Right column fixed width; pip grid uses left part, pip squares right part
       const pipLblW  = 0.82
       const pipGridW = pipLevels * pipSize + (pipLevels - 1) * pipGap
@@ -4567,10 +4568,11 @@ function _matrixToBlocks(art, content_y, blocks, bt, r2) {
     })
   }
   // X-axis low/high labels at the horizontal center divider
+  // Centered on midY (y = midY - h/2) so the label straddles the divider and exactly touches Q3/Q4
   if (xAxis.low_label) {
     blocks.push({
       block_type: 'text_box',
-      x: r2(gridX + 0.06), y: r2(midY + 0.04), w: r2(quadW - 0.12), h: 0.18,
+      x: r2(gridX + 0.06), y: r2(midY - 0.09), w: r2(quadW - 0.12), h: 0.18,
       text: xAxis.low_label,
       font_family: axisFont, font_size: axisFs, bold: false,
       color: axisTextColor, align: 'left', valign: 'middle'
@@ -4579,7 +4581,7 @@ function _matrixToBlocks(art, content_y, blocks, bt, r2) {
   if (xAxis.high_label) {
     blocks.push({
       block_type: 'text_box',
-      x: r2(midX + 0.06), y: r2(midY + 0.04), w: r2(quadW - 0.12), h: 0.18,
+      x: r2(midX + 0.06), y: r2(midY - 0.09), w: r2(quadW - 0.12), h: 0.18,
       text: xAxis.high_label,
       font_family: axisFont, font_size: axisFs, bold: false,
       color: axisTextColor, align: 'right', valign: 'middle'
@@ -6814,10 +6816,19 @@ function flattenToBlocks(slideSpec, brandTokens) {
     slideFontSizeFloor = Math.min(...sizes)
   }
 
-  for (const zone of (slideSpec.zones || [])) {
+  // Suppress artifact header on 1-zone-1-artifact slides — the slide title already acts as the header
+  const slideZones = slideSpec.zones || []
+  const isSingleArtifactSlide = slideZones.length === 1 && (slideZones[0].artifacts || []).length === 1
+
+  for (const zone of slideZones) {
     for (const art of (zone.artifacts || [])) {
       const floor = art.type === 'insight_text' ? slideFontSizeFloor : null
-      _artifactToBlocks(art, blocks, bt, r2, floor)
+      if (isSingleArtifactSlide && art.header_block) {
+        const artWithoutHeader = { ...art, header_block: null, artifact_header: '' }
+        _artifactToBlocks(artWithoutHeader, blocks, bt, r2, floor)
+      } else {
+        _artifactToBlocks(art, blocks, bt, r2, floor)
+      }
     }
   }
 
@@ -7207,8 +7218,8 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
         return {
           ...dArt,
           artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
-          artifact_header: '',   // always empty for risk_register
-          header_block: null,
+          artifact_header: artifactHeader || dArt.artifact_header || '',
+          header_block: makeHeaderBlockFromManifestArtifact(mArt, bt) || dArt.header_block || null,
           risk_header: mArt.risk_header || dArt.risk_header || mArt.table_header || '',
           severity_levels: normalized.severity_levels.length ? normalized.severity_levels : (dArt.severity_levels || [])
         }
