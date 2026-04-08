@@ -3164,7 +3164,9 @@ def _estimate_text_lines(text, font_size_pt, available_width_in):
       2. Fallback (PIL unavailable): char_w = font_size × 0.50 heuristic.
     """
     import math, os
-    width_px = available_width_in * 96.0   # 96 DPI
+    # PIL measures text width in pixels at 72 DPI when loaded with point size.
+    # Box width must be in the same unit: points = inches × 72.
+    width_pts = available_width_in * 72.0
 
     # ── PIL measurement ───────────────────────────────────────────────────────
     try:
@@ -3184,29 +3186,35 @@ def _estimate_text_lines(text, font_size_pt, available_width_in):
             '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
         ]
         pil_font = None
+        pil_font_name = None
         for fp in _FONT_CANDIDATES:
             if os.path.exists(fp):
                 try:
                     pil_font = ImageFont.truetype(fp, int(font_size_pt))
+                    pil_font_name = os.path.basename(fp)
                     break
                 except Exception:
                     pass
 
         if pil_font is not None:
-            text_w = pil_font.getlength(str(text or '').strip())
-            lines  = max(1, math.ceil(text_w / width_px))
+            text_str = str(text or '').strip()
+            # getlength returns float pixels at the loaded font's point size (72 DPI)
+            text_w = pil_font.getlength(text_str)
+            lines  = max(1, math.ceil(text_w / width_pts))
+            print(f'[title lines] PIL({pil_font_name}) {font_size_pt:.0f}pt'
+                  f' text_w={text_w:.0f}px box_w={width_pts:.0f}pt → {lines} line(s)')
             return lines
-    except Exception:
-        pass
+    except Exception as _e:
+        print(f'[title lines] PIL failed: {_e}')
 
     # ── Fallback: heuristic char_w factor ────────────────────────────────────
-    width_pts      = max(1.0, available_width_in * 72.0)
-    char_w         = max(1.0, font_size_pt * 0.50)
+    char_w         = max(1.0, font_size_pt * 0.45)
     chars_per_line = max(4, int(width_pts / char_w))
     lines = 0
     for chunk in (text or '').split('\n'):
         chunk = chunk.strip()
         lines += max(1, int(len(chunk) / chars_per_line) + 1)
+    print(f'[title lines] fallback cpl={chars_per_line} len={len(str(text or ""))} → {lines} line(s)')
     return max(1, lines)
 
 
