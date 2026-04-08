@@ -532,13 +532,15 @@ def place_in_placeholder(slide, ph_idx, text, style_spec, bt,
                 tf = ph.text_frame
                 tf.clear()
                 tf.word_wrap = True
-                # For the title placeholder, let the shape grow to fit the text.
-                # _compute_title_bottom already resizes ph.height to the estimated
-                # text height; SHAPE_TO_FIT_TEXT acts as a safety net for any
-                # remaining underestimation so the title is never visually clipped.
+                # Explicitly disable auto-fit for the title placeholder.
+                # _compute_title_bottom resizes ph.height to the estimated text
+                # height before content blocks are placed, so the placeholder is
+                # already the right size.  Setting any auto_size here can interact
+                # with the 'vert' attribute inherited from some layout masters and
+                # cause the title text to render vertically.
                 if ph_idx == 0:
                     try:
-                        tf.auto_size = MSO_AUTO_SIZE.SHAPE_TO_FIT_TEXT
+                        tf.auto_size = MSO_AUTO_SIZE.NONE
                     except Exception:
                         pass
                 # Reset any vertical text direction inherited from the template layout.
