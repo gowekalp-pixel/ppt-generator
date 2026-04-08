@@ -4387,12 +4387,17 @@ function _statBarToBlocks(art, content_y, blocks, bt, r2) {
             displayVal = barCell?.value ?? ''
           }
           const isLastCol = ci === colHeaders.length - 1
+          // Bar companion columns (value label immediately after a bar) are left-aligned so the
+          // number sits tight against the bar end. Standalone normal columns (e.g. trailing %) stay
+          // right-aligned.
+          const isBarCompanion = !!lay.barCompanionOf
+          const alignVal = isBarCompanion ? 'left' : 'right'
           blocks.push({
             block_type: 'text_box',
             x: lay.x, y, w: isLastCol ? lay.w - rowPadX : lay.w, h: rowH,
             text: _truncateText(String(displayVal), 20),
             font_family: bodyFont, font_size: valueFontSize, bold: true,
-            color: isHighlighted ? highlightTextColor : bodyTextColor, align: 'right', valign: 'middle'
+            color: isHighlighted ? highlightTextColor : bodyTextColor, align: alignVal, valign: 'middle'
           })
         } else {
           // text column **” first text col is the entity label (bold), others are annotations
