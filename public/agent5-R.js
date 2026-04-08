@@ -358,8 +358,8 @@ Inspect the Agent 4 artifact:
 }
 
 Standard mode styling rules:
-- style.fill_color: null (transparent) or very light brand background tint
-- style.border_color: subtle brand accent color or null **” no heavy full-border box
+- style.fill_color: ALWAYS null — no background box or tint; insight_text renders directly on the slide background
+- style.border_color: ALWAYS null; border_width: 0 — no box, no border of any kind
 - heading_style.color: brand primary color; risk/alert accent only for "Risk Alert"
 - list_style: "tick_cross" for positive/negative mix; "numbered" for sequential/ranked; "bullet" for parallel
 - indent_inches: 0.12**“0.18; space_before_pt: 4**“8pt
@@ -6242,18 +6242,12 @@ function _computeInsightFontSize(art, content_y) {
   const aw    = art.w || 0
 
   if (mode !== 'grouped') {
-    // standard
-    const sty        = art.style || {}
-    const hasBox     = !!(sty.fill_color || (sty.border_color && sty.border_width))
-    const cr         = sty.corner_radius || 0
-    const hasHeader  = !!(art.header_block && art.header_block.text)
-    const BOX_TOP_GUARD = (hasBox && hasHeader) ? 0.06 : 0
-    const body_y     = r2(content_y + BOX_TOP_GUARD)
+    // standard — no background box ever
+    const body_y     = r2(content_y)
     const body_h     = r2(Math.max(0.3, ay + ah - body_y))
-    const cornerInset = cr >= 4 ? 0.04 : 0
-    const padV = hasBox ? (0.10 + cornerInset) : 0
-    const padH = hasBox ? (0.12 + cornerInset) : 0.04
-    const TOP_GAP = hasBox ? 0 : 0.06
+    const padV   = 0
+    const padH   = 0.04
+    const TOP_GAP = 0.06
     const innerH     = Math.max(0.2, body_h - 2 * padV - TOP_GAP)
     const points     = art.points || []
     const nPoints    = Math.max(1, points.length)
@@ -6335,12 +6329,9 @@ function _standardInsightToBlocks(art, content_y, blocks, r2, fontSizeFloor) {
   const aw = art.w || 0
   const ah = art.h || 0
   const st  = art.body_style || {}
-  const sty = art.style || {}
-
-  const hasFill   = !!sty.fill_color
-  const hasBorder = !!(sty.border_color && sty.border_width)
-  const hasBox    = hasFill || hasBorder
-  const cr        = sty.corner_radius || 0
+  // insight_text standard never renders a background box — strip fill/border regardless of AI output
+  const hasBox = false
+  const cr     = 0
 
   const hasHeader     = !!(art.header_block && art.header_block.text)
   const BOX_TOP_GUARD = (hasBox && hasHeader) ? 0.06 : 0
