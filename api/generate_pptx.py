@@ -3155,15 +3155,53 @@ def _estimate_text_lines(text, font_size_pt, available_width_in):
     Estimate how many lines `text` wraps to at `font_size_pt` in a box
     `available_width_in` inches wide.
 
-    Uses char_w = font_size × 0.55 (points per character).  0.55 is a
-    conservative average for proportional fonts (including bold/display faces)
-    — meaning we err toward more lines rather than fewer.
-
-    Subtracts 0.15" from available_width for internal text-frame margins.
+    Strategy:
+      1. Use PIL/Pillow to measure actual pixel width of the text string using a
+         system font at the given size (96 DPI).  This eliminates the fragile
+         char_w factor entirely — PIL measures real glyph metrics.
+         The system font (Calibri → Arial → DejaVu) is used as a proxy; it won't
+         be the exact brand font but is close enough to determine line count.
+      2. Fallback (PIL unavailable): char_w = font_size × 0.50 heuristic.
     """
-    effective_w    = max(0.5, available_width_in - 0.15)
-    width_pts      = max(1.0, effective_w * 72.0)
-    char_w         = max(1.0, font_size_pt * 0.55)
+    import math, os
+    width_px = available_width_in * 96.0   # 96 DPI
+
+    # ── PIL measurement ───────────────────────────────────────────────────────
+    try:
+        from PIL import ImageFont
+        _FONT_CANDIDATES = [
+            # Windows
+            r'C:\Windows\Fonts\calibrib.ttf',
+            r'C:\Windows\Fonts\calibri.ttf',
+            r'C:\Windows\Fonts\arialbd.ttf',
+            r'C:\Windows\Fonts\arial.ttf',
+            # macOS
+            '/Library/Fonts/Microsoft/Calibri Bold.ttf',
+            '/System/Library/Fonts/Helvetica.ttc',
+            # Linux
+            '/usr/share/fonts/truetype/msttcorefonts/Arial_Bold.ttf',
+            '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+            '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+        ]
+        pil_font = None
+        for fp in _FONT_CANDIDATES:
+            if os.path.exists(fp):
+                try:
+                    pil_font = ImageFont.truetype(fp, int(font_size_pt))
+                    break
+                except Exception:
+                    pass
+
+        if pil_font is not None:
+            text_w = pil_font.getlength(str(text or '').strip())
+            lines  = max(1, math.ceil(text_w / width_px))
+            return lines
+    except Exception:
+        pass
+
+    # ── Fallback: heuristic char_w factor ────────────────────────────────────
+    width_pts      = max(1.0, available_width_in * 72.0)
+    char_w         = max(1.0, font_size_pt * 0.50)
     chars_per_line = max(4, int(width_pts / char_w))
     lines = 0
     for chunk in (text or '').split('\n'):
@@ -3321,12 +3359,15 @@ def _shift_blocks_for_title_gap(slide, blocks, use_template):
                     est_h     = lines * line_h + 0.06
                     B         = min(float(b['y']) for b in non_title)
 
-                    # Always anchor to actual text height — never the placeholder box.
-                    # ph_h > est_h for single-line titles, which previously produced a
-                    # larger-than-intended visual gap on short-title slides.
-                    content_start = ph_top + est_h + MIN_GAP
-                    n_lines = f'{lines}-line'
-                    label   = f'{n_lines} (est_h={est_h:.3f}")'
+                    cpl = max(4, int(ph_w * 72.0 / max(1.0, tmpl_fs * 0.50)))
+                    if lines == 1:
+                        # 1-line: anchor to placeholder bottom (fixed, brand-agnostic)
+                        content_start = ph_top + ph_h + MIN_GAP
+                        label = f'1-line (ph_bottom={ph_top+ph_h:.3f}" cpl={cpl} len={len(text)})'
+                    else:
+                        # 2+ line: anchor to estimated text bottom
+                        content_start = ph_top + est_h + MIN_GAP
+                        label = f'{lines}-line (est_h={est_h:.3f}" cpl={cpl} len={len(text)})'
 
                     shift = round(content_start - B, 3)
                     if abs(shift) < SKIP_PX:
