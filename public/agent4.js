@@ -529,6 +529,13 @@ OPTIONAL zones:
   Assign it SECONDARY or SUPPORTING. 1–2 cards cannot carry the primary proof burden of a slide.
   A cards-only zone with 3+ cards may be PRIMARY only if no other proof artifact is available.
 
+  ZONE ROLE HARD RULE FOR INSIGHT_TEXT:
+  A zone whose ONLY artifact is insight_text must NEVER be assigned zone_role PRIMARY or CO-PRIMARY.
+  insight_text is always a supporting/secondary element — it annotates and explains a primary proof artifact;
+  it cannot carry the primary proof burden of a zone on its own.
+  Assign such a zone zone_role SECONDARY. If this zone was intended as primary, add a chart, stat_bar,
+  table, or other data artifact as the lead artifact and pair insight_text alongside it.
+
 ─── WORKFLOW SELECTION Indicators ─────────────────────────────
 
 ─── WORKFLOW SELECTION INDICATORS ───────────────────────
@@ -2473,7 +2480,20 @@ function enforceReasoningArtifactUsage(slide) {
 }
 
 function enforceStructuralPatternRules(slide) {
-  return slide
+  if (!slide || slide.slide_type !== 'content') return slide
+  const zones = (slide.zones || []).map(zone => {
+    const arts = zone.artifacts || []
+    const role = String(zone.zone_role || '').toLowerCase()
+    // insight_text cannot be the sole artifact in a primary or co-primary zone.
+    // It is always a secondary/supporting element — downgrade the zone role to 'secondary'.
+    if (arts.length === 1 && String(arts[0]?.type || '').toLowerCase() === 'insight_text') {
+      if (/^primary|co.?primary/.test(role)) {
+        return { ...zone, zone_role: 'secondary' }
+      }
+    }
+    return zone
+  })
+  return { ...slide, zones }
 }
 
 function validateSlideArtifactMix(slide) {

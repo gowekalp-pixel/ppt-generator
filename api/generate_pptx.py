@@ -3267,24 +3267,24 @@ def _compute_title_bottom(slide, title_block, use_template):
 
 def _shift_blocks_for_title_gap(slide, blocks, use_template):
     """
-    After the title has been placed, normalize the gap between the title bottom
-    and the first content block to exactly TARGET_GAP — both pushing down (when
-    content is too close) and pulling up (when Agent 5 left too much space).
+    Shift content blocks down when the slide title overflows its placeholder.
 
-    Algorithm:
-      A = actual bottom of title text  (from _compute_title_bottom)
-      B = min Y of all non-title blocks (subtitle + content)
-      target = A + TARGET_GAP
-      shift  = target - B          (positive = push down, negative = pull up)
+    Agent 5 already designs the correct gap for 1-line titles, so we must NOT
+    touch 1-line slides.  We only act when the title wraps to 2+ lines — i.e.
+    when the estimated text height exceeds the original placeholder height.
+    In that case we shift all non-title blocks down by the overflow amount so
+    content clears the actual rendered title text.
 
-      Skip if |shift| < 2px (no meaningful change).
+    Algorithm (template mode):
+      overflow = estimated_text_h - ph.height   (only positive matters)
+      if overflow <= 2px: no shift (title fits — Agent 5 layout is correct)
+      else: shift every non-title block Y down by overflow
 
-    TARGET_GAP = 0.15" (~14px) — consistent comfortable gap on every slide.
+    Scratch mode falls back to the old A/B comparison using spec coordinates.
 
     Returns (shifted_blocks, shift_applied).
     """
-    TARGET_GAP_IN = 0.15          # consistent gap after title on every slide
-    SKIP_THRESHOLD = 2 / 96.0    # ignore sub-2px shifts (rounding noise)
+    SKIP_PX = 2 / 96.0   # ignore sub-2px overflows (rounding noise)
 
     title_block = next(
         (b for b in blocks if b.get('block_type') == 'title' and b.get('text')), None
@@ -3292,23 +3292,62 @@ def _shift_blocks_for_title_gap(slide, blocks, use_template):
     if not title_block:
         return blocks, 0.0
 
-    A = _compute_title_bottom(slide, title_block, use_template)
-    if A is None:
-        return blocks, 0.0
-
     non_title = [b for b in blocks if b.get('block_type') != 'title' and b.get('y') is not None]
     if not non_title:
         return blocks, 0.0
 
-    B = min(float(b['y']) for b in non_title)
-    shift = round((A + TARGET_GAP_IN) - B, 3)
+    if use_template:
+        # Compute overflow directly from placeholder geometry — no A/B needed.
+        EMU = 914400.0
+        shift = 0.0
+        try:
+            for ph in slide.placeholders:
+                if ph.placeholder_format.idx == 0:
+                    ph_h      = ph.height / EMU
+                    ph_w      = ph.width  / EMU
+                    font_size = float(title_block.get('font_size') or 18)
+                    tmpl_fs   = _get_template_title_font_size(slide) or font_size
+                    text      = str(title_block.get('text', '') or '').strip()
+                    lines     = _estimate_text_lines(text, tmpl_fs, ph_w)
+                    line_h    = (tmpl_fs / 72.0) * 1.25
+                    est_h     = lines * line_h + 0.06
+                    overflow  = est_h - ph_h
+                    if overflow > SKIP_PX:
+                        shift = round(overflow, 3)
+                        print(f'[title gap fix] title overflow: ph_h={ph_h:.3f}"'
+                              f' est_h={est_h:.3f}" overflow={overflow:.3f}"'
+                              f' shift=+{shift:.3f}" (down) mode=template')
+                    else:
+                        print(f'[title gap fix] no shift — title fits in 1 line'
+                              f' (ph_h={ph_h:.3f}" est_h={est_h:.3f}")')
+                    break
+        except Exception as _e:
+            print(f'[title gap fix] ph read failed: {_e}')
 
-    if abs(shift) < SKIP_THRESHOLD:
+        if shift == 0.0:
+            return blocks, 0.0
+
+        shifted = []
+        for b in blocks:
+            if b.get('block_type') == 'title':
+                shifted.append(b)
+            elif b.get('y') is not None:
+                shifted.append({**b, 'y': round(float(b['y']) + shift, 3)})
+            else:
+                shifted.append(b)
+        return shifted, shift
+
+    # ── Scratch mode: use A/B comparison against spec coordinates ────────────
+    A = _compute_title_bottom(slide, title_block, use_template)
+    if A is None:
         return blocks, 0.0
-    direction = 'down' if shift > 0 else 'up'
-    print(f'[title gap fix] A={A:.3f}" B={B:.3f}" target={A+TARGET_GAP_IN:.3f}"'
-          f' shift={shift:+.3f}" ({direction})'
-          f' mode={"template" if use_template else "scratch"}')
+
+    B     = min(float(b['y']) for b in non_title)
+    shift = round(A - B + SKIP_PX, 3)
+
+    if shift <= 0:
+        return blocks, 0.0
+    print(f'[title gap fix] A={A:.3f}" B={B:.3f}" shift=+{shift:.3f}" (down) mode=scratch')
 
     shifted = []
     for b in blocks:
