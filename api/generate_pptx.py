@@ -3183,10 +3183,11 @@ def _compute_title_bottom(slide, title_block, use_template):
         placeholder text-frame inspection and finally to the spec value.
       • Estimates line count with _estimate_text_lines (char_w = 0.55× — errs
         toward more lines to avoid under-shifting).
-      • A = ph.top + max(ph.height, estimated_text_h)
-        — never smaller than the original placeholder height.
-      • Resizes ph.height to estimated_text_h so the PPTX placeholder physically
-        matches the text, preventing content overlap in the rendered file.
+      • A = ph.top + estimated_text_h  (actual text bottom, not placeholder bottom)
+        Using ph.height as A over-estimates for 1-line titles and causes
+        inconsistent gaps across slides.
+      • Resizes ph.height only when estimated_text_h > ph.height (multi-line
+        overflow), preserving left/top/width to avoid collapsing the box to 0".
 
     In scratch mode:
       Uses title_block.y + max(spec_h, estimated_h) from spec coordinates.
@@ -3225,27 +3226,34 @@ def _compute_title_bottom(slide, title_block, use_template):
                     # A is at least the original placeholder bottom (conservative)
                     A = ph_top + max(ph_h, estimated_h)
 
-                    # Resize the placeholder so the PPTX physically accommodates
-                    # the text — prevents content from being drawn inside the title.
+                    # A = actual bottom of the text, not the placeholder box.
+                    # Using ph_h as A over-estimates for single-line titles,
+                    # causing excessive gaps on short-title slides.
+                    A = ph_top + estimated_h
+
+                    # Only resize the placeholder when the text genuinely overflows
+                    # the original box (multi-line titles). When est_h <= ph_h the
+                    # title fits inside the existing placeholder — no resize needed.
                     # IMPORTANT: setting ph.height materialises a new <a:xfrm> in
                     # the slide XML (overriding layout inheritance) that only writes
-                    # cy, leaving cx=0. We must read all four geometry values first
-                    # and restore them after, so width/position are not lost.
-                    new_ph_h = max(ph_h, estimated_h)
-                    try:
-                        saved_left = ph.left
-                        saved_top  = ph.top
-                        saved_w    = ph.width
-                        ph.left   = saved_left
-                        ph.top    = saved_top
-                        ph.width  = saved_w
-                        ph.height = int(new_ph_h * EMU)
-                    except Exception:
-                        pass
+                    # cy, leaving cx=0. Read and restore all four values so the
+                    # width and position are preserved.
+                    if estimated_h > ph_h:
+                        try:
+                            saved_left = ph.left
+                            saved_top  = ph.top
+                            saved_w    = ph.width
+                            ph.left   = saved_left
+                            ph.top    = saved_top
+                            ph.width  = saved_w
+                            ph.height = int(estimated_h * EMU)
+                        except Exception:
+                            pass
 
                     print(f'[title bottom] template ph: top={ph_top:.3f}" orig_h={ph_h:.3f}"'
                           f' font={tmpl_fs:.0f}pt lines={lines}'
-                          f' est_h={estimated_h:.3f}" new_h={new_ph_h:.3f}" → A={A:.3f}"')
+                          f' est_h={estimated_h:.3f}" → A={A:.3f}"'
+                          f'{" (resized)" if estimated_h > ph_h else ""}')
                     return A
         except Exception as _e:
             print(f'[title bottom] ph read failed: {_e}')
