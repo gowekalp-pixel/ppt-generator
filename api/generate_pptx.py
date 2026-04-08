@@ -3321,15 +3321,29 @@ def _shift_blocks_for_title_gap(slide, blocks, use_template):
     return shifted, shift
 
 
-def _nudge_subtitle_placeholder(slide, shift_in):
-    """Move the subtitle placeholder (idx=1) by shift_in inches (±)."""
+def _set_subtitle_placeholder_top(slide, top_in):
+    """
+    Set the subtitle placeholder (idx=1) top to an ABSOLUTE position (inches).
+
+    Positioning absolutely (not by delta) is essential for gap consistency:
+    the template's subtitle placeholder can start at any Y, so a delta-nudge
+    produces different visual gaps across slides depending on the template's
+    original placeholder position.  Setting top_in = subtitle_block['y']
+    (already shifted to the target Y by _shift_blocks_for_title_gap) ensures
+    the subtitle always lands at exactly A + TARGET_GAP regardless of template.
+
+    Reads and restores left/width before setting top so the materialised
+    <a:xfrm> element does not collapse cx to 0.
+    """
     EMU = 914400.0
-    if shift_in == 0:
-        return
     try:
         for ph in slide.placeholders:
             if ph.placeholder_format.idx == 1:
-                ph.top = int(ph.top + shift_in * EMU)
+                saved_left = ph.left
+                saved_w    = ph.width
+                ph.left    = saved_left
+                ph.width   = saved_w
+                ph.top     = int(top_in * EMU)
                 return
     except Exception:
         pass
@@ -3796,12 +3810,12 @@ def render_blocks(slide, slide_spec, bt, use_template):
     blocks = list(slide_spec.get('blocks') or [])
 
     # ── Header render + overlap correction ───────────────────────────────────
-    # Step 1: Place the slide title first (into the placeholder or as a text box).
-    # Step 2: Compute A = actual bottom of rendered title text (font metrics).
+    # Step 1: Place the slide title first (placeholder or text box).
+    # Step 2: Compute A = actual bottom of rendered title text.
     # Step 3: B = min Y of all non-title blocks (subtitle + content).
-    # Step 4: if B - A >= 10 px → no shift; else shift every non-title block
-    #         (and the subtitle placeholder in template mode) by (A - B + 10 px).
-    # Step 5: Place subtitle at the (possibly shifted) y coordinate.
+    # Step 4: Normalize gap → shift all non-title block Y coords so that
+    #         B lands at exactly A + TARGET_GAP (both directions).
+    # Step 5: Place subtitle placeholder at its shifted absolute Y (not delta).
     if blocks:
         title_block = next((b for b in blocks if b.get('block_type') == 'title'), None)
         if title_block:
@@ -3814,8 +3828,10 @@ def render_blocks(slide, slide_spec, bt, use_template):
 
         subtitle_block = next((b for b in blocks if b.get('block_type') == 'subtitle'), None)
         if subtitle_block:
-            if use_template and shift > 0:
-                _nudge_subtitle_placeholder(slide, shift)
+            if use_template:
+                # Set subtitle placeholder top to the block's (already-shifted)
+                # absolute Y — not a delta from the template's original position.
+                _set_subtitle_placeholder_top(slide, float(subtitle_block.get('y', 1.0)))
             try:
                 render_block_title(slide, subtitle_block, bt, use_template)
             except Exception as e:
