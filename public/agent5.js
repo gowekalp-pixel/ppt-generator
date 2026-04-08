@@ -4858,6 +4858,19 @@ function _driverTreeToBlocks(art, content_y, blocks, bt, r2) {
   })
 }
 
+// Returns rankFill if it has sufficient contrast against white (ratio >= 3),
+// otherwise returns a dark fallback so the badge text is always legible.
+function _badgeTextColor(rankFill, darkFallback) {
+  try {
+    const hex = String(rankFill || '#000000').replace(/^#/, '')
+    const r = parseInt(hex.slice(0, 2), 16) / 255
+    const g = parseInt(hex.slice(2, 4), 16) / 255
+    const b = parseInt(hex.slice(4, 6), 16) / 255
+    const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    return (1.05 / (lum + 0.05)) >= 3.0 ? rankFill : (darkFallback || '#1F2937')
+  } catch (e) { return darkFallback || '#1F2937' }
+}
+
 function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
   const ps = art.priority_style || {}
   const items = (art.items || []).slice().sort((a, b) => (+a.rank || 999) - (+b.rank || 999)).slice(0, 5)
@@ -4943,96 +4956,131 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
   items.forEach((item, idx) => {
     const rowY = r2(ay + idx * (rowH + rowGap))
     const { nonEmptyQualifiers, qualifierTexts, qualifierAreaW, textX, textW, qualifierX } = itemData[idx]
-    const rankFill = rankPalette[idx % Math.max(rankPalette.length, 1)] || bt.primary_color || '#0078AE'
-    const titleText = String(item.title || '')
-    const descText = String(item.description || '')
+    const rankFill = rankPalette[idx % Math.max(rankPalette.length, 1)] || bt.primary_color || ‘#0078AE’
+    const titleText = String(item.title || ‘’)
+    const descText = String(item.description || ‘’)
     const rankLabel = rankLabels[Math.min(idx, rankLabels.length - 1)]
     const rankNum = String(item.rank != null ? item.rank : idx + 1)
 
-    // Vertically center title + desc block within the row
+    // Determine layout: vertical (title above desc) vs horizontal (title | desc side-by-side)
     const titleH = r2(Math.max(0.20, estimateTextHeight(titleText, textW, globalTitleFs, 1.22) + 0.04))
-    const descH = r2(Math.max(0.18, estimateTextHeight(descText, textW, globalDescFs, 1.24) + 0.04))
+    const descH  = r2(Math.max(0.18, estimateTextHeight(descText,  textW, globalDescFs,  1.24) + 0.04))
     const contentH = titleH + minTitleDescGap + descH
     const availContentH = rowH - 2 * rowPad
-    const contentStartY = r2(rowY + rowPad + Math.max(0, (availContentH - contentH) / 2))
-    const titleY = contentStartY
-    const descY = r2(contentStartY + titleH + minTitleDescGap)
-    const descAvailH = r2(Math.max(descH, rowY + rowH - rowPad - descY))
+    const useHorizontalLayout = descText && contentH > availContentH + 0.05
 
     // Row background
     blocks.push({
-      block_type: 'rect',
+      block_type: ‘rect’,
       x: ax, y: rowY, w: aw, h: rowH,
-      fill_color: ps.row_fill_color || '#FFFFFF',
-      border_color: ps.row_border_color || '#D7DEE8',
+      fill_color: ps.row_fill_color || ‘#FFFFFF’,
+      border_color: ps.row_border_color || ‘#D7DEE8’,
       border_width: ps.row_border_width != null ? ps.row_border_width : 0.6,
       corner_radius: cr
     })
 
-    // === BADGE **” 3 steps ===
+    // === BADGE - 3 steps ===
     // Step 1: rank-colored rect, rounded corners
-    // Step 2: white rect, SAME w and h, shifted right by stripW â†’ colored strip shows on left
-    // Step 3: text ("#N" + rank label) in rankFill over the white area
-    const badgeStripW   = 0.10  // visible colored strip width
+    // Step 2: white rect shifted right by stripW, colored strip shows on left
+    // Step 3: “#N” + rank label centered as a block, color contrasts with rankFill on white
+    const badgeStripW   = 0.10
     const labelFontSize = Math.max(6, Math.min(9, Math.round(rowH * 13)))
     const textAreaX     = r2(ax + badgeStripW)
     const textAreaW     = r2(badgeW - badgeStripW)
+    const badgeTextColor = _badgeTextColor(rankFill, bt.body_color || ‘#1F2937’)  // FIX C: contrast
 
     // Step 1: rank-colored background rect
     blocks.push({
-      block_type: 'rect',
+      block_type: ‘rect’,
       x: ax, y: rowY, w: badgeW, h: rowH,
       fill_color: rankFill, border_color: null, border_width: 0, corner_radius: cr
     })
-
-    // Step 2: white rect **” same w and h as step 1, shifted right by badgeStripW
+    // Step 2: white rect - same size, shifted right so only a strip of color shows
     blocks.push({
-      block_type: 'rect',
+      block_type: ‘rect’,
       x: textAreaX, y: rowY, w: badgeW, h: rowH,
-      fill_color: '#FFFFFF', border_color: null, border_width: 0, corner_radius: cr
+      fill_color: ‘#FFFFFF’, border_color: null, border_width: 0, corner_radius: cr
     })
 
-    // Step 3a: "#N" in rankFill over white area, upper half
+    // FIX B: center “#N” + label as a single vertically-centered block
+    const numLineH   = r2(numFontSize   / 72 * 1.35 + 0.04)
+    const labelLineH = r2(labelFontSize / 72 * 1.35 + 0.02)
+    const badgeInnerGap  = 0.03
+    const badgeTotalH    = numLineH + badgeInnerGap + labelLineH
+    const badgeTextStartY = r2(rowY + (rowH - badgeTotalH) / 2)
+
+    // Step 3a: “#N”
     blocks.push({
-      block_type: 'text_box',
-      x: textAreaX, y: rowY, w: textAreaW, h: r2(rowH * 0.55),
-      text: '#' + rankNum,
-      font_family: ps.rank_font_family || bt.title_font_family || 'Arial',
+      block_type: ‘text_box’,
+      x: textAreaX, y: badgeTextStartY, w: textAreaW, h: numLineH,
+      text: ‘#’ + rankNum,
+      font_family: ps.rank_font_family || bt.title_font_family || ‘Arial’,
       font_size: numFontSize, bold: true,
-      color: rankFill, align: 'center', valign: 'bottom'
+      color: badgeTextColor, align: ‘center’, valign: ‘middle’
     })
-
-    // Step 3b: rank label in rankFill over white area, lower half
+    // Step 3b: rank label
     blocks.push({
-      block_type: 'text_box',
-      x: textAreaX, y: r2(rowY + rowH * 0.55), w: textAreaW, h: r2(rowH * 0.36),
+      block_type: ‘text_box’,
+      x: textAreaX, y: r2(badgeTextStartY + numLineH + badgeInnerGap), w: textAreaW, h: labelLineH,
       text: rankLabel,
-      font_family: ps.rank_font_family || bt.title_font_family || 'Arial',
+      font_family: ps.rank_font_family || bt.title_font_family || ‘Arial’,
       font_size: labelFontSize, bold: false,
-      color: rankFill, align: 'center', valign: 'top'
+      color: badgeTextColor, align: ‘center’, valign: ‘middle’
     })
 
-    // Title **” vertically centered with description
-    blocks.push({
-      block_type: 'text_box',
-      x: textX, y: titleY, w: textW, h: titleH,
-      text: titleText,
-      font_family: ps.title_font_family || bt.title_font_family || 'Arial',
-      font_size: globalTitleFs, bold: true,
-      color: ps.title_color || '#1F2937',
-      align: 'left', valign: 'top'
-    })
-
-    // Description **” vertically centered with title
-    blocks.push({
-      block_type: 'text_box',
-      x: textX, y: descY, w: textW, h: descAvailH,
-      text: descText,
-      font_family: ps.description_font_family || bt.body_font_family || 'Arial',
-      font_size: globalDescFs, bold: false,
-      color: ps.description_color || '#374151',
-      align: 'left', valign: 'top'
-    })
+    // FIX A: Title + Description layout
+    if (useHorizontalLayout) {
+      // Side-by-side: title (~40%) | gap | description (~rest), both vertically centred in row
+      const hGap      = 0.12
+      const titlePartW = r2(textW * 0.40)
+      const descPartW  = r2(textW - titlePartW - hGap)
+      const titleHoriz = r2(Math.max(0.20, estimateTextHeight(titleText, titlePartW, globalTitleFs, 1.22) + 0.04))
+      const descHoriz  = r2(Math.max(0.18, estimateTextHeight(descText,  descPartW,  globalDescFs,  1.24) + 0.04))
+      blocks.push({
+        block_type: ‘text_box’,
+        x: textX, y: r2(rowY + (rowH - titleHoriz) / 2), w: titlePartW, h: titleHoriz,
+        text: titleText,
+        font_family: ps.title_font_family || bt.title_font_family || ‘Arial’,
+        font_size: globalTitleFs, bold: true,
+        color: ps.title_color || ‘#1F2937’,
+        align: ‘left’, valign: ‘middle’
+      })
+      blocks.push({
+        block_type: ‘text_box’,
+        x: r2(textX + titlePartW + hGap), y: r2(rowY + (rowH - descHoriz) / 2), w: descPartW, h: descHoriz,
+        text: descText,
+        font_family: ps.description_font_family || bt.body_font_family || ‘Arial’,
+        font_size: globalDescFs, bold: false,
+        color: ps.description_color || ‘#374151’,
+        align: ‘left’, valign: ‘middle’
+      })
+    } else {
+      // Vertical: title above description, block centred in row
+      const contentStartY = r2(rowY + rowPad + Math.max(0, (availContentH - contentH) / 2))
+      const titleY     = contentStartY
+      const descY      = r2(contentStartY + titleH + minTitleDescGap)
+      const descAvailH = r2(Math.max(descH, rowY + rowH - rowPad - descY))
+      blocks.push({
+        block_type: ‘text_box’,
+        x: textX, y: titleY, w: textW, h: titleH,
+        text: titleText,
+        font_family: ps.title_font_family || bt.title_font_family || ‘Arial’,
+        font_size: globalTitleFs, bold: true,
+        color: ps.title_color || ‘#1F2937’,
+        align: ‘left’, valign: ‘top’
+      })
+      if (descText) {
+        blocks.push({
+          block_type: ‘text_box’,
+          x: textX, y: descY, w: textW, h: descAvailH,
+          text: descText,
+          font_family: ps.description_font_family || bt.body_font_family || ‘Arial’,
+          font_size: globalDescFs, bold: false,
+          color: ps.description_color || ‘#374151’,
+          align: ‘left’, valign: ‘top’
+        })
+      }
+    }
 
     // Qualifier pills: try stacked first; fall back to side-by-side if overflow
     if (nonEmptyQualifiers.length) {
