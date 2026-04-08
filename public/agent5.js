@@ -4956,9 +4956,9 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
   items.forEach((item, idx) => {
     const rowY = r2(ay + idx * (rowH + rowGap))
     const { nonEmptyQualifiers, qualifierTexts, qualifierAreaW, textX, textW, qualifierX } = itemData[idx]
-    const rankFill = rankPalette[idx % Math.max(rankPalette.length, 1)] || bt.primary_color || ‘#0078AE’
-    const titleText = String(item.title || ‘’)
-    const descText = String(item.description || ‘’)
+    const rankFill = rankPalette[idx % Math.max(rankPalette.length, 1)] || bt.primary_color || '#0078AE'
+    const titleText = String(item.title || '')
+    const descText = String(item.description || '')
     const rankLabel = rankLabels[Math.min(idx, rankLabels.length - 1)]
     const rankNum = String(item.rank != null ? item.rank : idx + 1)
 
@@ -4971,10 +4971,10 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
 
     // Row background
     blocks.push({
-      block_type: ‘rect’,
+      block_type: 'rect',
       x: ax, y: rowY, w: aw, h: rowH,
-      fill_color: ps.row_fill_color || ‘#FFFFFF’,
-      border_color: ps.row_border_color || ‘#D7DEE8’,
+      fill_color: ps.row_fill_color || '#FFFFFF',
+      border_color: ps.row_border_color || '#D7DEE8',
       border_width: ps.row_border_width != null ? ps.row_border_width : 0.6,
       corner_radius: cr
     })
@@ -4987,19 +4987,19 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
     const labelFontSize = Math.max(6, Math.min(9, Math.round(rowH * 13)))
     const textAreaX     = r2(ax + badgeStripW)
     const textAreaW     = r2(badgeW - badgeStripW)
-    const badgeTextColor = _badgeTextColor(rankFill, bt.body_color || ‘#1F2937’)  // FIX C: contrast
+    const badgeTextColor = _badgeTextColor(rankFill, bt.body_color || '#1F2937')  // FIX C: contrast
 
     // Step 1: rank-colored background rect
     blocks.push({
-      block_type: ‘rect’,
+      block_type: 'rect',
       x: ax, y: rowY, w: badgeW, h: rowH,
       fill_color: rankFill, border_color: null, border_width: 0, corner_radius: cr
     })
     // Step 2: white rect - same size, shifted right so only a strip of color shows
     blocks.push({
-      block_type: ‘rect’,
+      block_type: 'rect',
       x: textAreaX, y: rowY, w: badgeW, h: rowH,
-      fill_color: ‘#FFFFFF’, border_color: null, border_width: 0, corner_radius: cr
+      fill_color: '#FFFFFF', border_color: null, border_width: 0, corner_radius: cr
     })
 
     // FIX B: center “#N” + label as a single vertically-centered block
@@ -5011,21 +5011,21 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
 
     // Step 3a: “#N”
     blocks.push({
-      block_type: ‘text_box’,
+      block_type: 'text_box',
       x: textAreaX, y: badgeTextStartY, w: textAreaW, h: numLineH,
-      text: ‘#’ + rankNum,
-      font_family: ps.rank_font_family || bt.title_font_family || ‘Arial’,
+      text: '#' + rankNum,
+      font_family: ps.rank_font_family || bt.title_font_family || 'Arial',
       font_size: numFontSize, bold: true,
-      color: badgeTextColor, align: ‘center’, valign: ‘middle’
+      color: badgeTextColor, align: 'center', valign: 'middle'
     })
     // Step 3b: rank label
     blocks.push({
-      block_type: ‘text_box’,
+      block_type: 'text_box',
       x: textAreaX, y: r2(badgeTextStartY + numLineH + badgeInnerGap), w: textAreaW, h: labelLineH,
       text: rankLabel,
-      font_family: ps.rank_font_family || bt.title_font_family || ‘Arial’,
+      font_family: ps.rank_font_family || bt.title_font_family || 'Arial',
       font_size: labelFontSize, bold: false,
-      color: badgeTextColor, align: ‘center’, valign: ‘middle’
+      color: badgeTextColor, align: 'center', valign: 'middle'
     })
 
     // FIX A: Title + Description layout
@@ -5037,22 +5037,22 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
       const titleHoriz = r2(Math.max(0.20, estimateTextHeight(titleText, titlePartW, globalTitleFs, 1.22) + 0.04))
       const descHoriz  = r2(Math.max(0.18, estimateTextHeight(descText,  descPartW,  globalDescFs,  1.24) + 0.04))
       blocks.push({
-        block_type: ‘text_box’,
+        block_type: 'text_box',
         x: textX, y: r2(rowY + (rowH - titleHoriz) / 2), w: titlePartW, h: titleHoriz,
         text: titleText,
-        font_family: ps.title_font_family || bt.title_font_family || ‘Arial’,
+        font_family: ps.title_font_family || bt.title_font_family || 'Arial',
         font_size: globalTitleFs, bold: true,
-        color: ps.title_color || ‘#1F2937’,
-        align: ‘left’, valign: ‘middle’
+        color: ps.title_color || '#1F2937',
+        align: 'left', valign: 'middle'
       })
       blocks.push({
-        block_type: ‘text_box’,
+        block_type: 'text_box',
         x: r2(textX + titlePartW + hGap), y: r2(rowY + (rowH - descHoriz) / 2), w: descPartW, h: descHoriz,
         text: descText,
-        font_family: ps.description_font_family || bt.body_font_family || ‘Arial’,
+        font_family: ps.description_font_family || bt.body_font_family || 'Arial',
         font_size: globalDescFs, bold: false,
-        color: ps.description_color || ‘#374151’,
-        align: ‘left’, valign: ‘middle’
+        color: ps.description_color || '#374151',
+        align: 'left', valign: 'middle'
       })
     } else {
       // Vertical: title above description, block centred in row
@@ -5061,23 +5061,23 @@ function _prioritizationToBlocks(art, content_y, blocks, bt, r2) {
       const descY      = r2(contentStartY + titleH + minTitleDescGap)
       const descAvailH = r2(Math.max(descH, rowY + rowH - rowPad - descY))
       blocks.push({
-        block_type: ‘text_box’,
+        block_type: 'text_box',
         x: textX, y: titleY, w: textW, h: titleH,
         text: titleText,
-        font_family: ps.title_font_family || bt.title_font_family || ‘Arial’,
+        font_family: ps.title_font_family || bt.title_font_family || 'Arial',
         font_size: globalTitleFs, bold: true,
-        color: ps.title_color || ‘#1F2937’,
-        align: ‘left’, valign: ‘top’
+        color: ps.title_color || '#1F2937',
+        align: 'left', valign: 'top'
       })
       if (descText) {
         blocks.push({
-          block_type: ‘text_box’,
+          block_type: 'text_box',
           x: textX, y: descY, w: textW, h: descAvailH,
           text: descText,
-          font_family: ps.description_font_family || bt.body_font_family || ‘Arial’,
+          font_family: ps.description_font_family || bt.body_font_family || 'Arial',
           font_size: globalDescFs, bold: false,
-          color: ps.description_color || ‘#374151’,
-          align: ‘left’, valign: ‘top’
+          color: ps.description_color || '#374151',
+          align: 'left', valign: 'top'
         })
       }
     }

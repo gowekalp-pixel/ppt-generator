@@ -10,7 +10,10 @@
       "Bash(python3 -c ':*)",
       "Bash(python3)",
       "Bash(cp \"c:/Users/Sourav Sekhar/ppt-generator/public/agent4.js\" \"c:/Users/Sourav Sekhar/ppt-generator/public/agent4-R.js\")",
-      "Bash(cp \"c:/Users/Sourav Sekhar/ppt-generator/public/agent5.js\" \"c:/Users/Sourav Sekhar/ppt-generator/public/agent5-R.js\")"
+      "Bash(cp \"c:/Users/Sourav Sekhar/ppt-generator/public/agent5.js\" \"c:/Users/Sourav Sekhar/ppt-generator/public/agent5-R.js\")",
+      "Bash(node --check \"c:\\\\Users\\\\Sourav Sekhar\\\\ppt-generator\\\\public\\\\agent5.js\")",
+      "Bash(node -e \"const fs = require\\('fs'\\); const content = fs.readFileSync\\('c:/Users/Sourav Sekhar/ppt-generator/public/agent5.js', 'utf8'\\); const lines = content.split\\('\\\\n'\\); const line = lines[4958]; console.log\\(JSON.stringify\\(line\\)\\);\")",
+      "Bash(node --check \"c:\\\\Users\\\\Sourav Sekhar\\\\ppt-generator\\\\public\\\\agent5-R.js\")"
     ]
   }
 }
