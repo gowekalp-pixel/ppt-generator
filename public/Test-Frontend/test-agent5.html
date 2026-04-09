@@ -232,7 +232,17 @@
 </div>
 
 <!-- Load agents — ?v= cache-bust: increment when agent5.js changes -->
-<script src="agent5.js?v=20260408a"></script>
+<script src="../prompts/agent5/P0-SystemHeader.js"></script>
+<script src="../prompts/agent5/A2-SlideRules.js"></script>
+<script src="../prompts/agent5/A5-SlideSchema.js"></script>
+<script src="../prompts/agent5/A1-FlattenedArtifactSchema.js"></script>
+<script src="../prompts/agent5/A7-QualityCheck.js"></script>
+<script src="../prompts/agent5/A6-fallback-system.js"></script>
+<script src="../prompts/agent5/A3-BatchProcess.js"></script>
+<script src="../prompts/agent5/A4-FallbackRules.js"></script>
+<script src="../RealAgents/agent5.js?v=20260408a"></script>
+<script src="../repair/agent5-validate.js"></script>
+<script src="../repair/agent5-fallback.js"></script>
 <script>
 // ─── SELF-CONTAINED DEPENDENCIES ─────────────────────────────────────────────
 // callClaude and safeParseJSON are normally provided by app.js in the full

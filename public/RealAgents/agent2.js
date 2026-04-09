@@ -12,72 +12,12 @@
 //   Step C — If file is PDF or image (not PPTX)
 //            Skip Step A, use Claude vision to extract brand rules
 
-const AGENT2_CLAUDE_SYSTEM = `You are a senior brand designer reviewing extracted brand guidelines.
+// ─── PROMPT TEXT ──────────────────────────────────────────────────────────────
+// Loaded via <script> tags (see index.html):
+//   prompts/agent2/P1-enrich-vision.js → _A2_ENRICH, _A2_VISION
 
-You will receive structured data extracted directly from a PowerPoint brand template.
-Your job is to:
-1. Add a clear "visual_style" description (e.g. "clean corporate", "bold financial", "minimal consulting")
-2. Review slide masters and linked slide layouts together, not independently
-3. For each slide layout, add a "usage_guidance" field — one sentence on when to use it
-4. Add "spacing_notes" based on the slide dimensions, master regions, and layout patterns
-
-Return the enriched data as valid JSON only. Keep all existing fields exactly as-is.
-Add these new fields at the top level:
-- visual_style: string
-- spacing_notes: string
-
-Add this field to each layout object:
-- usage_guidance: string
-
-Return ONLY valid JSON. No explanation. No markdown fences.`
-
-const AGENT2_GLOBAL_ENRICH_SYSTEM = `You are a senior brand designer reviewing extracted PowerPoint brand metadata.
-Use the slide masters, layout summary, colors, and fonts to infer comprehensive deck-level design rules.
-Return ONLY a valid JSON object with exactly these fields:
-{
-  "visual_style": "string — e.g. 'clean corporate', 'bold financial', 'minimal consulting'",
-  "spacing_notes": "string — margin and padding conventions derived from placeholder positions",
-  "typography_hierarchy": {
-    "title_size_pt": number,
-    "subtitle_size_pt": number,
-    "body_size_pt": number,
-    "caption_size_pt": number,
-    "title_color": "#hex — from primary/accent colors",
-    "body_color": "#hex — from text colors"
-  },
-  "chart_color_sequence": ["#hex1", "#hex2", "#hex3", "#hex4", "#hex5", "#hex6"],
-  "bullet_style": {
-    "char": "• or – or ▪",
-    "indent_inches": number,
-    "space_before_pt": number,
-    "space_after_pt": number
-  },
-  "insight_box_style": {
-    "fill_color": "#hex or null",
-    "border_color": "null — insight boxes use a left accent bar, not a full border",
-    "corner_radius": number
-  },
-  "divider_style": {
-    "line_color": "#hex",
-    "line_width_pt": number
-  }
-}
-Rules:
-- chart_color_sequence must have 6 visually DISTINCT colors drawn from accent1–accent6; if fewer accents exist pad with brand-appropriate alternatives
-- typography_hierarchy sizes must come from the actual placeholder font_size_pt values in the master data, not guesses
-- bullet_style.space_before_pt should be 4–6 for comfortable reading
-- insight_box_style.border_color must always be null (left accent bar is rendered separately)
-No markdown. No explanation.`
-
-const AGENT2_LAYOUT_ENRICH_SYSTEM = `You are a senior brand designer reviewing PowerPoint slide layouts.
-You will receive a small batch of layouts plus a summary of the relevant slide masters.
-Return ONLY a valid JSON array. For each input layout return:
-{
-  "name": "original layout name",
-  "usage_guidance": "one sentence on when to use this layout"
-}
-Keep layout names exactly unchanged. No markdown. No explanation.`
-
+const AGENT2_ENRICH_SYSTEM = _A2_ENRICH
+const AGENT2_VISION_SYSTEM = _A2_VISION
 
 function buildLayoutBlueprints(layouts) {
   return (layouts || []).map(l => ({
@@ -155,85 +95,59 @@ function summarizeForClaudeEnrichment(extracted) {
   }
 }
 
-function chunkArray(arr, size) {
-  const out = []
-  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
-  return out
-}
 
-async function enrichAgent2InBatches(extracted) {
+async function enrichAgent2(extracted) {
   const summary = summarizeForClaudeEnrichment(extracted)
 
-  let globalEnrichment = null
-  try {
-    const globalInput = {
-      color_scheme_name: summary.color_scheme_name,
-      font_scheme_name: summary.font_scheme_name,
-      slide_width_inches: summary.slide_width_inches,
-      slide_height_inches: summary.slide_height_inches,
-      primary_colors: summary.primary_colors,
-      secondary_colors: summary.secondary_colors,
-      background_colors: summary.background_colors,
-      text_colors: summary.text_colors,
-      accent_colors: summary.accent_colors,
-      chart_colors: summary.chart_colors,
-      title_font: summary.title_font,
-      body_font: summary.body_font,
-      caption_font: summary.caption_font,
-      slide_masters: summary.slide_masters.map(m => ({
-        name: m.name,
-        background_color: m.background_color,
-        grid_summary: m.grid_summary,
-        text_style_summary: m.text_style_summary,
-        regions: m.regions,
-        layout_names: m.layout_names
-      })),
-      layout_overview: summary.slide_layouts.map(l => ({
-        name: l.name,
-        type: l.type,
-        structure: l.structure,
-        master_name: l.master_name,
-        grid_summary: l.grid_summary
-      }))
-    }
-
-    const raw = await callClaude(AGENT2_GLOBAL_ENRICH_SYSTEM, [{
-      role: 'user',
-      content: 'Infer deck-level brand guidance from this extracted metadata:\n' +
-        JSON.stringify(globalInput, null, 2)
-    }], 900)
-    globalEnrichment = safeParseJSON(raw, null)
-  } catch (e) {
-    console.warn('Agent 2 Step B — global enrichment failed:', e.message)
+  const input = {
+    color_scheme_name:  summary.color_scheme_name,
+    font_scheme_name:   summary.font_scheme_name,
+    slide_width_inches: summary.slide_width_inches,
+    slide_height_inches: summary.slide_height_inches,
+    primary_colors:     summary.primary_colors,
+    secondary_colors:   summary.secondary_colors,
+    background_colors:  summary.background_colors,
+    text_colors:        summary.text_colors,
+    accent_colors:      summary.accent_colors,
+    chart_colors:       summary.chart_colors,
+    title_font:         summary.title_font,
+    body_font:          summary.body_font,
+    caption_font:       summary.caption_font,
+    slide_masters: summary.slide_masters.map(m => ({
+      name: m.name,
+      background_color: m.background_color,
+      grid_summary: m.grid_summary,
+      text_style_summary: m.text_style_summary,
+      regions: m.regions,
+      layout_names: m.layout_names
+    })),
+    slide_layouts: summary.slide_layouts.map(l => ({
+      name: l.name,
+      type: l.type,
+      structure: l.structure,
+      master_name: l.master_name,
+      grid_summary: l.grid_summary
+    }))
   }
 
-  const layoutBatches = chunkArray(summary.slide_layouts || [], 6)
-  const usageByName = {}
+  console.log('Agent 2 Step B — single enrichment call (' + summary.slide_layouts.length + ' layouts)')
+  const raw = await callClaude(AGENT2_ENRICH_SYSTEM, [{
+    role: 'user',
+    content: 'Infer brand guidance from this extracted metadata:\n' + JSON.stringify(input, null, 2)
+  }], 1200)
 
-  for (let i = 0; i < layoutBatches.length; i++) {
-    const batch = layoutBatches[i]
-    try {
-      const masterNames = [...new Set(batch.map(l => l.master_name).filter(Boolean))]
-      const relevantMasters = (summary.slide_masters || []).filter(m => masterNames.includes(m.name))
-      const batchInput = { slide_masters: relevantMasters, slide_layouts: batch }
-      console.log('Agent 2 Step B — layout batch', i + 1, 'of', layoutBatches.length, '| layouts:', batch.length)
-      const raw = await callClaude(AGENT2_LAYOUT_ENRICH_SYSTEM, [{
-        role: 'user',
-        content: 'Add usage guidance for this layout batch:\n' + JSON.stringify(batchInput, null, 2)
-      }], 450)
-      const parsed = safeParseJSON(raw, null)
-      if (Array.isArray(parsed)) {
-        parsed.forEach(item => {
-          if (item && item.name && item.usage_guidance) usageByName[item.name] = item.usage_guidance
-        })
-      }
-    } catch (e) {
-      console.warn('Agent 2 Step B — layout batch', i + 1, 'failed:', e.message)
-    }
+  const parsed = safeParseJSON(raw, null)
+  if (!parsed) return {}
+
+  const usageByName = {}
+  if (Array.isArray(parsed.layout_usage)) {
+    parsed.layout_usage.forEach(item => {
+      if (item && item.name && item.usage_guidance) usageByName[item.name] = item.usage_guidance
+    })
   }
 
   return {
-    ...(globalEnrichment || {}),
+    ...parsed,
     slide_layouts: (extracted.slide_layouts || []).map(l => ({
       ...l,
       usage_guidance: usageByName[l.name] || l.usage_guidance || ''
@@ -255,30 +169,6 @@ function hasUsablePptxTemplateExtraction(extracted) {
   })
   return contentLike.length > 0
 }
-
-const AGENT2_VISION_SYSTEM = `You are an expert brand designer analyzing a brand guideline document.
-Extract ALL design rules and return as a single valid JSON object with these exact fields:
-{
-  "color_scheme_name": "scheme name",
-  "primary_colors": ["#hex"],
-  "secondary_colors": ["#hex"],
-  "background_colors": ["#hex"],
-  "text_colors": ["#hex"],
-  "accent_colors": ["#hex"],
-  "chart_colors": ["#hex"],
-  "all_colors": { "accent1": "#hex", "accent2": "#hex" },
-  "title_font": { "family": "font name", "size": "28pt", "weight": "bold", "color": "#hex" },
-  "body_font": { "family": "font name", "size": "14pt", "weight": "regular", "color": "#hex" },
-  "caption_font": { "family": "font name", "size": "9pt", "weight": "regular", "color": "#hex" },
-  "slide_width_inches": 10,
-  "slide_height_inches": 7.5,
-  "visual_style": "corporate",
-  "spacing_notes": "0.5 inch margins",
-  "slide_layouts": [
-    { "name": "Title slide", "structure": "Full-page title", "usage_guidance": "Use for opening" }
-  ]
-}
-Return ONLY valid JSON. No explanation. No markdown fences.`
 
 async function runAgent2(state, brandContent) {
   console.log('Agent 2 starting — file type:', state.brandExt)
@@ -338,7 +228,7 @@ async function runAgent2(state, brandContent) {
     }
     try {
       console.log('Agent 2 Step B — enriching with Claude...')
-      const enriched = await enrichAgent2InBatches(extracted)
+      const enriched = await enrichAgent2(extracted)
 
       if (enriched && (enriched.primary_colors || enriched.slide_layouts)) {
         console.log('Agent 2 Step B — enrichment successful')

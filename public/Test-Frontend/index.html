@@ -241,14 +241,38 @@
 </div>
 
 <!-- SCRIPTS — order matters -->
-<script src="agent1.js"></script>
-<script src="agent2.js"></script>
-<script src="agent3.js"></script>
-<script src="agent4.js"></script>
-<script src="agent5.js?v=20260408a"></script>
-<script src="agent5point1.js"></script>
-<script src="agent6.js?v=20260405a"></script>
-<script src="app.js"></script>
+<script src="../RealAgents/agent1.js"></script>
+<script src="../prompts/agent2/P1-enrich-vision.js"></script>
+<script src="../RealAgents/agent2.js"></script>
+<script src="../prompts/agent3/P1-DocAnalysis.js"></script>
+<script src="../prompts/agent3/P2-SlideSort.js"></script>
+<script src="../RealAgents/agent3.js"></script>
+<script src="../prompts/agent4/P0-SystemHeader.js"></script>
+<script src="../prompts/agent4/P1-SlideZoning.js"></script>
+<script src="../prompts/agent4/P2-ZoneContent.js"></script>
+<script src="../prompts/agent4/P3-ArtifactSelection.js"></script>
+<script src="../prompts/agent4/P4-SlideLayout.js"></script>
+<script src="../prompts/agent4/P5-DeckAssembly.js"></script>
+<script src="../prompts/agent4/A1-ArtifactSchema.js"></script>
+<script src="../prompts/agent4/A3-QualityCheck.js"></script>
+<script src="../prompts/agent4/A2-BatchProcess.js"></script>
+<script src="../prompts/agent4/A4-SlideRepair.js"></script>
+<script src="../RealAgents/agent4.js"></script>
+<script src="../repair/agent4-validate.js"></script>
+<script src="../repair/agent4-repair.js"></script>
+<script src="../prompts/agent5/P0-SystemHeader.js"></script>
+<script src="../prompts/agent5/A2-SlideRules.js"></script>
+<script src="../prompts/agent5/A5-SlideSchema.js"></script>
+<script src="../prompts/agent5/A1-FlattenedArtifactSchema.js"></script>
+<script src="../prompts/agent5/A7-QualityCheck.js"></script>
+<script src="../prompts/agent5/A6-fallback-system.js"></script>
+<script src="../prompts/agent5/A3-BatchProcess.js"></script>
+<script src="../prompts/agent5/A4-FallbackRules.js"></script>
+<script src="../RealAgents/agent5.js?v=20260408a"></script>
+<script src="../repair/agent5-validate.js"></script>
+<script src="../repair/agent5-fallback.js"></script>
+<script src="../RealAgents/agent6.js?v=20260405a"></script>
+<script src="../app.js"></script>
 
 <script>
   // Wrap setProgress to also update pipeline circles

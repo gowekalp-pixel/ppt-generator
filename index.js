@@ -7,6 +7,9 @@ const app = express()
 app.use(express.json({ limit: '30mb' }))
 app.use(express.static('public'))
 
+// Root redirect — public/index.html no longer exists; main UI is in Test-Frontend/
+app.get('/', (_req, res) => res.redirect('/Test-Frontend/'))
+
 // Wire Vercel serverless handlers as local Express routes
 const claudeHandler = require('./api/claude')
 app.post('/api/claude', claudeHandler)
@@ -30,8 +33,8 @@ app.post('/api/inject-artifact', (req, res) => {
     return res.status(400).json({ error: 'Missing required fields: artifact_type, agent4, agent5' })
   }
 
-  const a4Path = path.join(__dirname, 'public', 'agent4-R.js')
-  const a5Path = path.join(__dirname, 'public', 'agent5-R.js')
+  const a4Path = path.join(__dirname, 'public', 'Change Management', 'agent4-R.js')
+  const a5Path = path.join(__dirname, 'public', 'Change Management', 'agent5-R.js')
 
   // Back up originals
   const a4PathBak = a4Path + '.bak'
