@@ -33,8 +33,8 @@ app.post('/api/inject-artifact', (req, res) => {
     return res.status(400).json({ error: 'Missing required fields: artifact_type, agent4, agent5' })
   }
 
-  const a4Path = path.join(__dirname, 'public', 'Change Management', 'agent4-R.js')
-  const a5Path = path.join(__dirname, 'public', 'Change Management', 'agent5-R.js')
+  const a4Path = path.join(__dirname, 'public', 'change-management', 'agent4-R.js')
+  const a5Path = path.join(__dirname, 'public', 'change-management', 'agent5-R.js')
 
   // Back up originals
   const a4PathBak = a4Path + '.bak'

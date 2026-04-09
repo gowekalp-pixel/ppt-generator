@@ -11,6 +11,13 @@
     { "src": "/api/generate-pptx",    "dest": "api/generate_pptx.py" },
     { "src": "/api/extract-brand",    "dest": "api/extract_brand.py" },
     { "src": "/",                     "dest": "public/Test-Frontend/index.html" },
+    { "src": "/add-artifact",         "dest": "public/change-management/add-artifact.html" },
+    { "src": "/test-agent2\\.html",   "dest": "public/Test-Frontend/test-agent2.html" },
+    { "src": "/test-agent3\\.html",   "dest": "public/Test-Frontend/test-agent3.html" },
+    { "src": "/test-agent4\\.html",   "dest": "public/Test-Frontend/test-agent4.html" },
+    { "src": "/Test-agent4\\.html",   "dest": "public/Test-Frontend/test-agent4.html" },
+    { "src": "/test-agent5\\.html",   "dest": "public/Test-Frontend/test-agent5.html" },
+    { "src": "/test-agent6\\.html",   "dest": "public/Test-Frontend/test-agent6.html" },
     { "src": "/(.*)",                 "dest": "public/$1"            }
   ]
 }
