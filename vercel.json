@@ -10,6 +10,7 @@
     { "src": "/api/claude",           "dest": "api/claude.js"        },
     { "src": "/api/generate-pptx",    "dest": "api/generate_pptx.py" },
     { "src": "/api/extract-brand",    "dest": "api/extract_brand.py" },
+    { "src": "/",                     "dest": "public/Test-Frontend/index.html" },
     { "src": "/(.*)",                 "dest": "public/$1"            }
   ]
 }
