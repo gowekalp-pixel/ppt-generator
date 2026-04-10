@@ -25,51 +25,116 @@ app.post('/api/generate-pptx', (_req, res) => {
 })
 
 // ─── INJECT NEW ARTIFACT TYPE ─────────────────────────────────────────────────
-// Patches agent4.js + agent5.js to register a new artifact type.
-// Body: { artifact_type, display_name, description, agent4:{...}, agent5:{...} }
+// Patches change-management replica files. Never touches production prompts/.
+// Targets:
+//   change-management/prompts/agent4/P3-ArtifactSelection.js  (modular replica)
+//   change-management/prompts/agent4/A1-ArtifactSchema.js     (modular replica)
+//   change-management/agent4-R.js                             (monolithic replica)
+// Body: { artifact_type, display_name, description, p3:{...}, a1:{...} }
 app.post('/api/inject-artifact', (req, res) => {
   const def = req.body
-  if (!def || !def.artifact_type || !def.agent4 || !def.agent5) {
-    return res.status(400).json({ error: 'Missing required fields: artifact_type, agent4, agent5' })
+  if (!def || !def.artifact_type || !def.p3 || !def.a1) {
+    return res.status(400).json({ error: 'Missing required fields: artifact_type, p3, a1' })
   }
 
-  const a4Path = path.join(__dirname, 'public', 'change-management', 'agent4-R.js')
-  const a5Path = path.join(__dirname, 'public', 'change-management', 'agent5-R.js')
+  const CM = path.join(__dirname, 'public', 'change-management')
+  const a4Path = path.join(CM, 'agent4-R.js')
+  const p3Path = path.join(CM, 'prompts', 'agent4', 'P3-ArtifactSelection.js')
+  const a1Path = path.join(CM, 'prompts', 'agent4', 'A1-ArtifactSchema.js')
 
-  // Back up originals
-  const a4PathBak = a4Path + '.bak'
-  const a5PathBak = a5Path + '.bak'
-
-  let a4, a5
+  let a4, p3, a1
   try {
     a4 = fs.readFileSync(a4Path, 'utf8')
-    a5 = fs.readFileSync(a5Path, 'utf8')
+    p3 = fs.readFileSync(p3Path, 'utf8')
+    a1 = fs.readFileSync(a1Path, 'utf8')
   } catch (err) {
-    return res.status(500).json({ error: 'Could not read agent files: ' + err.message })
+    return res.status(500).json({ error: 'Could not read replica files: ' + err.message })
   }
 
-  // Write backups before touching originals
   try {
-    fs.writeFileSync(a4PathBak, a4, 'utf8')
-    fs.writeFileSync(a5PathBak, a5, 'utf8')
+    fs.writeFileSync(a4Path + '.bak', a4, 'utf8')
+    fs.writeFileSync(p3Path + '.bak', p3, 'utf8')
+    fs.writeFileSync(a1Path + '.bak', a1, 'utf8')
   } catch (_) { /* non-fatal */ }
 
   const steps = {}
-  const type   = def.artifact_type
-  const a4data = def.agent4
-  const a5data = def.agent5
+  const type  = def.artifact_type
+  const p3d   = def.p3
+  const a1d   = def.a1
 
-  // Guard: skip if already injected
-  if (a4.includes(`  ${type}\n`) && a4.includes(type + ':')) {
-    return res.status(409).json({ error: `Artifact "${type}" already exists in agent4-R.js.` })
+  // Guard: skip if already present
+  if (p3.includes(`  ${type}\n`) || p3.includes(`  ${type}\r\n`)) {
+    return res.status(409).json({ error: `Artifact "${type}" already exists in P3-ArtifactSelection.js.` })
   }
 
-  // NOTE: agent4.js uses Windows line endings (\r\n); agent5.js uses Unix (\n).
-  // All agent4 anchors must use \r\n.
+  // ════════════════════════════════════════════════════════════════════════════
+  // P3-ArtifactSelection.js replica  (Unix \n)
+  // ════════════════════════════════════════════════════════════════════════════
 
-  // ── AGENT 4 INJECTIONS ──────────────────────────────────────────────────────
+  // P3-1. Add to AVAILABLE ARTIFACT TYPES list (after risk_register, before matrix)
+  const p3_type_anchor = '  risk_register\n  matrix'
+  if (p3.includes(p3_type_anchor)) {
+    p3 = p3.replace(p3_type_anchor, `  risk_register\n  ${type}\n  matrix`)
+    steps.p3_type = true
+  } else {
+    steps.p3_type = false
+  }
 
-  // 1. Add to AVAILABLE ARTIFACT TYPES list (after risk_register, before matrix)
+  // P3-2. Add to PRIMARY zone permitted list (after risk_register, before cards)
+  if (p3d.can_be_primary) {
+    const p3_primary_anchor = '    - risk_register\n    - cards'
+    if (p3.includes(p3_primary_anchor)) {
+      p3 = p3.replace(p3_primary_anchor, `    - risk_register\n    - ${type}\n    - cards`)
+      steps.p3_primary = true
+    } else {
+      steps.p3_primary = false
+    }
+  } else {
+    steps.p3_primary = true  // not applicable — skipped
+  }
+
+  // P3-3. Add pairing rule (after risk_register pairing, before matrix pairing)
+  const p3_pairing_anchor = '  risk_register                             no second artifact permitted\n  matrix'
+  if (p3d.pairing_rule && p3.includes(p3_pairing_anchor)) {
+    p3 = p3.replace(
+      p3_pairing_anchor,
+      `  risk_register                             no second artifact permitted\n${p3d.pairing_rule}\n  matrix`
+    )
+    steps.p3_pairing = true
+  } else {
+    steps.p3_pairing = false
+  }
+
+  // P3-4. Add selection indicator (after risk_register indicator, before CARDS SELECTION)
+  const p3_selection_anchor = '  NEVER use plain table when severity-by-row is the primary signal.\n\n\u2500\u2500\u2500 CARDS SELECTION'
+  if (p3d.selection_indicator && p3.includes(p3_selection_anchor)) {
+    p3 = p3.replace(
+      p3_selection_anchor,
+      `  NEVER use plain table when severity-by-row is the primary signal.\n\n${p3d.selection_indicator}\n\n\u2500\u2500\u2500 CARDS SELECTION`
+    )
+    steps.p3_selection = true
+  } else {
+    steps.p3_selection = false
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // A1-ArtifactSchema.js replica  (Unix \n)
+  // ════════════════════════════════════════════════════════════════════════════
+
+  const a1_anchor = '  NEVER use plain table when severity-by-row is the primary signal.\n`'
+  if (a1d.schema_snippet && a1.includes(a1_anchor)) {
+    const block = '\n' + a1d.schema_snippet + '\n' + (a1d.schema_usage_notes || '') + '\n'
+    a1 = a1.replace(a1_anchor, `  NEVER use plain table when severity-by-row is the primary signal.\n${block}\``)
+    steps.a1_schema = true
+  } else {
+    steps.a1_schema = false
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // agent4-R.js monolithic replica  (Windows \r\n)
+  // ════════════════════════════════════════════════════════════════════════════
+
+  // A4-1. Add to AVAILABLE ARTIFACT TYPES list
   const a4_type_anchor = '  risk_register\r\n  matrix'
   if (a4.includes(a4_type_anchor)) {
     a4 = a4.replace(a4_type_anchor, `  risk_register\r\n  ${type}\r\n  matrix`)
@@ -78,8 +143,8 @@ app.post('/api/inject-artifact', (req, res) => {
     steps.a4_type = false
   }
 
-  // 2. Add to PRIMARY zone permitted list (after risk_register, before cards)
-  if (a4data.can_be_primary) {
+  // A4-2. Add to PRIMARY zone permitted list
+  if (p3d.can_be_primary) {
     const a4_primary_anchor = '    - risk_register\r\n    - cards'
     if (a4.includes(a4_primary_anchor)) {
       a4 = a4.replace(a4_primary_anchor, `    - risk_register\r\n    - ${type}\r\n    - cards`)
@@ -88,102 +153,56 @@ app.post('/api/inject-artifact', (req, res) => {
       steps.a4_primary = false
     }
   } else {
-    steps.a4_primary = true  // skipped — not applicable
+    steps.a4_primary = true
   }
 
-  // 3. Add pairing rule (after risk_register pairing line, before matrix pairing line)
+  // A4-3. Add pairing rule
   const a4_pairing_anchor = '  risk_register                             no second artifact permitted\r\n  matrix'
-  if (a4data.pairing_rule && a4.includes(a4_pairing_anchor)) {
+  if (p3d.pairing_rule && a4.includes(a4_pairing_anchor)) {
     a4 = a4.replace(
       a4_pairing_anchor,
-      `  risk_register                             no second artifact permitted\r\n${a4data.pairing_rule}\r\n  matrix`
+      `  risk_register                             no second artifact permitted\r\n${p3d.pairing_rule}\r\n  matrix`
     )
     steps.a4_pairing = true
   } else {
     steps.a4_pairing = false
   }
 
-  // 4. Add density rule (after risk_register density entry, before FAMILY 6)
+  // A4-4. Add density rule
   const a4_density_anchor = '    risk_register:     No compact; standard <6 risks;  dense >=6\r\n\r\n  FAMILY 6'
-  if (a4data.density_rule && a4.includes(a4_density_anchor)) {
+  if (p3d.density_rule && a4.includes(a4_density_anchor)) {
     a4 = a4.replace(
       a4_density_anchor,
-      `    risk_register:     No compact; standard <6 risks;  dense >=6\r\n${a4data.density_rule}\r\n\r\n  FAMILY 6`
+      `    risk_register:     No compact; standard <6 risks;  dense >=6\r\n${p3d.density_rule}\r\n\r\n  FAMILY 6`
     )
     steps.a4_density = true
   } else {
     steps.a4_density = false
   }
 
-  // 5. Add schema snippet + usage notes (after risk_register schema, before CARDS SELECTION section)
+  // A4-5. Add schema snippet + usage notes
   const a4_schema_anchor = '  NEVER use plain table when severity-by-row is the primary signal.\r\n\r\n\u2500\u2500\u2500 CARDS SELECTION'
-  if (a4data.schema_snippet && a4.includes(a4_schema_anchor)) {
+  if (a1d.schema_snippet && a4.includes(a4_schema_anchor)) {
     const eol = '\r\n'
-    const schemaBlock = eol + a4data.schema_snippet + eol + (a4data.schema_usage_notes || '') + eol
+    const block = eol + a1d.schema_snippet + eol + (a1d.schema_usage_notes || '') + eol
     a4 = a4.replace(
       a4_schema_anchor,
-      `  NEVER use plain table when severity-by-row is the primary signal.${eol}${schemaBlock}${eol}\u2500\u2500\u2500 CARDS SELECTION`
+      `  NEVER use plain table when severity-by-row is the primary signal.${eol}${block}${eol}\u2500\u2500\u2500 CARDS SELECTION`
     )
     steps.a4_schema = true
   } else {
     steps.a4_schema = false
   }
 
-  // ── AGENT 5 INJECTIONS ──────────────────────────────────────────────────────
-
-  // 6. Register in supportedArtifactTypes Set (after 'workflow')
-  const a5_type_anchor = `    'workflow'\n  ])`
-  if (a5.includes(a5_type_anchor)) {
-    a5 = a5.replace(a5_type_anchor, `    'workflow',\n    '${type}'\n  ])`)
-    steps.a5_type = true
-  } else {
-    steps.a5_type = false
-  }
-
-  // 7. Add switch case entry (before default: break at end of artifact switch)
-  const a5_case_anchor = `    case 'workflow': {\n      _workflowToBlocks(art, content_y, blocks, bt, r2)\n      break\n    }\n\n    default:`
-  if (a5data.case_entry && a5.includes(a5_case_anchor)) {
-    a5 = a5.replace(
-      a5_case_anchor,
-      `    case 'workflow': {\n      _workflowToBlocks(art, content_y, blocks, bt, r2)\n      break\n    }\n\n${a5data.case_entry}\n\n    default:`
-    )
-    steps.a5_case = true
-  } else {
-    steps.a5_case = false
-  }
-
-  // 8. Add flattening function (before MAIN RUNNER section)
-  const a5_fn_anchor = `// \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n// MAIN RUNNER`
-  if (a5data.function_code && a5.includes(a5_fn_anchor)) {
-    a5 = a5.replace(
-      a5_fn_anchor,
-      `${a5data.function_code}\n\n${a5_fn_anchor}`
-    )
-    steps.a5_fn = true
-  } else {
-    // Fallback: append before the last closing lines if anchor not found
-    if (a5data.function_code) {
-      const fallbackAnchor = '\nasync function runAgent5('
-      if (a5.includes(fallbackAnchor)) {
-        a5 = a5.replace(fallbackAnchor, `\n${a5data.function_code}\n\nasync function runAgent5(`)
-        steps.a5_fn = true
-      } else {
-        steps.a5_fn = false
-      }
-    } else {
-      steps.a5_fn = false
-    }
-  }
-
-  // ── WRITE BACK ──────────────────────────────────────────────────────────────
+  // ── WRITE REPLICA FILES ──────────────────────────────────────────────────────
   try {
     fs.writeFileSync(a4Path, a4, 'utf8')
-    fs.writeFileSync(a5Path, a5, 'utf8')
+    fs.writeFileSync(p3Path, p3, 'utf8')
+    fs.writeFileSync(a1Path, a1, 'utf8')
   } catch (err) {
-    // Restore backups
-    try { fs.writeFileSync(a4Path, fs.readFileSync(a4PathBak, 'utf8'), 'utf8') } catch (_) {}
-    try { fs.writeFileSync(a5Path, fs.readFileSync(a5PathBak, 'utf8'), 'utf8') } catch (_) {}
-    return res.status(500).json({ error: 'Failed to write agent files: ' + err.message })
+    const restore = (src) => { try { fs.writeFileSync(src, fs.readFileSync(src + '.bak', 'utf8'), 'utf8') } catch (_) {} }
+    ;[a4Path, p3Path, a1Path].forEach(restore)
+    return res.status(500).json({ error: 'Failed to write replica files: ' + err.message })
   }
 
   const allOk = Object.values(steps).every(Boolean)

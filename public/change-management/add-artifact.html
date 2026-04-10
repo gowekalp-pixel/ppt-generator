@@ -42,23 +42,6 @@
     .img-thumb { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; display: none; flex-shrink: 0; border: 1px solid #e5e7eb; }
     .img-thumb.show { display: block; }
 
-    /* Radio / checkbox groups */
-    .radio-group, .check-group { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 2px; }
-    .radio-group label, .check-group label {
-      display: flex; align-items: center; gap: 6px;
-      font-size: 13px; font-weight: 500; color: #333;
-      cursor: pointer; padding: 6px 14px; border: 1.5px solid #d1d5db;
-      border-radius: 20px; transition: all 0.15s; white-space: nowrap;
-    }
-    .radio-group input[type=radio], .check-group input[type=checkbox] { display: none; }
-    .radio-group label.selected, .check-group label.selected {
-      border-color: #2563eb; background: #eff6ff; color: #1d4ed8; font-weight: 600;
-    }
-
-    /* Secondary artifact — conditional */
-    #secondary-wrap { display: none; margin-top: 10px; }
-    #secondary-wrap.show { display: block; }
-
     /* Buttons */
     .btn-primary { width: 100%; padding: 13px; font-size: 14px; font-weight: 700; background: #2563eb; color: white; border: none; border-radius: 10px; cursor: pointer; transition: background 0.15s, transform 0.1s; letter-spacing: 0.02em; }
     .btn-primary:hover:not(:disabled) { background: #1d4ed8; }
@@ -188,44 +171,9 @@
       </div>
 
       <div class="field">
-        <label>Description</label>
-        <div class="hint">What does this artifact visualise? When should a consultant choose it?</div>
-        <textarea id="description" placeholder="e.g. A colour-encoded grid that shows intensity across two categorical dimensions, ideal when the audience needs to spot hot-spots at a glance."></textarea>
-      </div>
-
-      <div class="field">
-        <label>Can it be a PRIMARY zone artifact?</label>
-        <div class="hint">Primary artifacts occupy 50–100% of a zone. Only data-rich, self-sufficient visuals qualify.</div>
-        <div class="radio-group" id="rg-primary">
-          <label class="selected"><input type="radio" name="primary" value="yes" checked> Yes — it can stand alone</label>
-          <label><input type="radio" name="primary" value="no"> No — supporting only</label>
-        </div>
-        <div id="secondary-wrap" class="show">
-          <div class="hint" style="margin-top:8px">If primary, which EXISTING artifact type can pair as a secondary alongside it?</div>
-          <select id="secondary-artifact">
-            <option value="none">None — no second artifact permitted</option>
-            <option value="insight_text standard, max 30% of zone size">insight_text standard (max 30%)</option>
-            <option value="insight_text standard (callout only — 1–2 points), max 25% of zone size">insight_text standard callout (max 25%)</option>
-            <option value="insight_text grouped, max 30% of zone size">insight_text grouped (max 30%)</option>
-            <option value="cards (1–2) or insight_text, max 40% of zone size">cards or insight_text (max 40%)</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="field">
-        <label>Supported Density Levels</label>
-        <div class="hint">Which volume tiers does this artifact support? (Compact = fewest items; Dense = most.)</div>
-        <div class="check-group" id="cg-density">
-          <label><input type="checkbox" value="compact"> Compact</label>
-          <label class="selected"><input type="checkbox" value="standard" checked> Standard</label>
-          <label class="selected"><input type="checkbox" value="dense" checked> Dense</label>
-        </div>
-      </div>
-
-      <div class="field">
-        <label>Best Narrative Roles <span style="font-weight:400;color:#999">(optional)</span></label>
-        <div class="hint">Which Agent 3 narrative roles are this artifact best suited for? E.g. <em>segmentation, benchmark_comparison, drill_down</em></div>
-        <textarea id="narrative-roles" placeholder="e.g. segmentation, benchmark_comparison, exception_highlight" style="min-height:54px"></textarea>
+        <label>Basic Description <span style="font-weight:400;color:#999">(optional)</span></label>
+        <div class="hint">A brief note on what this artifact visualises. Claude will analyze the image and enrich this automatically.</div>
+        <textarea id="description" placeholder="e.g. A colour-encoded grid showing intensity across two categorical dimensions."></textarea>
       </div>
     </div>
 
@@ -253,49 +201,48 @@
       </div>
     </div>
 
-    <!-- Agent 4 block -->
+    <!-- P3-ArtifactSelection block -->
     <div class="card">
-      <div class="card-title">Agent 4 — Schema &amp; Rules</div>
+      <div class="card-title">P3 — Artifact Selection</div>
+      <div class="hint" style="margin-bottom:1rem;font-size:12px;color:#666">Governs <strong>when</strong> Agent 4 selects this artifact type.</div>
 
       <div class="preview-section">
-        <h3>JSON Schema Snippet</h3>
-        <div class="copy-wrap"><button class="copy-btn" onclick="copyBlock('schema-code')">Copy</button></div>
-        <pre class="code-block" id="schema-code"></pre>
+        <h3>Selection Indicator</h3>
+        <div class="hint" style="font-size:11px;color:#999;margin-bottom:4px">Added to the "Other artifacts SELECTION INDICATORS" section of P3-ArtifactSelection.js</div>
+        <div class="copy-wrap"><button class="copy-btn" onclick="copyBlock('p3-indicator-code')">Copy</button></div>
+        <pre class="code-block" id="p3-indicator-code"></pre>
       </div>
 
       <div class="preview-section" style="margin-top:1rem">
-        <h3>Selection Guidance (Phase 3)</h3>
-        <div class="copy-wrap"><button class="copy-btn" onclick="copyBlock('guidance-code')">Copy</button></div>
-        <pre class="code-block" id="guidance-code"></pre>
-      </div>
-
-      <div class="preview-section" style="margin-top:1rem">
-        <h3>Pairing Rule &amp; Density (Phase 4)</h3>
-        <div class="copy-wrap"><button class="copy-btn" onclick="copyBlock('density-code')">Copy</button></div>
-        <pre class="code-block" id="density-code"></pre>
+        <h3>Pairing Rule &amp; Density</h3>
+        <div class="hint" style="font-size:11px;color:#999;margin-bottom:4px">Added to the pairing table and FAMILY 5B density section of P3-ArtifactSelection.js</div>
+        <div class="copy-wrap"><button class="copy-btn" onclick="copyBlock('p3-rules-code')">Copy</button></div>
+        <pre class="code-block" id="p3-rules-code"></pre>
       </div>
     </div>
 
-    <!-- Agent 5 block -->
+    <!-- A1-ArtifactSchema block -->
     <div class="card">
-      <div class="card-title">Agent 5 — Flattening Function</div>
+      <div class="card-title">A1 — Artifact Schema</div>
+      <div class="hint" style="margin-bottom:1rem;font-size:12px;color:#666">Governs <strong>how</strong> Agent 4 populates this artifact type.</div>
 
       <div class="preview-section">
-        <h3>Switch Case Entry</h3>
-        <div class="copy-wrap"><button class="copy-btn" onclick="copyBlock('case-code')">Copy</button></div>
-        <pre class="code-block" id="case-code"></pre>
+        <h3>JSON Schema Snippet</h3>
+        <div class="hint" style="font-size:11px;color:#999;margin-bottom:4px">Added to A1-ArtifactSchema.js after the risk_register entry</div>
+        <div class="copy-wrap"><button class="copy-btn" onclick="copyBlock('a1-schema-code')">Copy</button></div>
+        <pre class="code-block" id="a1-schema-code"></pre>
       </div>
 
       <div class="preview-section" style="margin-top:1rem">
-        <h3>Flattening Function</h3>
-        <div class="copy-wrap"><button class="copy-btn" onclick="copyBlock('fn-code')">Copy</button></div>
-        <pre class="code-block" id="fn-code"></pre>
+        <h3>Usage Notes</h3>
+        <div class="copy-wrap"><button class="copy-btn" onclick="copyBlock('a1-notes-code')">Copy</button></div>
+        <pre class="code-block" id="a1-notes-code"></pre>
       </div>
     </div>
 
     <div class="card">
       <div id="step2-error" class="error-box"></div>
-      <button class="btn-green" id="btn-inject">Approve &amp; Inject Into Agents</button>
+      <button class="btn-green" id="btn-inject">Approve &amp; Inject Into Prompt Files</button>
       <button class="btn-ghost" id="btn-back">← Revise Definition</button>
     </div>
 
@@ -309,6 +256,31 @@
       <div class="card-title">Step 3 — Injecting Into Agents</div>
 
       <div id="inject-steps">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:#888;margin-bottom:8px">P3-ArtifactSelection replica</div>
+        <div class="status-row" id="inj-p3-type">
+          <div class="dot dot-wait" id="dot-p3-type"></div>
+          <span>P3-ArtifactSelection.js — add to available artifact types list</span>
+        </div>
+        <div class="status-row" id="inj-p3-primary">
+          <div class="dot dot-wait" id="dot-p3-primary"></div>
+          <span>P3-ArtifactSelection.js — add to primary zone permitted list</span>
+        </div>
+        <div class="status-row" id="inj-p3-pairing">
+          <div class="dot dot-wait" id="dot-p3-pairing"></div>
+          <span>P3-ArtifactSelection.js — add pairing rule</span>
+        </div>
+        <div class="status-row" id="inj-p3-selection">
+          <div class="dot dot-wait" id="dot-p3-selection"></div>
+          <span>P3-ArtifactSelection.js — add selection indicator</span>
+        </div>
+
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:#888;margin:12px 0 8px">A1-ArtifactSchema replica</div>
+        <div class="status-row" id="inj-a1-schema">
+          <div class="dot dot-wait" id="dot-a1-schema"></div>
+          <span>A1-ArtifactSchema.js — add JSON schema + usage notes</span>
+        </div>
+
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:#888;margin:12px 0 8px">agent4-R.js monolithic replica</div>
         <div class="status-row" id="inj-a4-type">
           <div class="dot dot-wait" id="dot-a4-type"></div>
           <span>agent4-R.js — add to artifact type list</span>
@@ -328,18 +300,6 @@
         <div class="status-row" id="inj-a4-schema">
           <div class="dot dot-wait" id="dot-a4-schema"></div>
           <span>agent4-R.js — add JSON schema + usage notes</span>
-        </div>
-        <div class="status-row" id="inj-a5-type">
-          <div class="dot dot-wait" id="dot-a5-type"></div>
-          <span>agent5-R.js — register in supported types set</span>
-        </div>
-        <div class="status-row" id="inj-a5-case">
-          <div class="dot dot-wait" id="dot-a5-case"></div>
-          <span>agent5-R.js — add switch case entry</span>
-        </div>
-        <div class="status-row" id="inj-a5-fn">
-          <div class="dot dot-wait" id="dot-a5-fn"></div>
-          <span>agent5-R.js — add flattening function</span>
         </div>
       </div>
 
@@ -389,24 +349,6 @@ imgInput.addEventListener('change', () => {
   reader.readAsDataURL(file)
 })
 
-/* ─── RADIO / CHECKBOX STYLING ───────────────────────────────────────────── */
-document.querySelectorAll('.radio-group input[type=radio]').forEach(radio => {
-  radio.addEventListener('change', () => {
-    document.querySelectorAll('.radio-group label').forEach(l => l.classList.remove('selected'))
-    if (radio.checked) radio.closest('label').classList.add('selected')
-    const isPrimary = document.querySelector('input[name=primary]:checked')?.value === 'yes'
-    document.getElementById('secondary-wrap').classList.toggle('show', isPrimary)
-  })
-})
-
-document.querySelectorAll('.check-group input[type=checkbox]').forEach(cb => {
-  // Sync initial state
-  if (cb.checked) cb.closest('label').classList.add('selected')
-  cb.addEventListener('change', () => {
-    cb.closest('label').classList.toggle('selected', cb.checked)
-  })
-})
-
 /* ─── ENABLE ANALYZE BUTTON ──────────────────────────────────────────────── */
 const nameInput = document.getElementById('artifact-name')
 nameInput.addEventListener('input', updateBtn)
@@ -424,17 +366,9 @@ document.getElementById('btn-analyze').addEventListener('click', async () => {
   const inputs = {
     imageB64,
     imageMime,
-    artifactName:      nameInput.value.trim(),
-    description:       document.getElementById('description').value.trim(),
-    canBePrimary:      document.querySelector('input[name=primary]:checked')?.value === 'yes',
-    secondaryArtifact: document.getElementById('secondary-artifact').value,
-    densities: {
-      compact:  document.querySelector('#cg-density input[value=compact]')?.checked,
-      standard: document.querySelector('#cg-density input[value=standard]')?.checked,
-      dense:    document.querySelector('#cg-density input[value=dense]')?.checked
-    },
-    narrativeRoles: document.getElementById('narrative-roles').value.trim(),
-    onProgress: msg => console.log('[agent_add_artifact]', msg)
+    artifactName: nameInput.value.trim(),
+    description:  document.getElementById('description').value.trim(),
+    onProgress:   msg => console.log('[agent_add_artifact]', msg)
   }
 
   const btn = document.getElementById('btn-analyze')
@@ -456,42 +390,35 @@ document.getElementById('btn-analyze').addEventListener('click', async () => {
 
 /* ─── POPULATE REVIEW PAGE ───────────────────────────────────────────────── */
 function populateReview(def) {
-  const a4 = def.agent4 || {}
-  const a5 = def.agent5 || {}
+  const p3 = def.p3 || {}
+  const a1 = def.a1 || {}
 
   // Info grid
   document.getElementById('info-grid').innerHTML = `
     <div class="info-item"><div class="il">Artifact Type</div><div class="iv">${def.artifact_type || '—'}</div></div>
     <div class="info-item"><div class="il">Display Name</div><div class="iv">${def.display_name || '—'}</div></div>
-    <div class="info-item"><div class="il">Primary Zone</div><div class="iv">${a4.can_be_primary ? 'Yes' : 'No'}</div></div>
-    <div class="info-item"><div class="il">Flattening Fn</div><div class="iv">${a5.function_name || '—'}</div></div>
+    <div class="info-item"><div class="il">Primary Zone</div><div class="iv">${p3.can_be_primary ? 'Yes' : 'No'}</div></div>
+    <div class="info-item"><div class="il">Type List Entry</div><div class="iv">${(p3.type_list_entry || '—').trim()}</div></div>
   `
 
   document.getElementById('preview-desc').textContent = def.description || ''
 
-  // Schema snippet
-  const schemaText = (a4.schema_snippet || '(none)') + '\n\n' + (a4.schema_usage_notes || '')
-  document.getElementById('schema-code').textContent = schemaText
+  // P3 — selection indicator
+  document.getElementById('p3-indicator-code').textContent = p3.selection_indicator || '(none)'
 
-  // Selection guidance
-  const guidanceText = (a4.selection_guidance || '(none)')
-  document.getElementById('guidance-code').textContent = guidanceText
-
-  // Pairing + density
-  const densityText = [
-    'Pairing rule:', a4.pairing_rule || '(none)',
+  // P3 — pairing + density
+  const rulesText = [
+    'Pairing rule:', p3.pairing_rule || '(none)',
     '',
-    'Density (FAMILY 5B):', a4.density_rule || '(none)',
-    '',
-    'Pre-output gate check:', a4.gate_check || '(none)'
+    'Density rule:', p3.density_rule || '(none)'
   ].join('\n')
-  document.getElementById('density-code').textContent = densityText
+  document.getElementById('p3-rules-code').textContent = rulesText
 
-  // Case entry
-  document.getElementById('case-code').textContent = a5.case_entry || '(none)'
+  // A1 — schema snippet
+  document.getElementById('a1-schema-code').textContent = a1.schema_snippet || '(none)'
 
-  // Function code
-  document.getElementById('fn-code').textContent = a5.function_code || '(none)'
+  // A1 — usage notes
+  document.getElementById('a1-notes-code').textContent = a1.schema_usage_notes || '(none)'
 }
 
 /* ─── COPY HELPER ────────────────────────────────────────────────────────── */
@@ -522,20 +449,22 @@ document.getElementById('btn-inject').addEventListener('click', async () => {
     document.getElementById('inject-error').classList.add('show')
   } finally {
     btn.disabled = false
-    btn.textContent = 'Approve & Inject Into Agents'
+    btn.textContent = 'Approve & Inject Into Prompt Files'
   }
 })
 
 /* ─── INJECTION ORCHESTRATION ────────────────────────────────────────────── */
 async function runInjection(def) {
-  const ids = ['a4-type','a4-primary','a4-pairing','a4-density','a4-schema','a5-type','a5-case','a5-fn']
-  // Set all to spinning
+  const ids = [
+    'p3-type','p3-primary','p3-pairing','p3-selection',
+    'a1-schema',
+    'a4-type','a4-primary','a4-pairing','a4-density','a4-schema'
+  ]
   ids.forEach(id => setDot(id, 'spin'))
 
   try {
     const result = await injectArtifact(def)
 
-    // Mark each step according to server report
     const steps = result.steps || {}
     ids.forEach(id => {
       const key = id.replace(/-/g, '_')
@@ -543,10 +472,9 @@ async function runInjection(def) {
       setDot(id, success ? 'ok' : 'err')
     })
 
-    // Show success
     document.getElementById('success-detail').textContent =
-      `"${def.display_name}" (${def.artifact_type}) has been injected into agent4-R.js and agent5-R.js. ` +
-      `Restart your dev server for the changes to take effect.`
+      `"${def.display_name}" (${def.artifact_type}) has been registered in P3-ArtifactSelection.js, ` +
+      `A1-ArtifactSchema.js, and agent4-R.js. Restart your dev server for changes to take effect.`
     document.getElementById('inject-success').classList.add('show')
 
   } catch (err) {
@@ -587,10 +515,13 @@ document.getElementById('btn-add-another').addEventListener('click', () => {
   uzText.innerHTML = '<span>Choose file</span> or drag here — PNG, JPG, GIF'
   document.getElementById('artifact-name').value = ''
   document.getElementById('description').value = ''
-  document.getElementById('narrative-roles').value = ''
   document.getElementById('inject-success').classList.remove('show')
   document.getElementById('inject-error').classList.remove('show')
-  ;['a4-type','a4-primary','a4-pairing','a4-density','a4-schema','a5-type','a5-case','a5-fn'].forEach(id => setDot(id, 'wait'))
+  ;[
+    'p3-type','p3-primary','p3-pairing','p3-selection',
+    'a1-schema',
+    'a4-type','a4-primary','a4-pairing','a4-density','a4-schema'
+  ].forEach(id => setDot(id, 'wait'))
   goToPage(1)
   updateBtn()
 })

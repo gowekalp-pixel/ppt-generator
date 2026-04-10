@@ -1,11 +1,12 @@
 // ─── AGENT: ADD ARTIFACT ─────────────────────────────────────────────────────
-// Takes a user-uploaded representative image and metadata about a new artifact
-// type, calls Claude Vision to analyze it, and generates:
-//   - JSON schema snippet for agent4's schema catalogue
-//   - Phase 3 selection constraints for agent4
-//   - Phase 4 layout/density rules for agent4
-//   - Agent 5 flattening function (JavaScript)
-// On user approval, calls /api/inject-artifact to patch agent4.js + agent5.js.
+// Takes a user-uploaded image + name + basic description.
+// Calls Claude Vision to analyze the image and generate:
+//   - P3-ArtifactSelection entries: type list, primary eligibility, pairing rule,
+//     density rule, and selection indicator text
+//   - A1-ArtifactSchema entry: full JSON schema + usage notes
+// On user approval, calls /api/inject-artifact to patch the change-management
+// replica files (P3-ArtifactSelection.js, A1-ArtifactSchema.js, agent4-R.js).
+// Agent 5 flattening is a separate developer step.
 
 /* ─── SCHEMA PHILOSOPHY — shown verbatim to Claude ───────────────────────── */
 
@@ -220,90 +221,12 @@ risk_register:
   NEVER use plain table when severity-by-row is the primary signal.
 `
 
-/* ─── FLATTENING FUNCTION GUIDE — shown verbatim to Claude ───────────────── */
-
-const AA_FUNCTION_EXAMPLE = `
-════════════════════════════════════════════════════════
-FLATTENING FUNCTION GUIDE — agent5.js _xxxToBlocks pattern
-════════════════════════════════════════════════════════
-
-Signature: function _ArtifactNameToBlocks(art, content_y, blocks, bt, r2)
-
-Parameters:
-  art        — the artifact object exactly as emitted by agent4 (after normalization)
-  content_y  — y-coordinate (inches) where content starts, i.e. bottom edge of the artifact header block.
-               Available height = r2((art.y + art.h) - content_y)
-  blocks     — array to push primitive render blocks into (order = painter's order, back to front)
-  bt         — brand tokens object. Key fields:
-                 bt.primary_color         '#1A3C8F'
-                 bt.secondary_color       '#E0B324'
-                 bt.accent_colors         ['#...', ...]  (may be empty)
-                 bt.chart_palette         ['#...', ...]  (6 distinct colors)
-                 bt.body_font_family      'Arial'
-                 bt.title_font_family     'Arial'
-                 bt.body_color            '#111111'
-                 bt.caption_color         '#666666'
-                 bt.body_size_pt          11
-                 bt.caption_size_pt       9
-  r2(v)      — rounds to 2 decimal places; use on ALL coordinate arithmetic
-
-Block types — push one of these objects into blocks[]:
-
-  RECT:
-  { block_type: 'rect',
-    x, y, w, h,                        // inches
-    fill_color:   '#hex' | null,        // null = transparent
-    border_color: '#hex' | null,
-    border_width: 0.5,                  // points
-    corner_radius: 4                    // points; 0 = sharp
-  }
-
-  TEXT:
-  { block_type: 'text',
-    x, y, w, h,                        // inches
-    text:        'the string',
-    font_family: bt.body_font_family,
-    font_size:   11,                    // points
-    font_weight: 'normal' | 'bold',
-    color:       '#hex',
-    align:       'left' | 'center' | 'right',
-    valign:      'top'  | 'middle' | 'bottom',
-    wrap:        true | false
-  }
-
-  LINE:
-  { block_type: 'line',
-    x1, y1, x2, y2,                    // inches
-    color: '#hex',
-    width: 0.5                         // points
-  }
-
-COORDINATE SYSTEM:
-  (0,0) = top-left of slide. x increases rightward. y increases downward.
-  All coordinates in inches. Slide is typically 10" × 7.5".
-  art.x, art.y, art.w, art.h = bounding box in inches (zone content area).
-  content_y = art.y + (header height if artifact_header exists, else 0).
-
-TYPICAL PATTERN (row-based artifacts):
-  const ax = art.x, ay = content_y, aw = art.w
-  const ab = r2((art.y + art.h))          // bottom edge
-  const ah = r2(ab - ay)                   // available height
-  const items = art.rows || art.items || []
-  if (!items.length || aw <= 0 || ah <= 0) return
-  const gap   = 0.08                       // gap between rows
-  const rowH  = r2((ah - gap * Math.max(0, items.length - 1)) / Math.max(items.length, 1))
-  for (let i = 0; i < items.length; i++) {
-    const ry = r2(ay + i * (rowH + gap))
-    // ... push rect + text blocks for this row ...
-  }
-`
-
 /* ─── MAIN ENTRY POINT ───────────────────────────────────────────────────── */
 
 async function runAgentAddArtifact(inputs) {
-  // inputs: { imageB64, imageMime, artifactName, description,
-  //           canBePrimary, secondaryArtifact, densities:{compact,standard,dense},
-  //           narrativeRoles, onProgress }
+  // inputs: { imageB64, imageMime, artifactName, description, onProgress }
+  // Claude analyzes the image to infer primary eligibility, density, pairings,
+  // narrative roles, schema, and flattening function automatically.
   const log = inputs.onProgress || (() => {})
 
   log('Sending to Claude for analysis…')
@@ -318,103 +241,135 @@ async function runAgentAddArtifact(inputs) {
 /* ─── CLAUDE CALL ────────────────────────────────────────────────────────── */
 
 async function _callClaude(inputs) {
-  const { imageB64, imageMime, artifactName, description,
-          canBePrimary, secondaryArtifact, densities, narrativeRoles } = inputs
+  const { imageB64, imageMime, artifactName, description } = inputs
 
-  const densityList = Object.entries(densities || {})
-    .filter(([, v]) => v).map(([k]) => k).join(', ') || 'standard'
+  const systemPrompt = `You are an expert presentation design system architect.
+Your task is to analyze a new visual artifact (shown in an image) and generate the exact text
+needed to register it in two prompt files:
 
-  const systemPrompt = `You are an expert presentation design system architect adding a NEW artifact type.
-
-The system has two agents:
-  - Agent 4 (Content Architect): selects artifact types, defines density, populates structured data.
-  - Agent 5 (Layout Engine): flattens each artifact into primitive render blocks (rect / text / line).
+  1. P3-ArtifactSelection.js — governs WHEN Agent 4 selects this artifact type
+  2. A1-ArtifactSchema.js    — governs HOW Agent 4 populates this artifact type
 
 EXISTING ARTIFACT TYPES (do NOT reuse these names):
   chart, stat_bar, insight_text, cards, profile_card_set,
   workflow, table, comparison_table, initiative_map, risk_register,
   matrix, driver_tree, prioritization
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FILE 1 — P3-ArtifactSelection.js  (WHAT YOU MUST GENERATE)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+P3 has three places that need a new entry:
+
+A) AVAILABLE ARTIFACT TYPES list — one line:
+   Example:  "  risk_register"
+
+B) PERMITTED SECOND ARTIFACT PAIRINGS table — one line:
+   Format:   "  artifact_type_name    [secondary description or 'no second artifact permitted']"
+   Examples:
+     "  stat_bar                                  insight_text standard (callout only — 1–2 points), max 25% of zone size"
+     "  risk_register                             no second artifact permitted"
+
+C) "Other artifacts SELECTION INDICATORS" section — a paragraph block:
+   Format (match exactly):
+     "  artifact_type_name
+     [One-paragraph description: what data it encodes, what makes it unique, what problem it solves]
+     Use when: [specific condition that triggers this artifact — not just 'data is available'].
+     NEVER use [alternative artifact] when [this artifact's defining condition]."
+
+   Real example for risk_register:
+     "  risk_register
+     A severity-encoded list of risks or issues where row background color IS the
+     primary data channel (not decoration). Multiple rows may have different severity
+     levels simultaneously — this is what distinguishes it from highlight_rows on a
+     plain table (which marks only one row at a time).
+     Use when: risks or issues must be shown with per-row severity variation AND
+     the board's eye must be directed to critical items without reading every cell.
+     NEVER use plain table when severity-by-row is the primary signal."
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FILE 2 — A1-ArtifactSchema.js  (WHAT YOU MUST GENERATE)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+A1 holds the JSON schema that Agent 4 must follow when populating this artifact.
+Each entry has FOUR parts:
+  1. TYPE NAME LINE:  artifact_type_name:
+  2. Optional IMPORTANT deprecation note (only if the artifact has old/alternate field names)
+  3. JSON BLOCK — every field with a concrete example value and inline comment
+  4. USAGE NOTES — bullet rules + a NEVER statement
+
 ${AA_SCHEMA_EXAMPLES}
 
-${AA_FUNCTION_EXAMPLE}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+IMAGE ANALYSIS INSTRUCTIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-PAIRING RULES FORMAT (how agent4 describes secondary artifact pairings):
+Before writing anything:
+1. Study the image carefully. What data dimensions does it encode? How are elements
+   arranged spatially? What visual encoding is used (color, size, position, shape, label)?
+2. Infer from the image:
+   - Is it data-rich enough to be a PRIMARY zone artifact (standalone, 50–100% of zone)?
+   - What secondary artifact (if any) could pair alongside it?
+   - What density levels does it naturally support?
+3. Use the user-provided description only as a hint — your visual analysis takes precedence.
+4. Write description as one precise sentence derived from the image.
+
+PAIRING FORMAT REFERENCE:
   Charts (except pie/donut/group_pie)   insight_text (any subtype), max 30% of zone size
   stat_bar                              insight_text standard (callout only — 1–2 points), max 25% of zone size
   comparison_table                      insight_text standard, max 30% of zone size
   risk_register                         no second artifact permitted
-  matrix                                insight_text grouped, max 30% of zone size
 
-DENSITY FAMILIES — FAMILY 5B is for structured display artifacts:
+DENSITY FORMAT REFERENCE (FAMILY 5B — structured display):
   stat_bar:          No compact; standard 4–5 rows;   dense 6–8 rows
   comparison_table:  No compact; standard ≤4 opt × ≤4 crit;  dense larger
-  initiative_map:    No compact; standard ≤5 rows × ≤4 dims;  dense larger
-  profile_card_set:  compact 2;  standard 3–5;  dense 6+
   risk_register:     No compact; standard <6 risks;  dense >=6
-
-NARRATIVE ROLES (agent3 assigns these; agent4 gates artifact selection on them):
-  summary, explainer_to_summary, drill_down, segmentation, trend_analysis,
-  waterfall_decomposition, benchmark_comparison, exception_highlight, validation,
-  context_setter, problem_statement, risk_assessment, scenario_analysis,
-  option_evaluation, recommendations, methodology_note, additional_information,
-  transition_narrative
 
 OUTPUT: Respond with a single JSON object wrapped in \`\`\`json ... \`\`\` fences.
 No explanation text outside the JSON block.`
 
-  const userMessage = `Analyze the artifact in this image and generate a complete agent4 + agent5 definition.
+  const userMessage = `Analyze the artifact shown in this image. Decipher its visual layout, then generate
+the exact entries needed for P3-ArtifactSelection.js and A1-ArtifactSchema.js.
 
-USER-PROVIDED CONTEXT:
-  Artifact name hint:          "${artifactName}"
-  Description:                 "${description}"
-  Can be PRIMARY zone artifact: ${canBePrimary ? 'Yes' : 'No'}
-  Secondary artifact pairing:  "${secondaryArtifact || 'none'}"
-  Supported density levels:    ${densityList}
-  Best narrative roles:        "${narrativeRoles || 'any'}"
+USER-PROVIDED HINTS (image analysis takes precedence):
+  Artifact name hint:  "${artifactName}"
+  Basic description:   "${description || '(none — infer entirely from the image)'}"
 
-Generate this exact JSON structure. Every field is required unless marked OPTIONAL.
+Generate this exact JSON structure. Every field is required.
 
 {
-  "artifact_type": "snake_case identifier ≤20 chars",
-  "display_name":  "Human Readable Name",
-  "description":   "One precise sentence: what it visualises AND the deciding condition for choosing it",
+  "artifact_type":  "snake_case identifier ≤20 chars — derived from the image",
+  "display_name":   "Human Readable Name",
+  "description":    "One precise sentence: what it visualises AND the deciding condition for choosing it",
 
-  "agent4": {
+  "p3": {
     "can_be_primary": true | false,
 
-    "selection_guidance": "  - Display Name - Replace [what] when [condition]. Use it only when [distinguishing signal, not just 'data is available']. One concrete anti-pattern: do not use when [wrong context].",
+    "type_list_entry": "  artifact_type_name",
 
-    "pairing_rule": "  artifact_type_name    [permitted secondary artifact and max % of zone, or 'no second artifact permitted']",
+    "pairing_rule": "  artifact_type_name    [secondary artifact permitted and max % of zone, or 'no second artifact permitted']",
 
-    "density_rule":  "    artifact_type_name:  [compact rule or 'No compact']; standard [threshold]; dense [threshold]",
+    "density_rule": "    artifact_type_name:  [compact rule or 'No compact']; standard [threshold]; dense [threshold]",
 
-    "schema_snippet": "FULL schema entry in the EXACT format shown in the examples above.\\n\\nMUST include:\\n  1. TYPE NAME LINE:  artifact_type_name:\\n  2. IMPORTANT deprecation warning IF this artifact has alternate/old field names (write 'IMPORTANT: Use ONLY...' if applicable, else omit)\\n  3. JSON BLOCK with:\\n     - Every field shown with a concrete example value in quotes or as number, not just a type keyword\\n     - Inline comment on every field: fieldname: example — ≤N words; what it means\\n     - Allowed values shown as: \\"opt1\\" | \\"opt2\\" | \\"opt3\\"\\n     - OPTIONAL fields called out inline: \\"field\\": \\"example — OPTIONAL; omit if …\\"\\n     - Arrays with one representative element fully filled in\\n  4. Column pairing rules sub-block (if artifact uses column_headers)\\n  5. SIZE RULES sub-block (minimum zone width % and height % driven by item count)\\n  6. GATE line embedded: e.g. Minimum N rows, maximum M rows.",
-
-    "schema_usage_notes": "  artifact_type_name usage:\\n  - [rule 1: what each structural field means — concrete, not generic]\\n  - [rule 2: hard limit with ≤/≥ notation]\\n  - [rule 3: CRITICAL rendering rule if any — suppression logic, ordering, etc.]\\n  - [rule 4: a typical concrete population example: e.g. 'Typical tagged cell: ...']\\n  - [anti-pattern: Do NOT use X when Y — use [other artifact] instead]\\n  NEVER use [plain table / other artifact] when [this artifact's defining condition].",
-
-    "gate_check": "  [ ] [Hard structural constraint for the PRE-OUTPUT GATE — e.g. 'Every stat_bar bar column is immediately followed by a normal column with empty header']"
+    "selection_indicator": "  artifact_type_name\\n  [one paragraph: what it encodes, what makes it unique]\\n  Use when: [specific triggering condition].\\n  NEVER use [alternative] when [this artifact's defining condition]."
   },
 
-  "agent5": {
-    "function_name": "_ArtifactTypeNameToBlocks",
+  "a1": {
+    "schema_snippet": "FULL schema entry in the EXACT 4-part format shown in the examples above.\\nMUST include:\\n  1. TYPE NAME LINE: artifact_type_name:\\n  2. JSON BLOCK — every field has a concrete example value + inline comment\\n     BAD: \\"severity\\": \\"string\\"   GOOD: \\"severity\\": \\"critical\\" | \\"high\\" | \\"medium\\" | \\"low\\"\\n     Every string field ends with: \\"example — ≤N words; what it means\\"\\n     Optional fields end with: \\"example — OPTIONAL; omit if …\\"\\n     Arrays show one fully-filled representative element.\\n  3. SIZE RULES sub-block: minimum zone width % and height %\\n  4. Column pairing rules (if artifact uses column_headers)",
 
-    "function_code": "Complete, working JavaScript function. No TODOs, no placeholders.\\nMust follow the exact pattern from the FLATTENING FUNCTION GUIDE above.\\nMust handle: empty data guard, gap between rows, brand token colors, header gap below content_y, correct r2() on all coordinates.",
-
-    "case_entry": "    case 'artifact_type_name': {\\n      _ArtifactTypeNameToBlocks(art, content_y, blocks, bt, r2)\\n      break\\n    }"
+    "schema_usage_notes": "  artifact_type_name usage:\\n  - [rule 1: what each structural field means — concrete]\\n  - [rule 2: hard limit with ≤/≥]\\n  - [CRITICAL rendering rule if any]\\n  - Typical population example: [concrete Typical X: ...]\\n  - Do NOT use X when Y — use [other artifact] instead.\\n  NEVER use [alternative] when [this artifact's defining condition]."
   }
 }
 
-SCHEMA QUALITY CHECKLIST — verify before emitting:
-  [ ] schema_snippet has NO bare "string" or "number" type keywords — every field has a concrete example value
-  [ ] every string field has a trailing " — ≤N words; what it does" comment
-  [ ] optional fields have "— OPTIONAL; omit if …" in their comment
-  [ ] allowed enumerations are written as "a" | "b" | "c" directly in the JSON value
-  [ ] SIZE RULES specify zone width % and height % thresholds
-  [ ] schema_usage_notes contains at least one concrete population example (Typical X: ...)
-  [ ] schema_usage_notes ends with a NEVER statement
-  [ ] function_code handles the empty-data guard at the top
-  [ ] function_code uses r2() on all coordinate arithmetic`
+QUALITY CHECKLIST — verify before emitting:
+  [ ] p3.selection_indicator follows the exact 4-line format (name, paragraph, Use when, NEVER)
+  [ ] p3.pairing_rule and p3.density_rule use the exact spacing/format from the reference examples
+  [ ] a1.schema_snippet has NO bare "string" or "number" — every field has a concrete example
+  [ ] every string field in the JSON block has a trailing " — ≤N words; what it does" comment
+  [ ] optional fields have "— OPTIONAL; omit if …"
+  [ ] enumerations are written as "a" | "b" | "c" directly in the value
+  [ ] SIZE RULES sub-block is present
+  [ ] a1.schema_usage_notes ends with a NEVER statement`
 
   const body = {
     system: systemPrompt,
@@ -467,10 +422,17 @@ function _parseResponse(rawText) {
     throw new Error('Claude response JSON is malformed: ' + e.message)
   }
 
-  // Validate required fields
-  const required = ['artifact_type', 'display_name', 'description', 'agent4', 'agent5']
-  for (const f of required) {
+  // Validate required top-level fields
+  for (const f of ['artifact_type', 'display_name', 'description', 'p3', 'a1']) {
     if (!parsed[f]) throw new Error(`Claude response missing required field: ${f}`)
+  }
+  // Validate p3 sub-fields
+  for (const f of ['type_list_entry', 'pairing_rule', 'density_rule', 'selection_indicator']) {
+    if (!parsed.p3[f]) throw new Error(`Claude response missing p3.${f}`)
+  }
+  // Validate a1 sub-fields
+  for (const f of ['schema_snippet', 'schema_usage_notes']) {
+    if (!parsed.a1[f]) throw new Error(`Claude response missing a1.${f}`)
   }
   return parsed
 }
