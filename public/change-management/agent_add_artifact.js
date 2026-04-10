@@ -721,7 +721,7 @@ async function injectAgent5Artifact(payload) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   })
-  const data = await res.json()
+  const data = await _safeJson(res, 'Agent 5 injection')
   if (!res.ok) throw new Error(data.error || `Agent 5 injection failed (${res.status})`)
   return data
 }
@@ -734,7 +734,25 @@ async function injectArtifact(definition) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(definition)
   })
-  const data = await res.json()
+  const data = await _safeJson(res, 'Injection')
   if (!res.ok) throw new Error(data.error || `Injection failed (${res.status})`)
   return data
+}
+
+/* ─── SAFE JSON PARSE ────────────────────────────────────────────────────── */
+// Prevents "Unexpected token" crash when the server returns HTML (e.g. a 404
+// page from Vercel when the endpoint doesn't exist as a serverless function).
+async function _safeJson(res, label) {
+  const text = await res.text()
+  try {
+    return JSON.parse(text)
+  } catch (_) {
+    // Surface the raw response so the user knows what went wrong
+    const preview = text.slice(0, 120).replace(/\s+/g, ' ')
+    throw new Error(
+      `${label} endpoint returned non-JSON (HTTP ${res.status}). ` +
+      `This feature requires the local dev server — run "node index.js" instead of deploying to Vercel. ` +
+      `Server said: "${preview}"`
+    )
+  }
 }
