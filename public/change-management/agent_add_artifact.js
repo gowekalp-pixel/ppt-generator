@@ -437,6 +437,295 @@ function _parseResponse(rawText) {
   return parsed
 }
 
+/* ─── VALIDATE & REFINE (called from Regenerate button) ─────────────────── */
+// Takes the currently edited definition (no image needed), sends it to Claude
+// for validation and correction, then returns the corrected definition in the
+// same JSON shape as runAgentAddArtifact.
+
+async function validateAndRefineArtifact(editedDef) {
+  const raw = await _callClaudeValidate(editedDef)
+  return _parseResponse(raw)
+}
+
+async function _callClaudeValidate(editedDef) {
+  const systemPrompt = `You are an expert presentation design system architect.
+The user has manually edited a new artifact definition intended for a PPT generation system.
+Your job is to validate and refine the edited content — fixing format errors, spelling mistakes,
+incorrect field references, and schema quality issues — WITHOUT changing the user's intent.
+
+WHAT TO VALIDATE AND FIX:
+  1. artifact_type       must be snake_case, ≤20 chars, no spaces
+  2. display_name        human readable, title case
+  3. description         one precise sentence — no fluff
+  4. p3.type_list_entry  must be exactly "  artifact_type" (two leading spaces)
+  5. p3.pairing_rule     must match: "  artifact_type    [secondary desc or 'no second artifact permitted']"
+  6. p3.density_rule     must match: "    artifact_type:  No compact; standard …;  dense …"
+  7. p3.selection_indicator  must follow the exact 4-line block:
+       "  artifact_type_name
+       [one paragraph: what it encodes, what makes it unique]
+       Use when: [specific triggering condition].
+       NEVER use [alternative artifact] when [this artifact's defining condition]."
+  8. a1.schema_snippet   FULL 4-part entry:
+       - TYPE NAME LINE: artifact_type_name:
+       - JSON BLOCK — every field must have a concrete example value + trailing inline comment
+         BAD:   "severity": "string"
+         GOOD:  "severity": "critical" | "high" | "medium" | "low"
+         Every optional field: "field": "value — OPTIONAL; omit if …"
+       - SIZE RULES sub-block (zone width/height requirements)
+       - NEVER statement
+  9. a1.schema_usage_notes  bullet rules ending with a NEVER statement
+
+EXISTING ARTIFACT TYPES (artifact_type must NOT duplicate these):
+  chart, stat_bar, insight_text, cards, profile_card_set,
+  workflow, table, comparison_table, initiative_map, risk_register,
+  matrix, driver_tree, prioritization
+
+${AA_SCHEMA_EXAMPLES}
+
+OUTPUT: Respond with a single corrected JSON object wrapped in \`\`\`json ... \`\`\` fences.
+Preserve the user's intent. No explanation text outside the JSON block.`
+
+  const userMessage = `Validate and refine this edited artifact definition.
+Fix all format errors, spelling mistakes, incorrect field references, bare type values in schemas.
+Preserve the user's intent and direction.
+
+EDITED DEFINITION:
+\`\`\`json
+${JSON.stringify(editedDef, null, 2)}
+\`\`\`
+
+Return the corrected definition in the same JSON structure.`
+
+  const body = {
+    system: systemPrompt,
+    max_tokens: 10000,
+    messages: [{ role: 'user', content: userMessage }]
+  }
+
+  const res = await fetch('/api/claude', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(`Claude API error ${res.status}: ${err.error || res.statusText}`)
+  }
+  const data = await res.json()
+  return (data.content?.[0]?.text || '').trim()
+}
+
+/* ─── AGENT 5: GENERATE FLATTENED SCHEMA ─────────────────────────────────── */
+// Takes the Agent 4 definition (post-inject) and generates the Agent 5
+// rendering schema: either a native PowerPoint chart mapping or a full
+// custom primitive-rendering spec.
+
+async function generateAgent5Schema(a4def) {
+  const raw = await _callClaudeAgent5(a4def)
+  return _parseAgent5Response(raw)
+}
+
+async function _callClaudeAgent5(a4def) {
+  const systemPrompt = `You are an expert PowerPoint presentation rendering engineer.
+
+Agent 4 produces structured data for artifacts. Agent 5 converts that data into PowerPoint rendering specs.
+Your job: given a NEW Agent 4 artifact schema, decide whether it is a **native chart** or a **custom rendered artifact**, then generate the correct Agent 5 schema entry.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DECISION RULE: native chart vs custom
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  NATIVE CHART if:
+    - The artifact's primary data encoding is a standard PowerPoint chart type
+      (bar, column, line, scatter, area, pie, donut, waterfall, funnel, bubble, radar)
+    - The data consists of series + categories, not free-form boxes or custom shapes
+    - A standard PowerPoint chart engine can render it faithfully without custom shape code
+  → is_native_chart: true
+  → native_chart_type: the exact PowerPoint chart type (e.g. "bar", "column", "line", "scatter", "waterfall")
+  → schema_entry: Produce a schema block IDENTICAL in structure to the existing "chart" type schema.
+    Embed a comment at the top of the schema block explaining what chart_type value to use
+    and any special Agent 5 overrides for this artifact. Reference the existing "chart" schema —
+    do NOT invent a parallel structure.
+
+  CUSTOM RENDERER if:
+    - The artifact uses custom shapes, colored bands, pip indicators, tag chips, row/column grids,
+      icon cells, severity fills, or any visual encoding that PowerPoint charts cannot express
+    - Even if it shows data in a table-like form, if Agent 4 drives the layout, it is custom
+  → is_native_chart: false
+  → native_chart_type: null
+  → schema_entry: Generate a FULL custom schema block. Study the existing custom types for format:
+    stat_bar, comparison_table, initiative_map, risk_register, profile_card_set.
+    Pattern for custom schema:
+      - A _style object with ALL visual tokens Agent 5 must decide (fonts, colors, sizes, gaps)
+        that cannot be inferred from Agent 4 data alone
+      - A header_block field (null or structure)
+      - Rules section explaining what layout JS computes vs what Agent 5 must specify
+      - A MICRO-LAYOUT OWNERSHIP note saying which fields Agent 5 must set explicitly
+      - Content fields (rows, columns, cells, etc.) come from Agent 4 manifest —
+        Agent 5 NEVER duplicates them; Agent 5 only adds the style skin
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FORMAT OF schema_entry
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+The schema_entry string is inserted verbatim into A1-FlattenedArtifactSchema.js.
+It must be a complete section block in this format:
+
+*********************************************************************************
+NN. ARTIFACT_DISPLAY_NAME (in caps)
+*********************************************************************************
+
+{
+  "type": "artifact_type_name",
+  "x": number, "y": number, "w": number, "h": number,
+  ...all style fields with concrete examples...
+  "header_block": null or { ... }
+}
+
+Rules:
+- [rule 1: what JS layout engine computes — do NOT set in Agent 5]
+- [rule 2: what Agent 5 must set explicitly]
+- ...
+
+*********************************************************************************
+MICRO-LAYOUT OWNERSHIP:
+- [list fields Agent 5 must explicitly set]
+
+Numbering: use "XX" — the integration script will not renumber; the developer will fix.
+
+OUTPUT: Respond with a single JSON object wrapped in \`\`\`json ... \`\`\` fences. No text outside.`
+
+  const userMessage = `Generate the Agent 5 rendering schema for this new artifact.
+
+AGENT 4 ARTIFACT TYPE:   ${a4def.artifact_type}
+AGENT 4 DISPLAY NAME:    ${a4def.display_name}
+AGENT 4 DESCRIPTION:     ${a4def.description}
+
+AGENT 4 SCHEMA (A1-ArtifactSchema.js entry):
+${a4def.a1.schema_snippet}
+
+AGENT 4 USAGE NOTES:
+${a4def.a1.schema_usage_notes}
+
+Decide:
+  1. Is this a native PowerPoint chart type? (true/false)
+  2. If yes, which chart_type value maps to it?
+  3. Generate the complete schema_entry block.
+
+Return this exact JSON:
+{
+  "is_native_chart": true | false,
+  "native_chart_type": "chart_type_name or null",
+  "description": "One sentence: how Agent 5 renders this artifact",
+  "schema_entry": "FULL schema block string — see format above"
+}`
+
+  const body = {
+    system: systemPrompt,
+    max_tokens: 8000,
+    messages: [{ role: 'user', content: userMessage }]
+  }
+
+  const res = await fetch('/api/claude', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(`Claude API error ${res.status}: ${err.error || res.statusText}`)
+  }
+  const data = await res.json()
+  return (data.content?.[0]?.text || '').trim()
+}
+
+function _parseAgent5Response(rawText) {
+  let jsonStr = null
+  const fenced = rawText.match(/```json\s*([\s\S]*?)```/)
+  if (fenced) {
+    jsonStr = fenced[1].trim()
+  } else {
+    const start = rawText.indexOf('{')
+    const end   = rawText.lastIndexOf('}')
+    if (start !== -1 && end > start) jsonStr = rawText.slice(start, end + 1)
+  }
+  if (!jsonStr) throw new Error('Claude response did not contain a JSON block.')
+
+  let parsed
+  try { parsed = JSON.parse(jsonStr) }
+  catch (e) { throw new Error('Claude Agent 5 response JSON is malformed: ' + e.message) }
+
+  for (const f of ['is_native_chart', 'description', 'schema_entry']) {
+    if (parsed[f] === undefined || parsed[f] === null || parsed[f] === '') {
+      throw new Error(`Agent 5 Claude response missing required field: ${f}`)
+    }
+  }
+  return parsed
+}
+
+/* ─── AGENT 5: VALIDATE & REFINE ────────────────────────────────────────── */
+async function validateAndRefineAgent5Schema(editedA5, a4def) {
+  const systemPrompt = `You are an expert PowerPoint presentation rendering engineer.
+The user has manually edited an Agent 5 schema entry for a new artifact.
+Validate and fix format errors, schema quality issues, missing fields, or incorrect structure.
+Preserve the user's intent.
+
+Rules to enforce:
+- _style objects must have concrete color hex values (e.g. "hex" is not valid — use #RRGGBB format tokens)
+- All font_size fields must be numbers, not strings
+- header_block must be present as null or a fully-formed object
+- If is_native_chart is true, the schema_entry must reference the existing "chart" schema structure
+- If is_native_chart is false, the schema_entry must include a _style block, header_block, and Rules + MICRO-LAYOUT OWNERSHIP sections
+- schema_entry must start with the *** section header and end with a *** separator line
+
+OUTPUT: Respond with a single JSON object in \`\`\`json ... \`\`\` fences.`
+
+  const userMessage = `Validate and refine this Agent 5 schema definition.
+
+ARTIFACT TYPE:  ${a4def.artifact_type}
+IS NATIVE CHART: ${editedA5.is_native_chart}
+NATIVE CHART TYPE: ${editedA5.native_chart_type || 'null'}
+
+EDITED SCHEMA ENTRY:
+${editedA5.schema_entry}
+
+Return:
+{
+  "is_native_chart": ${editedA5.is_native_chart},
+  "native_chart_type": ${editedA5.native_chart_type ? '"' + editedA5.native_chart_type + '"' : 'null'},
+  "description": "${editedA5.description || ''}",
+  "schema_entry": "corrected schema block"
+}`
+
+  const body = {
+    system: systemPrompt,
+    max_tokens: 8000,
+    messages: [{ role: 'user', content: userMessage }]
+  }
+
+  const res = await fetch('/api/claude', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(`Claude API error ${res.status}: ${err.error || res.statusText}`)
+  }
+  const data = await res.json()
+  return _parseAgent5Response((data.content?.[0]?.text || '').trim())
+}
+
+/* ─── AGENT 5: INJECTION CALL ────────────────────────────────────────────── */
+async function injectAgent5Artifact(payload) {
+  const res = await fetch('/api/inject-agent5-artifact', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error || `Agent 5 injection failed (${res.status})`)
+  return data
+}
+
 /* ─── INJECTION CALL ─────────────────────────────────────────────────────── */
 
 async function injectArtifact(definition) {

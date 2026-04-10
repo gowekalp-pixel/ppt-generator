@@ -217,6 +217,118 @@ app.post('/api/inject-artifact', (req, res) => {
   })
 })
 
+// ─── INJECT AGENT 5 ARTIFACT ──────────────────────────────────────────────
+// Patches Agent 5 change-management replica files only. Never touches production.
+// Targets:
+//   change-management/prompts/agent5/A1-FlattenedArtifactSchema.js  (Unix LF)
+//   change-management/agent5-R.js                                   (Windows CRLF)
+// Body: { artifact_type, display_name, is_native_chart, schema_entry }
+app.post('/api/inject-agent5-artifact', (req, res) => {
+  const def = req.body
+  if (!def || !def.artifact_type || !def.schema_entry) {
+    return res.status(400).json({ error: 'Missing required fields: artifact_type, schema_entry' })
+  }
+
+  const CM    = path.join(__dirname, 'public', 'change-management')
+  const a5rPath = path.join(CM, 'agent5-R.js')
+  const a5Path  = path.join(CM, 'prompts', 'agent5', 'A1-FlattenedArtifactSchema.js')
+
+  let a5r, a5
+  try {
+    a5r = fs.readFileSync(a5rPath, 'utf8')
+    a5  = fs.readFileSync(a5Path,  'utf8')
+  } catch (err) {
+    return res.status(500).json({ error: 'Could not read Agent 5 replica files: ' + err.message })
+  }
+
+  // Backups
+  try {
+    fs.writeFileSync(a5rPath + '.bak', a5r, 'utf8')
+    fs.writeFileSync(a5Path  + '.bak', a5,  'utf8')
+  } catch (_) { /* non-fatal */ }
+
+  const type    = def.artifact_type
+  const steps   = {}
+  const entry   = def.schema_entry  // the full section block text
+
+  // Guard: skip if already present
+  if (a5.includes(type) && a5.includes('*********************************************************************************\n')) {
+    const typePattern = new RegExp(`\\b${type}\\b`)
+    if (typePattern.test(a5.slice(a5.indexOf('Allowed types')))) {
+      return res.status(409).json({ error: `Artifact "${type}" already exists in A1-FlattenedArtifactSchema.js.` })
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // A1-FlattenedArtifactSchema.js  (Unix \n)
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // A5-1. Update "Allowed types" line
+  const allowedLineA5 = 'Allowed types: insight_text | chart | stat_bar | cards | workflow | table | matrix | driver_tree | prioritization | comparison_table | initiative_map | profile_card_set | risk_register\n'
+  if (a5.includes(allowedLineA5)) {
+    a5 = a5.replace(allowedLineA5, allowedLineA5.replace('\n', ` | ${type}\n`))
+    steps.a5_types = true
+  } else {
+    steps.a5_types = false
+  }
+
+  // A5-2. Insert schema entry before ARTIFACT HEADER section
+  const a5SchemaAnchor = 'ARTIFACT HEADER\n*********************************************************************************\n'
+  if (a5.includes(a5SchemaAnchor)) {
+    // Normalise entry line endings to LF and ensure it ends with \n\n
+    const entryLF = entry.replace(/\r\n/g, '\n').replace(/\n+$/, '') + '\n\n'
+    a5 = a5.replace(a5SchemaAnchor, entryLF + a5SchemaAnchor)
+    steps.a5_schema = true
+  } else {
+    steps.a5_schema = false
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // agent5-R.js  (Windows \r\n)
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // A5R-1. Update "Allowed types" line
+  const allowedLineA5R = 'Allowed types: insight_text | chart | stat_bar | cards | workflow | table | matrix | driver_tree | prioritization | comparison_table | initiative_map | profile_card_set | risk_register\r\n'
+  if (a5r.includes(allowedLineA5R)) {
+    a5r = a5r.replace(allowedLineA5R, allowedLineA5R.replace('\r\n', ` | ${type}\r\n`))
+    steps.a5r_types = true
+  } else {
+    steps.a5r_types = false
+  }
+
+  // A5R-2. Insert schema entry before ARTIFACT HEADER section
+  const a5rSchemaAnchor = 'ARTIFACT HEADER\r\n*********************************************************************************\r\n'
+  if (a5r.includes(a5rSchemaAnchor)) {
+    // Convert entry to CRLF
+    const entryCRLF = entry.replace(/\r\n/g, '\n').replace(/\n/g, '\r\n').replace(/\r\n+$/, '') + '\r\n\r\n'
+    a5r = a5r.replace(a5rSchemaAnchor, entryCRLF + a5rSchemaAnchor)
+    steps.a5r_schema = true
+  } else {
+    steps.a5r_schema = false
+  }
+
+  // ── WRITE ────────────────────────────────────────────────────────────────
+  try {
+    fs.writeFileSync(a5rPath, a5r, 'utf8')
+    fs.writeFileSync(a5Path,  a5,  'utf8')
+  } catch (err) {
+    const restore = (src) => { try { fs.writeFileSync(src, fs.readFileSync(src + '.bak', 'utf8'), 'utf8') } catch (_) {} }
+    ;[a5rPath, a5Path].forEach(restore)
+    return res.status(500).json({ error: 'Failed to write Agent 5 replica files: ' + err.message })
+  }
+
+  const allOk       = Object.values(steps).every(Boolean)
+  const failedSteps = Object.entries(steps).filter(([,v]) => !v).map(([k]) => k)
+
+  res.json({
+    success: allOk,
+    steps,
+    warnings: failedSteps.length
+      ? `Some injection points were not found and were skipped: ${failedSteps.join(', ')}. Manual insertion may be needed.`
+      : undefined
+  })
+})
+
 app.use((err, req, res, next) => {
   if (err && err.type === 'entity.too.large') {
     return res.status(413).json({

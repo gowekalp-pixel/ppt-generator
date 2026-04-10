@@ -73,26 +73,56 @@
     .badge-green  { background: #dcfce7; color: #16a34a; }
     .badge-orange { background: #fef3c7; color: #92400e; }
 
-    pre.code-block {
-      background: #1e1e2e; color: #cdd6f4; font-family: 'Consolas', 'Monaco', monospace;
+    /* Dark code textareas (editable) */
+    textarea.code-textarea {
+      width: 100%; background: #1e1e2e; color: #cdd6f4;
+      font-family: 'Consolas', 'Monaco', monospace;
       font-size: 11.5px; line-height: 1.55; padding: 14px 16px; border-radius: 8px;
-      overflow-x: auto; white-space: pre-wrap; word-break: break-word;
-      max-height: 320px; overflow-y: auto; margin: 0;
+      border: 2px solid transparent; resize: vertical; white-space: pre; overflow-x: auto;
+      outline: none; display: block; margin: 0;
     }
-    pre.code-block .kw { color: #89b4fa; }
-    pre.code-block .str { color: #a6e3a1; }
-    pre.code-block .cm { color: #6c7086; font-style: italic; }
+    textarea.code-textarea:focus { border-color: #2563eb; }
+    textarea.code-textarea.short { min-height: 56px; }
+    textarea.code-textarea.medium { min-height: 120px; }
+    textarea.code-textarea.tall { min-height: 280px; }
 
     .copy-btn { font-size: 11px; padding: 4px 10px; background: #374151; color: #d1d5db; border: none; border-radius: 5px; cursor: pointer; float: right; margin-bottom: 6px; transition: background 0.15s; }
     .copy-btn:hover { background: #4b5563; }
 
     .copy-wrap { overflow: hidden; margin-bottom: 6px; }
 
-    /* Info rows */
+    /* Info rows — editable */
     .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 1rem; }
-    .info-item { background: #f9fafb; border-radius: 8px; padding: 10px 14px; }
-    .info-item .il { font-size: 10px; color: #999; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px; }
-    .info-item .iv { font-size: 13px; font-weight: 700; color: #111; }
+    .info-item { background: #f0f4ff; border: 1.5px solid #bfdbfe; border-radius: 8px; padding: 10px 14px; }
+    .info-item .il { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+    .info-input {
+      width: 100%; font-size: 13px; font-weight: 700; color: #111;
+      background: transparent; border: none; outline: none; font-family: inherit;
+      padding: 0;
+    }
+    select.info-input { cursor: pointer; font-weight: 600; }
+
+    /* Light editable textarea for description */
+    textarea.edit-textarea {
+      width: 100%; font-size: 13px; color: #333; background: #f9fafb;
+      border: 1.5px solid #d1d5db; border-radius: 8px; padding: 9px 12px;
+      outline: none; font-family: inherit; line-height: 1.5; resize: vertical;
+      min-height: 56px;
+    }
+    textarea.edit-textarea:focus { border-color: #2563eb; background: #fff; }
+
+    /* Edit-detected banner + regenerate button */
+    .regen-banner {
+      background: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px;
+      padding: 10px 14px; font-size: 12px; color: #92400e; margin-bottom: 10px;
+    }
+    .btn-regen {
+      width: 100%; padding: 11px; font-size: 14px; font-weight: 700;
+      background: #d97706; color: white; border: none; border-radius: 10px;
+      cursor: pointer; transition: background 0.15s; margin-bottom: 8px;
+    }
+    .btn-regen:hover:not(:disabled) { background: #b45309; }
+    .btn-regen:disabled { opacity: 0.4; cursor: not-allowed; }
 
     /* Status messages */
     .status-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #555; padding: 6px 0; }
@@ -110,6 +140,11 @@
     .success-box.show { display: block; }
     .success-box h3 { font-size: 16px; font-weight: 700; color: #15803d; margin-bottom: 6px; }
     .success-box p { font-size: 13px; color: #555; margin-bottom: 14px; line-height: 1.5; }
+
+    /* Agent5 native-chart badge */
+    .native-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; margin-bottom: 12px; }
+    .native-badge.chart  { background: #dbeafe; color: #1d4ed8; }
+    .native-badge.custom { background: #f3e8ff; color: #6d28d9; }
 
     /* Page transitions */
     .page { display: none; }
@@ -141,6 +176,11 @@
     <div class="step-dot">
       <div class="circle" id="dot3">3</div>
       <div class="label" id="lbl3">Inject</div>
+    </div>
+    <div class="step-connector" id="conn3"></div>
+    <div class="step-dot">
+      <div class="circle" id="dot4">4</div>
+      <div class="label" id="lbl4">Agent 5</div>
     </div>
   </div>
 
@@ -188,60 +228,100 @@
   <!-- ═══════════════════════ PAGE 2 — REVIEW ══════════════════════════ -->
   <div class="page" id="page-2">
 
+    <!-- a) Generated Artifact Definition — editable -->
     <div class="card">
-      <div class="card-title">Generated Artifact Definition</div>
+      <div class="card-title">Generated Artifact Definition <span style="font-weight:400;font-size:10px;color:#9ca3af;text-transform:none;letter-spacing:0">(click any field to edit)</span></div>
 
-      <div class="info-grid" id="info-grid">
-        <!-- populated by JS -->
+      <div class="info-grid">
+        <div class="info-item">
+          <div class="il">Artifact Type</div>
+          <input class="info-input" id="edit-artifact-type" type="text" maxlength="20" placeholder="snake_case" spellcheck="false">
+        </div>
+        <div class="info-item">
+          <div class="il">Display Name</div>
+          <input class="info-input" id="edit-display-name" type="text" placeholder="Human Readable Name">
+        </div>
+        <div class="info-item">
+          <div class="il">Primary Zone</div>
+          <select class="info-input" id="edit-can-be-primary">
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+          </select>
+        </div>
+        <div class="info-item">
+          <div class="il">Type List Entry</div>
+          <input class="info-input" id="edit-type-list-entry" type="text" spellcheck="false">
+        </div>
       </div>
 
       <div class="preview-section">
         <h3>Description</h3>
-        <p id="preview-desc" style="font-size:13px;color:#333;line-height:1.55"></p>
+        <textarea class="edit-textarea" id="edit-description" rows="2" placeholder="One precise sentence describing what this artifact visualises"></textarea>
       </div>
     </div>
 
-    <!-- P3-ArtifactSelection block -->
+    <!-- b/c) P3-ArtifactSelection — editable -->
     <div class="card">
-      <div class="card-title">P3 — Artifact Selection</div>
+      <div class="card-title">P3 — Artifact Selection <span style="font-weight:400;font-size:10px;color:#9ca3af;text-transform:none;letter-spacing:0">(editable)</span></div>
       <div class="hint" style="margin-bottom:1rem;font-size:12px;color:#666">Governs <strong>when</strong> Agent 4 selects this artifact type.</div>
 
+      <!-- b) Selection Indicator -->
       <div class="preview-section">
-        <h3>Selection Indicator</h3>
-        <div class="hint" style="font-size:11px;color:#999;margin-bottom:4px">Added to the "Other artifacts SELECTION INDICATORS" section of P3-ArtifactSelection.js</div>
+        <h3>b) Selection Indicator</h3>
+        <div class="hint" style="font-size:11px;color:#999;margin-bottom:4px">4-line block: name line → paragraph → Use when → NEVER statement</div>
         <div class="copy-wrap"><button class="copy-btn" onclick="copyBlock('p3-indicator-code')">Copy</button></div>
-        <pre class="code-block" id="p3-indicator-code"></pre>
+        <textarea class="code-textarea medium" id="p3-indicator-code" spellcheck="false"></textarea>
       </div>
 
+      <!-- c) Pairing Rule -->
       <div class="preview-section" style="margin-top:1rem">
-        <h3>Pairing Rule &amp; Density</h3>
-        <div class="hint" style="font-size:11px;color:#999;margin-bottom:4px">Added to the pairing table and FAMILY 5B density section of P3-ArtifactSelection.js</div>
-        <div class="copy-wrap"><button class="copy-btn" onclick="copyBlock('p3-rules-code')">Copy</button></div>
-        <pre class="code-block" id="p3-rules-code"></pre>
+        <h3>c) Pairing Rule</h3>
+        <div class="hint" style="font-size:11px;color:#999;margin-bottom:4px">Format: &nbsp;<code style="background:#2d2d3f;color:#cdd6f4;padding:1px 6px;border-radius:3px;font-size:10.5px">  artifact_type    [secondary or 'no second artifact permitted']</code></div>
+        <div class="copy-wrap"><button class="copy-btn" onclick="copyBlock('p3-pairing-code')">Copy</button></div>
+        <textarea class="code-textarea short" id="p3-pairing-code" spellcheck="false"></textarea>
+      </div>
+
+      <!-- c) Density Rule -->
+      <div class="preview-section" style="margin-top:1rem">
+        <h3>c) Density Rule</h3>
+        <div class="hint" style="font-size:11px;color:#999;margin-bottom:4px">Format: &nbsp;<code style="background:#2d2d3f;color:#cdd6f4;padding:1px 6px;border-radius:3px;font-size:10.5px">    artifact_type:  No compact; standard …;  dense …</code></div>
+        <div class="copy-wrap"><button class="copy-btn" onclick="copyBlock('p3-density-code')">Copy</button></div>
+        <textarea class="code-textarea short" id="p3-density-code" spellcheck="false"></textarea>
       </div>
     </div>
 
-    <!-- A1-ArtifactSchema block -->
+    <!-- d/e) A1-ArtifactSchema — editable -->
     <div class="card">
-      <div class="card-title">A1 — Artifact Schema</div>
+      <div class="card-title">A1 — Artifact Schema <span style="font-weight:400;font-size:10px;color:#9ca3af;text-transform:none;letter-spacing:0">(editable)</span></div>
       <div class="hint" style="margin-bottom:1rem;font-size:12px;color:#666">Governs <strong>how</strong> Agent 4 populates this artifact type.</div>
 
+      <!-- d) JSON Schema Snippet -->
       <div class="preview-section">
-        <h3>JSON Schema Snippet</h3>
-        <div class="hint" style="font-size:11px;color:#999;margin-bottom:4px">Added to A1-ArtifactSchema.js after the risk_register entry</div>
+        <h3>d) JSON Schema Snippet</h3>
+        <div class="hint" style="font-size:11px;color:#999;margin-bottom:4px">4-part entry: type name line → JSON block (no bare "string"/"number") → SIZE RULES → NEVER statement</div>
         <div class="copy-wrap"><button class="copy-btn" onclick="copyBlock('a1-schema-code')">Copy</button></div>
-        <pre class="code-block" id="a1-schema-code"></pre>
+        <textarea class="code-textarea tall" id="a1-schema-code" spellcheck="false"></textarea>
       </div>
 
+      <!-- e) Usage Notes -->
       <div class="preview-section" style="margin-top:1rem">
-        <h3>Usage Notes</h3>
+        <h3>e) Usage Notes</h3>
+        <div class="hint" style="font-size:11px;color:#999;margin-bottom:4px">Bullet rules starting with "  artifact_type usage:" ending with a NEVER statement</div>
         <div class="copy-wrap"><button class="copy-btn" onclick="copyBlock('a1-notes-code')">Copy</button></div>
-        <pre class="code-block" id="a1-notes-code"></pre>
+        <textarea class="code-textarea medium" id="a1-notes-code" spellcheck="false"></textarea>
       </div>
     </div>
 
+    <!-- Action card -->
     <div class="card">
       <div id="step2-error" class="error-box"></div>
+
+      <!-- Regenerate section — shown only when edits detected -->
+      <div id="regen-section" style="display:none">
+        <div class="regen-banner"><strong>Edits detected</strong> — Regenerate to let Claude validate and refine your changes before injecting.</div>
+        <button class="btn-regen" id="btn-regenerate">Regenerate with Claude →</button>
+      </div>
+
       <button class="btn-green" id="btn-inject">Approve &amp; Inject Into Prompt Files</button>
       <button class="btn-ghost" id="btn-back">← Revise Definition</button>
     </div>
@@ -306,24 +386,120 @@
       <div id="inject-error" class="error-box"></div>
 
       <div class="success-box" id="inject-success">
-        <h3>Artifact Injected Successfully</h3>
-        <p id="success-detail">The new artifact type has been added to both agent4-R.js and agent5-R.js. Restart the server if running locally for changes to take effect.</p>
-        <a href="/" style="display:inline-block;padding:10px 24px;background:#059669;color:white;border-radius:8px;font-size:14px;font-weight:700;text-decoration:none">Back to PPT Generator</a>
-        <br><br>
+        <h3>Agent 4 Injection Complete</h3>
+        <p id="success-detail"></p>
+        <button class="btn-primary" id="btn-go-agent5" style="max-width:360px;margin:0 auto 12px">Generate Agent 5 Schema →</button>
+        <br>
+        <a href="/" style="display:inline-block;padding:8px 20px;background:#e5e7eb;color:#374151;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;margin-right:8px">Back to PPT Generator</a>
         <button class="btn-ghost" id="btn-add-another" style="width:auto;padding:8px 20px">Add Another Artifact</button>
       </div>
     </div>
 
   </div><!-- /page-3 -->
 
+
+  <!-- ═══════════════════════ PAGE 4 — AGENT 5 ════════════════════════ -->
+  <div class="page" id="page-4">
+
+    <!-- Status card while generating -->
+    <div class="card" id="a5-generating-card">
+      <div class="card-title">Generating Agent 5 Schema…</div>
+      <div class="status-row" style="margin-top:4px">
+        <div class="dot dot-spin" id="dot-a5-gen"></div>
+        <span>Claude is analysing the Agent 4 schema and generating the Agent 5 rendering spec…</span>
+      </div>
+      <div id="a5-gen-error" class="error-box"></div>
+    </div>
+
+    <!-- Review card (hidden until generated) -->
+    <div id="a5-review-cards" style="display:none">
+
+      <div class="card">
+        <div class="card-title">Agent 5 — Rendering Schema <span style="font-weight:400;font-size:10px;color:#9ca3af;text-transform:none;letter-spacing:0">(editable)</span></div>
+        <div class="hint" style="margin-bottom:1rem;font-size:12px;color:#666">
+          Governs <strong>how Agent 5 renders</strong> this artifact into PowerPoint primitives.
+          If it is a native chart, it maps to PowerPoint's built-in chart engine.
+        </div>
+
+        <div class="preview-section">
+          <h3>Rendering Type</h3>
+          <div id="a5-native-badge" style="margin-bottom:8px"></div>
+          <p id="a5-description" style="font-size:13px;color:#444;line-height:1.55;margin-bottom:4px"></p>
+        </div>
+
+        <div class="preview-section" style="margin-top:1rem">
+          <h3>Schema Entry</h3>
+          <div class="hint" style="font-size:11px;color:#999;margin-bottom:4px">Full section block to be inserted into A1-FlattenedArtifactSchema.js and agent5-R.js</div>
+          <div class="copy-wrap"><button class="copy-btn" onclick="copyBlock('a5-schema-code')">Copy</button></div>
+          <textarea class="code-textarea tall" id="a5-schema-code" spellcheck="false"></textarea>
+        </div>
+      </div>
+
+      <!-- Action card -->
+      <div class="card">
+        <div id="a5-step-error" class="error-box"></div>
+
+        <div id="a5-regen-section" style="display:none">
+          <div class="regen-banner"><strong>Edits detected</strong> — Regenerate to let Claude validate and refine your changes.</div>
+          <button class="btn-regen" id="btn-a5-regenerate">Regenerate with Claude →</button>
+        </div>
+
+        <button class="btn-green" id="btn-a5-inject">Approve &amp; Inject Into Agent 5 Files</button>
+        <button class="btn-ghost" id="btn-a5-back" style="margin-top:8px">← Back to Injection Summary</button>
+      </div>
+
+      <!-- Agent 5 injection progress -->
+      <div class="card" id="a5-inject-card" style="display:none">
+        <div class="card-title">Step 4 — Injecting Into Agent 5</div>
+
+        <div id="a5-inject-steps">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:#888;margin-bottom:8px">A1-FlattenedArtifactSchema.js replica</div>
+          <div class="status-row">
+            <div class="dot dot-wait" id="dot-a5-types"></div>
+            <span>A1-FlattenedArtifactSchema.js — update Allowed types list</span>
+          </div>
+          <div class="status-row">
+            <div class="dot dot-wait" id="dot-a5-schema"></div>
+            <span>A1-FlattenedArtifactSchema.js — insert schema entry</span>
+          </div>
+
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:#888;margin:12px 0 8px">agent5-R.js monolithic replica</div>
+          <div class="status-row">
+            <div class="dot dot-wait" id="dot-a5r-types"></div>
+            <span>agent5-R.js — update Allowed types list</span>
+          </div>
+          <div class="status-row">
+            <div class="dot dot-wait" id="dot-a5r-schema"></div>
+            <span>agent5-R.js — insert schema entry</span>
+          </div>
+        </div>
+
+        <div id="a5-inject-error" class="error-box"></div>
+
+        <div class="success-box" id="a5-inject-success">
+          <h3>All Done!</h3>
+          <p id="a5-success-detail"></p>
+          <a href="/" style="display:inline-block;padding:10px 24px;background:#059669;color:white;border-radius:8px;font-size:14px;font-weight:700;text-decoration:none">Back to PPT Generator</a>
+          <br><br>
+          <button class="btn-ghost" id="btn-a5-add-another" style="width:auto;padding:8px 20px">Add Another Artifact</button>
+        </div>
+      </div>
+
+    </div><!-- /a5-review-cards -->
+
+  </div><!-- /page-4 -->
+
 </div><!-- /container -->
 
 <script src="agent_add_artifact.js"></script>
 <script>
 /* ─── STATE ──────────────────────────────────────────────────────────────── */
-let imageB64   = null
-let imageMime  = null
-let definition = null   // Claude's parsed response
+let imageB64             = null
+let imageMime            = null
+let definition           = null   // Claude's last parsed response
+let originalSnapshot     = null   // snapshot of field values when page-2 was populated
+let agent5Definition     = null   // Claude's Agent 5 schema response
+let a5OriginalSnapshot   = null   // snapshot for Agent 5 change detection
 
 /* ─── IMAGE UPLOAD ───────────────────────────────────────────────────────── */
 const imgInput = document.getElementById('img-input')
@@ -393,44 +569,116 @@ function populateReview(def) {
   const p3 = def.p3 || {}
   const a1 = def.a1 || {}
 
-  // Info grid
-  document.getElementById('info-grid').innerHTML = `
-    <div class="info-item"><div class="il">Artifact Type</div><div class="iv">${def.artifact_type || '—'}</div></div>
-    <div class="info-item"><div class="il">Display Name</div><div class="iv">${def.display_name || '—'}</div></div>
-    <div class="info-item"><div class="il">Primary Zone</div><div class="iv">${p3.can_be_primary ? 'Yes' : 'No'}</div></div>
-    <div class="info-item"><div class="il">Type List Entry</div><div class="iv">${(p3.type_list_entry || '—').trim()}</div></div>
-  `
+  // Info grid — editable inputs
+  document.getElementById('edit-artifact-type').value   = def.artifact_type || ''
+  document.getElementById('edit-display-name').value    = def.display_name  || ''
+  document.getElementById('edit-can-be-primary').value  = p3.can_be_primary ? 'true' : 'false'
+  document.getElementById('edit-type-list-entry').value = p3.type_list_entry || ''
+  document.getElementById('edit-description').value     = def.description || ''
 
-  document.getElementById('preview-desc').textContent = def.description || ''
+  // P3 — separate editable code textareas
+  document.getElementById('p3-indicator-code').value = p3.selection_indicator || ''
+  document.getElementById('p3-pairing-code').value   = p3.pairing_rule        || ''
+  document.getElementById('p3-density-code').value   = p3.density_rule        || ''
 
-  // P3 — selection indicator
-  document.getElementById('p3-indicator-code').textContent = p3.selection_indicator || '(none)'
+  // A1 — editable code textareas
+  document.getElementById('a1-schema-code').value = a1.schema_snippet       || ''
+  document.getElementById('a1-notes-code').value  = a1.schema_usage_notes   || ''
 
-  // P3 — pairing + density
-  const rulesText = [
-    'Pairing rule:', p3.pairing_rule || '(none)',
-    '',
-    'Density rule:', p3.density_rule || '(none)'
-  ].join('\n')
-  document.getElementById('p3-rules-code').textContent = rulesText
+  // Take baseline snapshot for change detection; hide regen banner
+  originalSnapshot = snapshotFields()
+  document.getElementById('regen-section').style.display = 'none'
+  document.getElementById('step2-error').classList.remove('show')
+}
 
-  // A1 — schema snippet
-  document.getElementById('a1-schema-code').textContent = a1.schema_snippet || '(none)'
+/* ─── FIELD SNAPSHOT & CHANGE DETECTION ─────────────────────────────────── */
+function snapshotFields() {
+  return {
+    artifact_type:    document.getElementById('edit-artifact-type').value,
+    display_name:     document.getElementById('edit-display-name').value,
+    can_be_primary:   document.getElementById('edit-can-be-primary').value,
+    type_list_entry:  document.getElementById('edit-type-list-entry').value,
+    description:      document.getElementById('edit-description').value,
+    p3_indicator:     document.getElementById('p3-indicator-code').value,
+    p3_pairing:       document.getElementById('p3-pairing-code').value,
+    p3_density:       document.getElementById('p3-density-code').value,
+    a1_schema:        document.getElementById('a1-schema-code').value,
+    a1_notes:         document.getElementById('a1-notes-code').value,
+  }
+}
 
-  // A1 — usage notes
-  document.getElementById('a1-notes-code').textContent = a1.schema_usage_notes || '(none)'
+function checkEdits() {
+  if (!originalSnapshot) return
+  const cur = snapshotFields()
+  const edited = Object.keys(originalSnapshot).some(k => cur[k] !== originalSnapshot[k])
+  document.getElementById('regen-section').style.display = edited ? 'block' : 'none'
+}
+
+// Attach change listeners to all editable fields on page-2
+;['edit-artifact-type','edit-display-name','edit-can-be-primary','edit-type-list-entry',
+  'edit-description','p3-indicator-code','p3-pairing-code','p3-density-code',
+  'a1-schema-code','a1-notes-code'
+].forEach(id => {
+  const el = document.getElementById(id)
+  if (el) el.addEventListener('input', checkEdits)
+})
+
+/* ─── READ CURRENT EDITED DEFINITION ────────────────────────────────────── */
+function readEditedDefinition() {
+  return {
+    artifact_type: document.getElementById('edit-artifact-type').value.trim(),
+    display_name:  document.getElementById('edit-display-name').value.trim(),
+    description:   document.getElementById('edit-description').value.trim(),
+    p3: {
+      can_be_primary:      document.getElementById('edit-can-be-primary').value === 'true',
+      type_list_entry:     document.getElementById('edit-type-list-entry').value,
+      pairing_rule:        document.getElementById('p3-pairing-code').value,
+      density_rule:        document.getElementById('p3-density-code').value,
+      selection_indicator: document.getElementById('p3-indicator-code').value,
+    },
+    a1: {
+      schema_snippet:     document.getElementById('a1-schema-code').value,
+      schema_usage_notes: document.getElementById('a1-notes-code').value,
+    }
+  }
 }
 
 /* ─── COPY HELPER ────────────────────────────────────────────────────────── */
 function copyBlock(id) {
   const el = document.getElementById(id)
-  navigator.clipboard.writeText(el.textContent || '').catch(() => {})
-  const btn = el.previousElementSibling?.querySelector('.copy-btn')
+  const text = el.tagName === 'TEXTAREA' ? el.value : (el.textContent || '')
+  navigator.clipboard.writeText(text).catch(() => {})
+  // Find the copy button in the preceding .copy-wrap sibling
+  const wrap = el.previousElementSibling
+  const btn  = wrap?.querySelector?.('.copy-btn')
   if (btn) { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 1500) }
 }
 
 /* ─── STEP 2 BACK ────────────────────────────────────────────────────────── */
 document.getElementById('btn-back').addEventListener('click', () => goToPage(1))
+
+/* ─── REGENERATE (validate + refine edited content) ─────────────────────── */
+document.getElementById('btn-regenerate').addEventListener('click', async () => {
+  const errBox = document.getElementById('step2-error')
+  errBox.classList.remove('show')
+
+  const btn = document.getElementById('btn-regenerate')
+  btn.disabled = true
+  btn.textContent = 'Validating with Claude…'
+
+  try {
+    const editedDef = readEditedDefinition()
+    const refined   = await validateAndRefineArtifact(editedDef)
+    definition = refined
+    populateReview(refined)   // repopulates + resets snapshot → hides regen banner
+  } catch (err) {
+    errBox.textContent = err.message
+    errBox.classList.add('show')
+  } finally {
+    btn.disabled = false
+    btn.textContent = 'Regenerate with Claude →'
+  }
+})
 
 /* ─── STEP 2 → STEP 3 (INJECT) ──────────────────────────────────────────── */
 document.getElementById('btn-inject').addEventListener('click', async () => {
@@ -442,8 +690,10 @@ document.getElementById('btn-inject').addEventListener('click', async () => {
   btn.textContent = 'Injecting…'
 
   try {
+    // Always use the current (possibly edited) field values, not the original definition
+    const currentDef = readEditedDefinition()
     goToPage(3)
-    await runInjection(definition)
+    await runInjection(currentDef)
   } catch (err) {
     document.getElementById('inject-error').textContent = err.message
     document.getElementById('inject-error').classList.add('show')
@@ -467,7 +717,7 @@ async function runInjection(def) {
 
     const steps = result.steps || {}
     ids.forEach(id => {
-      const key = id.replace(/-/g, '_')
+      const key     = id.replace(/-/g, '_')
       const success = steps[key] !== false
       setDot(id, success ? 'ok' : 'err')
     })
@@ -492,23 +742,161 @@ function setDot(id, state) {
 /* ─── PAGE NAVIGATION ────────────────────────────────────────────────────── */
 function goToPage(n) {
   document.querySelectorAll('.page').forEach((p, i) => p.classList.toggle('show', i + 1 === n))
-  ;[1,2,3].forEach(i => {
+  ;[1,2,3,4].forEach(i => {
     const dot  = document.getElementById('dot' + i)
     const lbl  = document.getElementById('lbl' + i)
+    if (!dot) return
     if (i < n)  { dot.className = 'circle done';   lbl.className = 'label done'; }
     if (i === n){ dot.className = 'circle active'; lbl.className = 'label active'; }
     if (i > n)  { dot.className = 'circle';        lbl.className = 'label'; }
-    if (i < 3) {
+    if (i < 4) {
       const conn = document.getElementById('conn' + i)
-      conn.classList.toggle('done', i < n)
+      if (conn) conn.classList.toggle('done', i < n)
     }
   })
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
+/* ─── PAGE 3 → PAGE 4 (GENERATE AGENT 5 SCHEMA) ─────────────────────────── */
+document.getElementById('btn-go-agent5').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-go-agent5')
+  btn.disabled = true
+  btn.textContent = 'Generating…'
+
+  goToPage(4)
+
+  // Show generating card, hide review
+  document.getElementById('a5-generating-card').style.display = ''
+  document.getElementById('a5-review-cards').style.display = 'none'
+  document.getElementById('a5-gen-error').classList.remove('show')
+  document.getElementById('dot-a5-gen').className = 'dot dot-spin'
+
+  try {
+    const currentDef  = readEditedDefinition()
+    agent5Definition  = await generateAgent5Schema(currentDef)
+    populateAgent5Review(agent5Definition)
+    document.getElementById('a5-generating-card').style.display = 'none'
+    document.getElementById('a5-review-cards').style.display = ''
+  } catch (err) {
+    document.getElementById('dot-a5-gen').className = 'dot dot-err'
+    document.getElementById('a5-gen-error').textContent = err.message
+    document.getElementById('a5-gen-error').classList.add('show')
+  } finally {
+    btn.disabled = false
+    btn.textContent = 'Generate Agent 5 Schema →'
+  }
+})
+
+/* ─── POPULATE AGENT 5 REVIEW ────────────────────────────────────────────── */
+function populateAgent5Review(a5def) {
+  // Badge
+  const badgeEl = document.getElementById('a5-native-badge')
+  if (a5def.is_native_chart) {
+    badgeEl.innerHTML = `<span class="native-badge chart">Native PowerPoint Chart — maps to chart type: <strong>${a5def.native_chart_type || 'chart'}</strong></span>`
+  } else {
+    badgeEl.innerHTML = `<span class="native-badge custom">Custom Renderer — Agent 5 renders as PowerPoint primitives</span>`
+  }
+  document.getElementById('a5-description').textContent = a5def.description || ''
+  document.getElementById('a5-schema-code').value = a5def.schema_entry || ''
+
+  a5OriginalSnapshot = a5def.schema_entry || ''
+  document.getElementById('a5-regen-section').style.display = 'none'
+  document.getElementById('a5-step-error').classList.remove('show')
+  document.getElementById('a5-inject-card').style.display = 'none'
+  document.getElementById('a5-inject-success').classList.remove('show')
+}
+
+/* ─── AGENT 5 CHANGE DETECTION ───────────────────────────────────────────── */
+document.getElementById('a5-schema-code').addEventListener('input', () => {
+  if (a5OriginalSnapshot === null) return
+  const changed = document.getElementById('a5-schema-code').value !== a5OriginalSnapshot
+  document.getElementById('a5-regen-section').style.display = changed ? 'block' : 'none'
+})
+
+/* ─── AGENT 5 REGENERATE ─────────────────────────────────────────────────── */
+document.getElementById('btn-a5-regenerate').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-a5-regenerate')
+  const errBox = document.getElementById('a5-step-error')
+  errBox.classList.remove('show')
+  btn.disabled = true
+  btn.textContent = 'Validating with Claude…'
+
+  try {
+    const editedEntry = document.getElementById('a5-schema-code').value
+    const editedA5    = { ...agent5Definition, schema_entry: editedEntry }
+    const refined     = await validateAndRefineAgent5Schema(editedA5, readEditedDefinition())
+    agent5Definition  = refined
+    populateAgent5Review(refined)
+  } catch (err) {
+    errBox.textContent = err.message
+    errBox.classList.add('show')
+  } finally {
+    btn.disabled = false
+    btn.textContent = 'Regenerate with Claude →'
+  }
+})
+
+/* ─── AGENT 5 BACK ───────────────────────────────────────────────────────── */
+document.getElementById('btn-a5-back').addEventListener('click', () => goToPage(3))
+
+/* ─── AGENT 5 INJECT ─────────────────────────────────────────────────────── */
+document.getElementById('btn-a5-inject').addEventListener('click', async () => {
+  const errBox = document.getElementById('a5-step-error')
+  errBox.classList.remove('show')
+
+  const btn = document.getElementById('btn-a5-inject')
+  btn.disabled = true
+  btn.textContent = 'Injecting…'
+
+  // Show inject progress card
+  const injectCard = document.getElementById('a5-inject-card')
+  injectCard.style.display = ''
+  ;['a5-types','a5-schema','a5r-types','a5r-schema'].forEach(id => setDot(id, 'spin'))
+  injectCard.scrollIntoView({ behavior: 'smooth' })
+
+  try {
+    const currentDef  = readEditedDefinition()
+    const schemaEntry = document.getElementById('a5-schema-code').value
+    const payload     = {
+      artifact_type:    currentDef.artifact_type,
+      display_name:     currentDef.display_name,
+      is_native_chart:  agent5Definition.is_native_chart,
+      schema_entry:     schemaEntry
+    }
+
+    const result = await injectAgent5Artifact(payload)
+    const steps  = result.steps || {}
+
+    setDot('a5-types',  steps.a5_types  !== false ? 'ok' : 'err')
+    setDot('a5-schema', steps.a5_schema !== false ? 'ok' : 'err')
+    setDot('a5r-types', steps.a5r_types !== false ? 'ok' : 'err')
+    setDot('a5r-schema',steps.a5r_schema!== false ? 'ok' : 'err')
+
+    document.getElementById('a5-success-detail').textContent =
+      `"${currentDef.display_name}" (${currentDef.artifact_type}) is now registered in ` +
+      `A1-FlattenedArtifactSchema.js and agent5-R.js. Both replica files updated.`
+    document.getElementById('a5-inject-success').classList.add('show')
+  } catch (err) {
+    ;['a5-types','a5-schema','a5r-types','a5r-schema'].forEach(id => setDot(id, 'err'))
+    document.getElementById('a5-inject-error').textContent = err.message
+    document.getElementById('a5-inject-error').classList.add('show')
+  } finally {
+    btn.disabled = false
+    btn.textContent = 'Approve & Inject Into Agent 5 Files'
+  }
+})
+
+/* ─── AGENT 5 ADD ANOTHER ────────────────────────────────────────────────── */
+document.getElementById('btn-a5-add-another').addEventListener('click', () => {
+  resetAll()
+})
+
 /* ─── ADD ANOTHER ────────────────────────────────────────────────────────── */
-document.getElementById('btn-add-another').addEventListener('click', () => {
-  imageB64 = null; imageMime = null; definition = null
+document.getElementById('btn-add-another').addEventListener('click', resetAll)
+
+function resetAll() {
+  imageB64 = null; imageMime = null; definition = null; originalSnapshot = null
+  agent5Definition = null; a5OriginalSnapshot = null
   imgThumb.classList.remove('show')
   imgThumb.src = ''
   zoneImg.classList.remove('ready')
@@ -517,14 +905,20 @@ document.getElementById('btn-add-another').addEventListener('click', () => {
   document.getElementById('description').value = ''
   document.getElementById('inject-success').classList.remove('show')
   document.getElementById('inject-error').classList.remove('show')
+  document.getElementById('regen-section').style.display = 'none'
+  document.getElementById('a5-generating-card').style.display = ''
+  document.getElementById('a5-review-cards').style.display = 'none'
+  document.getElementById('a5-inject-card').style.display = 'none'
+  document.getElementById('a5-inject-success').classList.remove('show')
   ;[
     'p3-type','p3-primary','p3-pairing','p3-selection',
     'a1-schema',
-    'a4-type','a4-primary','a4-pairing','a4-density','a4-schema'
+    'a4-type','a4-primary','a4-pairing','a4-density','a4-schema',
+    'a5-types','a5-schema','a5r-types','a5r-schema'
   ].forEach(id => setDot(id, 'wait'))
   goToPage(1)
   updateBtn()
-})
+}
 </script>
 </body>
 </html>
