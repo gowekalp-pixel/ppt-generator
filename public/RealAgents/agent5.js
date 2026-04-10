@@ -2579,8 +2579,16 @@ function _statBarToBlocks(art, content_y, blocks, bt, r2) {
     const headerH   = r2(Math.min(0.48, Math.max(0.30, ah * 0.11)))
     const headerGap = r2(Math.max(0.08, Math.min(0.16, ah * 0.03)))
     const bodyH     = Math.max(0.6, ah - headerH - headerGap)
-    const rowGap    = items.length > 1 ? r2(Math.max(0.14, Math.min(0.28, bodyH * 0.06))) : 0
-    const rowH      = r2(Math.max(0.56, (bodyH - rowGap * Math.max(0, items.length - 1)) / Math.max(items.length, 1)))
+    // Prefer LLM-computed values (set by agent 5 prompt formula, based on artifact_split_hint).
+    // Fall back to JS computation only when absent.
+    const rowGap = items.length > 1
+      ? (art.row_gap_in != null
+          ? r2(art.row_gap_in)
+          : r2(Math.max(0.04, Math.min(0.18, bodyH * 0.05 / items.length))))
+      : 0
+    const rowH = art.row_height_in != null
+      ? r2(art.row_height_in)
+      : r2((bodyH - rowGap * Math.max(0, items.length - 1)) / Math.max(items.length, 1))
     const rowPadX   = r2(Math.max(0.08, Math.min(0.14, aw * 0.018)))
     const colGap    = 0.12
     const headerFontSize     = Math.max(10, Math.min(13,   rowH * 20))

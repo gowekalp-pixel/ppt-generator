@@ -730,43 +730,56 @@ Prioritization rules:
 *********************************************************************************
 
 {
-  "type": "stat_bar",
-  "x": number, "y": number, "w": number, "h": number,
-  "artifact_header": "string **” artifact section label",
-  "column_headers": [
-    {"id": "col1", "value": "string **” column header label", "display_type": "text" | "bar" | "normal"}
+  “type”: “stat_bar”,
+  “x”: number, “y”: number, “w”: number, “h”: number,
+  “artifact_header”: “string **” artifact section label”,
+  “row_height_in”: number,
+  “row_gap_in”: number,
+  “column_headers”: [
+    {“id”: “col1”, “value”: “string **” column header label”, “display_type”: “text” | “bar” | “normal”}
   ],
-  "annotation_style": {
-    "label_font_family": "string",
-    "axis_color": "hex **” muted color for column header labels, dividers, and neutral bars",
-    "annotation_color": "hex **” annotation text column color",
-    "gridline_color": "hex **” header divider rule color",
-    "border_color": "hex **” non-highlighted row border color",
-    "background_color": "hex **” empty bar track fill and highlighted row background tint"
+  “annotation_style”: {
+    “label_font_family”: “string”,
+    “axis_color”: “hex **” muted color for column header labels, dividers, and neutral bars”,
+    “annotation_color”: “hex **” annotation text column color”,
+    “gridline_color”: “hex **” header divider rule color”,
+    “border_color”: “hex **” non-highlighted row border color”,
+    “background_color”: “hex **” empty bar track fill and highlighted row background tint”
   },
-  "scale_UL": number or null **” upper limit for bar scale; null = auto-scale to max row value,
-  "rows": [
+  “scale_UL”: number or null **” upper limit for bar scale; null = auto-scale to max row value,
+  “rows”: [
     {
-      "row_id": number,
-      "row_focus": "Y" | "N" **” "Y" = highlighted row,
-      "cells": [
-        {"col_id": "col1", "value": "string **” numeric string for bar columns, display text for others"}
+      “row_id”: number,
+      “row_focus”: “Y” | “N” **” “Y” = highlighted row,
+      “cells”: [
+        {“col_id”: “col1”, “value”: “string **” numeric string for bar columns, display text for others”}
       ]
     }
   ],
-  "header_block": null or { "text": "string", "x": number, "y": number, "w": number, "h": number,
-    "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
-    "style": "underline" | "brand_fill", "accent_color": "hex" }
+  “header_block”: null or { “text”: “string”, “x”: number, “y”: number, “w”: number, “h”: number,
+    “font_family”: “string”, “font_size”: number, “font_weight”: “semibold”, “color”: “hex”,
+    “style”: “underline” | “brand_fill”, “accent_color”: “hex” }
 }
 
 Stat_bar rules:
-- Layout (column widths, bar geometry, row heights) is computed by JS from x/y/w/h **” do NOT set internal positions
-- column_headers: array of column descriptors. display_type "text" = label/annotation text; "bar" = proportional bar (1**“3 allowed, each with optional "scale_UL" on the column); "normal" = secondary display value
-- COLUMN PAIRING: every "bar" column MUST be immediately followed by a "normal" column with "value": "" **” that column renders the bar's numeric value as readable text. No two "bar" columns may be adjacent.
+- column_headers: array of column descriptors. display_type “text” = label/annotation text; “bar” = proportional bar (1**”3 allowed, each with optional “scale_UL” on the column); “normal” = secondary display value
+- COLUMN PAIRING: every “bar” column MUST be immediately followed by a “normal” column with “value”: “” **” that column renders the bar's numeric value as readable text. No two “bar” columns may be adjacent.
 - axis_color: use a muted caption gray (NOT a brand primary **” too vibrant for column headers)
 - background_color: use a very light tint for the bar track background and highlighted row fill
 - Highlighted bar fill comes automatically from brand chart_palette[0]; do not set it in annotation_style
-- Max 8 rows; mark the most important row row_focus: "Y" (at most 1**“2 highlighted rows)
+- Max 8 rows; mark the most important row row_focus: “Y” (at most 1**”2 highlighted rows)
+
+ROW SIZING — YOU MUST compute and output row_height_in and row_gap_in:
+The JS renderer uses these values directly to position every data row. Incorrect values cause rows to overflow into adjacent artifacts.
+Use this formula (all values in inches, rounded to 2 decimal places):
+  n                  = number of rows
+  col_header_band    = clamp(h × 0.11, 0.30, 0.48)
+  col_header_gap     = clamp(h × 0.03, 0.08, 0.16)
+  body_h             = h − col_header_band − col_header_gap
+  row_gap_in         = clamp(body_h × 0.05 / n, 0.04, 0.18)
+  row_height_in      = (body_h − row_gap_in × (n − 1)) / n
+VERIFY before outputting: row_height_in × n + row_gap_in × (n − 1) must be ≤ body_h.
+If the check fails, reduce row_gap_in until it passes.
 
 *********************************************************************************
 10. COMPARISON_TABLE
