@@ -3311,7 +3311,7 @@ def _compute_title_bottom(slide, title_block, use_template):
     return title_y + max(spec_h, estimated_h)
 
 
-def _shift_blocks_for_title_gap(slide, blocks, use_template):
+def _shift_blocks_for_title_gap(slide, blocks, use_template, canvas_bottom=None):
     """
     Shift content blocks down when the slide title overflows its placeholder.
 
@@ -3320,6 +3320,12 @@ def _shift_blocks_for_title_gap(slide, blocks, use_template):
     when the estimated text height exceeds the original placeholder height.
     In that case we shift all non-title blocks down by the overflow amount so
     content clears the actual rendered title text.
+
+    Overflow guard (canvas_bottom):
+      If the computed downward shift would push any block past canvas_bottom,
+      we instead reduce the title font size until the title fits in one line
+      (no shift needed) rather than displacing content off-slide.
+      Minimum font size tried: 12pt.
 
     Algorithm (template mode):
       overflow = estimated_text_h - ph.height   (only positive matters)
@@ -3349,10 +3355,13 @@ def _shift_blocks_for_title_gap(slide, blocks, use_template):
         #          gap below the title text regardless of whether it is 1-line or multi-line.
         #          content_start = ph_top + est_h + MIN_GAP  (always)
         # Step 2 — shift = content_start - B  (positive=down, negative=up)
-        # Step 3 — apply shift to every non-title block Y (both directions)
+        # Step 3 — if shift would push content past canvas_bottom, reduce title font
+        #          size until the title fits in 1 line (no shift needed).
+        # Step 4 — otherwise apply shift to every non-title block Y (both directions)
         EMU       = 914400.0
         MIN_GAP   = 0.15        # gap below title text before content starts
         shift     = 0.0
+        _ph_state = {}          # captured placeholder state for overflow guard
         try:
             for ph in slide.placeholders:
                 if ph.placeholder_format.idx == 0:
@@ -3387,12 +3396,44 @@ def _shift_blocks_for_title_gap(slide, blocks, use_template):
                         print(f'[title gap fix] {label}'
                               f' content_start={content_start:.3f}" B={B:.3f}"'
                               f' shift={shift:+.3f}" ({direction}) mode=template')
+                    _ph_state = {'ph': ph, 'tmpl_fs': tmpl_fs, 'text': text, 'ph_w': ph_w}
                     break
         except Exception as _e:
             print(f'[title gap fix] ph read failed: {_e}')
 
         if shift == 0.0:
             return blocks, 0.0
+
+        # ── Overflow guard: if shift would push content past canvas bottom,
+        #    reduce title font size until title fits on 1 line (no shift needed).
+        if shift > 0 and canvas_bottom is not None and _ph_state:
+            blocks_with_h = [b for b in non_title
+                             if b.get('h') is not None and b.get('y') is not None]
+            content_bottom = (max(float(b['y']) + float(b['h']) for b in blocks_with_h)
+                              if blocks_with_h
+                              else max(float(b['y']) for b in non_title))
+            if content_bottom + shift > canvas_bottom + 0.01:
+                ph      = _ph_state['ph']
+                tmpl_fs = _ph_state['tmpl_fs']
+                text    = _ph_state['text']
+                ph_w    = _ph_state['ph_w']
+                # Find the smallest font size that makes the title fit in 1 line
+                reduced_fs = None
+                for try_fs in range(int(tmpl_fs) - 1, 11, -1):  # floor: 12pt
+                    if _estimate_text_lines(text, float(try_fs), ph_w) == 1:
+                        reduced_fs = float(try_fs)
+                        break
+                if reduced_fs is not None:
+                    try:
+                        for para in ph.text_frame.paragraphs:
+                            for run in para.runs:
+                                run.font.size = pt(reduced_fs)
+                            para.font.size = pt(reduced_fs)
+                    except Exception as _fe:
+                        print(f'[title gap fix] font reduce failed: {_fe}')
+                    print(f'[title gap fix] overflow guard: title font {tmpl_fs}pt → {reduced_fs}pt'
+                          f', content stays at original Y (no shift)')
+                    return blocks, 0.0
 
         shifted = []
         for b in blocks:
@@ -3456,8 +3497,8 @@ def _set_subtitle_placeholder_top(slide, top_in):
 
 
 # Backward-compatible alias
-def _shift_blocks_for_title_overflow(slide, blocks, use_template):
-    return _shift_blocks_for_title_gap(slide, blocks, use_template)
+def _shift_blocks_for_title_overflow(slide, blocks, use_template, canvas_bottom=None):
+    return _shift_blocks_for_title_gap(slide, blocks, use_template, canvas_bottom=canvas_bottom)
 
 
 # ─── BLOCKS-BASED RENDERER ────────────────────────────────────────────────────
@@ -3930,7 +3971,12 @@ def render_blocks(slide, slide_spec, bt, use_template):
             except Exception as e:
                 print(f'render_blocks: error on block_type=title: {e}')
 
-        blocks, shift = _shift_blocks_for_title_gap(slide, blocks, use_template)
+        _canvas      = slide_spec.get('canvas') or {}
+        _canvas_h    = float(_canvas.get('height_in') or 7.5)
+        _margin_bot  = float((_canvas.get('margin') or {}).get('bottom') or 0.3)
+        _canvas_bot  = round(_canvas_h - _margin_bot, 3)
+        blocks, shift = _shift_blocks_for_title_gap(slide, blocks, use_template,
+                                                     canvas_bottom=_canvas_bot)
 
         subtitle_block = next((b for b in blocks if b.get('block_type') == 'subtitle'), None)
         if subtitle_block:
