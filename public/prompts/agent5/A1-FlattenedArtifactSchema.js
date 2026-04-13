@@ -59,7 +59,7 @@ Inspect the Agent 4 artifact:
     "text": "string **” the artifact_header value from Agent 4",
     "x": number, "y": number, "w": number, "h": number,
     "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
-    "style": "underline" | "brand_fill",
+    "style": "underline",
     "accent_color": "hex",
     "placeholder_ref": true or false
   }
@@ -251,7 +251,7 @@ GEOMETRY **” rows layout (renderer uses these formulas):
     "text": "string **” the artifact_header value from Agent 4",
     "x": number, "y": number, "w": number, "h": number,
     "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
-    "style": "underline" | "brand_fill",
+    "style": "underline",
     "accent_color": "hex"
   }
 }
@@ -463,7 +463,7 @@ Card styling rules:
     "text": "string **” the artifact_header value from Agent 4",
     "x": number, "y": number, "w": number, "h": number,
     "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
-    "style": "underline" | "brand_fill",
+    "style": "underline",
     "accent_color": "hex"
   }
 }
@@ -543,7 +543,7 @@ WORKFLOW MICRO-LAYOUT OWNERSHIP:
     "text": "string **” the artifact_header value from Agent 4",
     "x": number, "y": number, "w": number, "h": number,
     "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
-    "style": "underline" | "brand_fill",
+    "style": "underline",
     "accent_color": "hex"
   }
 }
@@ -608,7 +608,7 @@ TABLE MICRO-LAYOUT OWNERSHIP:
     "text": "string **” the artifact_header value from Agent 4",
     "x": number, "y": number, "w": number, "h": number,
     "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
-    "style": "underline" | "brand_fill",
+    "style": "underline",
     "accent_color": "hex"
   }
 }
@@ -654,7 +654,7 @@ Matrix rules:
     "text": "string **” the artifact_header value from Agent 4",
     "x": number, "y": number, "w": number, "h": number,
     "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
-    "style": "underline" | "brand_fill",
+    "style": "underline",
     "accent_color": "hex"
   }
 }
@@ -701,7 +701,7 @@ Driver tree rules:
     "text": "string **” the artifact_header value from Agent 4",
     "x": number, "y": number, "w": number, "h": number,
     "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
-    "style": "underline" | "brand_fill",
+    "style": "underline",
     "accent_color": "hex"
   }
 }
@@ -758,7 +758,7 @@ Prioritization rules:
   ],
   “header_block”: null or { “text”: “string”, “x”: number, “y”: number, “w”: number, “h”: number,
     “font_family”: “string”, “font_size”: number, “font_weight”: “semibold”, “color”: “hex”,
-    “style”: “underline” | “brand_fill”, “accent_color”: “hex” }
+    “style”: “underline”, “accent_color”: “hex” }
 }
 
 Stat_bar rules:
@@ -973,13 +973,10 @@ LAYOUT MODE **” detecting if the layout has a header area:
         h = 0.30
     â†’ adjust artifact y = body_placeholder.y_in + 0.30
     â†’ adjust artifact h = body_placeholder.h_in - 0.30
-    â†’ choose style:
-        "underline"  **” thin line under the header text using brand accent color
-        "brand_fill" **” fill header area with brand primary/secondary, white text
-      Default: "underline"
+    â†’ style is always “underline” (see ARTIFACT HEADER RULES in A2-SlideRules)
 
 SCRATCH MODE:
   - Position header_block at the top of zone inner bounds
   - artifact y += header_block.h; artifact h -= header_block.h
-  - Choose style same as above
+  - style is always “underline”
 `

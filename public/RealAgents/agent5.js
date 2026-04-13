@@ -1862,7 +1862,7 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
           let bodyStartY = ay
           if (hb && hb.text) {
             const hbH = Math.max(hb.h != null ? +hb.h : 0, estimateHeaderBlockHeight(hb.text, aw, hb.font_size || 11))
-            const hbRule = (hb.style === 'brand_fill') ? 0 : 0.005  // hairline rule
+            const hbRule = 0.005  // hairline rule (always underline style)
             const hbGap  = 0.06
             bodyStartY = round2(ay + hbH + hbRule + hbGap)
           }
@@ -2276,8 +2276,7 @@ function estimateHeaderBlockHeight(text, widthIn, fontSizePt) {
 
 function normalizeArtifactHeaderBands(zones) {
   // Align header_block bottom edges across artifacts whose headers start at the same y.
-  // Applied to ALL header styles (underline and brand_fill) **” the bottom-edge alignment
-  // is style-agnostic and prevents ragged-looking multi-zone slides.
+  // Prevents ragged-looking multi-zone slides.
   const items = []
   for (const zone of (zones || [])) {
     for (const art of (zone.artifacts || [])) {
@@ -3908,7 +3907,15 @@ function _comparisonTableToBlocks(art, content_y, blocks, bt, r2) {
   const getIconClr = t => iconClr[t] || iconClr.neutral
 
   // ── Header row ────────────────────────────────────────────────
-  const headerFill     = cs.header_fill      || bt.primary_color || '#0078AE'
+  // Column header must be visually distinct from the artifact header bar (which uses bt.primary_color).
+  // If no explicit header_fill is set, derive a lighter variant so the two bars don't look identical.
+  const _lightenHex = (hex, amt) => {
+    const h = (hex || '#0078AE').replace('#', '').replace(/^(.{3})$/, '$1$1')
+    return '#' + [0, 2, 4].map(i =>
+      Math.min(255, Math.round(parseInt(h.slice(i, i + 2), 16) + amt)).toString(16).padStart(2, '0')
+    ).join('')
+  }
+  const headerFill     = cs.header_fill      || _lightenHex(bt.primary_color || '#0078AE', 30)
   const headerTextClr  = cs.header_text_color || '#FFFFFF'
   blocks.push({ block_type: 'rect', x: ax, y: ay, w: aw, h: headerH,
     fill_color: headerFill, border_color: null, border_width: 0, corner_radius: 6 })
@@ -3946,20 +3953,29 @@ function _comparisonTableToBlocks(art, content_y, blocks, bt, r2) {
       const subtext  = String(cell.subtext   || '')
 
       if (ci === 0) {
-        // Option name — bold, no pill
-        const nameH  = r2(rowH > 0.5 ? rowH * 0.52 : rowH)
-        const nameY  = r2(rowY + (rowH - nameH) / 2)
-        blocks.push({ block_type: 'text_box',
-          x: r2(cx + colPad), y: nameY, w: r2(cw - colPad - 0.04), h: nameH,
-          text: value, font_family: titleFont,
-          font_size: nameFs, bold: true,
-          color: cs.option_name_color || '#1F2937', align: 'left', valign: 'middle' })
+        // Option name + subtext — stacked with an explicit gap so they never crowd each other
         if (subtext) {
+          const nameLineH  = r2((nameFs / 72) * 1.3)
+          const subLineH   = r2((subtextFs / 72) * 1.3)
+          const stackGap   = r2(Math.max(0.04, rowH * 0.06))
+          const stackH     = r2(nameLineH + stackGap + subLineH)
+          const stackY     = r2(rowY + (rowH - stackH) / 2)
           blocks.push({ block_type: 'text_box',
-            x: r2(cx + colPad), y: r2(nameY + nameH * 0.55), w: r2(cw - colPad - 0.04), h: r2(nameH * 0.45),
+            x: r2(cx + colPad), y: stackY, w: r2(cw - colPad - 0.04), h: nameLineH,
+            text: value, font_family: titleFont,
+            font_size: nameFs, bold: true,
+            color: cs.option_name_color || '#1F2937', align: 'left', valign: 'middle' })
+          blocks.push({ block_type: 'text_box',
+            x: r2(cx + colPad), y: r2(stackY + nameLineH + stackGap), w: r2(cw - colPad - 0.04), h: subLineH,
             text: subtext, font_family: bodyFont,
             font_size: subtextFs, bold: false,
             color: '#6B7280', align: 'left', valign: 'top' })
+        } else {
+          blocks.push({ block_type: 'text_box',
+            x: r2(cx + colPad), y: rowY, w: r2(cw - colPad - 0.04), h: rowH,
+            text: value, font_family: titleFont,
+            font_size: nameFs, bold: true,
+            color: cs.option_name_color || '#1F2937', align: 'left', valign: 'middle' })
         }
       } else if (iconType) {
         // Icon badge
@@ -3987,7 +4003,7 @@ function _comparisonTableToBlocks(art, content_y, blocks, bt, r2) {
         const pillX   = r2(cx + (cw - pillW) / 2)
         const pillY   = r2(rowY + (rowH - totalBlockH) / 2)
         blocks.push({ block_type: 'rect', x: pillX, y: pillY, w: pillW, h: pillH,
-          fill_color: tc.fill, border_color: null, border_width: 0, corner_radius: 10 })
+          fill_color: tc.fill, border_color: null, border_width: 0, corner_radius: 6 })
         blocks.push({ block_type: 'text_box',
           x: r2(pillX + 0.06), y: pillY, w: r2(pillW - 0.12), h: pillH,
           text: value, font_family: bodyFont,
@@ -4372,55 +4388,32 @@ function _artifactToBlocks(art, blocks, bt, r2, fontSizeFloor) {
     const hx  = hb.x  != null ? hb.x  : ax
     const hy  = hb.y  != null ? hb.y  : ay
     const hw  = hb.w  != null ? hb.w  : aw
-    const hfs = hb.font_size || 11
+    const hfs = 11   // fixed per ARTIFACT HEADER RULES — not overridable per-artifact
     const estimatedH = estimateHeaderBlockHeight(hb.text, hw, hfs)
     const hh  = Math.max(hb.h != null ? hb.h : 0.30, estimatedH)
-    const headerStyle = hb.style || 'underline'
-    const headerRuleH = 0.005
+    const headerRuleH  = 0.005
     const headerGapBelow = 0.06
-    content_y = r2(hy + hh + (headerStyle === 'underline' ? (headerRuleH + headerGapBelow) : headerGapBelow))
+    content_y = r2(hy + hh + headerRuleH + headerGapBelow)
 
-    if (headerStyle === 'brand_fill') {
-      // Filled header band
-      blocks.push({
-        block_type:    'rect',
-        x: hx, y: hy, w: hw, h: hh,
-        fill_color:    hb.fill_color   || bt.primary_color || '#1A3C8F',
-        border_color:  null,
-        border_width:  0,
-        corner_radius: hb.corner_radius || 0
-      })
-      blocks.push({
-        block_type:  'text_box',
-        x: r2(hx + 0.08), y: hy, w: r2(hw - 0.16), h: hh,
-        text:        hb.text,
-        font_family: hb.font_family || bt.title_font_family || 'Arial',
-        font_size:   hfs,
-        bold:        true,
-        color:       hb.text_color || '#FFFFFF',
-        align:       'left',
-        valign:      'middle'
-      })
-    } else {
-      // Underline header
-      blocks.push({
-        block_type:  'text_box',
-        x: hx, y: hy, w: hw, h: hh,
-        text:        hb.text,
-        font_family: hb.font_family || bt.title_font_family || 'Arial',
-        font_size:   hfs,
-        bold:        true,
-        color:       hb.color || bt.primary_color || '#1A3C8F',
-        align:       'left',
-        valign:      'top'
-      })
-      blocks.push({
-        block_type:  'rule',
-        x: hx, y: r2(hy + hh), w: hw, h: 0.005,
-        color:       hb.rule_color || bt.primary_color || '#1A3C8F',
-        line_width:  0.5
-      })
-    }
+    // Artifact headers are always underline style: bold primary-color text + thin rule below.
+    // "brand_fill" is reserved for future product use and never emitted here.
+    blocks.push({
+      block_type:  'text_box',
+      x: hx, y: hy, w: hw, h: hh,
+      text:        hb.text,
+      font_family: hb.font_family || bt.title_font_family || 'Arial',
+      font_size:   hfs,
+      bold:        true,
+      color:       bt.primary_color || hb.color || '#1A3C8F',
+      align:       'left',
+      valign:      'top'
+    })
+    blocks.push({
+      block_type:  'rule',
+      x: hx, y: r2(hy + hh), w: hw, h: 0.005,
+      color:       bt.primary_color || hb.rule_color || '#1A3C8F',
+      line_width:  0.5
+    })
   }
 
   // ****** Artifact body ***************************************************************************************************************************************************************************

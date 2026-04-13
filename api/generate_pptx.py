@@ -347,12 +347,7 @@ def infer_slide_header_style(slide_spec):
 
 
 def infer_artifact_header_style(artifact_type):
-    """Choose header emphasis by artifact type."""
-    artifact_type = str(artifact_type or '').lower()
-    if artifact_type == 'insight_text':
-        return 'brand_fill'
-    if artifact_type in FLATTENED_STRUCTURED_ARTIFACTS:
-        return 'underline'
+    """Choose header style. Always underline — brand_fill is reserved for future product use."""
     return 'underline'
 
 
@@ -609,53 +604,42 @@ def place_in_placeholder(slide, ph_idx, text, style_spec, bt,
 def render_header_block(slide, header_block, bt, header_style='underline'):
     """
     Render an artifact header label.
-    style='underline' — text + thin brand-colour rule below.
-    style='brand_fill' — filled rectangle with contrasting text.
+    Always underline style: bold primary-color text + thin rule below.
+    brand_fill is reserved for future product use and is never emitted by Agent 5.
     """
     if not header_block:
         return
     x     = header_block.get('x', 0)
     y     = header_block.get('y', 0)
     w     = header_block.get('w', 4)
-    h     = header_block.get('h', 0.3)
     text  = header_block.get('text', '')
-    style = header_style or 'underline'
 
     if not text:
         return
 
     primary   = bt.get('primary_color', '#1A3C8F')
     font_fam  = bt.get('title_font_family', 'Arial')
-    font_size = header_block.get('font_size', 11)
+    font_size = 11  # fixed per ARTIFACT HEADER RULES
     text_h = estimate_header_block_height(text, w, font_size)
     rule_gap = 0.02
     rule_h = 0.005
 
-    if style == 'brand_fill':
-        fill_color = header_block.get('accent_color') or primary
-        add_filled_rect(slide, x, y, w, h, fill_hex=fill_color)
-        text_color = '#FFFFFF' if is_dark_color(fill_color) else '#111111'
-        add_text_box(slide, x + 0.08, y, w - 0.16, h,
-                     text, font_fam, font_size, True, text_color, 'left', 'middle')
-        return y + h
-    else:
-        # Underline style
-        add_text_box(slide, x, y, w, text_h,
-                     text, font_fam, font_size, True, primary, 'left', 'top')
-        rule_y = y + text_h + rule_gap
-        # Use a connector (true hairline) instead of a filled rect to avoid PPTX minimum-height clamping
-        from pptx.enum.shapes import MSO_CONNECTOR
-        try:
-            rule_line = slide.shapes.add_connector(
-                MSO_CONNECTOR.STRAIGHT,
-                inches(x), inches(rule_y), inches(x + w), inches(rule_y)
-            )
-            rule_line.line.color.rgb = hex_to_rgb(primary)
-            rule_line.line.width = pt(0.5)
-            _strip_connector_endpoint_refs(rule_line)
-        except Exception:
-            pass
-        return rule_y + rule_h
+    add_text_box(slide, x, y, w, text_h,
+                 text, font_fam, font_size, True, primary, 'left', 'top')
+    rule_y = y + text_h + rule_gap
+    # Use a connector (true hairline) instead of a filled rect to avoid PPTX minimum-height clamping
+    from pptx.enum.shapes import MSO_CONNECTOR
+    try:
+        rule_line = slide.shapes.add_connector(
+            MSO_CONNECTOR.STRAIGHT,
+            inches(x), inches(rule_y), inches(x + w), inches(rule_y)
+        )
+        rule_line.line.color.rgb = hex_to_rgb(primary)
+        rule_line.line.width = pt(0.5)
+        _strip_connector_endpoint_refs(rule_line)
+    except Exception:
+        pass
+    return rule_y + rule_h
 
 
 # ─── SLIDE RENDERERS ──────────────────────────────────────────────────────────
@@ -2793,43 +2777,18 @@ def _write_heading_to_header_ph(slide, heading_text, header_ph_idx, bt, header_s
                 except Exception:
                     pass
                 try:
-                    font_size = 10
+                    font_size = 11  # fixed per ARTIFACT HEADER RULES
                     text_h = estimate_header_block_height(heading_text, ph_w, font_size)
-                    if header_style == 'brand_fill':
-                        fill_color = bt.get('primary_color', '#1A3C8F')
-                        text_color = '#FFFFFF' if is_dark_color(fill_color) else '#111111'
-                        # Hide placeholder text and render an explicit fill header above it.
-                        try:
-                            ph.text_frame.clear()
-                        except Exception:
-                            pass
-                        add_filled_rect(slide, ph_x, ph_y, ph_w, HEADER_HEIGHT, fill_hex=fill_color)
-                        add_text_box(
-                            slide,
-                            ph_x + MIN_TEXT_MARGIN,
-                            ph_y,
-                            max(0.2, ph_w - MIN_TEXT_MARGIN * 2),
-                            HEADER_HEIGHT,
-                            str(heading_text),
-                            bt.get('title_font_family', 'Arial'),
-                            font_size,
-                            True,
-                            text_color,
-                            'left',
-                            'middle'
-                        )
-                        return ph_y + HEADER_HEIGHT
-                    else:
-                        rule_y = ph_y + text_h + 0.02
-                        add_filled_rect(
-                            slide,
-                            ph_x,
-                            rule_y,
-                            ph_w,
-                            0.03,
-                            fill_hex=bt.get('primary_color', '#1A3C8F')
-                        )
-                        return rule_y + 0.03
+                    rule_y = ph_y + text_h + 0.02
+                    add_filled_rect(
+                        slide,
+                        ph_x,
+                        rule_y,
+                        ph_w,
+                        0.03,
+                        fill_hex=bt.get('primary_color', '#1A3C8F')
+                    )
+                    return rule_y + 0.03
                 except Exception:
                     pass
                 return ph_y + max(text_h, HEADER_HEIGHT)

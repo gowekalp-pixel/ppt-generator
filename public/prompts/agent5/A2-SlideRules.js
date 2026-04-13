@@ -88,4 +88,35 @@ Compute all coordinates from layout_hint splits.
 - Artifact headers: compute header_block at top of zone inner bounds; shrink artifact area
 - global_elements: include footer and page_number when uses_template is false
 - canvas.background: set when uses_template is false
+
+*********************************************************************************
+ARTIFACT HEADER RULES
+*********************************************************************************
+
+Every artifact header_block MUST follow these rules exactly — no exceptions:
+
+STYLE: always "underline"
+  - Render the header text in the brand primary color, bold
+  - Draw a thin rule line immediately below the text using the same primary color
+  - Never use "brand_fill" — the filled-bar style is reserved for future product use
+    and must not be output by this agent
+
+TYPOGRAPHY:
+  - font_size: 11 (fixed — do not scale with zone size or artifact type)
+  - font_weight: "bold"
+  - color: bt.primary_color (from brand theme)
+  - font_family: bt.title_font_family
+
+DIMENSIONS:
+  - h: 0.30 (fixed header band height)
+  - x, y, w: derived from layout placeholder or zone bounds as normal
+
+FIELD VALUES to always set on header_block:
+  {
+    "style": "underline",
+    "font_size": 11,
+    "font_weight": "bold",
+    "color": "<brand primary color hex>",
+    "accent_color": "<brand primary color hex>"
+  }
 `

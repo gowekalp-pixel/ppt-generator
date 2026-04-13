@@ -351,7 +351,7 @@ Inspect the Agent 4 artifact:
     "text": "string **” the artifact_header value from Agent 4",
     "x": number, "y": number, "w": number, "h": number,
     "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
-    "style": "underline" | "brand_fill",
+    "style": "underline",
     "accent_color": "hex",
     "placeholder_ref": true or false
   }
@@ -542,7 +542,7 @@ GEOMETRY **” rows layout (renderer uses these formulas):
     "text": "string **” the artifact_header value from Agent 4",
     "x": number, "y": number, "w": number, "h": number,
     "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
-    "style": "underline" | "brand_fill",
+    "style": "underline",
     "accent_color": "hex"
   }
 }
@@ -753,7 +753,7 @@ Card styling rules:
     "text": "string **” the artifact_header value from Agent 4",
     "x": number, "y": number, "w": number, "h": number,
     "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
-    "style": "underline" | "brand_fill",
+    "style": "underline",
     "accent_color": "hex"
   }
 }
@@ -833,7 +833,7 @@ WORKFLOW MICRO-LAYOUT OWNERSHIP:
     "text": "string **” the artifact_header value from Agent 4",
     "x": number, "y": number, "w": number, "h": number,
     "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
-    "style": "underline" | "brand_fill",
+    "style": "underline",
     "accent_color": "hex"
   }
 }
@@ -897,7 +897,7 @@ TABLE MICRO-LAYOUT OWNERSHIP:
     "text": "string **” the artifact_header value from Agent 4",
     "x": number, "y": number, "w": number, "h": number,
     "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
-    "style": "underline" | "brand_fill",
+    "style": "underline",
     "accent_color": "hex"
   }
 }
@@ -943,7 +943,7 @@ Matrix rules:
     "text": "string **” the artifact_header value from Agent 4",
     "x": number, "y": number, "w": number, "h": number,
     "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
-    "style": "underline" | "brand_fill",
+    "style": "underline",
     "accent_color": "hex"
   }
 }
@@ -990,7 +990,7 @@ Driver tree rules:
     "text": "string **” the artifact_header value from Agent 4",
     "x": number, "y": number, "w": number, "h": number,
     "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
-    "style": "underline" | "brand_fill",
+    "style": "underline",
     "accent_color": "hex"
   }
 }
@@ -1044,7 +1044,7 @@ Prioritization rules:
   ],
   "header_block": null or { "text": "string", "x": number, "y": number, "w": number, "h": number,
     "font_family": "string", "font_size": number, "font_weight": "semibold", "color": "hex",
-    "style": "underline" | "brand_fill", "accent_color": "hex" }
+    "style": "underline", "accent_color": "hex" }
 }
 
 Stat_bar rules:
@@ -1247,15 +1247,12 @@ LAYOUT MODE **” detecting if the layout has a header area:
         h = 0.30
     â†’ adjust artifact y = body_placeholder.y_in + 0.30
     â†’ adjust artifact h = body_placeholder.h_in - 0.30
-    â†’ choose style:
-        "underline"  **” thin line under the header text using brand accent color
-        "brand_fill" **” fill header area with brand primary/secondary, white text
-      Default: "underline"
+    â†’ style is always “underline” (bold primary-color text + thin rule below)
 
 SCRATCH MODE:
   - Position header_block at the top of zone inner bounds
   - artifact y += header_block.h; artifact h -= header_block.h
-  - Choose style same as above
+  - style is always “underline”
 
 *********************************************************************************
 INTERNAL ZONE LAYOUT (2 artifacts)
@@ -3539,7 +3536,7 @@ function computeArtifactInternals(zones, canvas, brandTokens) {
           let bodyStartY = ay
           if (hb && hb.text) {
             const hbH = Math.max(hb.h != null ? +hb.h : 0, estimateHeaderBlockHeight(hb.text, aw, hb.font_size || 11))
-            const hbRule = (hb.style === 'brand_fill') ? 0 : 0.005  // hairline rule
+            const hbRule = 0.005  // hairline rule (always underline style)
             const hbGap  = 0.06
             bodyStartY = round2(ay + hbH + hbRule + hbGap)
           }
@@ -3953,8 +3950,7 @@ function estimateHeaderBlockHeight(text, widthIn, fontSizePt) {
 
 function normalizeArtifactHeaderBands(zones) {
   // Align header_block bottom edges across artifacts whose headers start at the same y.
-  // Applied to ALL header styles (underline and brand_fill) **” the bottom-edge alignment
-  // is style-agnostic and prevents ragged-looking multi-zone slides.
+  // Prevents ragged-looking multi-zone slides.
   const items = []
   for (const zone of (zones || [])) {
     for (const art of (zone.artifacts || [])) {
@@ -5992,55 +5988,31 @@ function _artifactToBlocks(art, blocks, bt, r2, fontSizeFloor) {
     const hx  = hb.x  != null ? hb.x  : ax
     const hy  = hb.y  != null ? hb.y  : ay
     const hw  = hb.w  != null ? hb.w  : aw
-    const hfs = hb.font_size || 11
+    const hfs = 11   // fixed per ARTIFACT HEADER RULES — not overridable per-artifact
     const estimatedH = estimateHeaderBlockHeight(hb.text, hw, hfs)
     const hh  = Math.max(hb.h != null ? hb.h : 0.30, estimatedH)
-    const headerStyle = hb.style || 'underline'
-    const headerRuleH = 0.005
+    const headerRuleH  = 0.005
     const headerGapBelow = 0.06
-    content_y = r2(hy + hh + (headerStyle === 'underline' ? (headerRuleH + headerGapBelow) : headerGapBelow))
+    content_y = r2(hy + hh + headerRuleH + headerGapBelow)
 
-    if (headerStyle === 'brand_fill') {
-      // Filled header band
-      blocks.push({
-        block_type:    'rect',
-        x: hx, y: hy, w: hw, h: hh,
-        fill_color:    hb.fill_color   || bt.primary_color || '#1A3C8F',
-        border_color:  null,
-        border_width:  0,
-        corner_radius: hb.corner_radius || 0
-      })
-      blocks.push({
-        block_type:  'text_box',
-        x: r2(hx + 0.08), y: hy, w: r2(hw - 0.16), h: hh,
-        text:        hb.text,
-        font_family: hb.font_family || bt.title_font_family || 'Arial',
-        font_size:   hfs,
-        bold:        true,
-        color:       hb.text_color || '#FFFFFF',
-        align:       'left',
-        valign:      'middle'
-      })
-    } else {
-      // Underline header
-      blocks.push({
-        block_type:  'text_box',
-        x: hx, y: hy, w: hw, h: hh,
-        text:        hb.text,
-        font_family: hb.font_family || bt.title_font_family || 'Arial',
-        font_size:   hfs,
-        bold:        true,
-        color:       hb.color || bt.primary_color || '#1A3C8F',
-        align:       'left',
-        valign:      'top'
-      })
-      blocks.push({
-        block_type:  'rule',
-        x: hx, y: r2(hy + hh), w: hw, h: 0.005,
-        color:       hb.rule_color || bt.primary_color || '#1A3C8F',
-        line_width:  0.5
-      })
-    }
+    // Artifact headers are always underline style: bold primary-color text + thin rule below.
+    blocks.push({
+      block_type:  'text_box',
+      x: hx, y: hy, w: hw, h: hh,
+      text:        hb.text,
+      font_family: hb.font_family || bt.title_font_family || 'Arial',
+      font_size:   hfs,
+      bold:        true,
+      color:       bt.primary_color || hb.color || '#1A3C8F',
+      align:       'left',
+      valign:      'top'
+    })
+    blocks.push({
+      block_type:  'rule',
+      x: hx, y: r2(hy + hh), w: hw, h: 0.005,
+      color:       bt.primary_color || hb.rule_color || '#1A3C8F',
+      line_width:  0.5
+    })
   }
 
   // ****** Artifact body ***************************************************************************************************************************************************************************
