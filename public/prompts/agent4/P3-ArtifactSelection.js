@@ -323,8 +323,6 @@ OPTIONAL zones:
 
 ─── WORKFLOW SELECTION Indicators ─────────────────────────────
 
-─── WORKFLOW SELECTION INDICATORS ───────────────────────
-
 workflow is valid only when the slide’s message depends on structure, sequence, or causal breakdown.
 Do NOT use workflow when a chart, table, cards, or reasoning artifact would explain the message more directly.
 
