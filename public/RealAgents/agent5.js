@@ -3880,7 +3880,12 @@ function _comparisonTableToBlocks(art, content_y, blocks, bt, r2) {
   const dataColW    = r2((aw - col0W) / dataCols)
   const headerH     = cs.header_height || 0.34
   const rowH        = r2((ah - headerH - rowGap * Math.max(0, numRows - 1)) / Math.max(numRows, 1))
-  const iconSize    = Math.min(0.26, rowH * 0.65)
+  // Dynamic sizing — all derived from rowH/headerH so font scale with the number of rows
+  const iconSize    = Math.min(rowH * 0.55, dataColW * 0.40)
+  const headerFs    = Math.max(8, Math.min(cs.header_font_size  || 12, Math.floor(headerH * 72 * 0.40)))
+  const nameFs      = Math.max(7, Math.min(cs.option_name_font_size || 16, Math.floor(rowH * 72 * 0.28)))
+  const subtextFs   = Math.max(6, Math.min(cs.subtext_font_size || 11, Math.floor(rowH * 72 * 0.19)))
+  const subtextH    = r2(Math.max(0.12, rowH * 0.25))
 
   const colX = [ax]
   for (let ci = 1; ci < numCols; ci++) colX.push(r2(ax + col0W + (ci - 1) * dataColW))
@@ -3905,7 +3910,6 @@ function _comparisonTableToBlocks(art, content_y, blocks, bt, r2) {
   // ── Header row ────────────────────────────────────────────────
   const headerFill     = cs.header_fill      || bt.primary_color || '#0078AE'
   const headerTextClr  = cs.header_text_color || '#FFFFFF'
-  const headerFs       = cs.header_font_size  || 10
   blocks.push({ block_type: 'rect', x: ax, y: ay, w: aw, h: headerH,
     fill_color: headerFill, border_color: null, border_width: 0, corner_radius: 6 })
   columns.forEach((col, ci) => {
@@ -3931,12 +3935,6 @@ function _comparisonTableToBlocks(art, content_y, blocks, bt, r2) {
       fill_color: isRec ? recFill : (ri % 2 === 0 ? rowFill : altRowFill),
       border_color: isRec ? recBorderClr : dividerClr,
       border_width: isRec ? 1.2 : 0.5, corner_radius: 4 })
-    // Recommended accent strip on left edge
-    if (isRec) {
-      blocks.push({ block_type: 'rect', x: ax, y: rowY, w: 0.05, h: rowH,
-        fill_color: recBorderClr, border_color: null, border_width: 0, corner_radius: 4 })
-    }
-
     const cells = Array.isArray(row.cells) ? row.cells : []
     cells.forEach((cell, ci) => {
       if (ci >= numCols) return
@@ -3949,7 +3947,6 @@ function _comparisonTableToBlocks(art, content_y, blocks, bt, r2) {
 
       if (ci === 0) {
         // Option name — bold, no pill
-        const nameFs = cs.option_name_font_size || 11
         const nameH  = r2(rowH > 0.5 ? rowH * 0.52 : rowH)
         const nameY  = r2(rowY + (rowH - nameH) / 2)
         blocks.push({ block_type: 'text_box',
@@ -3961,31 +3958,34 @@ function _comparisonTableToBlocks(art, content_y, blocks, bt, r2) {
           blocks.push({ block_type: 'text_box',
             x: r2(cx + colPad), y: r2(nameY + nameH * 0.55), w: r2(cw - colPad - 0.04), h: r2(nameH * 0.45),
             text: subtext, font_family: bodyFont,
-            font_size: cs.subtext_font_size || 9, bold: false,
+            font_size: subtextFs, bold: false,
             color: '#6B7280', align: 'left', valign: 'top' })
         }
       } else if (iconType) {
         // Icon badge
         const ic  = getIconClr(tone)
+        const iconOffset = subtext ? r2(rowH * 0.12) : 0
         const bx  = r2(cx + (cw - iconSize) / 2)
-        const by  = r2(rowY + (rowH - iconSize) / 2 - (subtext ? 0.10 : 0))
+        const by  = r2(rowY + (rowH - iconSize) / 2 - iconOffset)
         blocks.push({ block_type: 'icon_badge', x: bx, y: by, w: iconSize, h: iconSize,
           icon: iconType, fill_color: ic.fill, icon_color: ic.icon })
         if (subtext) {
           blocks.push({ block_type: 'text_box',
-            x: r2(cx + colPad * 0.5), y: r2(by + iconSize + 0.02), w: r2(cw - colPad), h: 0.16,
+            x: r2(cx + colPad * 0.5), y: r2(by + iconSize + 0.02), w: r2(cw - colPad), h: subtextH,
             text: subtext, font_family: bodyFont,
-            font_size: cs.subtext_font_size || 8, bold: false,
+            font_size: subtextFs, bold: false,
             color: ic.icon, align: 'center', valign: 'top' })
         }
       } else if (value) {
-        // Value pill
-        const tc     = getToneClr(tone)
-        const pillW  = r2(Math.min(cw - colPad, Math.max(0.50, value.length * 0.068 + 0.20)))
-        const pillH  = Math.min(0.26, rowH * 0.55)
-        const pillX  = r2(cx + (cw - pillW) / 2)
-        const pillY  = r2(rowY + (rowH - pillH) / 2 - (subtext ? 0.10 : 0))
-        const valueFs = cs.value_font_size || 10
+        // Value pill — height and font size computed from rowH
+        const tc      = getToneClr(tone)
+        const pillH   = r2(subtext ? Math.min(rowH * 0.50, rowH - subtextH - 0.05) : rowH * 0.55)
+        const valueFs = Math.max(7, Math.min(cs.value_font_size || 16, Math.floor(pillH * 72 * 0.55)))
+        const charW   = valueFs * 0.0068
+        const pillW   = r2(Math.min(cw - colPad, Math.max(cw * 0.55, value.length * charW + 0.20)))
+        const totalBlockH = subtext ? pillH + 0.03 + subtextH : pillH
+        const pillX   = r2(cx + (cw - pillW) / 2)
+        const pillY   = r2(rowY + (rowH - totalBlockH) / 2)
         blocks.push({ block_type: 'rect', x: pillX, y: pillY, w: pillW, h: pillH,
           fill_color: tc.fill, border_color: null, border_width: 0, corner_radius: 10 })
         blocks.push({ block_type: 'text_box',
@@ -3995,9 +3995,9 @@ function _comparisonTableToBlocks(art, content_y, blocks, bt, r2) {
           align: 'center', valign: 'middle' })
         if (subtext) {
           blocks.push({ block_type: 'text_box',
-            x: r2(cx + colPad * 0.5), y: r2(pillY + pillH + 0.03), w: r2(cw - colPad), h: 0.16,
+            x: r2(cx + colPad * 0.5), y: r2(pillY + pillH + 0.03), w: r2(cw - colPad), h: subtextH,
             text: subtext, font_family: bodyFont,
-            font_size: cs.subtext_font_size || 8, bold: false,
+            font_size: subtextFs, bold: false,
             color: tc.text, align: 'center', valign: 'top' })
         }
       }
