@@ -5593,6 +5593,7 @@ function mergeContentIntoZones(designedZones, manifestZones, brandTokens) {
 
       if (t === 'risk_register') {
         const normalized = normalizeRiskRegisterManifest(mArt)
+        const artifactHeader = getArtifactHeader(mArt) || dArt.risk_header || dArt.artifact_header || ''
         return {
           ...dArt,
           artifact_coverage_hint: mArt.artifact_coverage_hint != null ? mArt.artifact_coverage_hint : dArt.artifact_coverage_hint,
