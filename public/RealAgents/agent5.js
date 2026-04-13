@@ -4860,13 +4860,17 @@ function _groupedInsightToBlocks(art, content_y, blocks, bt, r2, fontSizeFloor) 
         })
       }
 
-      // Dynamic bullet font + vertical centering within this row
+      // Dynamic bullet font + vertical centering within this row.
+      // bAreaH (text-only area, padding excluded) is used for font sizing.
+      // _centerBullets receives the full row_h so that `h` it returns includes
+      // the top/bottom padding the renderer will consume — preventing the renderer
+      // from double-subtracting padding that was already baked into a smaller h.
       const bPadV    = (gbs.padding && gbs.padding.top)  || 0.08
       const bPadH    = (gbs.padding && gbs.padding.left) || 0.10
       const bAreaW   = Math.max(0.3, box_w - 2 * bPadH)
       const bAreaH   = Math.max(0.1, row_h - 2 * bPadV)
       const bFs      = Math.min(_bulletFontSize(g.bullets || [], bAreaW, bAreaH, bsty.font_size), fontSizeFloor || Infinity)
-      const { offset: bOffset, h: bH } = _centerBullets(g.bullets || [], bAreaW, bAreaH, bFs, bPadV)
+      const { offset: bOffset, h: bH } = _centerBullets(g.bullets || [], bAreaW, row_h, bFs, bPadV)
       blocks.push({
         block_type: 'bullet_list',
         x: box_x, y: r2(cur_y + bOffset), w: box_w, h: r2(bH),
@@ -4935,13 +4939,16 @@ function _groupedInsightToBlocks(art, content_y, blocks, bt, r2, fontSizeFloor) 
         })
       }
 
-      // Dynamic bullet font + vertical centering within box_h
+      // Dynamic bullet font + vertical centering within box_h.
+      // bAreaH (text-only area, padding excluded) is used for font sizing.
+      // _centerBullets receives the full box_h so that `h` it returns includes
+      // the top/bottom padding the renderer will consume — preventing double-subtraction.
       const bPadV  = (gbs.padding && gbs.padding.top)  || 0.08
       const bPadH  = (gbs.padding && gbs.padding.left) || 0.10
       const bAreaW = Math.max(0.3, col_w - 2 * bPadH)
       const bAreaH = Math.max(0.1, box_h - 2 * bPadV)
       const bFs    = Math.min(_bulletFontSize(g.bullets || [], bAreaW, bAreaH, bsty.font_size), fontSizeFloor || Infinity)
-      const { offset: bOffset, h: bH } = _centerBullets(g.bullets || [], bAreaW, bAreaH, bFs, bPadV)
+      const { offset: bOffset, h: bH } = _centerBullets(g.bullets || [], bAreaW, box_h, bFs, bPadV)
       blocks.push({
         block_type: 'bullet_list',
         x: r2(cur_x), y: r2(bullet_y + bOffset), w: col_w, h: r2(bH),

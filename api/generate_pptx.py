@@ -514,7 +514,8 @@ def _compact_title_placeholder(slide, title_ph, text, font_size):
 
 def place_in_placeholder(slide, ph_idx, text, style_spec, bt,
                          preserve_template_style=False,
-                         compact_title=True):
+                         compact_title=True,
+                         force_font_size=None):
     """
     Write text into the placeholder at ph_idx on the slide.
     Falls back to a free-form text box if the placeholder is not found.
@@ -566,6 +567,14 @@ def place_in_placeholder(slide, ph_idx, text, style_spec, bt,
                     set_font(run, font_family, font_size, bold, False, color_hex)
                     align_map = {'left': PP_ALIGN.LEFT, 'center': PP_ALIGN.CENTER, 'right': PP_ALIGN.RIGHT}
                     p.alignment = align_map.get(align, PP_ALIGN.LEFT)
+                # Apply forced font size override even when preserve_template_style=True.
+                # This is used by the title-overflow guard to pre-render at the reduced
+                # size so we never render at the wrong size then try to fix it afterwards.
+                if force_font_size is not None:
+                    try:
+                        run.font.size = Pt(float(force_font_size))
+                    except Exception:
+                        pass
                 if ph_idx == 0 and compact_title and not preserve_template_style:
                     font_size = style_spec.get('font_size', 18 if ph_idx == 0 else 14)
                     return _compact_title_placeholder(slide, ph, text, font_size) or 0.0
@@ -681,7 +690,11 @@ def render_insight_text(slide, artifact, bt, suppress_heading=False):
 
     # ── Heading & body layout ────────────────────────────────────────────────
     TOP_PAD   = INSIGHT_TOP_PADDING
-    content_y = y + TOP_PAD
+    # When suppress_heading=True (called from render_block_bullet_list), the
+    # bullet_list block's y already represents the top of the allocated area and
+    # the block carries its own explicit padding — adding TOP_PAD on top of pad_top
+    # was double-offsetting and collapsing body_h to near zero.
+    content_y = y if suppress_heading else y + TOP_PAD
 
     # Collect heading params; rendering is deferred until after b_size is known
     _h_params = None
@@ -3417,23 +3430,41 @@ def _shift_blocks_for_title_gap(slide, blocks, use_template, canvas_bottom=None)
                 tmpl_fs = _ph_state['tmpl_fs']
                 text    = _ph_state['text']
                 ph_w    = _ph_state['ph_w']
-                # Find the smallest font size that makes the title fit in 1 line
+                # Use 85 % of the placeholder width as the fit-check threshold.
+                # Calibri Bold (measurement proxy) is typically ~10-15 % narrower
+                # than the actual brand/template font.  The 15 % margin ensures the
+                # found reduced_fs genuinely fits in 1 line when rendered in PowerPoint.
+                SAFE_W = ph_w * 0.85
+                # Find the largest font size where the title fits in 1 line at SAFE_W.
+                # Both the PIL pixel check and the char-count check must agree to
+                # prevent word-boundary wrapping from slipping through.
                 reduced_fs = None
                 for try_fs in range(int(tmpl_fs) - 1, 11, -1):  # floor: 12pt
-                    if _estimate_text_lines(text, float(try_fs), ph_w) == 1:
+                    if (_estimate_text_lines(text, float(try_fs), SAFE_W) == 1 and
+                            estimate_wrapped_lines(text, SAFE_W, float(try_fs)) == 1):
                         reduced_fs = float(try_fs)
                         break
                 if reduced_fs is not None:
+                    font_set_ok = False
                     try:
                         for para in ph.text_frame.paragraphs:
                             for run in para.runs:
                                 run.font.size = pt(reduced_fs)
-                            para.font.size = pt(reduced_fs)
+                        # Paragraph-level default run properties as belt-and-braces
+                        try:
+                            ph.text_frame.paragraphs[0].font.size = pt(reduced_fs)
+                        except Exception:
+                            pass
+                        font_set_ok = True
                     except Exception as _fe:
                         print(f'[title gap fix] font reduce failed: {_fe}')
                     print(f'[title gap fix] overflow guard: title font {tmpl_fs}pt → {reduced_fs}pt'
+                          f' (safe_w={SAFE_W:.2f}"), font_set={font_set_ok}'
                           f', content stays at original Y (no shift)')
                     return blocks, 0.0
+                else:
+                    print(f'[title gap fix] overflow guard: could not find 1-line fit'
+                          f' (tmpl_fs={tmpl_fs}pt, safe_w={SAFE_W:.2f}") — applying shift anyway')
 
         shifted = []
         for b in blocks:
@@ -3506,12 +3537,90 @@ def _shift_blocks_for_title_overflow(slide, blocks, use_template, canvas_bottom=
 # iterates slide_spec['blocks'] and dispatches each to its typed handler.
 # All layout decisions are pre-computed by flattenToBlocks() in agent5.js.
 
-def render_block_title(slide, block, bt, use_template):
+
+def _pre_compute_title_font_reduction(slide, title_block, blocks, canvas_bottom, use_template):
+    """
+    Before rendering the title, check whether the title would overflow the canvas
+    when the gap-shift logic runs.  If so, return the reduced font size (float pt)
+    that makes the title fit in 1 line.  Returns None if no reduction is needed.
+
+    This mirrors the overflow guard in _shift_blocks_for_title_gap but runs PRE-
+    render so the title placeholder is written at the correct size from the start.
+    The post-render guard in _shift_blocks_for_title_gap acts as a belt-and-braces
+    fallback for any edge cases this function misses.
+    """
+    if not use_template or canvas_bottom is None:
+        return None
+    try:
+        EMU      = 914400.0
+        MIN_GAP  = 0.15
+        text     = str(title_block.get('text', '') or '').strip()
+        if not text:
+            return None
+
+        non_title = [b for b in blocks
+                     if b.get('block_type') != 'title' and b.get('y') is not None]
+        if not non_title:
+            return None
+
+        for ph in slide.placeholders:
+            if ph.placeholder_format.idx == 0:
+                ph_top    = ph.top    / EMU
+                ph_h      = ph.height / EMU
+                ph_w      = ph.width  / EMU
+                font_size = float(title_block.get('font_size') or 18)
+                tmpl_fs   = _get_template_title_font_size(slide) or font_size
+                lines     = _estimate_text_lines(text, tmpl_fs, ph_w)
+                line_h    = (tmpl_fs / 72.0) * 1.25
+                est_h     = lines * line_h + 0.06
+
+                if lines == 1:
+                    content_start = ph_top + ph_h + MIN_GAP
+                else:
+                    content_start = ph_top + est_h + MIN_GAP
+
+                B     = min(float(b['y']) for b in non_title)
+                shift = round(content_start - B, 3)
+
+                if shift <= 0:
+                    return None   # no downward shift needed
+
+                blocks_with_h = [b for b in non_title
+                                  if b.get('h') is not None]
+                content_bottom = (max(float(b['y']) + float(b['h']) for b in blocks_with_h)
+                                  if blocks_with_h
+                                  else max(float(b['y']) for b in non_title))
+
+                if content_bottom + shift <= canvas_bottom + 0.01:
+                    return None   # shift is fine, won't overflow
+
+                # Overflow would occur — find reduced font size with safety margin
+                SAFE_W     = ph_w * 0.85
+                reduced_fs = None
+                for try_fs in range(int(tmpl_fs) - 1, 11, -1):
+                    if (_estimate_text_lines(text, float(try_fs), SAFE_W) == 1 and
+                            estimate_wrapped_lines(text, SAFE_W, float(try_fs)) == 1):
+                        reduced_fs = float(try_fs)
+                        break
+                if reduced_fs is not None:
+                    print(f'[title pre-render] overflow guard: {tmpl_fs:.0f}pt → {reduced_fs:.0f}pt'
+                          f' (safe_w={SAFE_W:.2f}", shift would have been {shift:+.3f}")')
+                return reduced_fs
+    except Exception as _e:
+        print(f'[title pre-render] check failed: {_e}')
+    return None
+
+
+def render_block_title(slide, block, bt, use_template, force_font_size=None):
     """Render a title or subtitle block.
 
     Template mode — seed text into the master's placeholder so that font, size,
     colour, and position stay consistent across all content slides.  The caller
     must NOT have removed the title/subtitle placeholder before this point.
+
+    force_font_size — when provided (float, points), the run is rendered at this
+    size even in template mode.  Used by the title-overflow guard to pre-render
+    the title at a reduced size so content is never displaced off-slide.
 
     Scratch mode — fall back to a free-form text box at the coordinates Agent 5
     computed.
@@ -3527,7 +3636,8 @@ def render_block_title(slide, block, bt, use_template):
         ph_idx = 0 if btype == 'title' else 1
         place_in_placeholder(slide, ph_idx, text, block, bt,
                              preserve_template_style=True,
-                             compact_title=False)
+                             compact_title=False,
+                             force_font_size=force_font_size)
         return
     # Scratch mode — render as a positioned text box
     add_text_box(slide,
@@ -3965,16 +4075,25 @@ def render_blocks(slide, slide_spec, bt, use_template):
     # Step 5: Place subtitle placeholder at its shifted absolute Y (not delta).
     if blocks:
         title_block = next((b for b in blocks if b.get('block_type') == 'title'), None)
-        if title_block:
-            try:
-                render_block_title(slide, title_block, bt, use_template)
-            except Exception as e:
-                print(f'render_blocks: error on block_type=title: {e}')
 
         _canvas      = slide_spec.get('canvas') or {}
         _canvas_h    = float(_canvas.get('height_in') or 7.5)
         _margin_bot  = float((_canvas.get('margin') or {}).get('bottom') or 0.3)
         _canvas_bot  = round(_canvas_h - _margin_bot, 3)
+
+        if title_block:
+            # Pre-compute reduced font size BEFORE rendering so the title placeholder
+            # is written at the correct size from the first write.
+            # _shift_blocks_for_title_gap also applies the font fix post-render as
+            # a belt-and-braces fallback, but pre-render is more reliable.
+            _pre_reduced_fs = _pre_compute_title_font_reduction(
+                slide, title_block, blocks, _canvas_bot, use_template)
+            try:
+                render_block_title(slide, title_block, bt, use_template,
+                                   force_font_size=_pre_reduced_fs)
+            except Exception as e:
+                print(f'render_blocks: error on block_type=title: {e}')
+
         blocks, shift = _shift_blocks_for_title_gap(slide, blocks, use_template,
                                                      canvas_bottom=_canvas_bot)
 
